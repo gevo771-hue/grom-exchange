@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: grom-backend
+  namespace: grom
+  labels:
+    app.kubernetes.io/name: grom-backend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: grom-backend
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+    - name: ws
+      port: 4001
+      targetPort: ws
+    - name: metrics
+      port: 9464
+      targetPort: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grom-backend-ws
+  namespace: grom
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-name: "grom_ws_sticky"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: grom-backend
+  ports:
+    - name: ws
+      port: 4001
+      targetPort: ws
+  sessionAffinity: ClientIP

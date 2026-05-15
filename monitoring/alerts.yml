@@ -1,0 +1,207 @@
+groups:
+  - name: grom-backend-slo
+    interval: 30s
+    rules:
+      # ===== Availability =====
+      - alert: GromBackendDown
+        expr: up{job=~"grom.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: grom-backend
+          pager: true
+        annotations:
+          summary: "GROM backend instance {{ $labels.instance }} is down"
+          description: "Backend has been unreachable for >1m. Check pod logs and network."
+          runbook: "https://docs.grom.internal/runbooks/backend-down"
+
+      - alert: GromBackendHighErrorRate
+        expr: |
+          sum(rate(grom_http_requests_total{status=~"5.."}[5m]))
+            /
+          sum(rate(grom_http_requests_total[5m])) > 0.02
+        for: 5m
+        labels:
+          severity: critical
+          service: grom-backend
+          pager: true
+        annotations:
+          summary: "HTTP 5xx error rate > 2%"
+          description: "5xx rate {{ $value | humanizePercentage }} sustained for 5m."
+
+      # ===== Latency SLO: p95 < 80ms for bet placement =====
+      - alert: GromBetPlacementSlow
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(grom_bet_place_duration_seconds_bucket[5m])) by (le)
+          ) > 0.080
+        for: 10m
+        labels:
+          severity: warning
+          service: binary-engine
+          slo: bet-latency-p95
+        annotations:
+          summary: "Bet placement p95 > 80ms (SLO violated)"
+          description: "p95 is {{ $value }}s. Check DB latency and engine queue."
+
+      - alert: GromBetPlacementCritical
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(grom_bet_place_duration_seconds_bucket[5m])) by (le)
+          ) > 0.250
+        for: 3m
+        labels:
+          severity: critical
+          service: binary-engine
+          pager: true
+        annotations:
+          summary: "Bet placement p95 > 250ms"
+          description: "Severe latency degradation. p95 = {{ $value }}s."
+
+      # ===== Binary settlement =====
+      - alert: GromRoundSettlementErrors
+        expr: |
+          sum(rate(grom_binary_round_settle_errors_total[10m]))
+            /
+          sum(rate(grom_binary_round_settle_total[10m])) > 0.0001
+        for: 10m
+        labels:
+          severity: critical
+          service: binary-engine
+          pager: true
+        annotations:
+          summary: "Binary round settlement error rate > 0.01%"
+          description: "Settlement failures may have left positions unresolved. Check ledger integrity."
+
+      - alert: GromRoundSettlementStalled
+        expr: |
+          time() - max(grom_binary_last_round_settled_timestamp) > 180
+        for: 3m
+        labels:
+          severity: critical
+          service: binary-engine
+          pager: true
+        annotations:
+          summary: "No binary round has settled in >3 minutes"
+          description: "Engine may be stuck. Check leader lease in Redis."
+
+      # ===== WebSocket =====
+      - alert: GromWsDisconnectRate
+        expr: |
+          sum(rate(grom_ws_disconnects_total[1h]))
+            /
+          sum(rate(grom_ws_connects_total[1h])) > 0.005
+        for: 15m
+        labels:
+          severity: warning
+          service: grom-backend
+        annotations:
+          summary: "WS disconnect rate > 0.5%/hr"
+          description: "Disconnect rate {{ $value | humanizePercentage }}. Check upstream stability."
+
+      # ===== Price feed =====
+      - alert: GromPriceFeedDivergence
+        expr: grom_price_source_divergence_bps > 100
+        for: 2m
+        labels:
+          severity: warning
+          service: price-aggregator
+        annotations:
+          summary: "Price source divergence > 100 bps on {{ $labels.pair }}"
+          description: "Aggregator has dropped a source. Check Binance/Kraken/Coinbase connectivity."
+
+      - alert: GromPriceFeedStale
+        expr: time() - grom_price_last_update_timestamp > 15
+        for: 1m
+        labels:
+          severity: critical
+          service: price-aggregator
+          pager: true
+        annotations:
+          summary: "Price feed stale for pair {{ $labels.pair }} (>15s)"
+          description: "All upstream sources lost. Binary rounds will be paused."
+
+      # ===== Database =====
+      - alert: GromDatabaseConnectionExhaustion
+        expr: grom_db_pool_active / grom_db_pool_max > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: grom-backend
+        annotations:
+          summary: "DB pool > 90% utilized"
+          description: "Pool may be leaking. Check long-running queries."
+
+      # ===== Resource saturation =====
+      - alert: GromPodHighMemory
+        expr: |
+          container_memory_working_set_bytes{pod=~"grom-backend-.*",container="backend"}
+            /
+          container_spec_memory_limit_bytes{pod=~"grom-backend-.*",container="backend"} > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          service: grom-backend
+        annotations:
+          summary: "Pod {{ $labels.pod }} memory > 85% of limit"
+
+      - alert: GromPodCrashLooping
+        expr: |
+          rate(kube_pod_container_status_restarts_total{namespace="grom"}[15m]) > 0
+        for: 15m
+        labels:
+          severity: critical
+          service: grom-backend
+          pager: true
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash-looping"
+
+      # ===== Business-critical =====
+      - alert: GromLedgerImbalance
+        expr: abs(grom_ledger_debits_total - grom_ledger_credits_total) > 0.01
+        for: 1m
+        labels:
+          severity: critical
+          service: grom-backend
+          pager: true
+          escalation: finance
+        annotations:
+          summary: "LEDGER IMBALANCE DETECTED"
+          description: "Debits and credits differ by {{ $value }}. STOP settlements and investigate immediately."
+
+      - alert: GromSuspiciousPayoutRate
+        expr: |
+          sum(rate(grom_binary_payouts_total[1h])) > 2 * sum(rate(grom_binary_stakes_total[1h]))
+        for: 30m
+        labels:
+          severity: warning
+          service: binary-engine
+        annotations:
+          summary: "Payouts > 2x stakes for 30m"
+          description: "House edge anomaly. Check for exploited pricing windows."
+
+      # ===== Backup / DR =====
+      - alert: GromPostgresBackupStale
+        expr: time() - grom_pg_backup_last_success_timestamp > 1800
+        for: 5m
+        labels:
+          severity: critical
+          service: platform
+          pager: true
+          escalation: sre
+        annotations:
+          summary: "No successful Postgres backup in >30m (RPO at risk)"
+          description: "Last successful backup {{ $value }}s ago. CronJob grom-postgres-backup is failing. RPO target is 15m."
+          runbook: "https://docs.grom.internal/runbooks/backup-stale"
+
+      - alert: GromPostgresBackupShrank
+        expr: |
+          grom_pg_backup_last_size_bytes
+            < 0.5 * avg_over_time(grom_pg_backup_last_size_bytes[24h])
+        for: 10m
+        labels:
+          severity: warning
+          service: platform
+        annotations:
+          summary: "Latest Postgres backup is <50% of 24h average size"
+          description: "Backup size collapsed to {{ $value }} bytes — possible truncation or partial dump."

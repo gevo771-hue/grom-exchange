@@ -1,0 +1,57 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grom-backend
+  namespace: grom
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grom-backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress traffic only from ingress-nginx
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 4001
+    # Allow Prometheus to scrape metrics
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9464
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Postgres (RDS)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Redis (ElastiCache)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 6379
+    # External APIs (Binance, Kraken, Coinbase, 1inch)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80

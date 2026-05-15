@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: grom
+
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+  - servicemonitor.yaml
+  - backup-cronjob.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: grom-exchange
+  app.kubernetes.io/managed-by: kustomize
+
+configMapGenerator:
+  - name: grom-backend-config
+    literals:
+      - NODE_ENV=production
+      - GROM_LOG_LEVEL=info
+      - GROM_HTTP_PORT=4000
+      - GROM_WS_PORT=4001
+      - GROM_METRICS_PORT=9464
+      - GROM_BINARY_ROUND_SECONDS=60
+      - GROM_BINARY_PAYOUT=0.87
+      - GROM_PRICE_SOURCES=binance,kraken,coinbase
+      - GROM_PRICE_DIVERGENCE_BPS=50

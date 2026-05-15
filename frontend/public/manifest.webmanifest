@@ -1,0 +1,19 @@
+{
+  "name": "GROM Finance Hub",
+  "short_name": "GROM",
+  "description": "Spot, futures, binary options, and wallet — GROM Finance Hub.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#080a0f",
+  "theme_color": "#080a0f",
+  "icons": [
+    {
+      "src": "assets/grom-brand-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

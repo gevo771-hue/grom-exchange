@@ -1,0 +1,116 @@
+# GROM Exchange — isolated stack. Does not share networks or volumes with Granium.
+
+networks:
+  grom_net:
+    name: grom_net
+    driver: bridge
+
+volumes:
+  grom_pg_data:
+  grom_redis_data:
+  grom_prom_data:
+  grom_graf_data:
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: grom_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${GROM_DB_NAME:-grom}
+      POSTGRES_USER: ${GROM_DB_USER:-grom}
+      POSTGRES_PASSWORD: ${GROM_DB_PASSWORD}
+    ports:
+      - "54320:5432"     # exposed on non-standard host port to avoid Granium clash
+    volumes:
+      - grom_pg_data:/var/lib/postgresql/data
+      - ./backend/src/db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GROM_DB_USER:-grom}"]
+      interval: 10s
+      retries: 5
+    networks: [grom_net]
+
+  redis:
+    image: redis:7-alpine
+    container_name: grom_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "63790:6379"
+    volumes:
+      - grom_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+    networks: [grom_net]
+
+  backend:
+    build:
+      context: ./backend
+    container_name: grom_backend
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${GROM_BACKEND_PORT:-4000}:4000"
+      - "9464:9464"      # prometheus metrics (WebSocket /ws is on port 4000)
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4000/health"]
+      interval: 15s
+      retries: 5
+    networks: [grom_net]
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: grom_frontend
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${GROM_FRONTEND_PORT:-5273}:80"
+    depends_on:
+      backend: { condition: service_healthy }
+    networks: [grom_net]
+
+  hummingbot:
+    profiles: ["mm"]
+    image: hummingbot/hummingbot:latest
+    container_name: grom_hummingbot
+    restart: unless-stopped
+    ports:
+      - "15889:15888"
+    volumes:
+      - ./hummingbot/conf:/conf
+      - ./hummingbot/logs:/logs
+      - ./hummingbot/data:/data
+    networks: [grom_net]
+
+  prometheus:
+    profiles: ["obs"]
+    image: prom/prometheus:latest
+    container_name: grom_prometheus
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - grom_prom_data:/prometheus
+    networks: [grom_net]
+
+  grafana:
+    profiles: ["obs"]
+    image: grafana/grafana:latest
+    container_name: grom_grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GROM_DB_PASSWORD}
+    volumes:
+      - grom_graf_data:/var/lib/grafana
+    networks: [grom_net]

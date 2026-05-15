@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1.6
+# Backup runner image: postgres-client + aws-cli, non-root.
+FROM alpine:3.20
+
+RUN apk add --no-cache \
+        bash \
+        coreutils \
+        postgresql16-client \
+        aws-cli \
+        curl \
+        ca-certificates \
+    && addgroup -S -g 10002 grom \
+    && adduser  -S -u 10002 -G grom grom \
+    && mkdir -p /home/grom/.aws \
+    && chown -R grom:grom /home/grom
+
+COPY --chmod=0755 backup-postgres.sh  /usr/local/bin/backup-postgres.sh
+COPY --chmod=0755 restore-postgres.sh /usr/local/bin/restore-postgres.sh
+
+USER grom:grom
+WORKDIR /home/grom
+
+ENTRYPOINT ["/usr/local/bin/backup-postgres.sh"]

@@ -1,0 +1,79 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: grom-postgres-backup
+  namespace: grom
+  labels:
+    app.kubernetes.io/name: grom-postgres-backup
+    app.kubernetes.io/component: backup
+spec:
+  # Every 15 minutes to meet the 15-minute RPO (logical dumps; WAL archiving
+  # runs continuously via wal-g out of band).
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: grom-postgres-backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: grom-backup
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10002
+            runAsGroup: 10002
+            fsGroup: 10002
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              image: ghcr.io/grom/grom-backup:latest
+              imagePullPolicy: IfNotPresent
+              command: ["/usr/local/bin/backup-postgres.sh"]
+              env:
+                - name: PGHOST
+                  value: postgres.grom.svc.cluster.local
+                - name: PGPORT
+                  value: "5432"
+                - name: PGDATABASE
+                  value: grom
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef: { name: grom-db, key: username }
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef: { name: grom-db, key: password }
+                - name: BACKUP_S3_BUCKET
+                  value: grom-prod-backups
+                - name: BACKUP_S3_PREFIX
+                  value: postgres/prod
+                - name: BACKUP_KMS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: { name: grom-backup, key: kms_key_id }
+                - name: BACKUP_RETAIN_DAYS
+                  value: "30"
+                - name: PROM_PUSHGATEWAY_URL
+                  value: http://pushgateway.monitoring.svc.cluster.local:9091
+              resources:
+                requests: { cpu: 100m, memory: 256Mi }
+                limits:   { cpu: 500m, memory: 512Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - { name: tmp,   mountPath: /tmp }
+                - { name: cache, mountPath: /home/grom/.aws }
+          volumes:
+            - name: tmp
+              emptyDir: { sizeLimit: 2Gi }
+            - name: cache
+              emptyDir: { sizeLimit: 64Mi }

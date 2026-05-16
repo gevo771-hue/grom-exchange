@@ -1,0 +1,59 @@
+name: GROM Production Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: grom-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to DigitalOcean
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Validate required secrets
+        run: |
+          test -n "${{ secrets.GROM_DEPLOY_HOST }}"
+          test -n "${{ secrets.GROM_DEPLOY_PORT }}"
+          test -n "${{ secrets.GROM_DEPLOY_USER }}"
+          test -n "${{ secrets.GROM_DEPLOY_KEY }}"
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.GROM_DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.GROM_DEPLOY_PORT }}
+          DEPLOY_KEY: ${{ secrets.GROM_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/grom_deploy_key
+          chmod 600 ~/.ssh/grom_deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.GROM_DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.GROM_DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.GROM_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.GROM_DEPLOY_PATH || '/opt/grom-exchange' }}
+        run: |
+          ssh -p "$DEPLOY_PORT" \
+            -i ~/.ssh/grom_deploy_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" "
+              set -euo pipefail
+              cd '$DEPLOY_PATH'
+              git fetch origin main
+              git reset --hard origin/main
+              docker compose up -d --build
+              docker compose exec -T backend npm run migrate
+              curl -fsS http://127.0.0.1:4000/health
+              curl -fsS http://127.0.0.1:5273 >/dev/null
+            "

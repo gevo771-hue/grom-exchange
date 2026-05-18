@@ -11,8 +11,8 @@
 
 // >>>>>>>>>>>>>>>>>>  ВПИШИ СЮДА СВОЙ PROJECT ID  <<<<<<<<<<<<<<<<<<
 // Получен на https://cloud.reown.com → Projects → Project ID
-// ID публичный, можно хранить в коде, но не коммить прод-ID в публичный git на всякий.
-const WC_PROJECT_ID = 'YOUR_WC_PROJECT_ID_HERE';
+// Reown / WalletConnect Project ID. Это публичный client-side идентификатор, не secret.
+const WC_PROJECT_ID = '28302d1699a8833692b54f0454164625';
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 import { EthereumProvider } from 'https://esm.sh/@walletconnect/ethereum-provider@2.18.0';

@@ -5938,7 +5938,7 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = 'grom-wallet.js?v=20260424x';
+  walletModule.src = 'grom-wallet.js?v=20260518a';
   document.head.appendChild(walletModule);
 }
 </script>
@@ -6278,15 +6278,18 @@ function disconnectWallet() {
   if (typeof applyI18n === 'function') applyI18n();
 }
 function openConnectModal() {
-  if (GROM_CONN.connected) {
-    openWalletModal('deposit');
-    return;
-  }
+  try {
+    if (window.GROM_CONN && GROM_CONN.connected) {
+      if (typeof openWalletModal === 'function') openWalletModal('deposit');
+      return;
+    }
+  } catch (_) {}
   var ov = document.getElementById('connectModal');
   if (ov) ov.classList.add('open');
   var ef = document.getElementById('cnEmailForm');
   if (ef) ef.style.display = 'none';
 }
+window.openConnectModal = openConnectModal;
 function closeConnectModal() {
   var ov = document.getElementById('connectModal');
   if (ov) ov.classList.remove('open');

@@ -55,6 +55,55 @@ function failToast(e) {
   if (typeof window.toast === 'function') window.toast('Connection failed: ' + msg.slice(0, 80), 'error');
 }
 
+function syncEmailSession(email, token, user) {
+  const label = email || user?.email || 'Email account';
+  localStorage.setItem('grom_jwt', token);
+  localStorage.setItem('grom_wallet_label', label);
+  localStorage.setItem('grom_user', JSON.stringify(user || { email: label }));
+
+  if (window.GROM_CONN) {
+    window.GROM_CONN.connected = true;
+    window.GROM_CONN.label = label;
+    window.GROM_CONN.method = 'email';
+  }
+  if (typeof window.setWalletLabel === 'function') window.setWalletLabel(label);
+  if (typeof window.updateAuthUi === 'function') window.updateAuthUi();
+  if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
+  if (window.gromWS?.connect) window.gromWS.connect();
+}
+
+async function connectEmail(email) {
+  const normalized = String(email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw new Error('Enter a valid email');
+  }
+
+  const response = await fetch('/auth/email-login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: normalized })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.token) {
+    throw new Error(payload.error || payload.message || 'Email login failed');
+  }
+
+  syncEmailSession(normalized, payload.token, payload.user);
+  window.toast?.('Signed in · ' + normalized, 'success');
+  return payload;
+}
+
+function openEmailFallback(providerName = 'email') {
+  if (typeof window.cnShowEmail === 'function') window.cnShowEmail();
+  setTimeout(() => {
+    const input = document.getElementById('cnEmail');
+    if (input) {
+      input.placeholder = providerName === 'Google' ? 'your@gmail.com' : 'you@example.com';
+      input.focus();
+    }
+  }, 30);
+}
+
 /* ----- 1. MetaMask / injected (инъекция EIP-1193) ----- */
 async function connectInjected() {
   const eth = window.ethereum;
@@ -174,6 +223,26 @@ Issued At: ${issuedAt}`;
 
 /* ----- Роутер: перехватываем клики по cn-row кнопкам ----- */
 function hook() {
+  window.cnSubmitEmail = async function () {
+    const input = document.getElementById('cnEmail');
+    const button = input?.closest('.cn-email-box')?.querySelector('button');
+    const originalText = button?.textContent;
+    try {
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'Connecting…';
+      }
+      await connectEmail(input?.value);
+    } catch (e) {
+      failToast(e);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText || 'Continue';
+      }
+    }
+  };
+
   // Подменяем cnConnect (был мок)
   window.cnConnect = async function (name, kind) {
     try {
@@ -182,8 +251,8 @@ function hook() {
       else if (kind === 'cb') await connectCoinbase();
       else if (kind === 'wc' || kind === 'ghost') await connectWC();
       else if (kind === 'gg') {
-        // Google логин — это Privy / Web3Auth, пока заглушка
-        window.toast?.('Google login требует Privy/Web3Auth — подключим следующим шагом', 'info');
+        openEmailFallback('Google');
+        window.toast?.('Google OAuth is not connected yet. Continue with your Google email for now.', 'info');
       } else {
         await connectWC();
       }
@@ -207,6 +276,7 @@ function hook() {
 /* ----- экспорт для отладки ----- */
 window.gromWallet = {
   connectInjected, connectOkx, connectCoinbase, connectWC,
+  connectEmail,
   disconnect, signSiwe,
   state: () => ({ account: currentAccount, chainId: currentChainId })
 };

@@ -10,7 +10,7 @@
  * JWT lifetime: config.auth.jwtTtl (seconds)
  */
 import express from 'express';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { SiweMessage } from 'siwe';
 import { z } from 'zod';
@@ -20,6 +20,11 @@ import logger from '../utils/logger.js';
 import { buildOtpAuthUrl, randomBase32, verifyTotp } from '../utils/totp.js';
 
 const NONCE_TTL_MS = 5 * 60 * 1000;
+
+function emailWalletAddress(email) {
+  const hash = createHash('sha256').update(`grom-email:${email}`).digest('hex');
+  return `email:${hash.slice(0, 40)}`;
+}
 
 async function ensureUserSettingsRow(userId) {
   await query(
@@ -54,6 +59,52 @@ export function createAuthRouter() {
       } catch (err) { next(err); }
     });
   }
+
+  const emailLoginSchema = z.object({
+    email: z.string().trim().toLowerCase().email().max(160),
+  }).strict();
+
+  r.post('/email-login', async (req, res, next) => {
+    try {
+      const { email } = emailLoginSchema.parse(req.body || {});
+      const pseudoWallet = emailWalletAddress(email);
+      const { rows } = await query(
+        `INSERT INTO users (wallet_address, chain_id)
+         VALUES ($1, $2)
+         ON CONFLICT (wallet_address) DO UPDATE
+           SET last_seen_at = NOW()
+         RETURNING id, wallet_address, chain_id, kyc_status, risk_level, role`,
+        [pseudoWallet, 0]
+      );
+      const user = rows[0];
+      if (user.risk_level === 'blocked') return res.status(403).json({ error: 'account_blocked' });
+
+      await ensureUserSettingsRow(user.id);
+      await query(
+        `UPDATE user_settings
+            SET email=$2,
+                security=jsonb_set(COALESCE(security,'{}'::jsonb), '{login_email}', 'true'::jsonb, true),
+                updated_at=NOW()
+          WHERE user_id=$1`,
+        [user.id, email]
+      );
+      await query(
+        `INSERT INTO notifications_outbox (user_id, channel, template_key, payload)
+         VALUES ($1, 'email', 'login_alert', $2::jsonb)`,
+        [user.id, JSON.stringify({ email, method: 'email', at: new Date().toISOString() })]
+      ).catch(() => {});
+
+      const token = jwt.sign(
+        { sub: user.id, addr: user.wallet_address, chain: user.chain_id, role: user.role || 'user', email },
+        config.auth.jwtSecret,
+        { expiresIn: config.auth.jwtTtl }
+      );
+      res.status(201).json({ token, user: { ...user, email }, method: 'email' });
+    } catch (err) {
+      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
+      next(err);
+    }
+  });
 
   r.post('/nonce', async (req, res, next) => {
     try {

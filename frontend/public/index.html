@@ -3430,6 +3430,8 @@
     .kpi-val { font-size: 16px; }
   }
 </style>
+<!-- TradingView lightweight-charts: professional candles/area/line — same library Binance/OKX use. MIT license, ~300KB. -->
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 
@@ -6303,16 +6305,34 @@ function cnShowEmail() {
     if (inp) inp.focus();
   }
 }
-function cnSubmitEmail() {
+async function cnSubmitEmail() {
   var v = (document.getElementById('cnEmail')?.value || '').trim();
   if (!v || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { toast('Enter a valid email', 'error'); return; }
-  GROM_CONN = { connected: true, label: v, method: 'email' };
-  try { localStorage.setItem('grom_jwt', 'demo-session'); } catch (_) {}
-  try { localStorage.setItem('grom_wallet_label', v); } catch (_) {}
-  setWalletLabel(v.length > 18 ? v.slice(0, 15) + '…' : v);
-  updateAuthUi();
-  closeConnectModal();
-  toast('Embedded wallet created · ' + v, 'success');
+  var btn = document.querySelector('#cnEmailForm button');
+  var oldText = btn ? btn.textContent : '';
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+    var res = await fetch('/auth/email-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: v })
+    });
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok || !data.token) throw new Error(data.error || 'email_login_failed');
+    GROM_CONN = { connected: true, label: v, method: 'email' };
+    try { localStorage.setItem('grom_jwt', data.token); } catch (_) {}
+    try { localStorage.setItem('grom_wallet_label', v); } catch (_) {}
+    try { localStorage.setItem('grom_user', JSON.stringify(data.user || {})); } catch (_) {}
+    setWalletLabel(v.length > 18 ? v.slice(0, 15) + '…' : v);
+    updateAuthUi();
+    closeConnectModal();
+    if (window.gromWS && typeof window.gromWS.connect === 'function') window.gromWS.connect();
+    toast('Email login connected · ' + v, 'success');
+  } catch (err) {
+    toast('Email login failed: ' + ((err && err.message) || 'try again'), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = oldText || 'Continue'; }
+  }
 }
 function cnConnect(name, kind) {
   // Simulate provider handshake — in production this dispatches to Privy / WalletConnect / injected.
@@ -7499,7 +7519,227 @@ function renderSvgChart(id, W, H, hist, candles, plotCandles, min, max, lastPx, 
   svg.innerHTML = parts.join('');
 }
 
+/* ============================================================================
+ * Professional TradingView-style charts via lightweight-charts library.
+ * Same engine used on Binance/OKX. Replaces old canvas drawChart() across
+ * Spot/Futures/Binary desks. PocketOption-style area mode for Binary.
+ * ========================================================================== */
+window.__gromTV = window.__gromTVCharts = window.__gromTVCharts || {};
+function _gromTVColors() {
+  return {
+    bg: 'transparent', grid: 'rgba(122,162,199,0.08)', text: '#9bb3c7',
+    up: '#22c17c', down: '#e8576b', area: 'rgba(0,194,255,0.25)', line: '#00c2ff',
+  };
+}
+function _gromTVCreate(container, mode) {
+  if (typeof LightweightCharts === 'undefined') return null;
+  var col = _gromTVColors();
+  var chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth || 600,
+    height: container.clientHeight || 360,
+    layout: { background: { type: 'solid', color: col.bg }, textColor: col.text, fontFamily: 'ui-sans-serif, system-ui, sans-serif' },
+    grid: { vertLines: { color: col.grid }, horzLines: { color: col.grid } },
+    timeScale: { borderColor: col.grid, timeVisible: true, secondsVisible: true, rightOffset: 5, barSpacing: 8 },
+    rightPriceScale: { borderColor: col.grid, scaleMargins: { top: 0.1, bottom: 0.1 } },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Magnet,
+      vertLine: { color: 'rgba(0,194,255,0.4)', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#00c2ff' },
+      horzLine: { color: 'rgba(0,194,255,0.4)', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#00c2ff' },
+    },
+    handleScroll: { mouseWheel: true, pressedMouseMove: true },
+    handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+  });
+  var series;
+  if (mode === 'candles') {
+    series = chart.addCandlestickSeries({
+      upColor: col.up, downColor: col.down,
+      borderUpColor: col.up, borderDownColor: col.down,
+      wickUpColor: col.up, wickDownColor: col.down,
+    });
+  } else if (mode === 'area') {
+    series = chart.addAreaSeries({
+      lineColor: col.line, topColor: 'rgba(0,194,255,0.35)', bottomColor: 'rgba(0,194,255,0.02)',
+      lineWidth: 2, priceLineVisible: true, priceLineColor: col.line, priceLineWidth: 1,
+      crosshairMarkerRadius: 5, crosshairMarkerBorderColor: col.line, crosshairMarkerBackgroundColor: '#fff',
+    });
+  } else {
+    series = chart.addLineSeries({ color: col.line, lineWidth: 2 });
+  }
+  return { chart: chart, series: series, mode: mode, candles: [], lastBucket: null };
+}
+function _gromTVBucketTime(ts, intervalSec) {
+  return Math.floor(ts / 1000 / intervalSec) * intervalSec;
+}
+function _gromTVAggregate(state, price, ts, intervalSec) {
+  var bucket = _gromTVBucketTime(ts, intervalSec);
+  var last = state.candles[state.candles.length - 1];
+  if (!last || last.time !== bucket) {
+    var newC = { time: bucket, open: price, high: price, low: price, close: price };
+    state.candles.push(newC);
+    if (state.candles.length > 300) state.candles.shift();
+    return newC;
+  } else {
+    last.close = price;
+    if (price > last.high) last.high = price;
+    if (price < last.low) last.low = price;
+    return last;
+  }
+}
+function _gromComputeSMA(candles, period) {
+  var out = [];
+  for (var i = 0; i < candles.length; i++) {
+    if (i < period - 1) continue;
+    var sum = 0;
+    for (var j = i - period + 1; j <= i; j++) sum += candles[j].close;
+    out.push({ time: candles[i].time, value: sum / period });
+  }
+  return out;
+}
+function gromDrawTVChart(id, opts) {
+  opts = opts || {};
+  var c = document.getElementById(id);
+  if (!c) return;
+  if (typeof LightweightCharts === 'undefined') { return false; }
+  // Binary → area (PocketOption-style); Spot/Futures → candles with volume + MA
+  var mode = opts.mode || (id === 'boChart' ? 'area' : 'candles');
+  // Replace non-div containers (old canvas/svg) with div
+  if (c.tagName.toLowerCase() !== 'div') {
+    var div = document.createElement('div');
+    div.id = id;
+    div.style.cssText = 'width:100%;height:' + (c.clientHeight || 380) + 'px;min-height:320px;position:relative';
+    c.parentNode.replaceChild(div, c);
+    c = div;
+  }
+  c.style.position = 'relative';
+  if (!c.style.minHeight) c.style.minHeight = '320px';
+
+  var state = window.__gromTVCharts[id];
+  if (!state || state.mode !== mode) {
+    if (state && state.chart) { try { state.chart.remove(); } catch (_) {} }
+    c.innerHTML = '';
+    state = _gromTVCreate(c, mode);
+    if (!state) return false;
+    state.id = id; state.mode = mode;
+    window.__gromTVCharts[id] = state;
+    // Add MA7 + MA25 indicators for candles mode
+    if (mode === 'candles') {
+      state.ma7  = state.chart.addLineSeries({ color: '#f5b94d', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      state.ma25 = state.chart.addLineSeries({ color: '#9d6cf5', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      // Add volume histogram on separate pane (bottom 20%)
+      state.volSeries = state.chart.addHistogramSeries({
+        color: 'rgba(122,162,199,0.35)',
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'volume',
+      });
+      state.chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      // Compress price scale margins so volume fits
+      state.chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.08, bottom: 0.22 } });
+      // Legend overlay for MA values
+      var legend = document.createElement('div');
+      legend.style.cssText = 'position:absolute;top:8px;left:10px;z-index:5;font-size:11px;font-family:ui-sans-serif,system-ui;color:#9bb3c7;pointer-events:none;display:flex;gap:14px';
+      legend.innerHTML = '<span style="color:#f5b94d">MA(7) <b id="' + id + '_ma7v" style="font-weight:700">—</b></span><span style="color:#9d6cf5">MA(25) <b id="' + id + '_ma25v" style="font-weight:700">—</b></span>';
+      c.appendChild(legend);
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+      var ro = new ResizeObserver(function () {
+        state.chart.applyOptions({ width: c.clientWidth, height: c.clientHeight || 380 });
+      });
+      ro.observe(c);
+    }
+  }
+  // Resolve pair → current price
+  var pair = '';
+  if (id === 'boChart' && window.boState) pair = boState.pair;
+  else if (id === 'spotChart' && window.spotState) pair = spotState.pair;
+  else if (id === 'futChart' && window.futDeskState) pair = futDeskState.pair;
+  var px = (typeof priceForPair === 'function') ? priceForPair(pair || 'BTC/USDT') : 100;
+  var now = Date.now();
+  var intervalSec = opts.intervalSec || (id === 'boChart' ? 1 : (mode === 'candles' ? 15 : 5));
+
+  // Seed history with realistic random-walk OHLC if first time
+  if (!state.candles.length) {
+    var seedPrice = px;
+    for (var i = 120; i >= 1; i--) {
+      var t = _gromTVBucketTime(now - i * intervalSec * 1000, intervalSec);
+      var drift = (Math.random() - 0.5) * px * 0.0035;
+      var open = seedPrice;
+      var close = seedPrice + drift;
+      var wickU = Math.random() * px * 0.0015;
+      var wickD = Math.random() * px * 0.0015;
+      var high = Math.max(open, close) + wickU;
+      var low  = Math.min(open, close) - wickD;
+      var vol  = Math.round((Math.random() * 0.7 + 0.3) * 1000);
+      state.candles.push({ time: t, open: open, high: high, low: low, close: close, volume: vol });
+      seedPrice = close;
+    }
+    state.candles[state.candles.length - 1].close = px;
+  }
+  _gromTVAggregate(state, px, now, intervalSec);
+
+  if (mode === 'candles') {
+    state.series.setData(state.candles.map(function (k) { return { time: k.time, open: k.open, high: k.high, low: k.low, close: k.close }; }));
+    if (state.ma7)  state.ma7.setData(_gromComputeSMA(state.candles, 7));
+    if (state.ma25) state.ma25.setData(_gromComputeSMA(state.candles, 25));
+    if (state.volSeries) {
+      var col = _gromTVColors();
+      state.volSeries.setData(state.candles.map(function (k) {
+        return { time: k.time, value: Number(k.volume || 100), color: k.close >= k.open ? 'rgba(34,193,124,0.45)' : 'rgba(232,87,107,0.45)' };
+      }));
+    }
+    // Update legend
+    var ma7Arr  = _gromComputeSMA(state.candles, 7);
+    var ma25Arr = _gromComputeSMA(state.candles, 25);
+    var ma7v  = ma7Arr.length  ? ma7Arr[ma7Arr.length - 1].value  : null;
+    var ma25v = ma25Arr.length ? ma25Arr[ma25Arr.length - 1].value : null;
+    var fmtN = function (n) { return n == null ? '—' : (n > 1000 ? n.toFixed(2) : n.toFixed(4)); };
+    var el7 = document.getElementById(id + '_ma7v'); if (el7) el7.textContent = fmtN(ma7v);
+    var el25 = document.getElementById(id + '_ma25v'); if (el25) el25.textContent = fmtN(ma25v);
+  } else {
+    state.series.setData(state.candles.map(function (k) { return { time: k.time, value: k.close }; }));
+  }
+  // Binary: strike line (PocketOption-style yellow dashed)
+  if (id === 'boChart' && window.boState && boState.strike) {
+    if (state.strikeLine) { try { state.series.removePriceLine(state.strikeLine); } catch (_) {} }
+    state.strikeLine = state.series.createPriceLine({
+      price: Number(boState.strike),
+      color: '#f5b94d', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: true, title: 'STRIKE',
+    });
+  }
+  return true;
+}
+window.gromDrawTVChart = gromDrawTVChart;
+
+// TV-only drawChart for trading desks; legacy canvas kept for other charts (sparklines, mini-tape).
+var _gromTVChartIds = ['boChart', 'spotChart', 'futChart'];
 function drawChart(id) {
+  if (_gromTVChartIds.indexOf(id) !== -1) {
+    // For trading desk charts — ONLY use TradingView lightweight-charts
+    if (typeof LightweightCharts === 'undefined') {
+      // Library not loaded yet — retry after a moment
+      setTimeout(function () { try { gromDrawTVChart(id); } catch (_) {} }, 400);
+      return;
+    }
+    try { gromDrawTVChart(id); } catch (e) { console.warn('[grom-tv]', id, e.message); }
+    return;
+  }
+  // Other charts (sparklines, mini-tape) — use legacy canvas
+  if (typeof window._gromOldDrawChart === 'function') return window._gromOldDrawChart(id);
+}
+window.drawChart = drawChart;
+// Auto-redraw TV charts every second to flush real-time price updates
+setInterval(function () {
+  if (typeof LightweightCharts === 'undefined') return;
+  _gromTVChartIds.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el && el.offsetParent !== null) { // only if visible
+      try { gromDrawTVChart(id); } catch (_) {}
+    }
+  });
+}, 1000);
+
+// Keep legacy implementation under different name (defined below as _origDrawChart).
+function _origDrawChart(id) {
   const c = document.getElementById(id);
   if (!c) return;
   var parent = c.parentElement;
@@ -7713,6 +7953,8 @@ function drawChart(id) {
     });
   }
 }
+// Wire legacy fallback so drawChart() above can call old canvas renderer when TV lib missing.
+window._gromOldDrawChart = _origDrawChart;
 
 setInterval(tickPrices, 1200);
 setTimeout(tickPrices, 100);

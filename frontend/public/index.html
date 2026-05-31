@@ -7525,6 +7525,76 @@ function renderSvgChart(id, W, H, hist, candles, plotCandles, min, max, lastPx, 
  * Spot/Futures/Binary desks. PocketOption-style area mode for Binary.
  * ========================================================================== */
 window.__gromTV = window.__gromTVCharts = window.__gromTVCharts || {};
+
+/* Direct Binance public WebSocket for real-time prices.
+ * Used as a fallback when our backend WS is offline (current red OFFLINE badge state).
+ * No auth needed, no API key. Updates global price vars + dispatches grom-ws-price events.
+ */
+(function gromBinanceDirectFeed() {
+  if (window.__gromBinanceDirectWS) return;
+  var pairs = [
+    { sym: 'btcusdt', base: 'BTC' },
+    { sym: 'ethusdt', base: 'ETH' },
+    { sym: 'solusdt', base: 'SOL' },
+    { sym: 'bnbusdt', base: 'BNB' },
+    { sym: 'xrpusdt', base: 'XRP' },
+    { sym: 'adausdt', base: 'ADA' },
+    { sym: 'dogeusdt', base: 'DOGE' },
+    { sym: 'avaxusdt', base: 'AVAX' },
+    { sym: 'linkusdt', base: 'LINK' },
+  ];
+  var backoff = 1000;
+  function connect() {
+    try {
+      var streams = pairs.map(function (p) { return p.sym + '@trade'; }).join('/');
+      var ws = new WebSocket('wss://stream.binance.com:9443/stream?streams=' + streams);
+      window.__gromBinanceDirectWS = ws;
+      ws.onopen = function () { backoff = 1000; console.log('[grom-binance-direct] connected'); };
+      ws.onmessage = function (ev) {
+        try {
+          var msg = JSON.parse(ev.data);
+          var d = msg.data || msg;
+          if (!d || !d.s || !d.p) return;
+          var sym = d.s.toLowerCase();
+          var pair = pairs.find(function (p) { return p.sym === sym; });
+          if (!pair) return;
+          var price = Number(d.p);
+          if (!isFinite(price) || price <= 0) return;
+          // Update global price vars (same names used across the app)
+          switch (pair.base) {
+            case 'BTC': window.btcPrice = price; break;
+            case 'ETH': window.ethPrice = price; break;
+            case 'SOL': window.solPrice = price; break;
+            case 'BNB': if (typeof bnbPrice !== 'undefined') window.bnbPrice = price; break;
+            case 'XRP': if (typeof xrpPrice !== 'undefined') window.xrpPrice = price; break;
+            case 'ADA': if (typeof adaPrice !== 'undefined') window.adaPrice = price; break;
+            case 'DOGE': if (typeof dogePrice !== 'undefined') window.dogePrice = price; break;
+            case 'AVAX': if (typeof avaxPrice !== 'undefined') window.avaxPrice = price; break;
+            case 'LINK': if (typeof linkPrice !== 'undefined') window.linkPrice = price; break;
+          }
+          // Dispatch same event our backend WS would emit — landing ticker, charts, etc. consume this
+          try {
+            window.dispatchEvent(new CustomEvent('grom-ws-price', {
+              detail: { channel: 'prices.' + pair.base + '/USDT', data: { asset: pair.base + '/USDT', price: price, source: 'binance-direct', ts: Date.now() } }
+            }));
+          } catch (_) {}
+        } catch (_) {}
+      };
+      ws.onclose = function () {
+        window.__gromBinanceDirectWS = null;
+        setTimeout(connect, backoff);
+        backoff = Math.min(backoff * 2, 30000);
+      };
+      ws.onerror = function () { try { ws.close(); } catch (_) {} };
+    } catch (e) {
+      setTimeout(connect, backoff);
+      backoff = Math.min(backoff * 2, 30000);
+    }
+  }
+  // Boot
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(connect, 500); });
+  else setTimeout(connect, 500);
+})();
 // Inject CSS to widen chart containers + push price scale to the right edge.
 (function () {
   if (document.getElementById('grom-tv-widen')) return;
@@ -7580,9 +7650,19 @@ function _gromTVCreate(container, mode) {
     });
   } else if (mode === 'area') {
     series = chart.addAreaSeries({
-      lineColor: col.line, topColor: 'rgba(0,194,255,0.35)', bottomColor: 'rgba(0,194,255,0.02)',
-      lineWidth: 2, priceLineVisible: true, priceLineColor: col.line, priceLineWidth: 1,
-      crosshairMarkerRadius: 5, crosshairMarkerBorderColor: col.line, crosshairMarkerBackgroundColor: '#fff',
+      lineColor: '#00d4ff',
+      topColor: 'rgba(0,212,255,0.45)',
+      bottomColor: 'rgba(0,212,255,0.01)',
+      lineWidth: 3,
+      priceLineVisible: true,
+      priceLineColor: '#00d4ff',
+      priceLineWidth: 2,
+      priceLineStyle: LightweightCharts.LineStyle.Dashed,
+      crosshairMarkerRadius: 7,
+      crosshairMarkerBorderWidth: 3,
+      crosshairMarkerBorderColor: '#00d4ff',
+      crosshairMarkerBackgroundColor: '#fff',
+      lastValueVisible: true,
     });
   } else {
     series = chart.addLineSeries({ color: col.line, lineWidth: 2 });
@@ -7622,8 +7702,20 @@ function gromDrawTVChart(id, opts) {
   var c = document.getElementById(id);
   if (!c) return;
   if (typeof LightweightCharts === 'undefined') { return false; }
-  // Binary → area (PocketOption-style); Spot/Futures → candles with volume + MA
-  var mode = opts.mode || (id === 'boChart' ? 'area' : 'candles');
+  // Binary → respects active tab (Line/Candles/Bars/HA); Spot/Futures → candles with volume + MA.
+  // Default: Binary=area (PocketOption-style glow), Spot/Futures=candles.
+  var mode = opts.mode;
+  if (!mode) {
+    if (id === 'boChart') {
+      // Look at active Binary chart-type tab — class "active" on Line/Candles/Bars/HA buttons
+      var activeTab = document.querySelector('#page-binary .chart-type-tabs .active, .bo-chart-tabs .active, [data-bo-chart-type].active');
+      var t = activeTab ? (activeTab.dataset.boChartType || activeTab.textContent || '').toLowerCase().trim() : '';
+      if (t.indexOf('candle') >= 0) mode = 'candles';
+      else if (t.indexOf('bar') >= 0)  mode = 'candles';
+      else if (t.indexOf('ha') >= 0)   mode = 'candles';
+      else                              mode = 'area';
+    } else mode = 'candles';
+  }
   // Replace non-div containers (old canvas/svg) with div
   if (c.tagName.toLowerCase() !== 'div') {
     var div = document.createElement('div');

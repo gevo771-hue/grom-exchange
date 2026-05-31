@@ -7525,6 +7525,21 @@ function renderSvgChart(id, W, H, hist, candles, plotCandles, min, max, lastPx, 
  * Spot/Futures/Binary desks. PocketOption-style area mode for Binary.
  * ========================================================================== */
 window.__gromTV = window.__gromTVCharts = window.__gromTVCharts || {};
+// Inject CSS to widen chart containers + push price scale to the right edge.
+(function () {
+  if (document.getElementById('grom-tv-widen')) return;
+  var s = document.createElement('style');
+  s.id = 'grom-tv-widen';
+  s.textContent = [
+    /* trading chart containers — full width, no inner padding */
+    '#boChart, #spotChart, #futChart { width: 100% !important; min-height: 360px; padding: 0 !important; margin: 0 !important; box-sizing: border-box; }',
+    /* parents that wrap the chart — kill horizontal padding so chart goes edge-to-edge */
+    '.chart-wrap, .bo-chart-shell, .spot-chart-shell, .fut-chart-shell, .chart-shell { padding-left: 0 !important; padding-right: 0 !important; }',
+    /* price-scale font / size tweak — tighter labels */
+    '#boChart .tv-lightweight-charts, #spotChart .tv-lightweight-charts, #futChart .tv-lightweight-charts { font-feature-settings: "tnum" 1; }',
+  ].join('\n');
+  document.head.appendChild(s);
+})();
 function _gromTVColors() {
   return {
     bg: 'transparent', grid: 'rgba(122,162,199,0.08)', text: '#9bb3c7',
@@ -7539,8 +7554,15 @@ function _gromTVCreate(container, mode) {
     height: container.clientHeight || 360,
     layout: { background: { type: 'solid', color: col.bg }, textColor: col.text, fontFamily: 'ui-sans-serif, system-ui, sans-serif' },
     grid: { vertLines: { color: col.grid }, horzLines: { color: col.grid } },
-    timeScale: { borderColor: col.grid, timeVisible: true, secondsVisible: true, rightOffset: 5, barSpacing: 8 },
-    rightPriceScale: { borderColor: col.grid, scaleMargins: { top: 0.1, bottom: 0.1 } },
+    timeScale: { borderColor: 'transparent', borderVisible: false, timeVisible: true, secondsVisible: true, rightOffset: 2, barSpacing: 10, minBarSpacing: 4 },
+    rightPriceScale: {
+      borderColor: 'transparent', borderVisible: false,
+      scaleMargins: { top: 0.06, bottom: 0.08 },
+      entireTextOnly: true, alignLabels: true,
+      ticksVisible: false,
+      minimumWidth: 56,
+    },
+    leftPriceScale: { visible: false },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Magnet,
       vertLine: { color: 'rgba(0,194,255,0.4)', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#00c2ff' },

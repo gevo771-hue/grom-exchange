@@ -376,6 +376,9 @@ window.privyLogout = async function privyLogout() {
     clearSession();
     try { localStorage.removeItem('grom:privy:oauth-pkce'); } catch {}
     try { localStorage.setItem('grom:logged_out', '1'); } catch {}
+    // Reset connect modal state — next time it opens it should show the main rows,
+    // not the email OTP form left over from the previous login.
+    try { showMainRows(); resetInlineForm(); } catch {}
     if (typeof orig === 'function') {
       try { orig(); } catch (e) { console.warn('[grom-privy] orig disconnect threw', e); }
     } else {
@@ -389,30 +392,17 @@ window.privyLogout = async function privyLogout() {
 /* ---------- Modal state recovery ----------
  *
  * Problem: every time showEmailForm() runs it calls hideMainRows() and shows our
- * inline form. If the user then closes the modal mid-flow (✕ click, ESC, backdrop),
- * the next time the modal is opened the main rows (Email / Google / wallets) are
- * STILL hidden and the inline form is STILL visible — so the user can only see
- * the email form and can't pick a different provider.
+ * inline form. If the user then closes the modal mid-flow (✕ click, ESC, backdrop)
+ * or logs out, the next time the modal is opened the main rows (Email / Google /
+ * wallets) are STILL hidden and the inline form is STILL visible — user can only
+ * see the email form and can't pick a different provider.
  *
- * The pageshow event with `persisted=true` catches Safari's bfcache (back-forward
- * cache) restores where JS does NOT re-execute — without this, after logout +
- * "open connect" in Safari the modal looks broken because the previous render is
- * frozen in the cache.
- *
- * A 500ms safety-net poll catches every other edge case (event ordering,
- * Privy-managed iframe quirks, etc.). It's cheap: two querySelectorAll on a
- * tiny subtree, and only does anything when the modal is actually open.
+ * Reset triggers (only fire on modal OPEN events — never while it's open mid-flow,
+ * so we don't wipe a half-typed email/OTP):
+ *   1. MutationObserver — connectModal class changes from "no .open" to ".open"
+ *   2. pageshow event with persisted=true — Safari bfcache restore where JS is frozen
+ *   3. disconnectWallet wrap — logout always resets so next open is clean
  */
-function ensureModalRowsVisible() {
-  const modal = document.getElementById('connectModal');
-  if (!modal || !modal.classList.contains('open')) return;
-  // If main rows are already visible we still want to ensure the inline form
-  // stays hidden — it's idempotent, so just always restore.
-  showMainRows();
-  // Don't clear the email/code inputs while the user is filling them in —
-  // resetInlineForm wipes values. Only hide the inline form (showMainRows does it).
-}
-
 function installModalResetObserver() {
   const modal = document.getElementById('connectModal');
   if (!modal) return;
@@ -429,17 +419,12 @@ function installModalResetObserver() {
   if (lastOpen) { showMainRows(); resetInlineForm(); }
 
   // Safari bfcache: pages restored from back-forward cache do NOT re-execute JS.
-  // Reset modal state explicitly so we don't show a stale email form.
+  // If the modal is currently open + showing stale email form, force reset.
   window.addEventListener('pageshow', (e) => {
-    if (e.persisted) {
-      showMainRows();
-      resetInlineForm();
-    }
+    if (!e.persisted) return;
+    showMainRows();
+    resetInlineForm();
   });
-
-  // Safety net — runs at most every 500ms regardless of how the modal was opened.
-  // Cheap when modal is closed (single classList check, then return).
-  setInterval(ensureModalRowsVisible, 500);
 }
 
 /* ---------- Bootstrap (после DOMContentLoaded) ---------- */

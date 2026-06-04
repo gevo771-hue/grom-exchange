@@ -6298,6 +6298,20 @@ function openConnectModal() {
   if (ov) ov.classList.add('open');
   var ef = document.getElementById('cnEmailForm');
   if (ef) ef.style.display = 'none';
+
+  // Reset modal state: Privy's showEmailForm() hides main rows (Email/Google/wallets)
+  // and shows its inline OTP form. If the user closed the modal mid-flow and reopens it,
+  // we need to restore the main rows so they can pick a different provider.
+  try {
+    document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(function (el) {
+      el.style.display = '';
+    });
+    document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note, #connectModal .wm-body > .cn-foot').forEach(function (el) {
+      el.style.display = '';
+    });
+    var pv = document.getElementById('privyInlineForm');
+    if (pv) pv.style.display = 'none';
+  } catch (_) {}
 }
 window.openConnectModal = openConnectModal;
 function closeConnectModal() {

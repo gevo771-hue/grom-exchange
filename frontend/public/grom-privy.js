@@ -386,7 +386,7 @@ window.privyLogout = async function privyLogout() {
   };
 })();
 
-/* ---------- Modal state recovery (MutationObserver) ----------
+/* ---------- Modal state recovery ----------
  *
  * Problem: every time showEmailForm() runs it calls hideMainRows() and shows our
  * inline form. If the user then closes the modal mid-flow (✕ click, ESC, backdrop),
@@ -394,12 +394,25 @@ window.privyLogout = async function privyLogout() {
  * STILL hidden and the inline form is STILL visible — so the user can only see
  * the email form and can't pick a different provider.
  *
- * Fix: watch #connectModal for class changes. Whenever it transitions to .open,
- * unconditionally restore the main rows and hide the inline form. This catches
- * every code path that opens the modal (button clicks, hash routing, programmatic),
- * regardless of whether the host page caches an older index.html with a buggy
- * openConnectModal(). It's a recovery hook, not a replacement.
+ * The pageshow event with `persisted=true` catches Safari's bfcache (back-forward
+ * cache) restores where JS does NOT re-execute — without this, after logout +
+ * "open connect" in Safari the modal looks broken because the previous render is
+ * frozen in the cache.
+ *
+ * A 500ms safety-net poll catches every other edge case (event ordering,
+ * Privy-managed iframe quirks, etc.). It's cheap: two querySelectorAll on a
+ * tiny subtree, and only does anything when the modal is actually open.
  */
+function ensureModalRowsVisible() {
+  const modal = document.getElementById('connectModal');
+  if (!modal || !modal.classList.contains('open')) return;
+  // If main rows are already visible we still want to ensure the inline form
+  // stays hidden — it's idempotent, so just always restore.
+  showMainRows();
+  // Don't clear the email/code inputs while the user is filling them in —
+  // resetInlineForm wipes values. Only hide the inline form (showMainRows does it).
+}
+
 function installModalResetObserver() {
   const modal = document.getElementById('connectModal');
   if (!modal) return;
@@ -407,15 +420,26 @@ function installModalResetObserver() {
   const observer = new MutationObserver(() => {
     const isOpen = modal.classList.contains('open');
     if (isOpen && !lastOpen) {
-      // Modal just opened — restore main rows + hide inline form.
       showMainRows();
       resetInlineForm();
     }
     lastOpen = isOpen;
   });
   observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
-  // Also reset immediately in case the modal was already open at boot.
   if (lastOpen) { showMainRows(); resetInlineForm(); }
+
+  // Safari bfcache: pages restored from back-forward cache do NOT re-execute JS.
+  // Reset modal state explicitly so we don't show a stale email form.
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) {
+      showMainRows();
+      resetInlineForm();
+    }
+  });
+
+  // Safety net — runs at most every 500ms regardless of how the modal was opened.
+  // Cheap when modal is closed (single classList check, then return).
+  setInterval(ensureModalRowsVisible, 500);
 }
 
 /* ---------- Bootstrap (после DOMContentLoaded) ---------- */

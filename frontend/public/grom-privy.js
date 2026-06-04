@@ -386,10 +386,43 @@ window.privyLogout = async function privyLogout() {
   };
 })();
 
+/* ---------- Modal state recovery (MutationObserver) ----------
+ *
+ * Problem: every time showEmailForm() runs it calls hideMainRows() and shows our
+ * inline form. If the user then closes the modal mid-flow (✕ click, ESC, backdrop),
+ * the next time the modal is opened the main rows (Email / Google / wallets) are
+ * STILL hidden and the inline form is STILL visible — so the user can only see
+ * the email form and can't pick a different provider.
+ *
+ * Fix: watch #connectModal for class changes. Whenever it transitions to .open,
+ * unconditionally restore the main rows and hide the inline form. This catches
+ * every code path that opens the modal (button clicks, hash routing, programmatic),
+ * regardless of whether the host page caches an older index.html with a buggy
+ * openConnectModal(). It's a recovery hook, not a replacement.
+ */
+function installModalResetObserver() {
+  const modal = document.getElementById('connectModal');
+  if (!modal) return;
+  let lastOpen = modal.classList.contains('open');
+  const observer = new MutationObserver(() => {
+    const isOpen = modal.classList.contains('open');
+    if (isOpen && !lastOpen) {
+      // Modal just opened — restore main rows + hide inline form.
+      showMainRows();
+      resetInlineForm();
+    }
+    lastOpen = isOpen;
+  });
+  observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+  // Also reset immediately in case the modal was already open at boot.
+  if (lastOpen) { showMainRows(); resetInlineForm(); }
+}
+
 /* ---------- Bootstrap (после DOMContentLoaded) ---------- */
 
 function boot() {
   hookChipDropdown();
+  installModalResetObserver();
 
   /* Auto-restore сессии: если у нас есть saved Privy session — применяем.
    * НО: если юзер явно вышел (флаг grom:logged_out), сначала чистим всё и не воскрешаем. */

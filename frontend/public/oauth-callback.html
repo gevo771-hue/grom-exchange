@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GROM · Sign in</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html,body{margin:0;background:#0b1220;color:#cfe1f2;font-family:-apple-system,Segoe UI,Inter,sans-serif;height:100%}
+  .wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center;padding:20px}
+  .dot{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#00c2ff,#0091c4);box-shadow:0 0 40px rgba(0,194,255,.45);animation:pulse 1.2s ease-in-out infinite;margin-bottom:18px}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.15);opacity:1}}
+  h1{font-size:16px;font-weight:600;margin:0;color:#e8f1fa}
+  p{color:#9bb3c7;font-size:13px;margin:8px 0 0}
+  .err{color:#ff7a7a;margin-top:14px;font-size:12px;max-width:420px;word-break:break-word}
+  .btn{margin-top:18px;padding:10px 20px;border-radius:10px;background:linear-gradient(180deg,#00c2ff,#0091c4);color:#00131c;font-weight:700;border:0;cursor:pointer;font:inherit}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="dot" id="dot"></div>
+  <h1 id="hd">Signing you in to GROM…</h1>
+  <p id="sub">Completing OAuth…</p>
+  <div class="err" id="err"></div>
+  <button class="btn" id="retry" style="display:none" onclick="location.href='/'">Back to GROM</button>
+</div>
+
+<!-- Тот же Privy client, что и на главной -->
+<script src="grom-i18n.js?v=20260424n"></script>
+<script type="module" src="grom-privy.js?v=20260424n"></script>
+
+<script>
+(function waitAndFinish() {
+  function fail(msg) {
+    document.getElementById('dot').style.animation = 'none';
+    document.getElementById('dot').style.background = '#ff7a7a';
+    document.getElementById('hd').textContent = 'Sign-in failed';
+    document.getElementById('sub').textContent = '';
+    document.getElementById('err').textContent = msg;
+    document.getElementById('retry').style.display = '';
+  }
+
+  var qs = new URLSearchParams(location.search);
+  // Privy приходит с privy_oauth_state / privy_oauth_code — основной кейс.
+  // Старые state_code / state / authorization_code / code оставляем как fallback.
+  var state = qs.get('privy_oauth_state')
+           || qs.get('state_code')
+           || qs.get('state');
+  var code  = qs.get('privy_oauth_code')
+           || qs.get('authorization_code')
+           || qs.get('code');
+  var err   = qs.get('privy_oauth_error')
+           || qs.get('error_description')
+           || qs.get('error');
+  if (err) return fail('Provider error: ' + err);
+  if (!state || !code) {
+    var seen = Array.from(qs.keys()).join(', ') || '(none)';
+    return fail('Missing OAuth state/code in callback URL. Got params: ' + seen);
+  }
+
+  // grom-privy.js загружается как module — ждём пока он выставит window.privyFinishOauth
+  var tries = 0;
+  (function tick() {
+    if (typeof window.privyFinishOauth === 'function') return complete();
+    if (++tries > 50) return fail('Privy client did not load (check grom-privy.js)');
+    setTimeout(tick, 100);
+  })();
+
+  async function complete() {
+    try {
+      document.getElementById('sub').textContent = 'Verifying with Privy…';
+      var res = await window.privyFinishOauth(state, code);
+      document.getElementById('hd').textContent = 'Signed in';
+      document.getElementById('sub').textContent = 'Redirecting…';
+      var returnTo = (res && res.returnTo) || '/';
+      // Отбрасываем hash "#oauth" если был, и OAuth-параметры
+      try {
+        var u = new URL(returnTo, location.origin);
+        ['privy_oauth_state','privy_oauth_code','privy_oauth_provider','privy_oauth_error',
+         'state_code','authorization_code','state','code','error','error_description']
+          .forEach(function(k){ u.searchParams.delete(k); });
+        returnTo = u.toString();
+      } catch (_) {}
+      setTimeout(function () { location.replace(returnTo); }, 300);
+    } catch (e) {
+      fail((e && e.message) ? e.message : String(e));
+    }
+  }
+})();
+</script>
+</body>
+</html>

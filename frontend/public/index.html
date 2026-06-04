@@ -180,6 +180,9 @@
   .grom-logo:hover .logo-img-shell {
     filter: drop-shadow(0 0 12px rgba(0, 194, 255, 0.35));
   }
+  .grom-logo--text-only .logo-img-shell {
+    display: none;
+  }
   .topbar-brand-lockup {
     display: flex;
     flex-direction: column;
@@ -3511,7 +3514,7 @@
     </button>
     <a href="#" class="grom-logo" id="logoHome" aria-label="GROM — Finance Hub">
       <span class="logo-img-shell logo-img-shell--header">
-        <img class="logo-raster logo-raster--header" src="assets/grom-brand-header-clear.png" width="441" height="462" alt="" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark-clear.png'" />
+        <img class="logo-raster logo-raster--header" src="assets/grom-brand-header.png" width="441" height="462" alt="" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
       </span>
       <span class="topbar-brand-lockup">
         <span class="tb-name">GROM</span>
@@ -3757,7 +3760,7 @@
                 <div class="hero-aura" aria-hidden="true"></div>
                 <div class="hero-glow" aria-hidden="true"></div>
                 <span class="landing-brand-anim">
-                  <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
+                  <img class="landing-brand-photo" src="assets/grom-brand-mark.png" width="592" height="647" alt="GROM Finance Hub" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
                 </span>
               </div>
             </div>
@@ -3886,7 +3889,7 @@
             <div class="hero-aura" aria-hidden="true"></div>
             <div class="hero-glow" aria-hidden="true"></div>
             <span class="landing-brand-anim">
-              <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" data-i18n-alt="landing_logo_img_alt" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
+              <img class="landing-brand-photo" src="assets/grom-brand-mark.png" width="592" height="647" alt="GROM Finance Hub" data-i18n-alt="landing_logo_img_alt" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
             </span>
           </div>
         </div>
@@ -5942,6 +5945,11 @@ if (location.protocol !== 'file:') {
   walletModule.type = 'module';
   walletModule.src = 'grom-wallet.js?v=20260518a';
   document.head.appendChild(walletModule);
+
+  var privyModule = document.createElement('script');
+  privyModule.type = 'module';
+  privyModule.src = 'grom-privy.js?v=20260603a';
+  document.head.appendChild(privyModule);
 }
 </script>
 <script>
@@ -6297,13 +6305,19 @@ function closeConnectModal() {
   if (ov) ov.classList.remove('open');
 }
 function cnShowEmail() {
-  var ef = document.getElementById('cnEmailForm');
-  if (!ef) return;
-  ef.style.display = ef.style.display === 'none' ? '' : 'none';
-  if (ef.style.display === '') {
-    var inp = document.getElementById('cnEmail');
-    if (inp) inp.focus();
+  // Real Privy email OTP flow (grom-privy.js exposes window.privyLogin).
+  if (typeof window.privyLogin === 'function') {
+    // Hide the legacy fake-email form so it doesn't sit next to Privy's UI.
+    var ef = document.getElementById('cnEmailForm');
+    if (ef) ef.style.display = 'none';
+    window.privyLogin('email');
+    return;
   }
+  // Fallback if grom-privy.js hasn't loaded yet — show a brief notice and try again.
+  toast('Sign-in client loading… try again in a moment.', 'info');
+  setTimeout(function () {
+    if (typeof window.privyLogin === 'function') window.privyLogin('email');
+  }, 800);
 }
 async function cnSubmitEmail() {
   var v = (document.getElementById('cnEmail')?.value || '').trim();
@@ -6335,7 +6349,26 @@ async function cnSubmitEmail() {
   }
 }
 function cnConnect(name, kind) {
-  // Simulate provider handshake — in production this dispatches to Privy / WalletConnect / injected.
+  // Real provider dispatch.
+  // Social logins (Google/Apple/Farcaster) go through Privy OAuth (PKCE redirect).
+  if (kind === 'gg' || kind === 'apple' || kind === 'farcaster') {
+    if (typeof window.privyLogin === 'function') {
+      var provider = kind === 'gg' ? 'google' : kind;
+      window.privyLogin(provider);
+      return;
+    }
+    toast('Sign-in client loading… try again in a moment.', 'info');
+    return;
+  }
+  // External wallets (MetaMask / WalletConnect / Binance Web3 / Trust / OKX / Coinbase)
+  // are handled by grom-wallet.js (window.gromWalletConnect when present).
+  if (typeof window.gromWalletConnect === 'function') {
+    window.gromWalletConnect(kind, name);
+    return;
+  }
+  // Last-resort fallback: legacy demo simulation. This should not run on production
+  // once grom-wallet.js + grom-privy.js are loaded — kept only so the UI degrades
+  // gracefully if the modules fail to download.
   var fakeAddr = '0x' + Math.random().toString(16).slice(2, 10) + '…' + Math.random().toString(16).slice(2, 6);
   GROM_CONN = { connected: true, label: name + ' · ' + fakeAddr, method: kind };
   try { localStorage.setItem('grom_jwt', 'demo-session'); } catch (_) {}
@@ -6343,7 +6376,7 @@ function cnConnect(name, kind) {
   setWalletLabel(fakeAddr);
   updateAuthUi();
   closeConnectModal();
-  toast(name + ' connected · ' + fakeAddr, 'success');
+  toast(name + ' connected · ' + fakeAddr + ' (demo)', 'success');
 }
 function connectWallet() { openConnectModal(); }
 var _wc = document.getElementById('walletChip');
@@ -6626,7 +6659,7 @@ document.addEventListener('click', e => {
     document.querySelectorAll('#boChart-tf button').forEach(x => x.classList.remove('active'));
     tf.classList.add('active');
     var map = { '5S': 5, '15S': 15, '1M': 60, '5M': 300, '15M': 900 };
-    __boTfSec = map[(tf.textContent || '').trim().toUpperCase()] || 15;
+    __boTfSec = map[(tf.textContent || '').trim().toUpperCase()] || 5;
     drawChart('boChart');
   }
   const stf = e.target.closest('#spotTfPills button');
@@ -7099,7 +7132,7 @@ futSeries[futSeries.length - 1] = btcPrice;
 let boSeries = buildSeriesAround(btcPrice, 60);
 boSeries[boSeries.length - 1] = btcPrice;
 var __boChartMode = 'candles';
-var __boTfSec = 15;
+var __boTfSec = 5;
 var spotState = { pair: 'BTC/USDT' };
 var futDeskState = { pair: 'BTC/USDT', leverage: 25, mode: 'cross', side: 'long' };
 var listUiState = {
@@ -7602,18 +7635,29 @@ window.__gromTV = window.__gromTVCharts = window.__gromTVCharts || {};
   s.id = 'grom-tv-widen';
   s.textContent = [
     /* trading chart containers — full width, no inner padding */
-    '#boChart, #spotChart, #futChart { width: 100% !important; min-height: 360px; padding: 0 !important; margin: 0 !important; box-sizing: border-box; }',
+    '#boChart, #spotChart, #futChart { width: 100% !important; min-height: 360px; padding: 0 !important; margin: 0 !important; box-sizing: border-box; overflow:hidden; border-radius: 0 0 14px 14px; }',
     /* parents that wrap the chart — kill horizontal padding so chart goes edge-to-edge */
     '.chart-wrap, .bo-chart-shell, .spot-chart-shell, .fut-chart-shell, .chart-shell { padding-left: 0 !important; padding-right: 0 !important; }',
+    '.chart-wrap { padding-top: 0 !important; padding-bottom: 0 !important; }',
+    '.bo-chart-body { background: radial-gradient(circle at 72% 22%, rgba(0,194,255,.10), transparent 34%), radial-gradient(circle at 12% 86%, rgba(245,185,77,.08), transparent 30%); }',
+    '.grom-tv-watermark { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:1; pointer-events:none; font-size:clamp(42px,8vw,108px); font-weight:900; letter-spacing:.18em; color:rgba(109,167,255,.035); text-shadow:0 0 42px rgba(0,194,255,.08); }',
+    '.grom-tv-badge { position:absolute; top:10px; right:10px; z-index:6; display:flex; gap:7px; flex-wrap:wrap; justify-content:flex-end; pointer-events:none; max-width:72%; }',
+    '.grom-tv-badge span { border:1px solid rgba(122,162,199,.18); background:rgba(7,11,22,.68); backdrop-filter:blur(12px); color:#b8c7d9; border-radius:999px; padding:5px 8px; font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; box-shadow:0 8px 24px rgba(0,0,0,.18); }',
+    '.grom-tv-badge span.hot { color:#22c17c; border-color:rgba(34,193,124,.34); background:rgba(34,193,124,.10); }',
+    '.grom-tv-badge span.warn { color:#f5b94d; border-color:rgba(245,185,77,.38); background:rgba(245,185,77,.10); }',
+    '.grom-tv-expiry { position:absolute; top:0; bottom:0; z-index:2; width:1px; pointer-events:none; background:linear-gradient(180deg, transparent, rgba(245,185,77,.86), transparent); box-shadow:0 0 22px rgba(245,185,77,.45); }',
+    '.grom-tv-expiry::after { content:"EXPIRY"; position:absolute; bottom:10px; left:8px; color:#0a1224; background:#f5b94d; border-radius:5px; padding:3px 6px; font-size:9px; font-weight:900; letter-spacing:.08em; }',
+    '.grom-tv-expiry::before { content:""; position:absolute; top:0; bottom:0; left:0; width:220px; background:linear-gradient(90deg, rgba(245,185,77,.10), transparent); }',
     /* price-scale font / size tweak — tighter labels */
     '#boChart .tv-lightweight-charts, #spotChart .tv-lightweight-charts, #futChart .tv-lightweight-charts { font-feature-settings: "tnum" 1; }',
+    '@media (max-width: 720px) { #boChart, #spotChart, #futChart { min-height: 330px; } .grom-tv-badge { position:static; padding:8px 10px 0; max-width:none; justify-content:flex-start; } }',
   ].join('\n');
   document.head.appendChild(s);
 })();
 function _gromTVColors() {
   return {
-    bg: 'transparent', grid: 'rgba(122,162,199,0.08)', text: '#9bb3c7',
-    up: '#22c17c', down: '#e8576b', area: 'rgba(0,194,255,0.25)', line: '#00c2ff',
+    bg: 'transparent', grid: 'rgba(122,162,199,0.075)', text: '#9bb3c7',
+    up: '#20d08a', down: '#ff5d72', area: 'rgba(0,194,255,0.25)', line: '#00d4ff',
   };
 }
 function _gromTVCreate(container, mode) {
@@ -7624,7 +7668,7 @@ function _gromTVCreate(container, mode) {
     height: container.clientHeight || 360,
     layout: { background: { type: 'solid', color: col.bg }, textColor: col.text, fontFamily: 'ui-sans-serif, system-ui, sans-serif' },
     grid: { vertLines: { color: col.grid }, horzLines: { color: col.grid } },
-    timeScale: { borderColor: 'transparent', borderVisible: false, timeVisible: true, secondsVisible: true, rightOffset: 2, barSpacing: 10, minBarSpacing: 4 },
+    timeScale: { borderColor: 'transparent', borderVisible: false, timeVisible: true, secondsVisible: true, rightOffset: 4, barSpacing: 10, minBarSpacing: 4, fixLeftEdge: true },
     rightPriceScale: {
       borderColor: 'transparent', borderVisible: false,
       scaleMargins: { top: 0.06, bottom: 0.08 },
@@ -7642,11 +7686,17 @@ function _gromTVCreate(container, mode) {
     handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
   });
   var series;
-  if (mode === 'candles') {
+  if (mode === 'candles' || mode === 'heikin') {
     series = chart.addCandlestickSeries({
       upColor: col.up, downColor: col.down,
       borderUpColor: col.up, borderDownColor: col.down,
       wickUpColor: col.up, wickDownColor: col.down,
+    });
+  } else if (mode === 'bars') {
+    series = chart.addBarSeries({
+      upColor: col.up,
+      downColor: col.down,
+      thinBars: false,
     });
   } else if (mode === 'area') {
     series = chart.addAreaSeries({
@@ -7667,7 +7717,7 @@ function _gromTVCreate(container, mode) {
   } else {
     series = chart.addLineSeries({ color: col.line, lineWidth: 2 });
   }
-  return { chart: chart, series: series, mode: mode, candles: [], lastBucket: null };
+  return { chart: chart, series: series, mode: mode, candles: [], lastBucket: null, priceLines: [] };
 }
 function _gromTVBucketTime(ts, intervalSec) {
   return Math.floor(ts / 1000 / intervalSec) * intervalSec;
@@ -7676,14 +7726,24 @@ function _gromTVAggregate(state, price, ts, intervalSec) {
   var bucket = _gromTVBucketTime(ts, intervalSec);
   var last = state.candles[state.candles.length - 1];
   if (!last || last.time !== bucket) {
-    var newC = { time: bucket, open: price, high: price, low: price, close: price };
+    var prev = last ? last.close : price;
+    var newC = {
+      time: bucket,
+      open: prev,
+      high: Math.max(prev, price),
+      low: Math.min(prev, price),
+      close: price,
+      volume: Math.max(80, Math.round((Math.abs(price - prev) / Math.max(price, 1)) * 180000 + 100 + Math.random() * 900))
+    };
     state.candles.push(newC);
     if (state.candles.length > 300) state.candles.shift();
     return newC;
   } else {
+    var old = last.close;
     last.close = price;
     if (price > last.high) last.high = price;
     if (price < last.low) last.low = price;
+    last.volume = Math.max(60, Number(last.volume || 0) + Math.round((Math.abs(price - old) / Math.max(price, 1)) * 120000 + Math.random() * 120));
     return last;
   }
 }
@@ -7697,6 +7757,54 @@ function _gromComputeSMA(candles, period) {
   }
   return out;
 }
+function _gromComputeVWAP(candles) {
+  var out = [];
+  var pv = 0;
+  var vv = 0;
+  for (var i = 0; i < candles.length; i++) {
+    var k = candles[i];
+    var typical = (k.high + k.low + k.close) / 3;
+    var vol = Number(k.volume || 1);
+    pv += typical * vol;
+    vv += vol;
+    out.push({ time: k.time, value: pv / Math.max(vv, 1) });
+  }
+  return out;
+}
+function _gromToHeikinSeries(candles) {
+  var out = [];
+  var prev = null;
+  for (var i = 0; i < candles.length; i++) {
+    var k = candles[i];
+    var close = (k.open + k.high + k.low + k.close) / 4;
+    var open = prev ? (prev.open + prev.close) / 2 : (k.open + k.close) / 2;
+    var high = Math.max(k.high, open, close);
+    var low = Math.min(k.low, open, close);
+    var row = { time: k.time, open: open, high: high, low: low, close: close };
+    out.push(row);
+    prev = row;
+  }
+  return out;
+}
+function _gromActiveText(selector, fallback) {
+  var el = document.querySelector(selector);
+  return (el ? (el.textContent || '').trim() : fallback || '').toLowerCase();
+}
+function _gromIntervalForChart(id, mode) {
+  if (id === 'boChart') return Math.max(1, Number(window.__boTfSec || 5));
+  if (id === 'spotChart') {
+    var t = _gromActiveText('#spotTfPills button.active', '15m').toUpperCase();
+    var map = { '1M': 60, '5M': 300, '15M': 900, '1H': 3600, '4H': 14400, '1D': 86400 };
+    return map[t] || 900;
+  }
+  return mode === 'area' ? 5 : 60;
+}
+function _gromPriceFormatFor(px) {
+  if (px < 0.001) return { type: 'price', precision: 8, minMove: 0.00000001 };
+  if (px < 1) return { type: 'price', precision: 5, minMove: 0.00001 };
+  if (px < 100) return { type: 'price', precision: 3, minMove: 0.001 };
+  return { type: 'price', precision: 2, minMove: 0.01 };
+}
 function gromDrawTVChart(id, opts) {
   opts = opts || {};
   var c = document.getElementById(id);
@@ -7708,14 +7816,19 @@ function gromDrawTVChart(id, opts) {
   if (!mode) {
     if (id === 'boChart') {
       // Look at active Binary chart-type tab — class "active" on Line/Candles/Bars/HA buttons
-      var activeTab = document.querySelector('#page-binary .chart-type-tabs .active, .bo-chart-tabs .active, [data-bo-chart-type].active');
+      var activeTab = document.querySelector('#boChart-type button.active, #page-binary .chart-type-tabs .active, .bo-chart-tabs .active, [data-bo-chart-type].active');
       var t = activeTab ? (activeTab.dataset.boChartType || activeTab.textContent || '').toLowerCase().trim() : '';
+      if (window.__boChartMode === 'line') mode = 'area';
+      else if (window.__boChartMode === 'bars') mode = 'bars';
+      else if (window.__boChartMode === 'heikin') mode = 'heikin';
+      else if (window.__boChartMode === 'candles') mode = 'candles';
       if (t.indexOf('candle') >= 0) mode = 'candles';
-      else if (t.indexOf('bar') >= 0)  mode = 'candles';
-      else if (t.indexOf('ha') >= 0)   mode = 'candles';
-      else                              mode = 'area';
+      else if (t.indexOf('bar') >= 0)  mode = 'bars';
+      else if (t.indexOf('ha') >= 0)   mode = 'heikin';
+      else if (!mode)                   mode = 'area';
     } else mode = 'candles';
   }
+  if (mode === 'heikin') mode = 'heikin';
   // Replace non-div containers (old canvas/svg) with div
   if (c.tagName.toLowerCase() !== 'div') {
     var div = document.createElement('div');
@@ -7727,18 +7840,30 @@ function gromDrawTVChart(id, opts) {
   c.style.position = 'relative';
   if (!c.style.minHeight) c.style.minHeight = '320px';
 
+  // Resolve pair before creating state so pair/timeframe switches reset old candles.
+  var pair = '';
+  if (id === 'boChart' && window.boState) pair = boState.pair;
+  else if (id === 'spotChart' && window.spotState) pair = spotState.pair;
+  else if (id === 'futChart' && window.futDeskState) pair = futDeskState.pair;
+  pair = pair || 'BTC/USDT';
+  var intervalSec = opts.intervalSec || _gromIntervalForChart(id, mode);
   var state = window.__gromTVCharts[id];
+  if (state && (state.pair !== pair || state.intervalSec !== intervalSec)) {
+    try { state.chart.remove(); } catch (_) {}
+    state = null;
+  }
   if (!state || state.mode !== mode) {
     if (state && state.chart) { try { state.chart.remove(); } catch (_) {} }
     c.innerHTML = '';
     state = _gromTVCreate(c, mode);
     if (!state) return false;
-    state.id = id; state.mode = mode;
+    state.id = id; state.mode = mode; state.pair = pair; state.intervalSec = intervalSec;
     window.__gromTVCharts[id] = state;
     // Add MA7 + MA25 indicators for candles mode
-    if (mode === 'candles') {
+    if (mode === 'candles' || mode === 'heikin' || mode === 'bars') {
       state.ma7  = state.chart.addLineSeries({ color: '#f5b94d', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
       state.ma25 = state.chart.addLineSeries({ color: '#9d6cf5', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      state.vwap = state.chart.addLineSeries({ color: '#00d4ff', lineWidth: 1.25, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: LightweightCharts.LineStyle.Dotted });
       // Add volume histogram on separate pane (bottom 20%)
       state.volSeries = state.chart.addHistogramSeries({
         color: 'rgba(122,162,199,0.35)',
@@ -7751,9 +7876,17 @@ function gromDrawTVChart(id, opts) {
       // Legend overlay for MA values
       var legend = document.createElement('div');
       legend.style.cssText = 'position:absolute;top:8px;left:10px;z-index:5;font-size:11px;font-family:ui-sans-serif,system-ui;color:#9bb3c7;pointer-events:none;display:flex;gap:14px';
-      legend.innerHTML = '<span style="color:#f5b94d">MA(7) <b id="' + id + '_ma7v" style="font-weight:700">—</b></span><span style="color:#9d6cf5">MA(25) <b id="' + id + '_ma25v" style="font-weight:700">—</b></span>';
+      legend.innerHTML = '<span style="color:#f5b94d">MA(7) <b id="' + id + '_ma7v" style="font-weight:700">—</b></span><span style="color:#9d6cf5">MA(25) <b id="' + id + '_ma25v" style="font-weight:700">—</b></span><span style="color:#00d4ff">VWAP <b id="' + id + '_vwapv" style="font-weight:700">—</b></span>';
       c.appendChild(legend);
     }
+    var wm = document.createElement('div');
+    wm.className = 'grom-tv-watermark';
+    wm.textContent = id === 'boChart' ? 'BINARY' : (id === 'futChart' ? 'PERP' : 'GROM');
+    c.appendChild(wm);
+    var badge = document.createElement('div');
+    badge.className = 'grom-tv-badge';
+    badge.id = id + '_badges';
+    c.appendChild(badge);
     if (typeof ResizeObserver !== 'undefined') {
       var ro = new ResizeObserver(function () {
         state.chart.applyOptions({ width: c.clientWidth, height: c.clientHeight || 380 });
@@ -7762,13 +7895,9 @@ function gromDrawTVChart(id, opts) {
     }
   }
   // Resolve pair → current price
-  var pair = '';
-  if (id === 'boChart' && window.boState) pair = boState.pair;
-  else if (id === 'spotChart' && window.spotState) pair = spotState.pair;
-  else if (id === 'futChart' && window.futDeskState) pair = futDeskState.pair;
   var px = (typeof priceForPair === 'function') ? priceForPair(pair || 'BTC/USDT') : 100;
+  try { state.series.applyOptions({ priceFormat: _gromPriceFormatFor(px) }); } catch (_) {}
   var now = Date.now();
-  var intervalSec = opts.intervalSec || (id === 'boChart' ? 1 : (mode === 'candles' ? 15 : 5));
 
   // Seed history with realistic random-walk OHLC if first time
   if (!state.candles.length) {
@@ -7790,10 +7919,13 @@ function gromDrawTVChart(id, opts) {
   }
   _gromTVAggregate(state, px, now, intervalSec);
 
-  if (mode === 'candles') {
-    state.series.setData(state.candles.map(function (k) { return { time: k.time, open: k.open, high: k.high, low: k.low, close: k.close }; }));
+  if (mode === 'candles' || mode === 'heikin' || mode === 'bars') {
+    var ohlcData = state.candles.map(function (k) { return { time: k.time, open: k.open, high: k.high, low: k.low, close: k.close }; });
+    if (mode === 'heikin') ohlcData = _gromToHeikinSeries(state.candles);
+    state.series.setData(ohlcData);
     if (state.ma7)  state.ma7.setData(_gromComputeSMA(state.candles, 7));
     if (state.ma25) state.ma25.setData(_gromComputeSMA(state.candles, 25));
+    if (state.vwap) state.vwap.setData(_gromComputeVWAP(state.candles));
     if (state.volSeries) {
       var col = _gromTVColors();
       state.volSeries.setData(state.candles.map(function (k) {
@@ -7803,51 +7935,114 @@ function gromDrawTVChart(id, opts) {
     // Update legend
     var ma7Arr  = _gromComputeSMA(state.candles, 7);
     var ma25Arr = _gromComputeSMA(state.candles, 25);
+    var vwapArr = _gromComputeVWAP(state.candles);
     var ma7v  = ma7Arr.length  ? ma7Arr[ma7Arr.length - 1].value  : null;
     var ma25v = ma25Arr.length ? ma25Arr[ma25Arr.length - 1].value : null;
+    var vwapv = vwapArr.length ? vwapArr[vwapArr.length - 1].value : null;
     var fmtN = function (n) { return n == null ? '—' : (n > 1000 ? n.toFixed(2) : n.toFixed(4)); };
     var el7 = document.getElementById(id + '_ma7v'); if (el7) el7.textContent = fmtN(ma7v);
     var el25 = document.getElementById(id + '_ma25v'); if (el25) el25.textContent = fmtN(ma25v);
+    var elVwap = document.getElementById(id + '_vwapv'); if (elVwap) elVwap.textContent = fmtN(vwapv);
   } else {
     state.series.setData(state.candles.map(function (k) { return { time: k.time, value: k.close }; }));
   }
+  if (state.priceLines && state.priceLines.length) {
+    state.priceLines.forEach(function (line) { try { state.series.removePriceLine(line); } catch (_) {} });
+  }
+  state.priceLines = [];
+  var badgeEl = document.getElementById(id + '_badges');
+  if (badgeEl) {
+    var last = state.candles[state.candles.length - 1] || { close: px, open: px };
+    var impulse = ((last.close - last.open) / Math.max(last.open, 1)) * 100;
+    if (id === 'spotChart') {
+      badgeEl.innerHTML = '<span class="hot">AI liquidity map</span><span>VWAP bands</span><span>' + pair + '</span>';
+    } else if (id === 'futChart') {
+      badgeEl.innerHTML = '<span class="warn">Funding live</span><span>Liquidation heat</span><span>' + (futDeskState && futDeskState.leverage ? futDeskState.leverage : 25) + 'x</span>';
+    } else {
+      badgeEl.innerHTML = '<span class="hot">1-tap expiry</span><span>Strike radar</span><span>' + (impulse >= 0 ? '+' : '') + impulse.toFixed(2) + '% candle</span>';
+    }
+  }
+  if (id === 'spotChart') {
+    var vwapLine = _gromComputeVWAP(state.candles).slice(-1)[0];
+    if (vwapLine && Number.isFinite(vwapLine.value)) {
+      state.priceLines.push(state.series.createPriceLine({
+        price: vwapLine.value,
+        color: 'rgba(0,212,255,.72)',
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dotted,
+        axisLabelVisible: true,
+        title: 'VWAP',
+      }));
+    }
+  }
+  if (id === 'futChart' && typeof futState !== 'undefined') {
+    [
+      { price: futState.liqTop, title: 'SHORT LIQ', color: 'rgba(255,93,114,.86)' },
+      { price: futState.liqBottom, title: 'LONG LIQ', color: 'rgba(32,208,138,.86)' }
+    ].forEach(function (line) {
+      if (Number.isFinite(line.price)) {
+        state.priceLines.push(state.series.createPriceLine({
+          price: line.price,
+          color: line.color,
+          lineWidth: 2,
+          lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: line.title,
+        }));
+      }
+    });
+  }
   // Binary: strike line (PocketOption-style yellow dashed)
   if (id === 'boChart' && window.boState && boState.strike) {
-    if (state.strikeLine) { try { state.series.removePriceLine(state.strikeLine); } catch (_) {} }
     state.strikeLine = state.series.createPriceLine({
       price: Number(boState.strike),
       color: '#f5b94d', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed,
       axisLabelVisible: true, title: 'STRIKE',
     });
+    state.priceLines.push(state.strikeLine);
+    var exp = c.querySelector('.grom-tv-expiry');
+    if (!exp) {
+      exp = document.createElement('div');
+      exp.className = 'grom-tv-expiry';
+      c.appendChild(exp);
+    }
+    var pctDone = Math.max(0, Math.min(1, Number(boState.elapsed || 0) / Math.max(1, Number(boState.roundLen || 1))));
+    exp.style.left = Math.round(78 + pctDone * 16) + '%';
+  } else {
+    var oldExp = c.querySelector('.grom-tv-expiry');
+    if (oldExp) oldExp.remove();
   }
   return true;
 }
 window.gromDrawTVChart = gromDrawTVChart;
 
-// TV-only drawChart for trading desks; legacy canvas kept for other charts (sparklines, mini-tape).
+// Trading desk charts: prefer the professional lightweight renderer, with SVG
+// fallback if the vendor script is unavailable.
 var _gromTVChartIds = ['boChart', 'spotChart', 'futChart'];
 function drawChart(id) {
   if (_gromTVChartIds.indexOf(id) !== -1) {
-    // For trading desk charts — ONLY use TradingView lightweight-charts
-    if (typeof LightweightCharts === 'undefined') {
-      // Library not loaded yet — retry after a moment
-      setTimeout(function () { try { gromDrawTVChart(id); } catch (_) {} }, 400);
-      return;
+    if (typeof window.gromDrawTVChart === 'function') {
+      try {
+        var rendered = window.gromDrawTVChart(id);
+        if (rendered !== false) return rendered;
+      } catch (err) {
+        console.warn('[grom-chart] lightweight renderer failed, falling back', id, err);
+      }
     }
-    try { gromDrawTVChart(id); } catch (e) { console.warn('[grom-tv]', id, e.message); }
+    if (typeof window._gromOldDrawChart === 'function') return window._gromOldDrawChart(id);
+    if (typeof _origDrawChart === 'function') return _origDrawChart(id);
     return;
   }
   // Other charts (sparklines, mini-tape) — use legacy canvas
   if (typeof window._gromOldDrawChart === 'function') return window._gromOldDrawChart(id);
 }
 window.drawChart = drawChart;
-// Auto-redraw TV charts every second to flush real-time price updates
+// Auto-redraw desk charts every second to flush real-time price updates.
 setInterval(function () {
-  if (typeof LightweightCharts === 'undefined') return;
   _gromTVChartIds.forEach(function (id) {
     var el = document.getElementById(id);
     if (el && el.offsetParent !== null) { // only if visible
-      try { gromDrawTVChart(id); } catch (_) {}
+      try { drawChart(id); } catch (_) {}
     }
   });
 }, 1000);
@@ -9205,16 +9400,24 @@ function exportHistoryCsv() {
     return '';
   }
 
+  var __devLoginDisabled = false;
   async function ensureApiToken() {
     var token = '';
     try { token = localStorage.getItem('grom_jwt') || ''; } catch (_) {}
     if (token && token !== 'demo-session') return token;
+    if (__devLoginDisabled) return '';
     try {
       var res = await fetch(apiBase() + '/auth/dev-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      if (!res.ok) return token && token !== 'demo-session' ? token : '';
+      if (!res.ok) {
+        // Disable dev-login attempts for this session — not available in production.
+        if (res.status === 404 || res.status === 403 || res.status === 401) {
+          __devLoginDisabled = true;
+        }
+        return token && token !== 'demo-session' ? token : '';
+      }
       var data = await res.json();
       if (data && data.token) {
         try { localStorage.setItem('grom_jwt', data.token); } catch (_) {}
@@ -9224,7 +9427,9 @@ function exportHistoryCsv() {
         }
         return data.token;
       }
-    } catch (_) {}
+    } catch (_) {
+      __devLoginDisabled = true;
+    }
     return token && token !== 'demo-session' ? token : '';
   }
 

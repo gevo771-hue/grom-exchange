@@ -197,7 +197,11 @@ function ensureInlineForm() {
 function showEmailForm() {
   const box = ensureInlineForm();
   if (!box) return;
-  hideMainRows();
+  // CHANGED: do NOT hide main rows when showing email form.
+  // Keeping Email + Google + wallet buttons visible alongside the email form
+  // means the user can always switch provider, and we don't need any of the
+  // recovery machinery (observer / wrap / pageshow) to restore state. The email
+  // form simply appears under the main rows as an expandable section.
   box.style.display = '';
   box.querySelector('#pvStep1').style.display = '';
   box.querySelector('#pvStep2').style.display = 'none';
@@ -205,18 +209,16 @@ function showEmailForm() {
 }
 
 function hideMainRows() {
-  console.log('[grom-privy] hideMainRows', new Error().stack?.split('\n')[2]?.trim());
-  document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(el => el.style.display = 'none');
-  document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note').forEach(el => el.style.display = 'none');
+  // Kept as no-op for backward compatibility — any old code path that calls it
+  // simply does nothing now. Main rows always stay visible.
 }
 
 function showMainRows() {
-  const rows = document.querySelectorAll('#connectModal .wm-body > button.cn-row');
-  console.log('[grom-privy] showMainRows', rows.length, 'rows');
-  rows.forEach(el => el.style.display = '');
+  // Ensure main rows + inline form are visible. With the new flow we never hide
+  // main rows, so this only matters for cleanup when stale state persists from
+  // an older version of the script.
+  document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(el => el.style.display = '');
   document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note').forEach(el => el.style.display = '');
-  const box = document.getElementById('privyInlineForm');
-  if (box) box.style.display = 'none';
 }
 
 function resetInlineForm() {

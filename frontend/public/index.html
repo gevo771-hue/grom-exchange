@@ -5726,7 +5726,7 @@
     </div>
     <div class="wm-body">
       <!-- Primary: Email + Google -->
-      <button type="button" class="cn-row primary" onclick="cnShowEmail()">
+      <button type="button" class="cn-row primary" onclick="cnShowEmail(event)">
         <span class="ico email"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></svg></span>
         <span class="lbl">Log in with Email</span>
         <span class="chev">›</span>
@@ -5738,7 +5738,7 @@
         </div>
         <div class="wm-note" style="margin:8px 0 0">We'll create an embedded wallet for you — no seed phrase needed. Powered by Privy.</div>
       </div>
-      <button type="button" class="cn-row" onclick="cnConnect('Google','gg')" style="margin-top:8px">
+      <button type="button" class="cn-row" onclick="cnConnect('Google','gg', event)" style="margin-top:8px">
         <span class="ico gg">G</span>
         <span class="lbl">Continue with Google</span>
         <span class="chev">›</span>
@@ -5948,7 +5948,7 @@ if (location.protocol !== 'file:') {
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = 'grom-privy.js?v=20260605c';
+  privyModule.src = 'grom-privy.js?v=20260605d';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -6318,7 +6318,11 @@ function closeConnectModal() {
   var ov = document.getElementById('connectModal');
   if (ov) ov.classList.remove('open');
 }
-function cnShowEmail() {
+function cnShowEmail(ev) {
+  // Block synthetic clicks (Chrome autofill / focus-as-click / .click() calls
+  // from extensions or assistive tech). Only a real user mouse/keyboard click
+  // has event.isTrusted === true.
+  if (ev && ev.isTrusted === false) return;
   // Mark this as an explicit user click so the modal-open guard in grom-privy.js
   // does NOT roll back to main rows. Without this flag, the 150ms cleanup would
   // undo the user's choice of opening the email form.
@@ -6366,7 +6370,11 @@ async function cnSubmitEmail() {
     if (btn) { btn.disabled = false; btn.textContent = oldText || 'Continue'; }
   }
 }
-function cnConnect(name, kind) {
+function cnConnect(name, kind, ev) {
+  // Block synthetic clicks (Chrome autofill / focus-as-click / .click() from
+  // extensions). A synthetic click on Google would trigger an unwanted OAuth
+  // redirect; isTrusted=false means "not a real user interaction".
+  if (ev && ev.isTrusted === false) return;
   // Real provider dispatch.
   // Social logins (Google/Apple/Farcaster) go through Privy OAuth (PKCE redirect).
   if (kind === 'gg' || kind === 'apple' || kind === 'farcaster') {

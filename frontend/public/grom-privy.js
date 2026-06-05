@@ -415,17 +415,27 @@ function installModalResetObserver() {
   // PRIMARY mechanism: wrap window.openConnectModal so we ALWAYS run after it.
   // This is the most reliable hook — every UI button calls openConnectModal(),
   // every hash route calls openConnectModal(), so wrapping it catches them all.
+  function hideEmailFormAndResetInputs() {
+    const box = document.getElementById('privyInlineForm');
+    if (box) box.style.display = 'none';
+    resetInlineForm();
+  }
+
   const origOpen = window.openConnectModal;
   window.openConnectModal = function gromPrivyOpenConnectModalWrap() {
     if (typeof origOpen === 'function') {
       try { origOpen.apply(this, arguments); } catch (e) { console.warn('[grom-privy] orig open threw', e); }
     }
-    // Defer one microtask so DOM ops in origOpen settle, then force-restore.
+    // Two passes: microtask (catches sync side effects) + 150ms (catches
+    // anything Chrome autofill or focus events trigger asynchronously).
     Promise.resolve().then(() => {
-      console.log('[grom-privy] openConnectModal wrap → restoring rows');
       showMainRows();
-      resetInlineForm();
+      hideEmailFormAndResetInputs();
     });
+    setTimeout(() => {
+      const m = document.getElementById('connectModal');
+      if (m && m.classList.contains('open')) hideEmailFormAndResetInputs();
+    }, 150);
   };
 
   // BACKUP mechanism 1: MutationObserver in case something else opens the modal
@@ -434,21 +444,19 @@ function installModalResetObserver() {
   const observer = new MutationObserver(() => {
     const isOpen = modal.classList.contains('open');
     if (isOpen && !lastOpen) {
-      console.log('[grom-privy] observer → modal opened, restoring rows');
       showMainRows();
-      resetInlineForm();
+      hideEmailFormAndResetInputs();
     }
     lastOpen = isOpen;
   });
   observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
-  if (lastOpen) { showMainRows(); resetInlineForm(); }
+  if (lastOpen) { showMainRows(); hideEmailFormAndResetInputs(); }
 
   // BACKUP mechanism 2: Safari bfcache restore.
   window.addEventListener('pageshow', (e) => {
     if (!e.persisted) return;
-    console.log('[grom-privy] pageshow persisted → restoring rows');
     showMainRows();
-    resetInlineForm();
+    hideEmailFormAndResetInputs();
   });
 }
 

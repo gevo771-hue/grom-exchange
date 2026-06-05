@@ -478,11 +478,61 @@ function installModalResetObserver() {
   });
 }
 
+/* ---------- Hard guard around cnShowEmail / cnConnect ----------
+ *
+ * The HTML inline handlers in index.html are `onclick="cnShowEmail(event)"` and
+ * `onclick="cnConnect('Google','gg', event)"`. But if a stale index.html in
+ * cache shows `onclick="cnShowEmail()"` (no event argument), or some other path
+ * calls these functions, the user-click flag could be set without a trusted
+ * event. We wrap both functions here as a hard guard: even if the inline
+ * handler doesn't pass `event`, we look at `window.event` (which Chrome and
+ * most browsers populate during event dispatch) and require isTrusted=true.
+ */
+function installClickGuards() {
+  function trustedEventOrNull(args) {
+    // Look at first arg, then window.event. Either way it must be a trusted
+    // user interaction event (mouse/keyboard click).
+    const evt = args && args[0] && args[0].isTrusted !== undefined
+      ? args[0]
+      : (typeof window !== 'undefined' ? window.event : null);
+    if (evt && evt.isTrusted) return evt;
+    return null;
+  }
+
+  const origCnShowEmail = window.cnShowEmail;
+  if (typeof origCnShowEmail === 'function') {
+    window.cnShowEmail = function () {
+      const evt = trustedEventOrNull(arguments);
+      if (!evt) {
+        console.warn('[grom-privy] cnShowEmail blocked — no trusted event (likely autofill/auto-trigger)');
+        return;
+      }
+      window.__gromUserClickedEmail = true;
+      return origCnShowEmail.apply(this, arguments);
+    };
+  }
+
+  const origCnConnect = window.cnConnect;
+  if (typeof origCnConnect === 'function') {
+    window.cnConnect = function (name, kind) {
+      // Block synthetic clicks on social/wallet buttons too — prevents
+      // accidental Google OAuth redirects from autofill etc.
+      const evt = trustedEventOrNull(arguments);
+      if (!evt) {
+        console.warn('[grom-privy] cnConnect blocked — no trusted event');
+        return;
+      }
+      return origCnConnect.apply(this, arguments);
+    };
+  }
+}
+
 /* ---------- Bootstrap (после DOMContentLoaded) ---------- */
 
 function boot() {
   hookChipDropdown();
   installModalResetObserver();
+  installClickGuards();
 
   /* Auto-restore сессии: если у нас есть saved Privy session — применяем.
    * НО: если юзер явно вышел (флаг grom:logged_out), сначала чистим всё и не воскрешаем. */

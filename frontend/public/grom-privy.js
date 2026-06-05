@@ -205,12 +205,15 @@ function showEmailForm() {
 }
 
 function hideMainRows() {
+  console.log('[grom-privy] hideMainRows', new Error().stack?.split('\n')[2]?.trim());
   document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(el => el.style.display = 'none');
   document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note').forEach(el => el.style.display = 'none');
 }
 
 function showMainRows() {
-  document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(el => el.style.display = '');
+  const rows = document.querySelectorAll('#connectModal .wm-body > button.cn-row');
+  console.log('[grom-privy] showMainRows', rows.length, 'rows');
+  rows.forEach(el => el.style.display = '');
   document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note').forEach(el => el.style.display = '');
   const box = document.getElementById('privyInlineForm');
   if (box) box.style.display = 'none';
@@ -406,10 +409,30 @@ window.privyLogout = async function privyLogout() {
 function installModalResetObserver() {
   const modal = document.getElementById('connectModal');
   if (!modal) return;
+
+  // PRIMARY mechanism: wrap window.openConnectModal so we ALWAYS run after it.
+  // This is the most reliable hook — every UI button calls openConnectModal(),
+  // every hash route calls openConnectModal(), so wrapping it catches them all.
+  const origOpen = window.openConnectModal;
+  window.openConnectModal = function gromPrivyOpenConnectModalWrap() {
+    if (typeof origOpen === 'function') {
+      try { origOpen.apply(this, arguments); } catch (e) { console.warn('[grom-privy] orig open threw', e); }
+    }
+    // Defer one microtask so DOM ops in origOpen settle, then force-restore.
+    Promise.resolve().then(() => {
+      console.log('[grom-privy] openConnectModal wrap → restoring rows');
+      showMainRows();
+      resetInlineForm();
+    });
+  };
+
+  // BACKUP mechanism 1: MutationObserver in case something else opens the modal
+  // by toggling the class directly without going through openConnectModal.
   let lastOpen = modal.classList.contains('open');
   const observer = new MutationObserver(() => {
     const isOpen = modal.classList.contains('open');
     if (isOpen && !lastOpen) {
+      console.log('[grom-privy] observer → modal opened, restoring rows');
       showMainRows();
       resetInlineForm();
     }
@@ -418,10 +441,10 @@ function installModalResetObserver() {
   observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
   if (lastOpen) { showMainRows(); resetInlineForm(); }
 
-  // Safari bfcache: pages restored from back-forward cache do NOT re-execute JS.
-  // If the modal is currently open + showing stale email form, force reset.
+  // BACKUP mechanism 2: Safari bfcache restore.
   window.addEventListener('pageshow', (e) => {
     if (!e.persisted) return;
+    console.log('[grom-privy] pageshow persisted → restoring rows');
     showMainRows();
     resetInlineForm();
   });

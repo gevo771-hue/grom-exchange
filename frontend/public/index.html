@@ -3514,7 +3514,7 @@
     </button>
     <a href="#" class="grom-logo" id="logoHome" aria-label="GROM — Finance Hub">
       <span class="logo-img-shell logo-img-shell--header">
-        <img class="logo-raster logo-raster--header" src="assets/grom-brand-header.png" width="441" height="462" alt="" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
+        <img class="logo-raster logo-raster--header" src="assets/grom-brand-header.png" width="441" height="462" alt="" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='assets/grom-brand-header-clear.png'}else{this.onerror=null;this.src='assets/grom-brand-mark.png'}" />
       </span>
       <span class="topbar-brand-lockup">
         <span class="tb-name">GROM</span>
@@ -3760,7 +3760,7 @@
                 <div class="hero-aura" aria-hidden="true"></div>
                 <div class="hero-glow" aria-hidden="true"></div>
                 <span class="landing-brand-anim">
-                  <img class="landing-brand-photo" src="assets/grom-brand-mark.png" width="592" height="647" alt="GROM Finance Hub" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
+                  <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
                 </span>
               </div>
             </div>
@@ -3889,7 +3889,7 @@
             <div class="hero-aura" aria-hidden="true"></div>
             <div class="hero-glow" aria-hidden="true"></div>
             <span class="landing-brand-anim">
-              <img class="landing-brand-photo" src="assets/grom-brand-mark.png" width="592" height="647" alt="GROM Finance Hub" data-i18n-alt="landing_logo_img_alt" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
+              <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" data-i18n-alt="landing_logo_img_alt" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
             </span>
           </div>
         </div>
@@ -4105,7 +4105,7 @@
         <div class="card">
           <div class="card-head"><h3>Market snapshot</h3><span class="sub">Live prices</span></div>
           <div id="watchlist">
-            <div class="watch-row" onclick="openSpotPair('BTC/USDT')"><span class="coin-ico btc">₿</span><div><div class="name">Bitcoin</div><div class="ticker">BTC/USDT</div></div><div class="price" id="px-btc">$104,218.40</div><div class="chg up">+1.82%</div></div>
+            <div class="watch-row" onclick="openSpotPair('BTC/USDT')"><span class="coin-ico btc">₿</span><div><div class="name">Bitcoin</div><div class="ticker">BTC/USDT</div></div><div class="price" id="px-btc">$63,903.09</div><div class="chg up">+1.82%</div></div>
             <div class="watch-row" onclick="openSpotPair('ETH/USDT')"><span class="coin-ico eth">Ξ</span><div><div class="name">Ethereum</div><div class="ticker">ETH/USDT</div></div><div class="price" id="px-eth">$3,684.15</div><div class="chg up">+0.94%</div></div>
             <div class="watch-row" onclick="openSpotPair('SOL/USDT')"><span class="coin-ico sol">S</span><div><div class="name">Solana</div><div class="ticker">SOL/USDT</div></div><div class="price" id="px-sol">$182.27</div><div class="chg down">-2.10%</div></div>
             <div class="watch-row" onclick="openSpotPair('BNB/USDT')"><span class="coin-ico bnb">B</span><div><div class="name">BNB</div><div class="ticker">BNB/USDT</div></div><div class="price" id="px-bnb">$612.88</div><div class="chg up">+0.33%</div></div>
@@ -4193,7 +4193,7 @@
                 <span class="pay">+92%</span>
               </div>
               <div class="bo-price">
-                <span class="big" id="boPrice">$104,218.40</span>
+                <span class="big" id="boPrice">$63,903.09</span>
                 <span class="pip up" id="boPip">+1.82%</span>
               </div>
             </div>
@@ -4219,7 +4219,7 @@
             <div class="bo-hud-overlay">
               <div class="hud-card">
                 <div class="lbl">Strike @ entry</div>
-                <div class="v mono" id="hudStrike">$104,208.40</div>
+                <div class="v mono" id="hudStrike">$63,892.65</div>
               </div>
               <div class="hud-card critical">
                 <div class="lbl">Expiry in</div>
@@ -4257,7 +4257,7 @@
             </div>
             <div class="side">
               <div class="strike">Strike lock</div>
-              <div class="strike-v mono" id="strikeLock">$104,208.40</div>
+              <div class="strike-v mono" id="strikeLock">$63,892.65</div>
             </div>
           </div>
 
@@ -4417,7 +4417,7 @@
 
       <div class="spot-overview">
         <div class="spot-kpi"><div class="k">24h change</div><div class="v mono" id="spotChangeBadge">+1.82%</div><div class="s up" id="spotChangeNote">buyers still control the session</div></div>
-        <div class="spot-kpi"><div class="k">24h high / low</div><div class="v mono" id="spotRangeTag">$105,140 / $102,840</div><div class="s">session expansion remains healthy</div></div>
+        <div class="spot-kpi"><div class="k">24h high / low</div><div class="v mono" id="spotRangeTag">$64,120 / $62,840</div><div class="s">session expansion remains healthy</div></div>
         <div class="spot-kpi"><div class="k">Quoted depth</div><div class="v mono" id="spotDepthTag">$14.8M</div><div class="s">within 10 bps on major venues</div></div>
         <div class="spot-kpi"><div class="k">24h notional</div><div class="v mono" id="spotVolumeTag">$2.1B</div><div class="s">aggregated spot routing</div></div>
       </div>
@@ -4427,7 +4427,7 @@
         <div class="card">
           <div class="chart-top">
             <div class="asset-price">
-              <span class="big mono" id="spotPrice">$104,218.40</span>
+              <span class="big mono" id="spotPrice">$63,903.09</span>
               <span class="chg up-pill">+1.82% · +$1,867.14</span>
             </div>
             <div class="tf-pills" id="spotTfPills">
@@ -4449,10 +4449,10 @@
               <div class="spot-panel-box">
                 <div class="hd">Liquidity map</div>
                 <div class="spot-heatmap" id="spotHeatBars">
-                  <div class="bar" style="--w:62%"><span><b>$104.4k bids</b><em>stacked</em></span></div>
-                  <div class="bar" style="--w:54%"><span><b>$104.1k bids</b><em>reload zone</em></span></div>
-                  <div class="bar sell" style="--w:49%"><span><b>$104.9k asks</b><em>local cap</em></span></div>
-                  <div class="bar sell" style="--w:68%"><span><b>$105.2k asks</b><em>take-profit wall</em></span></div>
+                  <div class="bar" style="--w:62%"><span><b>$63.8k bids</b><em>stacked</em></span></div>
+                  <div class="bar" style="--w:54%"><span><b>$63.7k bids</b><em>reload zone</em></span></div>
+                  <div class="bar sell" style="--w:49%"><span><b>$64.0k asks</b><em>local cap</em></span></div>
+                  <div class="bar sell" style="--w:68%"><span><b>$64.2k asks</b><em>take-profit wall</em></span></div>
                 </div>
               </div>
               <div class="spot-panel-box">
@@ -4505,10 +4505,10 @@
                 <button class="sell" data-side="sell">Sell</button>
               </div>
               <label id="spotPriceLbl" style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Price</label>
-              <div id="spotOrderPrice" class="mono spot-fieldbox">104,218.40 USDT</div>
+              <div id="spotOrderPrice" class="mono spot-fieldbox">63,903.09 USDT</div>
               <div id="spotStopRow" style="display:none">
                 <label style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Trigger price</label>
-                <div id="spotTriggerPrice" class="mono spot-fieldbox">103,800.00 USDT</div>
+                <div id="spotTriggerPrice" class="mono spot-fieldbox">63,500.00 USDT</div>
               </div>
               <div id="spotTwapRow" style="display:none">
                 <label style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Duration · Slices</label>
@@ -4519,9 +4519,9 @@
               <div class="spot-allocator" id="spotAllocator">
                 <button data-pct="25">25%</button><button data-pct="50">50%</button><button data-pct="75">75%</button><button data-pct="100">100%</button>
               </div>
-              <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--silver4);margin-bottom:12px"><span>Total</span><span class="mono" id="spotOrderTotal">521.09 USDT</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--silver4);margin-bottom:12px"><span>Total</span><span class="mono" id="spotOrderTotal">319.52 USDT</span></div>
               <div class="spot-balance-row"><span>Available</span><strong id="spotAvailBal">12,840.22 USDT</strong></div>
-              <div class="spot-balance-row"><span>Estimated fee</span><strong id="spotFeeTag">0.10% · 0.52 USDT</strong></div>
+              <div class="spot-balance-row"><span>Estimated fee</span><strong id="spotFeeTag">0.10% · 0.32 USDT</strong></div>
               <button class="btn-primary" id="spotOrderSubmit" style="width:100%;justify-content:center" onclick="submitSpotOrder()">Buy BTC</button>
             </div>
           </div>
@@ -4649,7 +4649,7 @@
           <div></div><div>Asset</div><div style="text-align:right">Balance</div><div style="text-align:right">Price</div><div style="text-align:right">Value</div>
         </div>
         <div id="walletAssetsList">
-          <div class="asset-row"><span class="coin-ico btc">₿</span><div class="nm">Bitcoin<small>BTC</small></div><div class="col">0.09842 BTC</div><div class="col">$104,218</div><div class="col" style="color:var(--silver1);font-weight:700">$10,257.23</div></div>
+          <div class="asset-row"><span class="coin-ico btc">₿</span><div class="nm">Bitcoin<small>BTC</small></div><div class="col">0.09842 BTC</div><div class="col">$63,903</div><div class="col" style="color:var(--silver1);font-weight:700">$6,289.37</div></div>
           <div class="asset-row"><span class="coin-ico eth">Ξ</span><div class="nm">Ethereum<small>ETH</small></div><div class="col">0.4820 ETH</div><div class="col">$3,684</div><div class="col" style="color:var(--silver1);font-weight:700">$1,775.76</div></div>
           <div class="asset-row"><span class="coin-ico usdt">$</span><div class="nm">Tether<small>USDT</small></div><div class="col">564.33 USDT</div><div class="col">$1.0002</div><div class="col" style="color:var(--silver1);font-weight:700">$564.44</div></div>
           <div class="asset-row"><span class="coin-ico sol">S</span><div class="nm">Solana<small>SOL</small></div><div class="col">1.3600 SOL</div><div class="col">$182.27</div><div class="col" style="color:var(--silver1);font-weight:700">$247.89</div></div>
@@ -4831,8 +4831,8 @@
 
           <div class="wl-sep"></div>
           <div class="wl-head"><span>Market stats</span><span>24h</span></div>
-          <div class="fut-stat"><span>Mark price</span><span class="mono">$104,212.50</span></div>
-          <div class="fut-stat"><span>Index price</span><span class="mono">$104,218.40</span></div>
+          <div class="fut-stat"><span>Mark price</span><span class="mono">$63,890.03</span></div>
+          <div class="fut-stat"><span>Index price</span><span class="mono">$63,903.09</span></div>
           <div class="fut-stat"><span>Open interest</span><span class="mono">$284.6M</span></div>
           <div class="fut-stat"><span>24h volume</span><span class="mono">$2.1B</span></div>
           <div class="fut-stat"><span>Next funding</span><span class="mono" id="fundCd">02:48:12</span></div>
@@ -4850,7 +4850,7 @@
                   <span class="pay" style="background:rgba(77,158,255,0.18);color:var(--steel1);padding:1px 6px;border-radius:4px">PERP</span>
                 </div>
                 <div class="bo-price">
-                  <span class="big mono" id="futPrice">$104,218.40</span>
+                  <span class="big mono" id="futPrice">$63,903.09</span>
                   <span class="pip up">+1.82%</span>
                 </div>
               </div>
@@ -4872,7 +4872,7 @@
               </div>
               <div class="box">
                 <div class="k">Session range</div>
-                <div class="v mono" id="futRangeTag">$102,840 – $105,120</div>
+                <div class="v mono" id="futRangeTag">$62,840 – $64,120</div>
                 <div class="s">Asia low → EU breakout</div>
               </div>
               <div class="box">
@@ -4977,7 +4977,7 @@
 
           <div class="stake-v2">
             <div class="top"><span class="lbl">Price</span><span class="pct-hint">USDT</span></div>
-            <div class="input"><input type="number" value="104218.40" step="0.1"/><span class="currency">USDT</span></div>
+            <div class="input"><input type="number" value="63903.09" step="0.1"/><span class="currency">USDT</span></div>
           </div>
           <div class="stake-v2">
             <div class="top"><span class="lbl">Size</span><span class="pct-hint">0.25 BTC ≈ $26,054</span></div>
@@ -5948,7 +5948,7 @@ if (location.protocol !== 'file:') {
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = 'grom-privy.js?v=20260604d';
+  privyModule.src = 'grom-privy.js?v=20260604e';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -6425,7 +6425,7 @@ const boState = {
   expirySec: 5,
   roundLen: 5,
   elapsed: 13,
-  strike: 104208.40,
+  strike: 63892.65,
   account: 'demo',
   balance: { demo: 50000, live: 12847.32 },
   positions: [],
@@ -6896,6 +6896,24 @@ document.addEventListener('input', e => {
 });
 function updateFuturesBoard() {
   var px = priceForPair(futDeskState.pair);
+  var futBase = String(futDeskState.pair || 'BTC/USDT').split('/')[0] || 'BTC';
+  var futQuote = String(futDeskState.pair || 'BTC/USDT').split('/')[1] || 'USDT';
+  var futPriceEl = document.getElementById('futPrice');
+  if (futPriceEl && Number.isFinite(px)) futPriceEl.textContent = '$' + marketFmt(px);
+  var stakeBlocks = document.querySelectorAll('#page-futures .stake-v2');
+  var futPriceInput = stakeBlocks[0] ? stakeBlocks[0].querySelector('input[type="number"]') : null;
+  var futSizeInput = stakeBlocks[1] ? stakeBlocks[1].querySelector('input[type="number"]') : null;
+  if (futPriceInput && document.activeElement !== futPriceInput && Number.isFinite(px)) {
+    futPriceInput.value = px < 20 ? px.toFixed(4) : px.toFixed(2);
+  }
+  var futSize = parseFloat(futSizeInput && futSizeInput.value) || 0.25;
+  var futPriceHint = stakeBlocks[0] ? stakeBlocks[0].querySelector('.pct-hint') : null;
+  var futSizeHint = stakeBlocks[1] ? stakeBlocks[1].querySelector('.pct-hint') : null;
+  if (futPriceHint) futPriceHint.textContent = futQuote;
+  if (futSizeHint && Number.isFinite(px)) futSizeHint.textContent = fmt(futSize, futSize < 1 ? 3 : 2) + ' ' + futBase + ' ≈ $' + fmt(px * futSize, 0);
+  var futPayVals = document.querySelectorAll('#page-futures .pay-panel .v');
+  if (futPayVals[0] && Number.isFinite(px)) futPayVals[0].textContent = '$' + fmt((px * futSize) / Math.max(1, futDeskState.leverage), 2);
+  if (futPayVals[1] && Number.isFinite(px)) futPayVals[1].textContent = '$' + fmt(px * (futDeskState.side === 'long' ? 0.954 : 1.046), 0);
   futState.markSpread += (Math.random() - 0.5) * 0.9;
   futState.flowBias = Math.max(0.7, Math.min(1.9, futState.flowBias + (Math.random() - 0.5) * 0.04));
   futState.sessionLow = Math.min(futState.sessionLow, px - (30 + Math.random() * 60));
@@ -7052,7 +7070,7 @@ function toggleDrawer(force) {
 })();
 
 /* Prices + chart */
-let btcPrice = 104218.40, ethPrice = 3684.15, solPrice = 182.27;
+let btcPrice = 63903.09, ethPrice = 1780.30, solPrice = 69.17;
 
 // Live price feed from backend WebSocket (prices.<asset> channel).
 // Updates global price variables so all consumers (charts, watchlists, KPIs) see real numbers.
@@ -7079,6 +7097,23 @@ function updateLandingTicker(base, price) {
     // Lock prev once per 30s for stable delta display
     setTimeout(function () { delete window.__lpPrev[base]; }, 30000);
   }
+}
+function gromScheduleMarketUiRefresh() {
+  if (window.__gromPriceUiRaf) return;
+  window.__gromPriceUiRaf = requestAnimationFrame(function () {
+    window.__gromPriceUiRaf = null;
+    try { if (typeof updatePairCards === 'function') updatePairCards(); } catch (_) {}
+    try { if (typeof updateSpotBoard === 'function' && window.spotState) updateSpotBoard(spotState.pair); } catch (_) {}
+    try { if (typeof updateFuturesBoard === 'function' && window.futDeskState) updateFuturesBoard(); } catch (_) {}
+    try {
+      if (typeof drawChart === 'function') {
+        ['boChart', 'spotChart', 'futChart'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el && el.offsetParent !== null) drawChart(id);
+        });
+      }
+    } catch (_) {}
+  });
 }
 window.addEventListener('grom-ws-price', function (ev) {
   var detail = ev && ev.detail;
@@ -7128,6 +7163,7 @@ window.addEventListener('grom-ws-price', function (ev) {
       if (fp) fp.textContent = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
   } catch (_) {}
+  try { gromScheduleMarketUiRefresh(); } catch (_) {}
 });
 function buildSeriesAround(anchor, len) {
   var base = Math.max(0.0001, Number(anchor) || 1);
@@ -7155,7 +7191,7 @@ var listUiState = {
   futuresFilter: 'all'
 };
 
-let bnbPrice = 612.88, xrpPrice = 2.48, adaPrice = 0.752, dogePrice = 0.1942, avaxPrice = 38.44, linkPrice = 17.28, eurPrice = 1.0842, gbpPrice = 193.482, xauPrice = 2487.30, aaplPrice = 206.8, tslaPrice = 173.4;
+let bnbPrice = 608.18, xrpPrice = 2.16, adaPrice = 0.58, dogePrice = 0.18, avaxPrice = 22.40, linkPrice = 13.80, eurPrice = 1.0842, gbpPrice = 193.482, xauPrice = 2487.30, aaplPrice = 206.8, tslaPrice = 173.4;
 let msftPrice = 417.2, nvdaPrice = 922.4;
 const extraCryptoPrices = {
   TON: 6.42,
@@ -7194,15 +7230,15 @@ const extraCryptoDrift = {
   OP: 0.03
 };
 const marketPairs = [
-  { fav: true,  sym: 'BTC/USDT',  name: 'Bitcoin',   coin: 'btc',  gliph: '₿', price: 104218.40, chg: 1.82, vol: '2.1B' },
-  { fav: true,  sym: 'ETH/USDT',  name: 'Ethereum',  coin: 'eth',  gliph: 'Ξ', price: 3684.15,   chg: 0.94, vol: '1.4B' },
-  { fav: true,  sym: 'SOL/USDT',  name: 'Solana',    coin: 'sol',  gliph: 'S', price: 182.27,    chg: -2.10, vol: '620M' },
-  { fav: true,  sym: 'BNB/USDT',  name: 'BNB',       coin: 'bnb',  gliph: 'B', price: 612.88,    chg: 0.33, vol: '520M' },
-  { fav: false, sym: 'XRP/USDT',  name: 'XRP',       coin: 'xrp',  gliph: 'X', price: 2.48,      chg: 1.74, vol: '480M' },
-  { fav: false, sym: 'ADA/USDT',  name: 'Cardano',   coin: 'ada',  gliph: 'A', price: 0.752,     chg: -1.22, vol: '210M' },
-  { fav: false, sym: 'DOGE/USDT', name: 'Dogecoin',  coin: 'doge', gliph: 'Ð', price: 0.1942,    chg: 3.18, vol: '340M' },
-  { fav: false, sym: 'AVAX/USDT', name: 'Avalanche', coin: 'avax', gliph: 'A', price: 38.44,     chg: -0.56, vol: '180M' },
-  { fav: false, sym: 'LINK/USDT', name: 'Chainlink', coin: 'link', gliph: 'L', price: 17.28,     chg: 0.85, vol: '210M' },
+  { fav: true,  sym: 'BTC/USDT',  name: 'Bitcoin',   coin: 'btc',  gliph: '₿', price: 63903.09, chg: 1.82, vol: '1.31B' },
+  { fav: true,  sym: 'ETH/USDT',  name: 'Ethereum',  coin: 'eth',  gliph: 'Ξ', price: 1780.30,  chg: 0.94, vol: '840M' },
+  { fav: true,  sym: 'SOL/USDT',  name: 'Solana',    coin: 'sol',  gliph: 'S', price: 69.17,    chg: -2.10, vol: '420M' },
+  { fav: true,  sym: 'BNB/USDT',  name: 'BNB',       coin: 'bnb',  gliph: 'B', price: 608.18,   chg: 0.33, vol: '390M' },
+  { fav: false, sym: 'XRP/USDT',  name: 'XRP',       coin: 'xrp',  gliph: 'X', price: 2.16,     chg: 1.74, vol: '330M' },
+  { fav: false, sym: 'ADA/USDT',  name: 'Cardano',   coin: 'ada',  gliph: 'A', price: 0.58,     chg: -1.22, vol: '170M' },
+  { fav: false, sym: 'DOGE/USDT', name: 'Dogecoin',  coin: 'doge', gliph: 'Ð', price: 0.18,     chg: 3.18, vol: '290M' },
+  { fav: false, sym: 'AVAX/USDT', name: 'Avalanche', coin: 'avax', gliph: 'A', price: 22.40,    chg: -0.56, vol: '120M' },
+  { fav: false, sym: 'LINK/USDT', name: 'Chainlink', coin: 'link', gliph: 'L', price: 13.80,    chg: 0.85, vol: '160M' },
   { fav: false, sym: 'TON/USDT',  name: 'Toncoin',   coin: 'ton',  gliph: 'T', price: 6.42,      chg: 0.76, vol: '390M' },
   { fav: false, sym: 'TRX/USDT',  name: 'TRON',      coin: 'trx',  gliph: 'T', price: 0.1462,    chg: 0.48, vol: '160M' },
   { fav: false, sym: 'DOT/USDT',  name: 'Polkadot',  coin: 'dot',  gliph: 'D', price: 7.11,      chg: -0.22, vol: '145M' },
@@ -7737,27 +7773,59 @@ function _gromTVBucketTime(ts, intervalSec) {
   return Math.floor(ts / 1000 / intervalSec) * intervalSec;
 }
 function _gromTVAggregate(state, price, ts, intervalSec) {
+  price = Number(price);
+  if (!Number.isFinite(price) || price <= 0) return null;
+  var jumpLimit = 0.022;
+  var lastClose = _gromTVLastClose(state);
+  if (!lastClose || Math.abs(price - lastClose) / Math.max(price, lastClose) > jumpLimit) {
+    _gromTVSeedCandles(state, price, ts, intervalSec);
+    return state.candles[state.candles.length - 1] || null;
+  }
   var bucket = _gromTVBucketTime(ts, intervalSec);
   var last = state.candles[state.candles.length - 1];
   if (!last || last.time !== bucket) {
-    var prev = last ? last.close : price;
+    var prev = last ? Number(last.close) || price : price;
+    if (Math.abs(price - prev) / Math.max(price, prev) > jumpLimit) {
+      _gromTVSeedCandles(state, price, ts, intervalSec);
+      return state.candles[state.candles.length - 1] || null;
+    }
+    if (Math.abs(price - prev) / Math.max(price, prev) > 0.012) {
+      prev = price * (1 + (Math.random() - 0.5) * 0.001);
+    }
+    var spread = Math.max(price * 0.00018, Math.abs(price - prev) * 0.35);
     var newC = {
       time: bucket,
       open: prev,
-      high: Math.max(prev, price),
-      low: Math.min(prev, price),
+      high: Math.max(prev, price) + spread * 0.35,
+      low: Math.min(prev, price) - spread * 0.35,
       close: price,
-      volume: Math.max(80, Math.round((Math.abs(price - prev) / Math.max(price, 1)) * 180000 + 100 + Math.random() * 900))
+      volume: Math.max(80, Math.round((Math.abs(price - prev) / Math.max(price, 1)) * 60000 + 120 + Math.random() * 520))
     };
+    var floor = price * 0.988;
+    var ceil = price * 1.012;
+    newC.high = Math.min(ceil, newC.high);
+    newC.low = Math.max(floor, newC.low);
     state.candles.push(newC);
     if (state.candles.length > 300) state.candles.shift();
+    state.anchorPrice = price;
     return newC;
   } else {
-    var old = last.close;
+    var old = Number(last.close) || price;
+    if (Math.abs(price - old) / Math.max(price, old) > jumpLimit) {
+      _gromTVSeedCandles(state, price, ts, intervalSec);
+      return state.candles[state.candles.length - 1] || null;
+    }
+    var liveOpen = Number(last.open) || price;
+    if (Math.abs(price - liveOpen) / Math.max(price, liveOpen) > 0.012) {
+      last.open = price * (1 + (Math.random() - 0.5) * 0.001);
+    }
     last.close = price;
-    if (price > last.high) last.high = price;
-    if (price < last.low) last.low = price;
-    last.volume = Math.max(60, Number(last.volume || 0) + Math.round((Math.abs(price - old) / Math.max(price, 1)) * 120000 + Math.random() * 120));
+    last.high = Math.max(Number(last.high) || price, Math.max(Number(last.open) || price, price));
+    last.low = Math.min(Number(last.low) || price, Math.min(Number(last.open) || price, price));
+    last.high = Math.min(last.high, price * 1.012);
+    last.low = Math.max(last.low, price * 0.988);
+    last.volume = Math.max(60, Number(last.volume || 0) + Math.round((Math.abs(price - old) / Math.max(price, 1)) * 50000 + Math.random() * 80));
+    state.anchorPrice = price;
     return last;
   }
 }
@@ -7818,6 +7886,68 @@ function _gromPriceFormatFor(px) {
   if (px < 1) return { type: 'price', precision: 5, minMove: 0.00001 };
   if (px < 100) return { type: 'price', precision: 3, minMove: 0.001 };
   return { type: 'price', precision: 2, minMove: 0.01 };
+}
+function _gromTVLastClose(state) {
+  if (!state || !Array.isArray(state.candles) || !state.candles.length) return null;
+  var last = state.candles[state.candles.length - 1];
+  var value = Number(last.close || last.open);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+function _gromTVNeedsReseed(state, px) {
+  px = Number(px);
+  if (!Number.isFinite(px) || px <= 0) return false;
+  if (!state || !Array.isArray(state.candles) || !state.candles.length) return true;
+  var last = _gromTVLastClose(state);
+  if (!last) return true;
+  if (Math.abs(px - last) / Math.max(px, last) > 0.022) return true;
+  var recent = state.candles.slice(-96);
+  var min = Infinity;
+  var max = -Infinity;
+  for (var i = 0; i < recent.length; i++) {
+    var k = recent[i] || {};
+    var open = Number(k.open);
+    var high = Number(k.high);
+    var low = Number(k.low);
+    var close = Number(k.close);
+    if (![open, high, low, close].every(function (v) { return Number.isFinite(v) && v > 0; })) return true;
+    min = Math.min(min, low);
+    max = Math.max(max, high);
+    if (high > px * 1.08 || low < px * 0.92) return true;
+    if (Math.abs(close - px) / Math.max(px, close) > 0.045) return true;
+  }
+  return Number.isFinite(min) && Number.isFinite(max) && (max - min) / px > 0.10;
+}
+function _gromTVSeedCandles(state, px, now, intervalSec) {
+  px = Number(px);
+  if (!Number.isFinite(px) || px <= 0) return;
+  state.candles = [];
+  state.lastBucket = null;
+  state.anchorPrice = px;
+  var floor = px * 0.992;
+  var ceil = px * 1.008;
+  var seedPrice = px * (1 + (Math.random() - 0.5) * 0.006);
+  for (var i = 140; i >= 1; i--) {
+    var t = _gromTVBucketTime(now - i * intervalSec * 1000, intervalSec);
+    var open = Math.min(ceil, Math.max(floor, seedPrice));
+    var wave = Math.sin(i * 0.19) * px * 0.0009;
+    var pull = (px - open) * (i < 18 ? 0.18 : 0.025);
+    var close = Math.min(ceil, Math.max(floor, open + pull + wave * 0.08 + (Math.random() - 0.5) * px * 0.00045));
+    var wick = Math.max(px * 0.00012, Math.abs(close - open) * 0.35);
+    var high = Math.min(ceil, Math.max(open, close) + Math.random() * wick);
+    var low = Math.max(floor, Math.min(open, close) - Math.random() * wick);
+    var vol = Math.round((Math.random() * 0.7 + 0.35) * 1200);
+    state.candles.push({ time: t, open: open, high: high, low: low, close: close, volume: vol });
+    seedPrice = close;
+  }
+  var last = state.candles[state.candles.length - 1];
+  if (last) {
+    last.open = px * (1 + (Math.random() - 0.5) * 0.0012);
+    last.close = px;
+    last.high = Math.min(ceil, Math.max(last.open, px) * 1.00025);
+    last.low = Math.max(floor, Math.min(last.open, px) * 0.99975);
+    last.volume = Math.max(last.volume || 0, 900);
+    state.lastBucket = last.time;
+  }
 }
 function gromDrawTVChart(id, opts) {
   opts = opts || {};
@@ -7913,23 +8043,8 @@ function gromDrawTVChart(id, opts) {
   try { state.series.applyOptions({ priceFormat: _gromPriceFormatFor(px) }); } catch (_) {}
   var now = Date.now();
 
-  // Seed history with realistic random-walk OHLC if first time
-  if (!state.candles.length) {
-    var seedPrice = px;
-    for (var i = 120; i >= 1; i--) {
-      var t = _gromTVBucketTime(now - i * intervalSec * 1000, intervalSec);
-      var drift = (Math.random() - 0.5) * px * 0.0035;
-      var open = seedPrice;
-      var close = seedPrice + drift;
-      var wickU = Math.random() * px * 0.0015;
-      var wickD = Math.random() * px * 0.0015;
-      var high = Math.max(open, close) + wickU;
-      var low  = Math.min(open, close) - wickD;
-      var vol  = Math.round((Math.random() * 0.7 + 0.3) * 1000);
-      state.candles.push({ time: t, open: open, high: high, low: low, close: close, volume: vol });
-      seedPrice = close;
-    }
-    state.candles[state.candles.length - 1].close = px;
+  if (!state.candles.length || _gromTVNeedsReseed(state, px)) {
+    _gromTVSeedCandles(state, px, now, intervalSec);
   }
   _gromTVAggregate(state, px, now, intervalSec);
 
@@ -8576,6 +8691,22 @@ window.addEventListener('grom-ws-event', function (ev) {
 
 function updateSpotBoard(sym) {
   var px = priceForPair(sym);
+  var pairParts = String(sym || 'BTC/USDT').split('/');
+  var base = pairParts[0] || 'BTC';
+  var quote = pairParts[1] || 'USDT';
+  var amountMap = { BTC: 0.005, ETH: 0.05, SOL: 2, BNB: 0.2, XRP: 200, ADA: 400, DOGE: 600, AVAX: 8, LINK: 15, TON: 35, TRX: 900, DOT: 40, ATOM: 25, NEAR: 30, LTC: 1.5, BCH: 0.3, SUI: 150, PEPE: 2500000, SHIB: 1800000, APT: 18, UNI: 16, ETC: 7, ICP: 12, ARB: 180, OP: 90 };
+  var amount = amountMap[base] || 10;
+  var total = Number.isFinite(px) ? px * amount : 0;
+  var op = document.getElementById('spotOrderPrice');
+  if (op && Number.isFinite(px)) op.textContent = marketFmt(px) + ' ' + quote;
+  var trg = document.getElementById('spotTriggerPrice');
+  if (trg && Number.isFinite(px)) trg.textContent = marketFmt(px * 0.994) + ' ' + quote;
+  var oa = document.getElementById('spotOrderAmount');
+  if (oa) oa.textContent = amount.toFixed(base === 'BTC' ? 5 : 2) + ' ' + base;
+  var ot = document.getElementById('spotOrderTotal');
+  if (ot) ot.textContent = fmt(total, total < 20 ? 4 : 2) + ' ' + quote;
+  var fee = document.getElementById('spotFeeTag');
+  if (fee) fee.textContent = '0.10% · ' + fmt(total * 0.001, 2) + ' ' + quote;
   var depth = document.getElementById('spotDepthTag');
   if (depth) depth.textContent = '$' + fmt(Math.max(2.8, Math.abs(px) * 0.00014), 1) + 'M';
   var vol = document.getElementById('spotVolumeTag');
@@ -8654,10 +8785,15 @@ function setFuturesPair(sym) {
   if (costEl) costEl.textContent = '$' + fmt((px * 0.25) / Math.max(1, futDeskState.leverage), 2);
   var liqEl = Array.from(document.querySelectorAll('#page-futures .pay-panel .v.loss')).shift();
   if (liqEl) liqEl.textContent = '$' + fmt(px * (futDeskState.side === 'long' ? 0.954 : 1.046), 0);
-  var sizeHint = document.querySelector('#page-futures .stake-v2 .pct-hint');
-  if (sizeHint) sizeHint.textContent = '0.25 ' + base + ' ≈ $' + fmt(px * 0.25, 0);
-  var priceInput = document.querySelector('#page-futures .stake-v2 input[type="number"]');
-  if (priceInput) priceInput.value = px < 20 ? px.toFixed(4) : px.toFixed(2);
+  var stakeBlocks = document.querySelectorAll('#page-futures .stake-v2');
+  var priceHint = stakeBlocks[0] ? stakeBlocks[0].querySelector('.pct-hint') : null;
+  var sizeHint = stakeBlocks[1] ? stakeBlocks[1].querySelector('.pct-hint') : null;
+  var priceInput = stakeBlocks[0] ? stakeBlocks[0].querySelector('input[type="number"]') : null;
+  var sizeInput = stakeBlocks[1] ? stakeBlocks[1].querySelector('input[type="number"]') : null;
+  var size = parseFloat(sizeInput && sizeInput.value) || 0.25;
+  if (priceHint) priceHint.textContent = futDeskState.pair.split('/')[1] || 'USDT';
+  if (sizeHint) sizeHint.textContent = fmt(size, size < 1 ? 3 : 2) + ' ' + base + ' ≈ $' + fmt(px * size, 0);
+  if (priceInput && document.activeElement !== priceInput) priceInput.value = px < 20 ? px.toFixed(4) : px.toFixed(2);
   futState.sessionLow = px * 0.986;
   futState.sessionHigh = px * 1.014;
   futState.liqTop = px * 1.019;
@@ -9018,6 +9154,8 @@ function setSpotPair(sym) {
   var total = Number.isFinite(px) ? px * amount : 0;
   var op = document.getElementById('spotOrderPrice');
   if (op && Number.isFinite(px)) op.textContent = marketFmt(px) + ' ' + quote;
+  var trg = document.getElementById('spotTriggerPrice');
+  if (trg && Number.isFinite(px)) trg.textContent = marketFmt(px * 0.994) + ' ' + quote;
   var oa = document.getElementById('spotOrderAmount');
   if (oa) oa.textContent = amount.toFixed(base === 'BTC' ? 5 : 2) + ' ' + base;
   var ot = document.getElementById('spotOrderTotal');
@@ -10512,7 +10650,7 @@ async function applyDepositNetwork(asset, n) {
 /* ========== Fiat on-ramp ========== */
 var FIAT_PROV = { moonpay: { fee: 0.029, name: 'MoonPay' }, transak: { fee: 0.025, name: 'Transak' }, ramp: { fee: 0.026, name: 'Ramp' } };
 var FIAT_FX = { USD: 1, EUR: 1.08, GBP: 1.27 };
-var FIAT_COIN_PX = { USDT: 1, USDC: 1, BTC: 104000, ETH: 3680, SOL: 182 };
+var FIAT_COIN_PX = { USDT: 1, USDC: 1, BTC: 63903, ETH: 1780, SOL: 69 };
 function currentProv() {
   var b = document.querySelector('#fiatProviders .prov.active');
   return b ? b.dataset.prov : 'moonpay';
@@ -11069,11 +11207,14 @@ async function gdel(path) {
 window.submitFuturesOrder = async function (side) {
   var contract = (typeof futDeskState !== 'undefined' && futDeskState.pair) ? futDeskState.pair : 'BTC/USDT';
   var leverage = (typeof futDeskState !== 'undefined' && futDeskState.leverage) ? futDeskState.leverage : 25;
-  var size = parseFloat((document.querySelector('#page-futures .stake-v2 input')?.value || '0.25')) || 0.25;
+  var futStakeBlocks = document.querySelectorAll('#page-futures .stake-v2');
+  var futPriceNode = futStakeBlocks[0] ? futStakeBlocks[0].querySelector('input[type="number"]') : null;
+  var futSizeNode = futStakeBlocks[1] ? futStakeBlocks[1].querySelector('input[type="number"]') : null;
+  var size = parseFloat((futSizeNode && futSizeNode.value) || '0.25') || 0.25;
   var typeBtn = document.querySelector('#page-futures .bo-chip-row button.active, #page-futures .order-type.active');
   var type = (typeBtn?.textContent || 'limit').trim().toLowerCase();
   if (type !== 'market' && type !== 'limit' && type !== 'stop') type = 'limit';
-  var price = parseFloat((document.querySelector('#page-futures .stake-v2 input[type="number"]')?.value || '0')) || null;
+  var price = parseFloat((futPriceNode && futPriceNode.value) || '0') || null;
   var reduceOnly = !!document.querySelector('#page-futures .flag-chip.on[data-flag="reduce"]');
   var postOnly   = !!document.querySelector('#page-futures .flag-chip.on[data-flag="post"]');
   var body = { contract, side, type, size, leverage, reduceOnly, postOnly };

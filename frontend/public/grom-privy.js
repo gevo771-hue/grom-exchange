@@ -197,11 +197,9 @@ function ensureInlineForm() {
 function showEmailForm() {
   const box = ensureInlineForm();
   if (!box) return;
-  // CHANGED: do NOT hide main rows when showing email form.
-  // Keeping Email + Google + wallet buttons visible alongside the email form
-  // means the user can always switch provider, and we don't need any of the
-  // recovery machinery (observer / wrap / pageshow) to restore state. The email
-  // form simply appears under the main rows as an expandable section.
+  // Restored: hide main rows so the email OTP form takes the whole modal.
+  // The wrap below detects auto-triggers (no user click) and rolls this back.
+  hideMainRows();
   box.style.display = '';
   box.querySelector('#pvStep1').style.display = '';
   box.querySelector('#pvStep2').style.display = 'none';
@@ -209,16 +207,15 @@ function showEmailForm() {
 }
 
 function hideMainRows() {
-  // Kept as no-op for backward compatibility — any old code path that calls it
-  // simply does nothing now. Main rows always stay visible.
+  document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note').forEach(el => el.style.display = 'none');
 }
 
 function showMainRows() {
-  // Ensure main rows + inline form are visible. With the new flow we never hide
-  // main rows, so this only matters for cleanup when stale state persists from
-  // an older version of the script.
   document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(el => el.style.display = '');
   document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note').forEach(el => el.style.display = '');
+  const box = document.getElementById('privyInlineForm');
+  if (box) box.style.display = 'none';
 }
 
 function resetInlineForm() {
@@ -423,18 +420,32 @@ function installModalResetObserver() {
 
   const origOpen = window.openConnectModal;
   window.openConnectModal = function gromPrivyOpenConnectModalWrap() {
+    // Reset the "user explicitly clicked Email" flag. Anything that triggers
+    // showEmailForm without the user clicking Email is treated as a stray
+    // auto-trigger (Chrome autofill / focus event / browser quirk) and we
+    // roll back to the main rows. If the user clicks Email after the modal
+    // opens, cnShowEmail sets the flag → we leave their flow alone.
+    window.__gromUserClickedEmail = false;
     if (typeof origOpen === 'function') {
       try { origOpen.apply(this, arguments); } catch (e) { console.warn('[grom-privy] orig open threw', e); }
     }
-    // Two passes: microtask (catches sync side effects) + 150ms (catches
-    // anything Chrome autofill or focus events trigger asynchronously).
+    // Microtask: clean state immediately.
     Promise.resolve().then(() => {
       showMainRows();
       hideEmailFormAndResetInputs();
     });
+    // 150ms: catches async auto-triggers (Chrome autofill etc). Roll back only
+    // if the user did NOT click Email in the meantime — otherwise we'd undo
+    // their legitimate choice.
     setTimeout(() => {
       const m = document.getElementById('connectModal');
-      if (m && m.classList.contains('open')) hideEmailFormAndResetInputs();
+      if (!m || !m.classList.contains('open')) return;
+      if (window.__gromUserClickedEmail) return;
+      const box = document.getElementById('privyInlineForm');
+      if (box && box.style.display !== 'none') {
+        showMainRows();
+        hideEmailFormAndResetInputs();
+      }
     }, 150);
   };
 

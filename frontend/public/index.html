@@ -4481,8 +4481,8 @@
                 <div class="spot-ai-row"><span>Liquidity skew</span><strong id="spotAiLiquidity">Bid support</strong></div>
               </div>
               <div class="spot-ai-list">
-                <div class="spot-ai-row"><span>Invalidation</span><strong class="down mono" id="spotAiInvalid">$102,940</strong></div>
-                <div class="spot-ai-row"><span>Upside magnet</span><strong class="up mono" id="spotAiTarget">$105,120</strong></div>
+          <div class="spot-ai-row"><span>Invalidation</span><strong class="down mono" id="spotAiInvalid">$61,940</strong></div>
+          <div class="spot-ai-row"><span>Upside magnet</span><strong class="up mono" id="spotAiTarget">$64,120</strong></div>
                 <div class="spot-ai-row"><span>Risk mode</span><strong id="spotAiRisk">Normal size</strong></div>
               </div>
             </div>
@@ -5948,7 +5948,7 @@ if (location.protocol !== 'file:') {
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = 'grom-privy.js?v=20260605b';
+  privyModule.src = 'grom-privy.js?v=20260605c';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -6319,6 +6319,10 @@ function closeConnectModal() {
   if (ov) ov.classList.remove('open');
 }
 function cnShowEmail() {
+  // Mark this as an explicit user click so the modal-open guard in grom-privy.js
+  // does NOT roll back to main rows. Without this flag, the 150ms cleanup would
+  // undo the user's choice of opening the email form.
+  window.__gromUserClickedEmail = true;
   // Real Privy email OTP flow (grom-privy.js exposes window.privyLogin).
   if (typeof window.privyLogin === 'function') {
     // Hide the legacy fake-email form so it doesn't sit next to Privy's UI.

@@ -195,10 +195,17 @@ function ensureInlineForm() {
 }
 
 function showEmailForm() {
+  // Belt-and-suspenders: only proceed if a real user click set the flag.
+  // cnShowEmail() sets window.__gromUserClickedEmail=true after passing its
+  // own event.isTrusted check. If some other code path (Chrome autofill,
+  // extension, programmatic .click()) calls us, the flag will be false and
+  // we silently no-op — leaving the main rows visible.
+  if (!window.__gromUserClickedEmail) {
+    console.warn('[grom-privy] showEmailForm called without user-click flag — ignoring auto-trigger');
+    return;
+  }
   const box = ensureInlineForm();
   if (!box) return;
-  // Restored: hide main rows so the email OTP form takes the whole modal.
-  // The wrap below detects auto-triggers (no user click) and rolls this back.
   hideMainRows();
   box.style.display = '';
   box.querySelector('#pvStep1').style.display = '';

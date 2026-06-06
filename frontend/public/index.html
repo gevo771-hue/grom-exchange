@@ -3760,7 +3760,7 @@
                 <div class="hero-aura" aria-hidden="true"></div>
                 <div class="hero-glow" aria-hidden="true"></div>
                 <span class="landing-brand-anim">
-                  <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
+            <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
                 </span>
               </div>
             </div>
@@ -3889,7 +3889,7 @@
             <div class="hero-aura" aria-hidden="true"></div>
             <div class="hero-glow" aria-hidden="true"></div>
             <span class="landing-brand-anim">
-              <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" data-i18n-alt="landing_logo_img_alt" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
+            <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" data-i18n-alt="landing_logo_img_alt" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
             </span>
           </div>
         </div>
@@ -5948,7 +5948,7 @@ if (location.protocol !== 'file:') {
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = 'grom-privy.js?v=20260605f';
+  privyModule.src = 'grom-privy.js?v=20260606a';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -6553,14 +6553,15 @@ function refreshPayout() {
   if (lose) lose.textContent = '−$' + stake.toFixed(2);
   if (hint) hint.textContent = bal ? (stake / bal * 100).toFixed(2) + '% of balance' : '';
 }
-function syncBinaryStrike(force) {
-  var px = priceForPair(boState.pair);
-  var ref = boState.strike || 0;
-  if (force || !ref || Math.abs(px - ref) / Math.max(1e-9, Math.abs(ref)) > 0.2) {
-    boState.strike = px;
-    var lock = document.getElementById('strikeLock'); if (lock) lock.textContent = (px < 100 ? '' : '$') + fmt(px, px < 20 ? 5 : 2);
-    var hs = document.getElementById('hudStrike'); if (hs) hs.textContent = (px < 100 ? '' : '$') + fmt(px, px < 20 ? 5 : 2);
-  }
+  function syncBinaryStrike(force) {
+    var px = priceForPair(boState.pair);
+    if (!Number.isFinite(px) || px <= 0) return;
+    var ref = boState.strike || 0;
+    if (force || !ref || Math.abs(px - ref) / Math.max(1e-9, Math.abs(ref)) > 0.08) {
+      boState.strike = px;
+      var lock = document.getElementById('strikeLock'); if (lock) lock.textContent = (px < 100 ? '' : '$') + fmt(px, px < 20 ? 5 : 2);
+      var hs = document.getElementById('hudStrike'); if (hs) hs.textContent = (px < 100 ? '' : '$') + fmt(px, px < 20 ? 5 : 2);
+    }
 }
 
 function ensureCountdownMarkup() {
@@ -6705,14 +6706,15 @@ document.addEventListener('click', e => {
   // Watchlist
   const w = e.target.closest('#wlList .wl-item');
   if (w) {
-    document.querySelectorAll('#wlList .wl-item').forEach(x => x.classList.remove('active'));
-    w.classList.add('active');
-    boState.pair = w.dataset.pair;
-    boState.payout = (+w.dataset.pay) / 100;
-    boState.strike = +w.dataset.price || priceForPair(boState.pair);
-    var ppx = priceForPair(boState.pair);
-    var fresh = buildSeriesAround(ppx, boSeries.length || 60);
-    boSeries = fresh;
+      document.querySelectorAll('#wlList .wl-item').forEach(x => x.classList.remove('active'));
+      w.classList.add('active');
+      boState.pair = w.dataset.pair;
+      boState.payout = (+w.dataset.pay) / 100;
+      var ppx = priceForPair(boState.pair);
+      var listedPx = Number(w.dataset.price);
+      boState.strike = (Number.isFinite(listedPx) && listedPx > 0 && Number.isFinite(ppx) && ppx > 0 && Math.abs(listedPx - ppx) / Math.max(listedPx, ppx, 1) <= 0.08) ? listedPx : ppx;
+      var fresh = buildSeriesAround(ppx, boSeries.length || 60);
+      boSeries = fresh;
     boSeries[boSeries.length - 1] = ppx;
     const tag = document.getElementById('boAssetTag');
     if (tag) {
@@ -7338,10 +7340,10 @@ function marketFmt(v) {
   return fmt(n, 2);
 }
 
-function priceForPair(sym) {
-  var s = String(sym || '').toUpperCase();
-  var base = s.split('/')[0].replace(/[^A-Z]/g, '');
-  if (base === 'BTC') return btcPrice;
+    function priceForPair(sym) {
+      var s = String(sym || '').toUpperCase();
+      var base = s.split('/')[0].replace(/[^A-Z]/g, '');
+      if (base === 'BTC') return btcPrice;
   if (base === 'ETH') return ethPrice;
   if (base === 'SOL') return solPrice;
   if (base === 'BNB') return bnbPrice;
@@ -7357,9 +7359,36 @@ function priceForPair(sym) {
   if (base === 'AAPL') return aaplPrice;
   if (base === 'TSLA') return tslaPrice;
   if (base === 'MSFT') return msftPrice;
-  if (base === 'NVDA') return nvdaPrice;
-  return btcPrice;
-}
+      if (base === 'NVDA') return nvdaPrice;
+      return btcPrice;
+    }
+
+    function safePairPrice(sym, fallback) {
+      var px = Number(priceForPair(sym));
+      if (Number.isFinite(px) && px > 0) return px;
+      var fb = Number(fallback);
+      if (Number.isFinite(fb) && fb > 0) return fb;
+      return 1;
+    }
+
+    function priceBandIsStale(low, high, px, tolerance) {
+      px = Number(px);
+      low = Number(low);
+      high = Number(high);
+      if (!Number.isFinite(px) || px <= 0) return false;
+      if (!Number.isFinite(low) || !Number.isFinite(high) || low <= 0 || high <= 0 || high <= low) return true;
+      var mid = (low + high) / 2;
+      return Math.abs(mid - px) / Math.max(mid, px, 1) > (tolerance || 0.12);
+    }
+
+    function resetFuturesPriceBands(px) {
+      px = Number(px);
+      if (!Number.isFinite(px) || px <= 0) px = safePairPrice(futDeskState && futDeskState.pair, btcPrice);
+      futState.sessionLow = px * 0.986;
+      futState.sessionHigh = px * 1.014;
+      futState.liqTop = px * 1.019;
+      futState.liqBottom = px * 0.981;
+    }
 
 function reseedSeriesIfNeeded(series, anchor) {
   var a = Number(anchor);
@@ -7620,6 +7649,7 @@ function renderSvgChart(id, W, H, hist, candles, plotCandles, min, max, lastPx, 
  * Spot/Futures/Binary desks. PocketOption-style area mode for Binary.
  * ========================================================================== */
 window.__gromTV = window.__gromTVCharts = window.__gromTVCharts || {};
+var GROM_TV_DATA_VERSION = '20260605-stable-v3';
 
 /* Direct Binance public WebSocket for real-time prices.
  * Used as a fallback when our backend WS is offline (current red OFFLINE badge state).

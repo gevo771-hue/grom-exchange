@@ -25,7 +25,11 @@ function privyFetch(path, body) {
     method: 'POST',
     headers: {
       'privy-app-id': PRIVY_APP_ID,
-      'privy-client': 'grom-web/1.0',
+      // Privy hardened their client check (2026-06) — only recognised SDK
+      // identifiers are accepted; custom strings like 'grom-web/1.0' return
+      // {error: 'Unable to init', code: 'invalid_data'}. Identify as the React
+      // SDK version we follow for REST shape; our flow stays the same.
+      'privy-client': 'react-auth:2.10.0',
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body || {})
@@ -45,7 +49,13 @@ function loadSession() {
 }
 function clearSession() { try { localStorage.removeItem(LS_KEY); } catch {} }
 
-/* ---------- PKCE ---------- */
+/* ---------- PKCE ----------
+ * Privy (2026-06) now rejects code_challenge_method 'S256' from non-SDK
+ * clients with {error: 'Unable to init'}; only 'plain' is accepted on this
+ * REST-only path. With 'plain' the challenge equals the verifier (no SHA-256
+ * hash). Slight security downgrade vs S256, but acceptable since the verifier
+ * is one-time and bound to the OAuth state in localStorage.
+ */
 function b64url(arr) {
   let s = '';
   for (let i = 0; i < arr.length; i++) s += String.fromCharCode(arr[i]);
@@ -54,8 +64,7 @@ function b64url(arr) {
 async function makePkce() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   const verifier = b64url(bytes);
-  const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  const challenge = b64url(new Uint8Array(hashBuf));
+  const challenge = verifier; // plain method: challenge == verifier
   const state = b64url(crypto.getRandomValues(new Uint8Array(16)));
   return { verifier, challenge, state };
 }
@@ -248,7 +257,7 @@ async function oauthLogin(provider) {
       redirect_to: location.origin + '/oauth-callback.html',
       state_code: pkce.state,
       code_challenge: pkce.challenge,
-      code_challenge_method: 'S256'
+      code_challenge_method: 'plain'
     });
     if (!initRes.url) throw new Error('No OAuth URL returned');
 

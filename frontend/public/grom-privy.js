@@ -49,12 +49,11 @@ function loadSession() {
 }
 function clearSession() { try { localStorage.removeItem(LS_KEY); } catch {} }
 
-/* ---------- PKCE ----------
- * Privy (2026-06) now rejects code_challenge_method 'S256' from non-SDK
- * clients with {error: 'Unable to init'}; only 'plain' is accepted on this
- * REST-only path. With 'plain' the challenge equals the verifier (no SHA-256
- * hash). Slight security downgrade vs S256, but acceptable since the verifier
- * is one-time and bound to the OAuth state in localStorage.
+/* ---------- PKCE (S256) ----------
+ * /oauth/init accepts both 'plain' and 'S256' from the react-auth client.
+ * /oauth/authenticate, however, validates the verifier with S256 — so 'plain'
+ * passes init but fails authenticate with "Invalid code during OAuth flow".
+ * Use S256 throughout: challenge = b64url(SHA-256(verifier)).
  */
 function b64url(arr) {
   let s = '';
@@ -64,7 +63,8 @@ function b64url(arr) {
 async function makePkce() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   const verifier = b64url(bytes);
-  const challenge = verifier; // plain method: challenge == verifier
+  const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  const challenge = b64url(new Uint8Array(hashBuf));
   const state = b64url(crypto.getRandomValues(new Uint8Array(16)));
   return { verifier, challenge, state };
 }
@@ -257,7 +257,7 @@ async function oauthLogin(provider) {
       redirect_to: location.origin + '/oauth-callback.html',
       state_code: pkce.state,
       code_challenge: pkce.challenge,
-      code_challenge_method: 'plain'
+      code_challenge_method: 'S256'
     });
     if (!initRes.url) throw new Error('No OAuth URL returned');
 

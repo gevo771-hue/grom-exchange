@@ -202,43 +202,118 @@ Issued At: ${issuedAt}`;
   return verifyJson;
 }
 
-/* ----- 1. MetaMask / injected (инъекция EIP-1193) ----- */
-async function connectInjected() {
+/* ----- EIP-6963 + multi-wallet provider pickers -----
+ * Trust/Binance often share window.ethereum with MetaMask — never call ethereum blindly. */
+const EIP6963 = new Map();
+
+function initEip6963() {
+  if (typeof window === 'undefined') return;
+  window.addEventListener('eip6963:announceProvider', (event) => {
+    const { info, provider } = event.detail || {};
+    if (info?.uuid) EIP6963.set(info.uuid, { info, provider });
+    if (info?.rdns) EIP6963.set(info.rdns, { info, provider });
+  });
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+}
+initEip6963();
+
+function rdnsProvider(...rdnsIds) {
+  for (const id of rdnsIds) {
+    const entry = EIP6963.get(id);
+    if (entry?.provider) return entry.provider;
+  }
+  return null;
+}
+
+function legacyProviders() {
+  const list = [];
   const eth = window.ethereum;
-  if (!eth) {
+  if (Array.isArray(eth?.providers)) list.push(...eth.providers);
+  else if (eth) list.push(eth);
+  if (window.trustwallet) list.push(window.trustwallet);
+  if (window.okxwallet) list.push(window.okxwallet);
+  if (window.BinanceChain) list.push(window.BinanceChain);
+  const binanceW3 = window.binancew3w?.ethereum || window.binance?.ethereum;
+  if (binanceW3) list.push(binanceW3);
+  if (window.coinbaseWalletExtension) list.push(window.coinbaseWalletExtension);
+  return list.filter(Boolean);
+}
+
+function findLegacy(matchFn) {
+  return legacyProviders().find(matchFn) || null;
+}
+
+function isMetaMaskProvider(p) {
+  return !!p?.isMetaMask && !p?.isTrust && !p?.isTrustWallet && !p?.isBinance && !p?.isBinanceWallet && !p?.isCoinbaseWallet;
+}
+function isTrustProvider(p) {
+  return !!(p?.isTrust || p?.isTrustWallet || p?.isTrustWalletProvider);
+}
+function isBinanceProvider(p) {
+  return !!(p?.isBinance || p?.isBinanceWallet || p?.bbcSignTx);
+}
+function isCoinbaseProvider(p) {
+  return !!p?.isCoinbaseWallet;
+}
+
+async function connectWithProvider(provider, label) {
+  if (!provider?.request) throw new Error(label + ' provider unavailable');
+  const accounts = await provider.request({ method: 'eth_requestAccounts' });
+  if (!accounts?.length) throw new Error('User rejected');
+  provider.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
+  provider.on?.('chainChanged', (hex) => { currentChainId = parseInt(hex, 16); });
+  await authenticateWithSIWE(accounts[0], provider);
+  return accounts[0];
+}
+
+/* ----- 1. MetaMask ----- */
+async function connectMetaMask() {
+  let provider = rdnsProvider('io.metamask', 'io.metamask.mobile');
+  if (!provider) provider = findLegacy(isMetaMaskProvider);
+  if (!provider) {
     window.open('https://metamask.io/download/', '_blank');
     throw new Error('MetaMask not installed — opened download page');
   }
-  const accounts = await eth.request({ method: 'eth_requestAccounts' });
-  if (!accounts?.length) throw new Error('User rejected');
-  eth.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-  eth.on?.('chainChanged', (hex) => { currentChainId = parseInt(hex, 16); });
-  // Sign in with backend — without this no JWT, no balance, no API access.
-  await authenticateWithSIWE(accounts[0], eth);
-  return accounts[0];
+  return connectWithProvider(provider, 'MetaMask');
 }
 
-/* ----- 2. OKX Wallet (отдельный injection window.okxwallet) ----- */
+/* ----- 2. Trust Wallet ----- */
+async function connectTrust() {
+  let provider = rdnsProvider('com.trustwallet.app');
+  if (!provider) provider = findLegacy(isTrustProvider);
+  if (!provider && window.trustwallet?.request) provider = window.trustwallet;
+  if (provider) return connectWithProvider(provider, 'Trust Wallet');
+  if (typeof window.toast === 'function') window.toast('Scan QR with Trust Wallet app', 'info');
+  return connectWC();
+}
+
+/* ----- 3. Binance Web3 Wallet ----- */
+async function connectBinanceWeb3() {
+  let provider = rdnsProvider('com.binance.wallet');
+  if (!provider) provider = findLegacy(isBinanceProvider);
+  if (!provider && window.BinanceChain?.request) provider = window.BinanceChain;
+  if (provider) return connectWithProvider(provider, 'Binance Web3 Wallet');
+  if (typeof window.toast === 'function') window.toast('Install Binance Web3 Wallet or scan QR', 'info');
+  return connectWC();
+}
+
+/* ----- 4. OKX Wallet ----- */
 async function connectOkx() {
-  const okx = window.okxwallet;
-  if (!okx) {
+  let provider = rdnsProvider('com.okex.wallet', 'com.okx.wallet');
+  if (!provider) provider = window.okxwallet;
+  if (!provider) {
     window.open('https://www.okx.com/web3', '_blank');
     throw new Error('OKX Wallet not installed');
   }
-  const accounts = await okx.request({ method: 'eth_requestAccounts' });
-  okx.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-  await authenticateWithSIWE(accounts[0], okx);
-  return accounts[0];
+  return connectWithProvider(provider, 'OKX Wallet');
 }
 
-/* ----- 3. Coinbase Wallet (инъекция или SDK fallback) ----- */
+/* ----- 5. Coinbase Wallet (инъекция или SDK fallback) ----- */
 async function connectCoinbase() {
-  const cb = window.coinbaseWalletExtension || (window.ethereum?.isCoinbaseWallet ? window.ethereum : null);
+  let cb = rdnsProvider('com.coinbase.wallet');
+  if (!cb) cb = window.coinbaseWalletExtension || findLegacy(isCoinbaseProvider);
   if (cb) {
-    const accounts = await cb.request({ method: 'eth_requestAccounts' });
-    cb.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-    await authenticateWithSIWE(accounts[0], cb);
-    return accounts[0];
+    return connectWithProvider(cb, 'Coinbase Wallet');
   }
   // Fallback — Coinbase Wallet SDK (QR / universal link)
   const { CoinbaseWalletSDK } = await import('https://esm.sh/@coinbase/wallet-sdk@4.0.0');
@@ -394,7 +469,9 @@ window.gromFetchOnchainBalances = async function gromFetchOnchainBalances(addres
 /* ----- Wallet connect router (used by index.html cnConnect) ----- */
 async function gromWalletConnect(kind, name) {
   try {
-    if (kind === 'mm' || kind === 'trust' || kind === 'bnw3') await connectInjected();
+    if (kind === 'mm') await connectMetaMask();
+    else if (kind === 'trust') await connectTrust();
+    else if (kind === 'bnw3') await connectBinanceWeb3();
     else if (kind === 'okx') await connectOkx();
     else if (kind === 'cb') await connectCoinbase();
     else if (kind === 'wc' || kind === 'ghost') await connectWC();
@@ -444,7 +521,8 @@ function hook() {
 
 /* ----- экспорт для отладки ----- */
 window.gromWallet = {
-  connectInjected, connectOkx, connectCoinbase, connectWC,
+  connectMetaMask, connectTrust, connectBinanceWeb3,
+  connectOkx, connectCoinbase, connectWC,
   connectEmail, gromWalletConnect,
   disconnect, signSiwe,
   fetchOnchainBalances: window.gromFetchOnchainBalances,

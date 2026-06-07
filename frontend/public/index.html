@@ -1695,13 +1695,17 @@
     width: 28px; height: 28px; border-radius: 7px;
     display: flex; align-items: center; justify-content: center;
     font-size: 14px; flex: 0 0 28px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.06);
   }
-  .cn-row .ico.mm { background: #f0f0f0; color: #E2761B; font-weight: 800; }
-  .cn-row .ico.wc { background: #3b99fc; color: #fff; font-weight: 800; }
-  .cn-row .ico.okx { background: #000; color: #fff; font-weight: 900; letter-spacing: -0.03em; }
-  .cn-row .ico.cb { background: #0052ff; color: #fff; font-weight: 800; }
+  .cn-row .ico img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: inherit;
+  }
   .cn-row .ico.email { background: rgba(200,212,232,0.12); color: var(--silver1); }
-  .cn-row .ico.gg { background: #fff; color: #4285F4; font-weight: 800; }
   .cn-row .ico.ghost { background: rgba(200,212,232,0.08); color: var(--silver3); border: 1px dashed rgba(200,212,232,0.25); }
   .cn-row .lbl { flex: 1; }
   .cn-row .chev { color: var(--silver5); font-size: 14px; }
@@ -6303,7 +6307,7 @@
         <div class="wm-note" style="margin:8px 0 0">We'll create an embedded wallet for you — no seed phrase needed. Powered by Privy.</div>
       </div>
       <button type="button" class="cn-row" onclick="cnConnect('Google','gg', event)" style="margin-top:8px">
-        <span class="ico gg">G</span>
+        <span class="ico gg"><img src="/assets/wallets/google.svg" width="22" height="22" alt="" decoding="async"/></span>
         <span class="lbl">Continue with Google</span>
         <span class="chev">›</span>
       </button>
@@ -6312,32 +6316,32 @@
 
       <div class="cn-list">
         <button type="button" class="cn-row" onclick="cnConnect('MetaMask','mm')">
-          <span class="ico mm">M</span>
+          <span class="ico mm"><img src="/assets/wallets/metamask.svg" width="22" height="22" alt="" decoding="async"/></span>
           <span class="lbl">MetaMask</span>
           <span class="chev">›</span>
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('WalletConnect','wc')">
-          <span class="ico wc">W</span>
+          <span class="ico wc"><img src="/assets/wallets/walletconnect.svg" width="22" height="22" alt="" decoding="async"/></span>
           <span class="lbl">WalletConnect</span>
           <span class="chev">›</span>
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('Binance Web3 Wallet','bnw3')">
-          <span class="ico" style="background:linear-gradient(135deg,#f0b90b,#f8d12f);color:#0a1224;font-weight:900">B</span>
+          <span class="ico"><img src="/assets/wallets/binance.svg" width="22" height="22" alt="" decoding="async"/></span>
           <span class="lbl">Binance Web3 Wallet</span>
           <span class="chev">›</span>
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('Trust Wallet','trust')">
-          <span class="ico" style="background:linear-gradient(135deg,#3375bb,#5aa6ff);color:#fff;font-weight:900">T</span>
+          <span class="ico"><img src="/assets/wallets/trust.svg" width="22" height="22" alt="" decoding="async"/></span>
           <span class="lbl">Trust Wallet</span>
           <span class="chev">›</span>
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('OKX Wallet','okx')">
-          <span class="ico okx">OKX</span>
+          <span class="ico okx"><img src="/assets/wallets/okx.svg" width="22" height="22" alt="" decoding="async"/></span>
           <span class="lbl">OKX Wallet</span>
           <span class="chev">›</span>
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('Coinbase Wallet','cb')">
-          <span class="ico cb">C</span>
+          <span class="ico cb"><img src="/assets/wallets/coinbase.svg" width="22" height="22" alt="" decoding="async"/></span>
           <span class="lbl">Coinbase Wallet</span>
           <span class="chev">›</span>
         </button>
@@ -6507,7 +6511,7 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = 'grom-wallet.js?v=20260607c';
+  walletModule.src = 'grom-wallet.js?v=20260607d';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');

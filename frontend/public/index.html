@@ -2514,9 +2514,13 @@
   .sig-card .head .title::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--steel1); box-shadow: 0 0 8px var(--steel1); animation: livePulse 1.6s ease-in-out infinite; }
   @keyframes livePulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
   .sig-card .body { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; }
-  .sig-dial { position: relative; width: 64px; height: 64px; }
-  .sig-dial svg { transform: rotate(-90deg); }
-  .sig-dial .pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--silver1); font-variant-numeric: tabular-nums; }
+  .sig-dial { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
+  .sig-dial svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+  .sig-dial .pct {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; color: var(--silver1); font-variant-numeric: tabular-nums;
+    line-height: 1; pointer-events: none;
+  }
   .sig-card .verdict { font-size: 13px; font-weight: 800; color: var(--silver1); }
   .sig-card .verdict .arr { font-size: 16px; margin-right: 4px; }
   .sig-card .verdict.up { color: var(--success); }
@@ -2697,6 +2701,7 @@
       gap: 12px;
     }
     #page-futures .fut-main-col { display: contents; }
+    #page-futures .bo-chart-card { min-height: 0 !important; }
     #page-futures aside.wl { grid-area: contracts; max-height: none; overflow: visible; }
     #page-futures .fut-main-col > .bo-chart-card { grid-area: chart; }
     #page-futures .fut-order-panel { grid-area: panel; }
@@ -3120,7 +3125,8 @@
     padding: 8px 9px; border-radius: 8px;
   }
   .spot-pair-item:hover { background: rgba(77,158,255,0.12); }
-  body.spot-pair-open { overflow: hidden; }
+  body.spot-pair-open,
+  body.desk-pair-open { overflow: hidden; }
   @media (max-width: 640px) {
     .spot-pair-pop {
       position: fixed;
@@ -3815,6 +3821,12 @@
     .bo-chip-row button { padding: 6px 10px; font-size: 11px; flex-shrink: 0; }
     .bo-price .big { font-size: 19px !important; }
 
+    #page-binary {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+      box-sizing: border-box;
+    }
     /* Binary watchlist — horizontal pair strip */
     #page-binary .wl {
       max-height: none;
@@ -3837,10 +3849,15 @@
       background: rgba(14,20,34,0.9);
       border: 1px solid rgba(255,255,255,0.06);
     }
+    #page-binary .wl .sig-card,
+    #page-binary .wl-cats,
+    #page-binary .wl-tools,
+    #page-binary #boListMode { display: none !important; }
+    #page-binary .sig-card .body { grid-template-columns: 48px 1fr; gap: 10px; }
     #page-binary .sig-card .sig-dial { width: 48px; height: 48px; }
-    #page-binary .sig-card .sig-dial svg { width: 48px; height: 48px; }
+    #page-binary .sig-card .sig-dial .pct { font-size: 11px; }
     #page-binary #wlList {
-      order: 2;
+      order: 1;
       display: flex;
       flex-direction: row;
       gap: 8px;
@@ -3889,7 +3906,20 @@
       width: 100%;
       max-width: 100%;
       padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+      box-sizing: border-box;
     }
+    #page-futures .bo-chart-card { min-height: 0 !important; }
+    #page-futures .fut-shell,
+    #page-futures .fut-main-col { overflow: visible !important; width: 100%; max-width: 100%; }
+    #page-futures .fut-shell > .bo-chart-card,
+    #page-futures .fut-shell .bo-panel-v2,
+    #page-futures .fut-shell aside.wl,
+    #page-futures .fut-positions-card,
+    #page-futures .fut-ai-card { overflow: visible !important; }
+    #page-futures .wl-cats,
+    #page-futures .wl-tabs,
+    #page-futures #futListMode,
+    #page-futures .wl-tools { display: none !important; }
     #page-futures .page-subtitle { margin-bottom: 14px; }
     #page-futures .fut-shell {
       min-height: 0 !important;
@@ -4973,7 +5003,7 @@
     <!-- BINARY -->
     <section class="page" id="page-binary">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Binary Options</span></div>
-      <h1 class="page-title"><span>Binary Options</span> <span class="tag">5s–1h</span></h1>
+      <h1 class="page-title"><span class="spot-pair-wrap"><button type="button" class="spot-pair-btn" id="boPairBtn"><span id="boPairTitle">BTC/USDT</span> ▾</button><div class="spot-pair-pop" id="boPairPop" hidden><input class="spot-pair-search" id="boPairSearch" placeholder="Search asset…" autocomplete="off" /><div class="spot-pair-list" id="boPairList"></div></div></span> <span class="tag">5s–1h</span></h1>
       <div class="bo-page-toolbar">
         <p class="page-subtitle" data-i18n="pg_binary_sub">Predict UP or DOWN at round close. Fixed payouts up to 94%, hard-capped risk, zero leverage — settled on-chain-verifiable feeds.</p>
         <button type="button" id="boSoundToggle" class="on" aria-pressed="true">Sound: On</button>
@@ -5006,7 +5036,7 @@
             </div>
             <div class="body">
               <div class="sig-dial">
-                <svg width="64" height="64">
+                <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
                   <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(200,212,232,0.1)" stroke-width="6"/>
                   <circle id="sigRing" cx="32" cy="32" r="26" fill="none" stroke="var(--success)" stroke-width="6" stroke-linecap="round" stroke-dasharray="163.4" stroke-dashoffset="43"/>
                 </svg>
@@ -5619,7 +5649,7 @@
     <!-- FUTURES -->
     <section class="page" id="page-futures">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Futures</span></div>
-      <h1 class="page-title">Futures <span class="tag">Perpetuals</span></h1>
+      <h1 class="page-title"><span class="spot-pair-wrap"><button type="button" class="spot-pair-btn" id="futPairBtn"><span id="futPairTitle">BTCUSDT</span> ▾</button><div class="spot-pair-pop" id="futPairPop" hidden><input class="spot-pair-search" id="futPairSearch" placeholder="Search contract…" autocomplete="off" /><div class="spot-pair-list" id="futPairList"></div></div></span> <span class="tag">Perpetuals</span></h1>
       <p class="page-subtitle">USDT-margined perpetuals · up to 100× leverage · cross &amp; isolated margin.</p>
 
       <div class="fut-shell">
@@ -7531,24 +7561,8 @@ document.addEventListener('click', e => {
   }
   // Watchlist
   const w = e.target.closest('#wlList .wl-item');
-  if (w) {
-      document.querySelectorAll('#wlList .wl-item').forEach(x => x.classList.remove('active'));
-      w.classList.add('active');
-      boState.pair = w.dataset.pair;
-      boState.payout = (+w.dataset.pay) / 100;
-      var ppx = priceForPair(boState.pair);
-      var listedPx = Number(w.dataset.price);
-      boState.strike = (Number.isFinite(listedPx) && listedPx > 0 && Number.isFinite(ppx) && ppx > 0 && Math.abs(listedPx - ppx) / Math.max(listedPx, ppx, 1) <= 0.08) ? listedPx : ppx;
-      var fresh = buildSeriesAround(ppx, boSeries.length || 60);
-      boSeries = fresh;
-    boSeries[boSeries.length - 1] = ppx;
-    updateBinaryAssetTag(w.dataset.pair, w.dataset.pay);
-    var boEl = document.getElementById('boPrice');
-    if (boEl) boEl.textContent = formatDeskPrice(boState.pair, ppx);
-    const lock = document.getElementById('strikeLock'); if (lock) lock.textContent = (boState.strike < 100 ? '' : '$') + fmt(boState.strike, boState.strike < 20 ? 5 : 2);
-    const hs = document.getElementById('hudStrike'); if (hs) hs.textContent = (boState.strike < 100 ? '' : '$') + fmt(boState.strike, boState.strike < 20 ? 5 : 2);
-    refreshPayout();
-    renderBinaryProPanels();
+  if (w && w.dataset.pair) {
+    setBinaryPair(w.dataset.pair, { pay: w.dataset.pay, price: w.dataset.price });
   }
   const fw = e.target.closest('#page-futures aside.wl .wl-item[data-pair]');
   if (fw) {
@@ -7705,8 +7719,11 @@ document.addEventListener('DOMContentLoaded', () => {
   initBinaryWatchlistMeta();
   applyWlTabFilter();
   initSpotPairPicker();
+  initBinaryPairPicker();
+  initFuturesPairPicker();
   syncBinaryStrike(true);
   setSpotPair(spotState.pair);
+  setBinaryPair(boState.pair);
   setFuturesPair(futDeskState.pair);
   renderDashboardWatchlist();
   renderBinaryProPanels();
@@ -10047,10 +10064,48 @@ function updateSpotAiAnalysis(sym) {
   if (stamp) stamp.textContent = 'model v2.4 · ' + base + ' live context';
 }
 
+function setBinaryPair(sym, opts) {
+  opts = opts || {};
+  if (!binaryPairs.length && typeof rebuildBinaryPairs === 'function') rebuildBinaryPairs();
+  var row = binaryPairs.find(function (r) { return r.sym === sym; });
+  boState.pair = sym || (row && row.sym) || boState.pair || 'BTC/USDT';
+  if (row) boState.payout = (+row.pay) / 100;
+  else if (opts.pay != null) boState.payout = (+opts.pay) / 100;
+  var ppx = priceForPair(boState.pair);
+  var listedPx = Number(opts.price);
+  boState.strike = (Number.isFinite(listedPx) && listedPx > 0 && Number.isFinite(ppx) && ppx > 0 && Math.abs(listedPx - ppx) / Math.max(listedPx, ppx, 1) <= 0.08) ? listedPx : ppx;
+  var fresh = buildSeriesAround(ppx, boSeries.length || 60);
+  boSeries = fresh;
+  boSeries[boSeries.length - 1] = ppx;
+  var title = document.getElementById('boPairTitle');
+  if (title) title.textContent = boState.pair;
+  document.querySelectorAll('#wlList .wl-item[data-pair]').forEach(function (x) {
+    x.classList.toggle('active', x.dataset.pair === boState.pair);
+  });
+  updateBinaryAssetTag(boState.pair, row ? row.pay : (opts.pay != null ? opts.pay : Math.round((boState.payout || 0.92) * 100)));
+  var boEl = document.getElementById('boPrice');
+  if (boEl) boEl.textContent = formatDeskPrice(boState.pair, ppx);
+  var lock = document.getElementById('strikeLock');
+  if (lock) lock.textContent = (boState.strike < 100 ? '' : '$') + fmt(boState.strike, boState.strike < 20 ? 5 : 2);
+  var hs = document.getElementById('hudStrike');
+  if (hs) hs.textContent = (boState.strike < 100 ? '' : '$') + fmt(boState.strike, boState.strike < 20 ? 5 : 2);
+  var pop = document.getElementById('boPairPop');
+  if (pop) pop.hidden = true;
+  document.body.classList.remove('desk-pair-open', 'spot-pair-open');
+  refreshPayout();
+  renderBinaryProPanels();
+  if (typeof drawChart === 'function') drawChart('boChart');
+}
+
 function setFuturesPair(sym) {
   futDeskState.pair = sym || 'BTC/USDT';
   var px = priceForPair(futDeskState.pair);
   var base = futDeskState.pair.split('/')[0];
+  var futTitle = document.getElementById('futPairTitle');
+  if (futTitle) futTitle.textContent = base + 'USDT';
+  var futPop = document.getElementById('futPairPop');
+  if (futPop) futPop.hidden = true;
+  document.body.classList.remove('desk-pair-open', 'spot-pair-open');
   document.querySelectorAll('#page-futures aside.wl .wl-item[data-pair]').forEach(function (row) {
     row.classList.toggle('active', row.dataset.pair === futDeskState.pair);
   });
@@ -10488,7 +10543,7 @@ function setSpotPair(sym) {
   spotSeries[spotSeries.length - 1] = px;
   var pop = document.getElementById('spotPairPop');
   if (pop) pop.hidden = true;
-  document.body.classList.remove('spot-pair-open');
+  document.body.classList.remove('desk-pair-open', 'spot-pair-open');
   updateSpotBoard(spotState.pair);
   renderOrderBook();
   drawChart('spotChart');
@@ -10523,15 +10578,16 @@ function getSpotPairOptions() {
   return out.sort(function (a, b) { return a.localeCompare(b); });
 }
 
-function initSpotPairPicker() {
-  var btn = document.getElementById('spotPairBtn');
-  var pop = document.getElementById('spotPairPop');
-  var inp = document.getElementById('spotPairSearch');
-  var list = document.getElementById('spotPairList');
+function initDeskPairPicker(cfg) {
+  var btn = document.getElementById(cfg.btnId);
+  var pop = document.getElementById(cfg.popId);
+  var inp = document.getElementById(cfg.searchId);
+  var list = document.getElementById(cfg.listId);
   if (!btn || !pop || !inp || !list) return;
-  var options = getSpotPairOptions();
   function setOpen(open) {
+    document.querySelectorAll('.spot-pair-pop').forEach(function (el) { el.hidden = true; });
     pop.hidden = !open;
+    document.body.classList.toggle('desk-pair-open', !!open);
     document.body.classList.toggle('spot-pair-open', !!open);
     if (open) {
       render(inp.value);
@@ -10540,10 +10596,16 @@ function initSpotPairPicker() {
   }
   function render(filter) {
     var f = String(filter || '').trim().toUpperCase();
-    var shown = options.filter(function (s) { return !f || s.indexOf(f) !== -1; });
+    var options = cfg.getOptions();
+    var shown = options.filter(function (s) {
+      var label = cfg.formatLabel ? cfg.formatLabel(s) : s;
+      return !f || String(s).toUpperCase().indexOf(f) !== -1 || String(label).toUpperCase().indexOf(f) !== -1;
+    });
     list.innerHTML = shown.map(function (s) {
       var px = priceForPair(s);
-      return '<button type="button" class="spot-pair-item" data-sym="' + s + '"><span>' + s + '</span><span class="mono">' + (Number.isFinite(px) ? ('$' + marketFmt(px)) : '-') + '</span></button>';
+      var label = cfg.formatLabel ? cfg.formatLabel(s) : s;
+      var extra = cfg.formatExtra ? cfg.formatExtra(s) : '';
+      return '<button type="button" class="spot-pair-item" data-sym="' + s + '"><span>' + label + extra + '</span><span class="mono">' + (Number.isFinite(px) ? ('$' + marketFmt(px)) : '-') + '</span></button>';
     }).join('');
   }
   btn.addEventListener('click', function (e) {
@@ -10554,21 +10616,76 @@ function initSpotPairPicker() {
   list.addEventListener('click', function (e) {
     var b = e.target.closest('.spot-pair-item');
     if (!b) return;
-    setSpotPair(b.dataset.sym);
+    cfg.onSelect(b.dataset.sym);
     setOpen(false);
   });
-  document.addEventListener('click', function (e) {
-    if (!pop.hidden && !e.target.closest('#spotPairPop') && !e.target.closest('#spotPairBtn')) setOpen(false);
-  });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !pop.hidden) setOpen(false);
-  });
-  window.addEventListener('resize', function () {
-    if (window.innerWidth > 640 && document.body.classList.contains('spot-pair-open')) {
-      document.body.classList.remove('spot-pair-open');
-    }
-  });
+  if (!window.__gromDeskPairPickerWired) {
+    window.__gromDeskPairPickerWired = true;
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('.spot-pair-pop') && !e.target.closest('.spot-pair-btn')) {
+        document.querySelectorAll('.spot-pair-pop').forEach(function (el) { el.hidden = true; });
+        document.body.classList.remove('desk-pair-open', 'spot-pair-open');
+      }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.spot-pair-pop').forEach(function (el) { el.hidden = true; });
+        document.body.classList.remove('desk-pair-open', 'spot-pair-open');
+      }
+    });
+    window.addEventListener('resize', function () {
+      if (window.innerWidth > 640) document.body.classList.remove('desk-pair-open', 'spot-pair-open');
+    });
+  }
   render('');
+}
+
+function initSpotPairPicker() {
+  initDeskPairPicker({
+    btnId: 'spotPairBtn',
+    popId: 'spotPairPop',
+    searchId: 'spotPairSearch',
+    listId: 'spotPairList',
+    getOptions: getSpotPairOptions,
+    onSelect: setSpotPair
+  });
+}
+
+function getBinaryPairOptions() {
+  if (!binaryPairs.length && typeof rebuildBinaryPairs === 'function') rebuildBinaryPairs();
+  return binaryPairs.map(function (r) { return r.sym; }).filter(Boolean).sort(function (a, b) { return a.localeCompare(b); });
+}
+
+function initBinaryPairPicker() {
+  initDeskPairPicker({
+    btnId: 'boPairBtn',
+    popId: 'boPairPop',
+    searchId: 'boPairSearch',
+    listId: 'boPairList',
+    getOptions: getBinaryPairOptions,
+    formatExtra: function (s) {
+      var row = binaryPairs.find(function (r) { return r.sym === s; });
+      return row ? ' <span style="color:var(--success);font-size:11px">+' + row.pay + '%</span>' : '';
+    },
+    onSelect: function (sym) { setBinaryPair(sym); }
+  });
+}
+
+function getFuturesPairOptions() {
+  if (!futuresPairs.length && typeof rebuildFuturesPairs === 'function') rebuildFuturesPairs();
+  return futuresPairs.map(function (r) { return r.sym; }).filter(Boolean).sort(function (a, b) { return a.localeCompare(b); });
+}
+
+function initFuturesPairPicker() {
+  initDeskPairPicker({
+    btnId: 'futPairBtn',
+    popId: 'futPairPop',
+    searchId: 'futPairSearch',
+    listId: 'futPairList',
+    getOptions: getFuturesPairOptions,
+    formatLabel: function (s) { return String(s || '').replace('/', ''); },
+    onSelect: setFuturesPair
+  });
 }
 
 function initMarketsFilter() {

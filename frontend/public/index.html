@@ -2106,9 +2106,61 @@
 
   .bo-chart-body { position: relative; flex: 1; min-height: 420px; }
   .bo-chart-body canvas { width: 100%; height: 100%; display: block; }
+  .bo-trade-toast {
+    position: absolute; bottom: 14px; left: 14px; z-index: 9; pointer-events: none;
+    min-width: 220px; max-width: min(92%, 340px);
+    padding: 12px 14px; border-radius: 12px;
+    background: rgba(7,11,22,0.88); backdrop-filter: blur(14px);
+    border: 1px solid rgba(77,158,255,0.22);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+    opacity: 0; transform: translateY(10px);
+    transition: opacity .28s ease, transform .28s ease;
+  }
+  .bo-trade-toast.show { opacity: 1; transform: translateY(0); }
+  .bo-trade-toast .k { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--silver5); font-weight: 800; }
+  .bo-trade-toast .v { margin-top: 4px; font-size: 13px; font-weight: 800; color: var(--silver1); }
+  .bo-trade-toast .s { margin-top: 4px; font-size: 11px; color: var(--silver4); }
+  .bo-trade-toast.up { border-color: rgba(34,193,124,0.35); }
+  .bo-trade-toast.down { border-color: rgba(232,87,107,0.35); }
+  .grom-tv-bet-layer { position: absolute; inset: 0; z-index: 7; pointer-events: none; overflow: hidden; }
+  .grom-tv-bet-marker {
+    position: absolute; left: 88px; right: 108px;
+    display: flex; align-items: center; transform: translateY(-50%);
+    transition: top .35s ease;
+  }
+  .grom-tv-bet-pill {
+    display: flex; flex-direction: column; gap: 1px; align-items: center;
+    padding: 5px 10px; border-radius: 8px; min-width: 78px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 10.5px; font-weight: 800; line-height: 1.2;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.38);
+    white-space: nowrap;
+  }
+  .grom-tv-bet-pill .amt { font-size: 11.5px; letter-spacing: .02em; }
+  .grom-tv-bet-pill .cd { font-size: 10px; opacity: .92; font-variant-numeric: tabular-nums; }
+  .grom-tv-bet-marker.up .grom-tv-bet-pill {
+    background: linear-gradient(145deg, #24d084, #18a862);
+    color: #fff; border: 1px solid rgba(255,255,255,0.22);
+  }
+  .grom-tv-bet-marker.down .grom-tv-bet-pill {
+    background: linear-gradient(145deg, #ff6175, #d93a52);
+    color: #fff; border: 1px solid rgba(255,255,255,0.22);
+  }
+  .grom-tv-bet-line {
+    flex: 1; height: 2px; margin-left: 6px; border-radius: 2px;
+    background-size: 8px 2px; background-repeat: repeat-x;
+  }
+  .grom-tv-bet-marker.up .grom-tv-bet-line { background-image: repeating-linear-gradient(90deg, rgba(34,193,124,.95) 0 5px, transparent 5px 8px); }
+  .grom-tv-bet-marker.down .grom-tv-bet-line { background-image: repeating-linear-gradient(90deg, rgba(232,87,107,.95) 0 5px, transparent 5px 8px); }
+  .grom-tv-bet-arrow {
+    width: 0; height: 0; margin-right: 4px;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+  }
+  .grom-tv-bet-marker.up .grom-tv-bet-arrow { border-bottom: 7px solid #24d084; }
+  .grom-tv-bet-marker.down .grom-tv-bet-arrow { border-top: 7px solid #ff6175; }
   .bo-hud-overlay {
     position: absolute; top: 12px; left: 12px; right: 12px;
-    display: flex; justify-content: space-between; pointer-events: none; gap: 10px;
+    display: flex; justify-content: flex-end; pointer-events: none; gap: 10px;
   }
   .hud-card {
     background: rgba(7,11,22,0.72);
@@ -4639,7 +4691,7 @@
       <h1 class="page-title"><span>Binary Options</span> <span class="tag">5s–1h</span></h1>
       <div class="bo-page-toolbar">
         <p class="page-subtitle" data-i18n="pg_binary_sub">Predict UP or DOWN at round close. Fixed payouts up to 94%, hard-capped risk, zero leverage — settled on-chain-verifiable feeds.</p>
-        <button type="button" id="boSoundToggle" aria-pressed="false">Sound: Off</button>
+        <button type="button" id="boSoundToggle" class="on" aria-pressed="true">Sound: On</button>
       </div>
 
       <div class="bo-shell">
@@ -4707,8 +4759,8 @@
             <div class="sep"></div>
             <div class="grp">
               <div class="bo-chip-row" id="boChart-type">
-                <button>Line</button>
-                <button class="active">Candles</button>
+                <button class="active">Line</button>
+                <button>Candles</button>
                 <button>Bars</button>
                 <button>HA</button>
               </div>
@@ -4724,15 +4776,12 @@
           <div class="bo-chart-body">
             <canvas id="boChart" class="chart"></canvas>
             <div class="bo-hud-overlay">
-              <div class="hud-card">
-                <div class="lbl">Strike @ entry</div>
-                <div class="v mono" id="hudStrike">$63,892.65</div>
-              </div>
               <div class="hud-card critical">
-                <div class="lbl">Expiry in</div>
+                <div class="lbl">Round closes</div>
                 <div class="v mono" id="hudExpiry">00:47</div>
               </div>
             </div>
+            <div id="boTradeToast" class="bo-trade-toast" aria-live="polite" hidden></div>
           </div>
           <div class="bo-pro-grid">
             <div class="pro-card">
@@ -6899,7 +6948,7 @@ const boState = {
   balance: { demo: 50000, live: 12847.32 },
   positions: [],
   wlTab: 'all',
-  sound: false
+  sound: true
 };
 var boAudioCtx = null;
 var boAudioUnlocked = false;
@@ -6920,6 +6969,22 @@ function updateBoSoundBtn() {
   btn.classList.toggle('on', !!boState.sound);
   btn.setAttribute('aria-pressed', boState.sound ? 'true' : 'false');
   btn.textContent = 'Sound: ' + (boState.sound ? 'On' : 'Off');
+}
+function showBoTradeToast(pos) {
+  var el = document.getElementById('boTradeToast');
+  if (!el || !pos) return;
+  var dcls = pos.dir === 'DOWN' ? 'down' : 'up';
+  var payout = Math.round((pos.pay || boState.payout || 0.92) * 100);
+  el.className = 'bo-trade-toast show ' + dcls;
+  el.hidden = false;
+  el.innerHTML = '<div class="k">Trade order placed</div>'
+    + '<div class="v">' + pos.dir + ' · ' + money(pos.stake) + ' · ' + (pos.asset || boState.pair) + '</div>'
+    + '<div class="s">Payout +' + payout + '% · expires in ' + (pos.tf || '5s') + '</div>';
+  clearTimeout(el._hideT);
+  el._hideT = setTimeout(function () {
+    el.classList.remove('show');
+    setTimeout(function () { el.hidden = true; }, 320);
+  }, 4200);
 }
 function ensureBoAudioReady() {
   if (!window.AudioContext && !window.webkitAudioContext) return null;
@@ -7271,21 +7336,26 @@ window.placeBinary = function placeBinary(dir) {
   var tfEl = document.querySelector('#expiryGrid button.active');
   var tf = (tfEl && tfEl.textContent) ? tfEl.textContent.trim() : '1m';
   boState.balance[boState.account] = Math.max(0, bal - stake);
-  boState.positions.unshift({
+  var newPos = {
+    id: 'bo' + Date.now() + Math.random().toString(36).slice(2, 6),
     dir: dir,
     asset: boState.pair,
     tf: tf,
     stake: stake,
     pay: boState.payout,
     strike: boState.strike,
-    remain: Math.max(3, boState.expirySec | 0)
-  });
+    remain: Math.max(3, boState.expirySec | 0),
+    entryTs: Date.now()
+  };
+  boState.positions.unshift(newPos);
   if (boState.positions.length > 8) boState.positions.length = 8;
   playBinarySound('entry');
+  showBoTradeToast(newPos);
   toast(dir + ' · ' + money(stake) + ' · ' + boState.pair + ' · ' + tf + ' · +' + (boState.payout * 100).toFixed(0) + '%', 'success');
   syncAcctBalances();
   refreshPayout();
   renderPositions();
+  if (typeof drawChart === 'function') drawChart('boChart');
 };
 setInterval(renderPositions, 1000);
 
@@ -7318,7 +7388,7 @@ setInterval(() => {
 
 // Initial
 document.addEventListener('DOMContentLoaded', () => {
-  try { boState.sound = localStorage.getItem('grom_bo_sound') === '1'; } catch (_) {}
+  try { boState.sound = localStorage.getItem('grom_bo_sound') !== '0'; } catch (_) { boState.sound = true; }
   renderBinaryWatchlist('');
   rebuildFuturesPairs();
   renderFuturesList('');
@@ -7666,7 +7736,7 @@ let futSeries = buildSeriesAround(btcPrice, 60);
 futSeries[futSeries.length - 1] = btcPrice;
 let boSeries = buildSeriesAround(btcPrice, 60);
 boSeries[boSeries.length - 1] = btcPrice;
-var __boChartMode = 'candles';
+var __boChartMode = 'line';
 var __boTfSec = 5;
 var spotState = { pair: 'BTC/USDT', side: 'buy', orderType: 'limit' };
 var futDeskState = { pair: 'BTC/USDT', leverage: 25, mode: 'cross', side: 'long' };
@@ -8868,7 +8938,7 @@ function gromDrawTVChart(id, opts) {
       }
     });
   }
-  // Binary: strike line — label on left pill, not on price axis (avoids overlap with expiry wall).
+  // Binary: round strike + per-bet entry lines (PocketOption-style).
   if (id === 'boChart' && window.boState && boState.strike) {
     state.strikeLine = state.series.createPriceLine({
       price: Number(boState.strike),
@@ -8876,14 +8946,64 @@ function gromDrawTVChart(id, opts) {
       axisLabelVisible: false, title: '',
     });
     state.priceLines.push(state.strikeLine);
+    (boState.positions || []).filter(function (p) { return (p.remain | 0) > 0; }).forEach(function (p) {
+      var up = p.dir === 'UP';
+      state.priceLines.push(state.series.createPriceLine({
+        price: Number(p.strike),
+        color: up ? 'rgba(34,193,124,0.42)' : 'rgba(232,87,107,0.42)',
+        lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted,
+        axisLabelVisible: false, title: '',
+      }));
+    });
   } else if (id !== 'boChart') {
     ['.grom-tv-expiry', '.grom-tv-strike-entry', '.grom-tv-strike-pill', '.grom-tv-edge-left', '.grom-tv-edge-right'].forEach(function (sel) {
       var old = c.querySelector(sel);
       if (old) old.remove();
     });
   }
-  if (id === 'boChart') _gromTVUpdateBinaryHud(state, c);
+  if (id === 'boChart') {
+    if (state.mode === 'area' && state.series) {
+      try {
+        state.series.applyOptions({
+          lineColor: '#2ee59a',
+          topColor: 'rgba(46,229,154,0.48)',
+          bottomColor: 'rgba(8,18,32,0.02)',
+          lineWidth: 2.5,
+        });
+      } catch (_) {}
+    }
+    _gromTVUpdateBinaryHud(state, c);
+  }
   return true;
+}
+function _gromTVRenderBinaryBets(state, container) {
+  if (!container || !state || !state.series || !window.boState) return;
+  var layer = container.querySelector('.grom-tv-bet-layer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.className = 'grom-tv-bet-layer';
+    container.appendChild(layer);
+  }
+  var positions = (boState.positions || []).filter(function (p) { return (p.remain | 0) > 0; });
+  var usedY = {};
+  layer.innerHTML = positions.map(function (p, idx) {
+    var strike = Number(p.strike);
+    if (!Number.isFinite(strike) || typeof state.series.priceToCoordinate !== 'function') return '';
+    var y = state.series.priceToCoordinate(strike);
+    if (y == null || !isFinite(y)) return '';
+    var yKey = Math.round(y / 6);
+    var stack = usedY[yKey] || 0;
+    usedY[yKey] = stack + 1;
+    var top = Math.max(18, Math.min((container.clientHeight || 360) - 18, y - 11 + stack * 30));
+    var r = Math.max(0, p.remain | 0);
+    var mm = String(Math.floor(r / 60)).padStart(2, '0');
+    var ss = String(r % 60).padStart(2, '0');
+    var dcls = p.dir === 'DOWN' ? 'down' : 'up';
+    return '<div class="grom-tv-bet-marker ' + dcls + '" data-bet-id="' + (p.id || idx) + '" style="top:' + top + 'px">'
+      + '<span class="grom-tv-bet-arrow" aria-hidden="true"></span>'
+      + '<div class="grom-tv-bet-pill"><span class="amt">' + money(p.stake) + '</span><span class="cd">' + mm + ':' + ss + '</span></div>'
+      + '<div class="grom-tv-bet-line"></div></div>';
+  }).join('');
 }
 function _gromTVUpdateBinaryHud(state, container) {
   if (!container || !state || !state.chart || !window.boState) return;
@@ -8942,6 +9062,7 @@ function _gromTVUpdateBinaryHud(state, container) {
   } else {
     strikePill.style.display = 'none';
   }
+  _gromTVRenderBinaryBets(state, container);
 }
 window.gromDrawTVChart = gromDrawTVChart;
 
@@ -9177,17 +9298,32 @@ function _origDrawChart(id) {
     ctx.fillStyle = '#0a1224'; ctx.font = 'bold 9.5px ui-monospace'; ctx.textAlign = 'center';
     ctx.fillText('EXPIRY', expiryX, H - 11);
 
-    // Open position markers on strike line (just the top ones)
-    (boState.positions || []).slice(0, 3).forEach((p, i) => {
+    // PocketOption-style bet markers: amount + countdown on entry line
+    (boState.positions || []).filter(function (p) { return (p.remain | 0) > 0; }).slice(0, 6).forEach(function (p, i) {
       if (p.strike < min || p.strike > max) return;
-      const py = y(p.strike);
-      const px = W - 110 - i * 18;
+      var py = y(p.strike) + i * 28;
+      var px = 88;
+      var up = p.dir === 'UP';
+      ctx.strokeStyle = up ? 'rgba(34,193,124,0.85)' : 'rgba(232,87,107,0.85)';
+      ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(px + 74, py); ctx.lineTo(W - 96, py); ctx.stroke();
+      ctx.setLineDash([]);
+      var r = Math.max(0, p.remain | 0);
+      var mm = String(Math.floor(r / 60)).padStart(2, '0');
+      var ss = String(r % 60).padStart(2, '0');
+      var grad = ctx.createLinearGradient(px, py - 14, px, py + 14);
+      if (up) { grad.addColorStop(0, '#24d084'); grad.addColorStop(1, '#18a862'); }
+      else { grad.addColorStop(0, '#ff6175'); grad.addColorStop(1, '#d93a52'); }
+      ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.fillStyle = p.dir === 'UP' ? 'rgba(34,193,124,0.95)' : 'rgba(232,87,107,0.95)';
-      ctx.arc(px, py, 5, 0, Math.PI*2); ctx.fill();
-      ctx.strokeStyle = '#0a1224'; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 8px ui-monospace'; ctx.textAlign = 'center';
-      ctx.fillText(p.dir === 'UP' ? '▲' : '▼', px, py + 3);
+      if (ctx.roundRect) ctx.roundRect(px, py - 16, 72, 32, 8);
+      else ctx.fillRect(px, py - 16, 72, 32);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px ui-monospace'; ctx.textAlign = 'center';
+      ctx.fillText(money(p.stake), px + 36, py - 1);
+      ctx.font = 'bold 10px ui-monospace';
+      ctx.fillText(mm + ':' + ss, px + 36, py + 11);
     });
   }
 }

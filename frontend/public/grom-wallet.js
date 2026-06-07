@@ -104,6 +104,91 @@ function openEmailFallback(providerName = 'email') {
   }, 30);
 }
 
+/* ----- SIWE authentication after wallet connect -----
+ * Without this, the UI chip says "Connected" but the backend has no JWT.
+ * Every /api/wallet/* request returns 401 and no balance/deposit address
+ * shows up. This helper runs after a successful EIP-1193 connect:
+ *   1. Get fresh nonce from /auth/nonce (server stores it in DB)
+ *   2. Build EIP-4361 SIWE message
+ *   3. personal_sign through the wallet provider
+ *   4. POST /auth/verify { message, signature } → { token, user }
+ *   5. Persist JWT + update GROM_CONN + reconnect WS
+ * If the user rejects the signature, throws and the caller disconnects.
+ */
+async function authenticateWithSIWE(address, provider) {
+  if (!address || !provider) throw new Error('SIWE: missing address or provider');
+
+  // 1. Server-issued nonce
+  const nonceRes = await fetch('/auth/nonce', { method: 'POST' });
+  const nonceJson = await nonceRes.json().catch(() => ({}));
+  if (!nonceRes.ok || !nonceJson.nonce) {
+    throw new Error(nonceJson.error || 'Could not get nonce from server');
+  }
+  const { nonce, statement, domain, version } = nonceJson;
+
+  // 2. Probe chain id (some providers cache it; ask once)
+  let chainId = currentChainId;
+  try {
+    const hex = await provider.request({ method: 'eth_chainId' });
+    chainId = parseInt(hex, 16);
+    currentChainId = chainId;
+  } catch (_) {}
+  if (!chainId) chainId = 1; // default to mainnet for SIWE only
+
+  // 3. Build EIP-4361 SIWE message
+  const issuedAt = new Date().toISOString();
+  const siweDomain = domain || location.host;
+  const siweStatement = statement || "Sign in to GROM. You're proving ownership of this wallet — no gas required.";
+  const message =
+`${siweDomain} wants you to sign in with your Ethereum account:
+${address}
+
+${siweStatement}
+
+URI: ${location.origin}
+Version: ${version || '1'}
+Chain ID: ${chainId}
+Nonce: ${nonce}
+Issued At: ${issuedAt}`;
+
+  // 4. Sign — this opens the wallet's signature dialog
+  const signature = await provider.request({
+    method: 'personal_sign',
+    params: [message, address]
+  });
+
+  // 5. Verify with backend, receive JWT
+  const verifyRes = await fetch('/auth/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, signature })
+  });
+  const verifyJson = await verifyRes.json().catch(() => ({}));
+  if (!verifyRes.ok || !verifyJson.token) {
+    throw new Error(verifyJson.error || 'Signature verification failed');
+  }
+
+  // 6. Persist + update UI
+  const short = address.slice(0, 6) + '…' + address.slice(-4);
+  try {
+    localStorage.setItem('grom_jwt', verifyJson.token);
+    localStorage.setItem('grom_wallet_label', address);
+    localStorage.removeItem('grom:logged_out');
+  } catch (_) {}
+  if (window.GROM_CONN) {
+    window.GROM_CONN.connected = true;
+    window.GROM_CONN.label = address;
+    window.GROM_CONN.method = 'wallet';
+  }
+  if (typeof window.setWalletLabel === 'function') window.setWalletLabel(short);
+  if (typeof window.updateAuthUi === 'function') window.updateAuthUi();
+  if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
+  if (typeof window.toast === 'function') window.toast('Connected · ' + short, 'success');
+  if (window.gromWS?.connect) try { window.gromWS.connect(); } catch (_) {}
+
+  return verifyJson;
+}
+
 /* ----- 1. MetaMask / injected (инъекция EIP-1193) ----- */
 async function connectInjected() {
   const eth = window.ethereum;
@@ -115,7 +200,8 @@ async function connectInjected() {
   if (!accounts?.length) throw new Error('User rejected');
   eth.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
   eth.on?.('chainChanged', (hex) => { currentChainId = parseInt(hex, 16); });
-  updateChip(accounts[0]);
+  // Sign in with backend — without this no JWT, no balance, no API access.
+  await authenticateWithSIWE(accounts[0], eth);
   return accounts[0];
 }
 
@@ -128,7 +214,7 @@ async function connectOkx() {
   }
   const accounts = await okx.request({ method: 'eth_requestAccounts' });
   okx.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-  updateChip(accounts[0]);
+  await authenticateWithSIWE(accounts[0], okx);
   return accounts[0];
 }
 
@@ -138,7 +224,7 @@ async function connectCoinbase() {
   if (cb) {
     const accounts = await cb.request({ method: 'eth_requestAccounts' });
     cb.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-    updateChip(accounts[0]);
+    await authenticateWithSIWE(accounts[0], cb);
     return accounts[0];
   }
   // Fallback — Coinbase Wallet SDK (QR / universal link)
@@ -147,7 +233,7 @@ async function connectCoinbase() {
   const provider = sdk.makeWeb3Provider({ options: 'all' });
   const accounts = await provider.request({ method: 'eth_requestAccounts' });
   provider.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-  updateChip(accounts[0]);
+  await authenticateWithSIWE(accounts[0], provider);
   return accounts[0];
 }
 
@@ -185,7 +271,10 @@ async function connectWC() {
   await p.connect();
   const accs = await p.request({ method: 'eth_accounts' });
   if (!accs?.length) throw new Error('No accounts returned');
-  updateChip(accs[0]);
+  // Sign in with backend so /api/wallet/* returns 200 instead of 401 and the
+  // balance + deposit address actually load. Required for Trust Wallet, Binance
+  // Web3 Wallet, MetaMask Mobile, and every other WalletConnect-compatible app.
+  await authenticateWithSIWE(accs[0], p);
   return accs[0];
 }
 

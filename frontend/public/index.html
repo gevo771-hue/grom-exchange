@@ -4933,6 +4933,22 @@
                 <div class="hd">Recent trades</div>
                 <div class="spot-trades" id="spotRecentTrades"></div>
               </div>
+              <div class="spot-panel-box">
+                <div class="hd">Liquidity bands</div>
+                <div class="spot-heatmap" id="spotHeatBars"></div>
+              </div>
+              <div class="spot-panel-box">
+                <div class="hd">Market pulse</div>
+                <div class="rows">
+                  <div class="row"><span>24h depth</span><strong id="spotDepthTag">—</strong></div>
+                  <div class="row"><span>24h volume</span><strong id="spotVolumeTag">—</strong></div>
+                  <div class="row"><span>Day range</span><strong class="mono" id="spotRangeTag">—</strong></div>
+                  <div class="row"><span>Best spread</span><strong id="spotSpreadTag">—</strong></div>
+                  <div class="row"><span>Buy pressure</span><strong class="up" id="spotBuyPressure">—</strong></div>
+                  <div class="row"><span>VWAP dev</span><strong id="spotVwapDev">—</strong></div>
+                  <div class="row"><span>Regime</span><strong id="spotTrendRegime">—</strong></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -8392,9 +8408,16 @@ var GROM_TV_DATA_VERSION = '20260605-stable-v3';
     '.grom-tv-badge span { border:1px solid rgba(122,162,199,.18); background:rgba(7,11,22,.68); backdrop-filter:blur(12px); color:#b8c7d9; border-radius:999px; padding:4px 7px; font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; box-shadow:0 8px 24px rgba(0,0,0,.18); white-space:nowrap; }',
     '.grom-tv-badge span.hot { color:#22c17c; border-color:rgba(34,193,124,.34); background:rgba(34,193,124,.10); }',
     '.grom-tv-badge span.warn { color:#f5b94d; border-color:rgba(245,185,77,.38); background:rgba(245,185,77,.10); }',
-    '.grom-tv-expiry { position:absolute; top:0; bottom:0; z-index:2; width:1px; pointer-events:none; background:linear-gradient(180deg, transparent, rgba(245,185,77,.86), transparent); box-shadow:0 0 22px rgba(245,185,77,.45); }',
-    '.grom-tv-expiry::after { content:"EXPIRY"; position:absolute; bottom:10px; left:8px; color:#0a1224; background:#f5b94d; border-radius:5px; padding:3px 6px; font-size:9px; font-weight:900; letter-spacing:.08em; }',
-    '.grom-tv-expiry::before { content:""; position:absolute; top:0; bottom:0; left:0; width:220px; background:linear-gradient(90deg, rgba(245,185,77,.10), transparent); }',
+    '#boChart { padding: 0 0 0 0 !important; }',
+    '#boChart .grom-tv-edge-left, #boChart .grom-tv-edge-right { position:absolute; top:0; bottom:0; z-index:4; pointer-events:none; }',
+    '#boChart .grom-tv-edge-left { left:0; width:78px; background:linear-gradient(90deg, rgba(7,11,22,.82), rgba(7,11,22,.42) 55%, transparent); }',
+    '#boChart .grom-tv-edge-right { right:0; width:96px; background:linear-gradient(270deg, rgba(7,11,22,.82), rgba(7,11,22,.42) 55%, transparent); }',
+    '.grom-tv-strike-entry { position:absolute; top:0; bottom:0; left:72px; z-index:5; width:1px; pointer-events:none; background:linear-gradient(180deg, transparent, rgba(245,185,77,.78), transparent); box-shadow:0 0 16px rgba(245,185,77,.35); }',
+    '.grom-tv-strike-entry::after { content:"ENTRY"; position:absolute; top:10px; left:8px; color:#0a1224; background:#f5b94d; border-radius:5px; padding:3px 6px; font-size:9px; font-weight:900; letter-spacing:.08em; white-space:nowrap; }',
+    '.grom-tv-strike-pill { position:absolute; left:8px; z-index:6; pointer-events:none; color:#0a1224; background:rgba(245,185,77,.94); border-radius:6px; padding:4px 8px; font-size:9.5px; font-weight:900; letter-spacing:.06em; font-family:ui-monospace, SFMono-Regular, monospace; white-space:nowrap; box-shadow:0 6px 18px rgba(0,0,0,.28); }',
+    '.grom-tv-expiry { position:absolute; top:0; bottom:0; z-index:5; width:1px; pointer-events:none; background:linear-gradient(180deg, transparent, rgba(245,185,77,.86), transparent); box-shadow:0 0 22px rgba(245,185,77,.45); transform:translateX(-50%); }',
+    '.grom-tv-expiry::before { content:""; position:absolute; top:0; bottom:0; right:0; width:min(240px, 38vw); background:linear-gradient(90deg, rgba(245,185,77,.12), transparent); pointer-events:none; }',
+    '.grom-tv-expiry-pill { position:absolute; bottom:10px; left:8px; color:#0a1224; background:#f5b94d; border-radius:5px; padding:3px 7px; font-size:9px; font-weight:900; letter-spacing:.08em; white-space:nowrap; }',
     /* price-scale font / size tweak — tighter labels */
     '#boChart .tv-lightweight-charts, #spotChart .tv-lightweight-charts, #futChart .tv-lightweight-charts { font-feature-settings: "tnum" 1; }',
     '@media (max-width: 900px) { #futChart { min-height: 260px !important; height: 260px !important; } }',
@@ -8705,8 +8728,8 @@ function gromDrawTVChart(id, opts) {
     if (!state) return false;
     state.id = id; state.mode = mode; state.pair = pair; state.intervalSec = intervalSec;
     window.__gromTVCharts[id] = state;
-    // Add MA7 + MA25 indicators for candles mode
-    if (mode === 'candles' || mode === 'heikin' || mode === 'bars') {
+    // Add MA7 + MA25 indicators for Spot/Futures candles — skip on Binary to keep strike/expiry clean.
+    if ((mode === 'candles' || mode === 'heikin' || mode === 'bars') && id !== 'boChart') {
       state.ma7  = state.chart.addLineSeries({ color: '#f5b94d', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
       state.ma25 = state.chart.addLineSeries({ color: '#9d6cf5', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
       state.vwap = state.chart.addLineSeries({ color: '#00d4ff', lineWidth: 1.25, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: LightweightCharts.LineStyle.Dotted });
@@ -8717,8 +8740,19 @@ function gromDrawTVChart(id, opts) {
         priceScaleId: 'volume',
       });
       state.chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-      // Compress price scale margins so volume fits
-      state.chart.priceScale('right').applyOptions({ scaleMargins: { top: id === 'boChart' ? 0.08 : 0.14, bottom: 0.22 } });
+      state.chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.14, bottom: 0.22 } });
+    }
+    if (id === 'boChart') {
+      state.chart.timeScale().applyOptions({ rightOffset: 20, barSpacing: 7, minBarSpacing: 4 });
+      state.chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.14, bottom: 0.3 }, minimumWidth: 62 });
+      if (mode === 'candles' || mode === 'heikin' || mode === 'bars') {
+        state.volSeries = state.chart.addHistogramSeries({
+          color: 'rgba(122,162,199,0.28)',
+          priceFormat: { type: 'volume' },
+          priceScaleId: 'volume',
+        });
+        state.chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
+      }
     }
     var wm = document.createElement('div');
     wm.className = 'grom-tv-watermark';
@@ -8834,27 +8868,80 @@ function gromDrawTVChart(id, opts) {
       }
     });
   }
-  // Binary: strike line (PocketOption-style yellow dashed)
+  // Binary: strike line — label on left pill, not on price axis (avoids overlap with expiry wall).
   if (id === 'boChart' && window.boState && boState.strike) {
     state.strikeLine = state.series.createPriceLine({
       price: Number(boState.strike),
-      color: '#f5b94d', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed,
-      axisLabelVisible: true, title: 'STRIKE',
+      color: 'rgba(245,185,77,0.72)', lineWidth: 1.5, lineStyle: LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: false, title: '',
     });
     state.priceLines.push(state.strikeLine);
-    var exp = c.querySelector('.grom-tv-expiry');
-    if (!exp) {
-      exp = document.createElement('div');
-      exp.className = 'grom-tv-expiry';
-      c.appendChild(exp);
-    }
-    var pctDone = Math.max(0, Math.min(1, Number(boState.elapsed || 0) / Math.max(1, Number(boState.roundLen || 1))));
-    exp.style.left = Math.round(78 + pctDone * 16) + '%';
-  } else {
-    var oldExp = c.querySelector('.grom-tv-expiry');
-    if (oldExp) oldExp.remove();
+  } else if (id !== 'boChart') {
+    ['.grom-tv-expiry', '.grom-tv-strike-entry', '.grom-tv-strike-pill', '.grom-tv-edge-left', '.grom-tv-edge-right'].forEach(function (sel) {
+      var old = c.querySelector(sel);
+      if (old) old.remove();
+    });
   }
+  if (id === 'boChart') _gromTVUpdateBinaryHud(state, c);
   return true;
+}
+function _gromTVUpdateBinaryHud(state, container) {
+  if (!container || !state || !state.chart || !window.boState) return;
+  var strike = Number(boState.strike);
+  var elapsed = Number(boState.elapsed || 0);
+  var roundLen = Math.max(1, Number(boState.roundLen || 5));
+  var remain = Math.max(0, roundLen - elapsed);
+  var mm = String(Math.floor(remain / 60)).padStart(2, '0');
+  var ss = String(remain % 60).padStart(2, '0');
+
+  ['grom-tv-edge-left', 'grom-tv-edge-right'].forEach(function (cls) {
+    if (!container.querySelector('.' + cls)) {
+      var edge = document.createElement('div');
+      edge.className = cls;
+      container.appendChild(edge);
+    }
+  });
+
+  var strikeCol = container.querySelector('.grom-tv-strike-entry');
+  if (!strikeCol) {
+    strikeCol = document.createElement('div');
+    strikeCol.className = 'grom-tv-strike-entry';
+    container.appendChild(strikeCol);
+  }
+
+  var exp = container.querySelector('.grom-tv-expiry');
+  if (!exp) {
+    exp = document.createElement('div');
+    exp.className = 'grom-tv-expiry';
+    var expPill = document.createElement('span');
+    expPill.className = 'grom-tv-expiry-pill';
+    exp.appendChild(expPill);
+    container.appendChild(exp);
+  }
+  var pctDone = Math.max(0, Math.min(1, elapsed / roundLen));
+  exp.style.left = Math.round(70 + pctDone * 16) + '%';
+  var expPillEl = exp.querySelector('.grom-tv-expiry-pill');
+  if (expPillEl) expPillEl.textContent = 'EXPIRY IN ' + mm + ':' + ss;
+
+  var strikePill = container.querySelector('.grom-tv-strike-pill');
+  if (!strikePill) {
+    strikePill = document.createElement('div');
+    strikePill.className = 'grom-tv-strike-pill';
+    container.appendChild(strikePill);
+  }
+  if (Number.isFinite(strike) && state.series && typeof state.series.priceToCoordinate === 'function') {
+    var y = state.series.priceToCoordinate(strike);
+    if (y != null && isFinite(y)) {
+      var top = Math.max(12, Math.min((container.clientHeight || 360) - 30, y - 11));
+      strikePill.style.top = top + 'px';
+      strikePill.style.display = '';
+      strikePill.textContent = 'STRIKE @ ' + (strike < 100 ? strike.toFixed(2) : Math.round(strike).toLocaleString('en-US'));
+    } else {
+      strikePill.style.display = 'none';
+    }
+  } else {
+    strikePill.style.display = 'none';
+  }
 }
 window.gromDrawTVChart = gromDrawTVChart;
 

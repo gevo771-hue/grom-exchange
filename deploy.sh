@@ -32,7 +32,7 @@ git push
 echo ""
 echo "▶ Deploying to grom-prod-fra1 ..."
 ssh -i ~/.ssh/grom_do -p 2222 root@134.122.69.161 \
-  "cd /opt/grom-exchange && git pull && docker compose restart frontend && docker compose ps frontend"
+  "cd /opt/grom-exchange && git pull && docker compose build frontend && docker compose up -d frontend && docker compose ps frontend"
 
 echo ""
 echo "✅ Deploy done. Open https://grom.exchange/ and Cmd+Shift+R to verify."

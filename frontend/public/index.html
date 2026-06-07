@@ -4597,8 +4597,8 @@
       <div class="wallet-hero">
         <div>
           <div class="total">Total balance</div>
-          <div class="val mono" id="walletTotalBalance">$12,847.32</div>
-          <div class="delta" id="walletTotalDelta">▲ 2.41% today · +$302.11</div>
+          <div class="val mono" id="walletTotalBalance">$0.00</div>
+          <div class="delta" id="walletTotalDelta">Connect a wallet or sign in to load balance</div>
         </div>
         <div class="actions">
           <button type="button" class="btn-ghost" onclick="openWalletModal('deposit')"><svg width="14" height="14"><use href="#i-deposit"/></svg> Deposit</button>
@@ -4610,13 +4610,13 @@
       <div class="ops-grid">
         <div class="ops-mini">
           <div class="k">Available to trade</div>
-          <div class="v mono" id="walletAvailableValue">$11,924.80</div>
-          <div class="s" id="walletAvailableMeta">94% of portfolio is immediately routable</div>
+          <div class="v mono" id="walletAvailableValue">$0.00</div>
+          <div class="s" id="walletAvailableMeta">Sign in to see how much is routable</div>
         </div>
         <div class="ops-mini">
           <div class="k">Pending transfers</div>
-          <div class="v mono" id="walletPendingCount">2</div>
-          <div class="s" id="walletPendingMeta">1 deposit confirming · 1 withdrawal batching</div>
+          <div class="v mono" id="walletPendingCount">0</div>
+          <div class="s" id="walletPendingMeta">No pending credits or withdrawals right now</div>
         </div>
         <div class="ops-mini">
           <div class="k">Bridge routes</div>
@@ -6403,23 +6403,12 @@ function cnConnect(name, kind, ev) {
     toast('Sign-in client loading… try again in a moment.', 'info');
     return;
   }
-  // External wallets (MetaMask / WalletConnect / Binance Web3 / Trust / OKX / Coinbase)
-  // are handled by grom-wallet.js (window.gromWalletConnect when present).
-  if (typeof window.gromWalletConnect === 'function') {
-    window.gromWalletConnect(kind, name);
-    return;
-  }
-  // Last-resort fallback: legacy demo simulation. This should not run on production
-  // once grom-wallet.js + grom-privy.js are loaded — kept only so the UI degrades
-  // gracefully if the modules fail to download.
-  var fakeAddr = '0x' + Math.random().toString(16).slice(2, 10) + '…' + Math.random().toString(16).slice(2, 6);
-  GROM_CONN = { connected: true, label: name + ' · ' + fakeAddr, method: kind };
-  try { localStorage.setItem('grom_jwt', 'demo-session'); } catch (_) {}
-  try { localStorage.setItem('grom_wallet_label', fakeAddr); } catch (_) {}
-  setWalletLabel(fakeAddr);
-  updateAuthUi();
-  closeConnectModal();
-  toast(name + ' connected · ' + fakeAddr + ' (demo)', 'success');
+  // External wallets are handled by grom-wallet.js — its boot replaces this
+  // function entirely (window.cnConnect = grom-wallet's implementation). If we
+  // reach here it means grom-wallet.js did not finish loading. Tell the user
+  // honestly instead of faking a demo connection — a fake JWT used to leave
+  // people stuck with $12k "demo balance" that never matched the real API.
+  toast('Wallet client still loading — wait a moment and try again.', 'info');
 }
 function connectWallet() { openConnectModal(); }
 var _wc = document.getElementById('walletChip');
@@ -6428,7 +6417,18 @@ var _logout = document.getElementById('topLogoutBtn');
 if (_logout) _logout.addEventListener('click', disconnectWallet);
 (function restoreAuthUi() {
   try {
-    if (localStorage.getItem('grom_jwt')) {
+    var jwt = localStorage.getItem('grom_jwt');
+    // Purge leftover fake JWTs from the old demo-only cnConnect path. Without
+    // this, an old visitor would land on the page already "connected" with a
+    // 0x4CDC… style fake address — backend then rejected every request and the
+    // hardcoded $12,847.32 stayed on screen forever.
+    if (jwt === 'demo-session' || jwt === 'fake' || jwt === 'demo') {
+      localStorage.removeItem('grom_jwt');
+      localStorage.removeItem('grom_wallet_label');
+      localStorage.removeItem('grom_user');
+      jwt = null;
+    }
+    if (jwt) {
       var label = localStorage.getItem('grom_wallet_label') || 'Wallet';
       GROM_CONN = { connected: true, label: label, method: 'restored' };
       setWalletLabel(label);
@@ -9885,8 +9885,30 @@ function exportHistoryCsv() {
       walletState.loaded = true;
       renderWalletOverview(results[0]);
       renderHistoryItems(results[1].items || []);
-    } catch (_) {
+    } catch (err) {
       walletState.backendReady = false;
+      // Backend rejected us (no JWT, expired session, etc). Reset the wallet
+      // panel to a zero/connect-prompt state instead of leaving stale labels
+      // or the hardcoded demo balance visible.
+      renderWalletOverview({
+        summary: {
+          totalUsd: 0,
+          totalUsdLabel: '$0.00',
+          availableUsd: 0,
+          availableUsdLabel: '$0.00',
+          deltaPct: 0,
+          deltaUsd: 0,
+          pendingTransfers: 0,
+          bridgeRoutes: 0,
+          assetCount: 0,
+        },
+        assets: [],
+      });
+      var deltaEl = document.getElementById('walletTotalDelta');
+      if (deltaEl) {
+        deltaEl.textContent = 'Connect a wallet or sign in to load balance';
+        deltaEl.style.color = 'var(--silver5)';
+      }
     } finally {
       walletState.loading = false;
     }

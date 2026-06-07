@@ -197,6 +197,9 @@
   .grom-logo:hover .logo-img-shell {
     filter: drop-shadow(0 0 12px rgba(0, 194, 255, 0.35));
   }
+  .grom-logo--text-only .logo-img-shell {
+    display: none;
+  }
   .topbar-brand-lockup {
     display: flex;
     flex-direction: column;
@@ -486,9 +489,7 @@
   .topbar-ico:active { background: rgba(255, 255, 255, 0.1); }
   .topbar-ico svg { width: 20px; height: 20px; display: block; }
   .topbar-ico--search svg { width: 19px; height: 19px; }
-  .lang-pop-wrap { position: relative; flex-shrink: 0; z-index: 260; }
-  #langGlobeBtn { pointer-events: auto; position: relative; z-index: 2; }
-  #langGlobeBtn svg { pointer-events: none; }
+  .lang-pop-wrap { position: relative; flex-shrink: 0; }
   .lang-pop {
     position: absolute;
     top: calc(100% + 6px);
@@ -499,7 +500,7 @@
     background: rgba(22, 26, 32, 0.98);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
-    z-index: 320;
+    z-index: 120;
   }
   .lang-pop[hidden] { display: none !important; }
   .lang-pop button {
@@ -1262,197 +1263,15 @@
   .progress { height: 6px; border-radius: 4px; background: rgba(28, 46, 71, 0.6); margin: 0 16px 14px; overflow: hidden; }
   .progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--steel1), var(--steel3)); border-radius: 4px; }
 
-  .card--market-snap {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-    position: relative;
-    background:
-      radial-gradient(120% 80% at 100% 0%, rgba(0, 194, 255, 0.08), transparent 60%),
-      linear-gradient(180deg, rgba(16, 26, 44, 0.78), rgba(10, 16, 30, 0.6));
-  }
-  .card--market-snap > .card-head {
-    flex-shrink: 0;
-    padding-bottom: 12px;
-    position: relative;
-    z-index: 3;
-  }
-  .ms-live-dot {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--silver4);
-  }
-  .ms-live-dot::before {
-    content: "";
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: #18d68a;
-    box-shadow: 0 0 0 0 rgba(24, 214, 138, 0.55);
-    animation: msPulse 1.8s ease-out infinite;
-  }
-  @keyframes msPulse {
-    0% { box-shadow: 0 0 0 0 rgba(24, 214, 138, 0.5); }
-    70% { box-shadow: 0 0 0 7px rgba(24, 214, 138, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(24, 214, 138, 0); }
-  }
-  .dash-watchlist {
-    flex: 1 1 auto;
-    min-height: 200px;
-    max-height: min(46vh, 420px);
-    overflow-y: auto;
-    overflow-x: hidden;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(77, 158, 255, 0.4) transparent;
-    position: relative;
-    z-index: 2;
-  }
-  .dash-watchlist::-webkit-scrollbar { width: 6px; }
-  .dash-watchlist::-webkit-scrollbar-track { background: transparent; }
-  .dash-watchlist::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(77, 158, 255, 0.45), rgba(0, 194, 255, 0.28));
-    border-radius: 99px;
-  }
-  .dash-watch-head {
-    display: grid;
-    grid-template-columns: 38px minmax(0, 1fr) 64px 96px 66px;
-    align-items: center;
-    gap: 12px;
-    padding: 9px 16px 7px;
-    font-size: 9.5px;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--silver5);
-    border-bottom: 1px solid rgba(200, 212, 232, 0.08);
-    position: sticky;
-    top: 0;
-    z-index: 4;
-    background: linear-gradient(180deg, rgba(13, 21, 38, 0.97), rgba(13, 21, 38, 0.88));
-    backdrop-filter: blur(10px);
-  }
-  .dash-watch-head span:nth-child(3) { text-align: center; }
-  .dash-watch-head span:nth-child(4),
-  .dash-watch-head span:nth-child(5) { text-align: right; }
-  .watch-row.dash-watch-row {
-    display: grid;
-    grid-template-columns: 38px minmax(0, 1fr) 64px 96px 66px;
-    align-items: center;
-    gap: 12px;
+  .watch-row {
+    display: grid; grid-template-columns: 32px 1fr auto auto;
+    align-items: center; gap: 12px;
     padding: 11px 16px;
-    border-bottom: 1px solid rgba(200, 212, 232, 0.045);
-    cursor: pointer;
-    transition: background 0.18s ease, transform 0.18s ease;
-    position: relative;
+    border-bottom: 1px solid rgba(200, 212, 232, 0.05);
+    cursor: pointer; transition: background 0.15s;
   }
-  .watch-row.dash-watch-row::before {
-    content: "";
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 2px;
-    background: linear-gradient(180deg, var(--steel3), var(--steel5));
-    opacity: 0;
-    transition: opacity 0.18s ease;
-  }
-  .watch-row.dash-watch-row:hover {
-    background: linear-gradient(90deg, rgba(28, 46, 71, 0.5), rgba(28, 46, 71, 0.18));
-    transform: translateX(2px);
-  }
-  .watch-row.dash-watch-row:hover::before { opacity: 1; }
-  .watch-row.dash-watch-row:last-child { border-bottom: none; }
-  .dash-watch-row .coin-ico,
-  .dash-watch-row .coin-ico.no-bg {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-    flex-shrink: 0;
-    font-size: 11px;
-    font-weight: 800;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
-    transition: transform 0.18s ease;
-  }
-  .watch-row.dash-watch-row:hover .coin-ico { transform: scale(1.08); }
-  .dash-watch-row .coin-ico img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 50%;
-    display: block;
-  }
-  .dash-watch-meta { min-width: 0; }
-  .dash-watch-row .name {
-    font-size: 13.5px;
-    font-weight: 600;
-    color: var(--silver1);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .dash-watch-row .ticker {
-    font-size: 11px;
-    color: var(--silver5);
-    margin-top: 1px;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
-  }
-  .dash-watch-spark {
-    width: 64px;
-    height: 26px;
-    display: block;
-    margin: 0 auto;
-    overflow: visible;
-  }
-  .dash-watch-row .price {
-    font-size: 13.5px;
-    font-weight: 700;
-    color: var(--silver1);
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    border-radius: 6px;
-    padding: 2px 4px;
-    transition: background 0.4s ease, color 0.4s ease;
-  }
-  .dash-watch-row .price.flash-up { background: rgba(24, 214, 138, 0.18); color: #2ee79b; }
-  .dash-watch-row .price.flash-down { background: rgba(232, 87, 107, 0.18); color: #ff7088; }
-  .dash-watch-row .chg {
-    justify-self: end;
-    font-size: 11.5px;
-    font-weight: 700;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-    padding: 3px 8px;
-    border-radius: 999px;
-    min-width: 60px;
-  }
-  .dash-watch-row .chg.up {
-    color: #2ee79b;
-    background: rgba(24, 214, 138, 0.14);
-    border: 1px solid rgba(24, 214, 138, 0.22);
-  }
-  .dash-watch-row .chg.down {
-    color: #ff7088;
-    background: rgba(232, 87, 107, 0.14);
-    border: 1px solid rgba(232, 87, 107, 0.22);
-  }
-  @media (max-width: 720px) {
-    .dash-watchlist { max-height: min(52vh, 360px); }
-    .dash-watch-head,
-    .watch-row.dash-watch-row {
-      grid-template-columns: 32px minmax(0, 1fr) 86px 60px;
-      gap: 9px;
-      padding-left: 12px;
-      padding-right: 12px;
-    }
-    .dash-watch-head span:nth-child(3),
-    .watch-row.dash-watch-row .dash-watch-spark { display: none; }
-    .dash-watch-head span:nth-child(4),
-    .dash-watch-head span:nth-child(5) { text-align: right; }
-  }
+  .watch-row:hover { background: rgba(28, 46, 71, 0.35); }
+  .watch-row:last-child { border-bottom: none; }
   .coin-ico {
     width: 30px; height: 30px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
@@ -1544,23 +1363,6 @@
   #page-settings .card-body,
   #page-help .card-body { padding: 6px 24px 22px; }
   #page-settings .seg { justify-self: end; }
-  #setLangSeg {
-    justify-self: stretch;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
-    gap: 6px;
-    max-width: 620px;
-    width: 100%;
-    padding: 6px;
-    border-radius: 12px;
-    background: rgba(7, 11, 22, 0.58);
-    border: 1px solid rgba(122,184,255,0.1);
-  }
-  #setLangSeg button {
-    min-height: 34px;
-    white-space: nowrap;
-    text-align: center;
-  }
   .set-actions { padding: 18px 24px 22px; display: flex; gap: 10px; }
   .set-toggle { position: relative; display: inline-block; width: 40px; height: 22px; cursor: pointer; }
   .set-toggle input { opacity: 0; width: 0; height: 0; }
@@ -1611,7 +1413,7 @@
     flex-wrap: wrap;
     background: rgba(11, 18, 32, 0.6); padding: 3px; border-radius: 9px;
   }
-  .seg:not(#setLangSeg) { max-width: 520px; }
+  #setLangSeg { max-width: 520px; }
   .seg button {
     padding: 6px 14px; border-radius: 7px;
     background: transparent; color: var(--silver4);
@@ -1876,26 +1678,8 @@
   }
   #page-spot .tf-pills::-webkit-scrollbar { display: none; }
   #page-spot .tf-pills button { flex: 0 0 auto; white-space: nowrap; }
-  .chart-wrap {
-    position: relative;
-    padding: 16px;
-    background:
-      radial-gradient(520px 260px at 18% 0%, rgba(77, 158, 255, 0.08), transparent 62%),
-      linear-gradient(180deg, rgba(7, 11, 22, 0.18), rgba(3, 7, 14, 0.32));
-  }
-  .chart {
-    width: 100%;
-    height: 390px;
-    display: block;
-    border-radius: 12px;
-    overflow: hidden;
-    background: linear-gradient(180deg, rgba(8, 13, 24, 0.96), rgba(4, 7, 15, 0.98));
-    border: 1px solid rgba(122, 184, 255, 0.12);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.035),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.015),
-      0 18px 46px rgba(0, 0, 0, 0.24);
-  }
+  .chart-wrap { position: relative; padding: 16px; }
+  .chart { width: 100%; height: 360px; display: block; }
 
   .bo-panel { display: flex; flex-direction: column; gap: 14px; }
   .countdown {
@@ -2134,55 +1918,8 @@
 
   .bo-chart-body { position: relative; flex: 1; min-height: 420px; }
   .bo-chart-body canvas { width: 100%; height: 100%; display: block; }
-  .bo-chart-body::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    pointer-events: none;
-    background:
-      linear-gradient(90deg, rgba(122,184,255,0.035) 1px, transparent 1px),
-      linear-gradient(180deg, rgba(122,184,255,0.03) 1px, transparent 1px);
-    background-size: 72px 100%, 100% 64px;
-    mask-image: linear-gradient(180deg, transparent 0%, #000 10%, #000 88%, transparent 100%);
-  }
-  .bo-expiry-wall {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    left: 86%;
-    z-index: 3;
-    pointer-events: none;
-    opacity: 0.95;
-    background: linear-gradient(180deg, rgba(245,185,77,0.05), rgba(245,185,77,0.92), rgba(245,185,77,0.05));
-    box-shadow: 0 0 18px rgba(245,185,77,0.22);
-    transition: left 0.95s linear;
-  }
-  .bo-expiry-wall::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    right: 1px;
-    width: min(180px, 24vw);
-    background: linear-gradient(90deg, rgba(245,185,77,0), rgba(245,185,77,0.08));
-  }
-  .bo-expiry-wall::after {
-    content: "EXPIRY";
-    position: absolute;
-    right: -28px;
-    bottom: 10px;
-    padding: 3px 7px;
-    border-radius: 999px;
-    background: rgba(245,185,77,0.94);
-    color: #07101f;
-    font: 800 9px ui-monospace, SFMono-Regular, monospace;
-    letter-spacing: 0.08em;
-  }
   .bo-hud-overlay {
     position: absolute; top: 12px; left: 12px; right: 12px;
-    z-index: 4;
     display: flex; justify-content: space-between; pointer-events: none; gap: 10px;
   }
   .hud-card {
@@ -3681,20 +3418,7 @@
     .set-row { grid-template-columns: 1fr; align-items: stretch; gap: 10px; padding: 16px 18px; }
     .set-input { width: 100% !important; max-width: none !important; }
     #page-settings .seg { justify-self: stretch; }
-    #page-settings .seg:not(#setLangSeg) button { flex: 1; }
-    #setLangSeg {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 7px;
-      padding: 7px;
-      max-width: none;
-    }
-    #setLangSeg button {
-      width: 100%;
-      min-height: 38px;
-      padding: 8px 10px;
-      border-radius: 9px;
-      font-size: 12px;
-    }
+    #page-settings .seg button { flex: 1; }
 
     /* Modal — more padding for phones */
     .wm { max-width: 94vw; }
@@ -3725,246 +3449,9 @@
     .page-subtitle { font-size: 12.5px; }
     .kpi-val { font-size: 16px; }
   }
-
-  /* Mobile topbar polish: compact, balanced, app-like header */
-  @media (max-width: 900px) {
-    .topbar {
-      height: 58px;
-      padding: 8px max(10px, env(safe-area-inset-left)) 8px max(10px, env(safe-area-inset-right));
-      gap: 6px;
-      background:
-        radial-gradient(260px 64px at 10% 0%, rgba(77,158,255,0.12), transparent 70%),
-        linear-gradient(180deg, rgba(6,10,20,0.96), rgba(6,10,18,0.86));
-      border-bottom-color: rgba(122,184,255,0.14);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.34), inset 0 -1px 0 rgba(255,255,255,0.035);
-    }
-    .topbar .left {
-      flex: 1 1 auto;
-      min-width: 0;
-      gap: 7px;
-      overflow: hidden;
-    }
-    .burger {
-      width: 34px;
-      height: 34px;
-      margin-right: 0;
-      border-radius: 11px;
-      background: rgba(10,18,34,0.78);
-      border: 1px solid rgba(122,184,255,0.14);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.045);
-    }
-    .burger svg { width: 18px; height: 18px; }
-    .grom-logo { flex: 0 1 auto; min-width: 0; max-width: 120px; }
-    .logo-img-shell--header { min-height: 34px; }
-    .logo-raster--header {
-      height: 31px;
-      max-height: 31px;
-      filter: drop-shadow(0 0 10px rgba(77,158,255,0.2));
-    }
-    .topbar .right {
-      flex: 0 0 auto;
-      gap: 6px;
-      min-width: 0;
-    }
-    .topbar-ico-group {
-      height: 36px;
-      gap: 1px;
-      padding: 2px;
-      border-radius: 13px;
-      background: rgba(6,11,22,0.76);
-      border-color: rgba(122,184,255,0.13);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 20px rgba(0,0,0,0.18);
-    }
-    #gromWsIndicator {
-      height: 26px !important;
-      margin: 0 2px 0 3px !important;
-      padding: 0 8px !important;
-      border-radius: 999px !important;
-      font-size: 8.5px !important;
-      letter-spacing: 0.07em !important;
-      background: rgba(5,9,18,0.78) !important;
-    }
-    #gromWsIndicator .lbl { max-width: 42px; overflow: hidden; text-overflow: ellipsis; }
-    .topbar-ico-group .topbar-ico,
-    .topbar-ico-group .lang-pop-wrap > .topbar-ico,
-    .topbar-ico-group #notifBtn {
-      width: 31px !important;
-      height: 31px !important;
-      border-radius: 10px !important;
-    }
-    .topbar-ico-group .topbar-ico svg,
-    .topbar-ico-group .lang-pop-wrap > .topbar-ico svg,
-    .topbar-ico-group #notifBtn svg {
-      width: 16px !important;
-      height: 16px !important;
-    }
-    .topbar-ico-group #notifBtn .dot {
-      top: 6px;
-      right: 6px;
-      width: 6px;
-      height: 6px;
-    }
-    .auth-actions.open { display: inline-flex; }
-    .auth-action.primary {
-      min-height: 36px;
-      height: 36px;
-      padding: 0 11px;
-      border-radius: 12px;
-      font-size: 11.5px;
-      letter-spacing: 0.01em;
-      background: linear-gradient(180deg, rgba(0,194,255,0.22), rgba(0,128,255,0.13));
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 10px 22px rgba(0,128,255,0.14);
-    }
-    #topLogoutBtn { display: none !important; }
-    .wallet-chip {
-      width: 36px;
-      height: 36px;
-      padding: 0;
-      justify-content: center;
-      border-radius: 12px;
-      background: rgba(6,11,22,0.78);
-      border-color: rgba(122,184,255,0.13);
-    }
-    .wallet-chip .avatar { width: 22px; height: 22px; }
-  }
-
-  @media (max-width: 560px) {
-    .topbar { height: 56px; padding: 8px 9px; }
-    .topbar .right { gap: 5px; }
-    .grom-logo { max-width: 46px; }
-    .logo-raster--header { height: 29px; max-height: 29px; }
-    .topbar-ico-group .lang-pop-wrap,
-    .topbar-ico-group #topHelpBtn {
-      display: none !important;
-    }
-    .auth-action.primary {
-      padding: 0 10px;
-      min-width: 76px;
-    }
-    .auth-action.primary svg { width: 13px; height: 13px; }
-  }
-
-  @media (max-width: 390px) {
-    .topbar { gap: 5px; padding-left: 8px; padding-right: 8px; }
-    .burger,
-    .wallet-chip,
-    .auth-action.primary,
-    .topbar-ico-group {
-      height: 34px;
-    }
-    .burger,
-    .wallet-chip {
-      width: 34px;
-    }
-    .topbar-ico-group .topbar-ico,
-    .topbar-ico-group #notifBtn {
-      width: 29px !important;
-      height: 29px !important;
-    }
-    #gromWsIndicator {
-      padding: 0 6px !important;
-      font-size: 8px !important;
-    }
-    .auth-action.primary {
-      min-width: 0;
-      padding: 0 9px;
-    }
-  }
-
-
-  /* GROM production polish: professional chart surfaces + mobile-safe trading layouts */
-  .chart-wrap, .bo-chart-body { min-width: 0; }
-  .bo-chart-card {
-    border-color: rgba(77,158,255,0.16);
-    box-shadow: 0 22px 70px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.045);
-  }
-  .bo-chart-body {
-    overflow: hidden;
-    background:
-      radial-gradient(720px 420px at 20% 0%, rgba(77,158,255,0.10), transparent 60%),
-      linear-gradient(180deg, rgba(5,9,18,0.96), rgba(3,7,15,0.98));
-  }
-  .bo-chart-body > svg {
-    position: relative;
-    z-index: 1;
-    border-radius: 0;
-  }
-  #page-binary .bo-chart-body { min-height: clamp(430px, 56vh, 640px); }
-  #page-futures .bo-chart-card { min-height: 560px !important; }
-  #page-futures .bo-chart-body { min-height: clamp(420px, 52vh, 600px); }
-  #page-spot .chart-wrap { min-height: clamp(420px, 52vh, 590px); }
-  #page-spot .chart, #page-spot .chart-wrap > svg,
-  #page-futures .chart, #page-futures .bo-chart-body > svg,
-  #page-binary .chart, #page-binary .bo-chart-body > svg { min-height: inherit; }
-  #page-futures .fut-shell,
-  #page-spot .spot-layout,
-  #page-binary .bo-shell { width: 100%; max-width: 100%; min-width: 0; }
-  #page-futures .fut-shell > *,
-  #page-spot .spot-layout > *,
-  #page-binary .bo-shell > *,
-  #page-futures .bo-panel-v2,
-  #page-binary .bo-panel-v2,
-  #page-spot .spot-side,
-  #page-spot .spot-main { min-width: 0; max-width: 100%; }
-  .stake-v2 .input input { min-width: 0; }
-  .bo-chip-row, .tf-pills { min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-  .bo-chip-row::-webkit-scrollbar, .tf-pills::-webkit-scrollbar { display: none; }
-  #page-futures .bo-panel-v2 {
-    gap: 12px;
-    padding: 12px;
-    border-radius: 16px;
-    background: linear-gradient(180deg, rgba(10,16,30,0.72), rgba(6,10,19,0.62));
-    border: 1px solid rgba(77,158,255,0.12);
-  }
-  #page-futures .fut-pro-grid .pro-card,
-  #page-binary .bo-pro-grid .pro-card,
-  #page-spot .card {
-    background: linear-gradient(180deg, rgba(12,20,36,0.72), rgba(7,11,22,0.58));
-    border-color: rgba(122,184,255,0.11);
-  }
-  @media (min-width: 1181px) {
-    #page-futures .fut-shell { grid-template-columns: minmax(220px, 250px) minmax(520px, 1fr) minmax(318px, 360px); }
-    #page-binary .bo-shell { grid-template-columns: minmax(220px, 250px) minmax(520px, 1fr) minmax(328px, 380px); }
-  }
-  @media (max-width: 900px) {
-    main { width: 100%; max-width: 100vw; overflow-x: hidden; }
-    .page.active { width: 100%; max-width: 100%; overflow-x: hidden; }
-    #page-futures .fut-kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
-    #page-futures .fut-shell,
-    #page-binary .bo-shell,
-    #page-spot .spot-layout { display: grid; grid-template-columns: minmax(0,1fr) !important; gap: 12px; }
-    #page-futures .fut-shell > *, #page-binary .bo-shell > *, #page-spot .spot-layout > * { width: 100%; }
-    #page-futures aside.wl { max-height: none; overflow: visible; order: 2; }
-    #page-futures .fut-shell > div:nth-child(2) { order: 1; }
-    #page-futures .bo-panel-v2 { order: 3; width: 100%; overflow: visible; max-height: none; }
-    #page-futures #futList { max-height: 230px; }
-    #page-futures .bo-chart-card { min-height: 430px !important; }
-    #page-futures .bo-chart-body { min-height: 330px; }
-    #page-futures .fut-overlay { display: none !important; }
-    #page-futures .fut-pro-grid { grid-template-columns: 1fr; }
-    #page-futures .fut-band { grid-template-columns: 1fr; }
-    #page-binary .bo-chart-body { min-height: 360px !important; }
-    #page-spot .chart-wrap { min-height: 340px; }
-    .bo-price .big, .asset-price .big { font-size: clamp(18px, 5vw, 24px); }
-  }
-  @media (max-width: 520px) {
-    main { padding: 10px !important; }
-    #page-futures .fut-kpis { grid-template-columns: 1fr; }
-    #page-futures .bo-hud-top,
-    #page-binary .bo-hud-top,
-    #page-spot .chart-top { align-items: stretch; flex-direction: column; }
-    #page-futures .bo-hud-top .grp,
-    #page-binary .bo-hud-top .grp { width: 100%; justify-content: space-between; flex-wrap: wrap; }
-    #page-futures .bo-chart-card { min-height: 400px !important; }
-    #page-futures .bo-chart-body { min-height: 300px; }
-    #page-binary .bo-chart-body { min-height: 330px !important; }
-    #page-spot .chart-wrap { min-height: 320px; }
-    .bo-buttons-v2 { grid-template-columns: 1fr 1fr; gap: 8px; }
-    .bo-btn-v2 { min-width: 0; padding-left: 8px; padding-right: 8px; }
-    .stake-v2 .presets { grid-template-columns: repeat(5, minmax(0,1fr)); }
-  }
-
 </style>
+<!-- TradingView lightweight-charts: professional candles/area/line — same library Binance/OKX use. MIT license, ~300KB. -->
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 
@@ -4044,11 +3531,11 @@
     </button>
     <a href="#" class="grom-logo" id="logoHome" aria-label="GROM — Finance Hub">
       <span class="logo-img-shell logo-img-shell--header">
-        <img class="logo-raster logo-raster--header" src="assets/grom-brand-header-clear.png" width="441" height="462" alt="" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark-clear.png'" />
+        <img class="logo-raster logo-raster--header" src="assets/grom-brand-header.png" width="441" height="462" alt="" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='assets/grom-brand-header-clear.png'}else{this.onerror=null;this.src='assets/grom-brand-mark.png'}" />
       </span>
       <span class="topbar-brand-lockup">
         <span class="tb-name">GROM</span>
-        <span class="tb-sub">FINANCE HUB</span>
+        <span class="tb-sub" data-i18n="top_brand_sub">Finance Hub</span>
       </span>
     </a>
   </div>
@@ -4290,7 +3777,7 @@
                 <div class="hero-aura" aria-hidden="true"></div>
                 <div class="hero-glow" aria-hidden="true"></div>
                 <span class="landing-brand-anim">
-                  <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
+            <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
                 </span>
               </div>
             </div>
@@ -4419,7 +3906,7 @@
             <div class="hero-aura" aria-hidden="true"></div>
             <div class="hero-glow" aria-hidden="true"></div>
             <span class="landing-brand-anim">
-              <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" data-i18n-alt="landing_logo_img_alt" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
+            <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" data-i18n-alt="landing_logo_img_alt" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
             </span>
           </div>
         </div>
@@ -4632,9 +4119,14 @@
           </div>
         </div>
 
-        <div class="card card--market-snap">
-          <div class="card-head"><h3>Market snapshot</h3><span class="ms-live-dot">Live prices</span></div>
-          <div class="dash-watchlist" id="watchlist" role="list" aria-label="Live market prices"></div>
+        <div class="card">
+          <div class="card-head"><h3>Market snapshot</h3><span class="sub">Live prices</span></div>
+          <div id="watchlist">
+            <div class="watch-row" onclick="openSpotPair('BTC/USDT')"><span class="coin-ico btc">₿</span><div><div class="name">Bitcoin</div><div class="ticker">BTC/USDT</div></div><div class="price" id="px-btc">$63,903.09</div><div class="chg up">+1.82%</div></div>
+            <div class="watch-row" onclick="openSpotPair('ETH/USDT')"><span class="coin-ico eth">Ξ</span><div><div class="name">Ethereum</div><div class="ticker">ETH/USDT</div></div><div class="price" id="px-eth">$3,684.15</div><div class="chg up">+0.94%</div></div>
+            <div class="watch-row" onclick="openSpotPair('SOL/USDT')"><span class="coin-ico sol">S</span><div><div class="name">Solana</div><div class="ticker">SOL/USDT</div></div><div class="price" id="px-sol">$182.27</div><div class="chg down">-2.10%</div></div>
+            <div class="watch-row" onclick="openSpotPair('BNB/USDT')"><span class="coin-ico bnb">B</span><div><div class="name">BNB</div><div class="ticker">BNB/USDT</div></div><div class="price" id="px-bnb">$612.88</div><div class="chg up">+0.33%</div></div>
+          </div>
         </div>
       </div>
 
@@ -4718,7 +4210,7 @@
                 <span class="pay">+92%</span>
               </div>
               <div class="bo-price">
-                <span class="big" id="boPrice">$77,417.71</span>
+                <span class="big" id="boPrice">$63,903.09</span>
                 <span class="pip up" id="boPip">+1.82%</span>
               </div>
             </div>
@@ -4741,11 +4233,10 @@
           </div>
           <div class="bo-chart-body">
             <canvas id="boChart" class="chart"></canvas>
-            <div class="bo-expiry-wall" id="boExpiryWall" aria-hidden="true"></div>
             <div class="bo-hud-overlay">
               <div class="hud-card">
                 <div class="lbl">Strike @ entry</div>
-                <div class="v mono" id="hudStrike">$77,417.71</div>
+                <div class="v mono" id="hudStrike">$63,892.65</div>
               </div>
               <div class="hud-card critical">
                 <div class="lbl">Expiry in</div>
@@ -4783,7 +4274,7 @@
             </div>
             <div class="side">
               <div class="strike">Strike lock</div>
-              <div class="strike-v mono" id="strikeLock">$77,417.71</div>
+              <div class="strike-v mono" id="strikeLock">$63,892.65</div>
             </div>
           </div>
 
@@ -4943,7 +4434,7 @@
 
       <div class="spot-overview">
         <div class="spot-kpi"><div class="k">24h change</div><div class="v mono" id="spotChangeBadge">+1.82%</div><div class="s up" id="spotChangeNote">buyers still control the session</div></div>
-        <div class="spot-kpi"><div class="k">24h high / low</div><div class="v mono" id="spotRangeTag">$105,140 / $102,840</div><div class="s">session expansion remains healthy</div></div>
+        <div class="spot-kpi"><div class="k">24h high / low</div><div class="v mono" id="spotRangeTag">$64,120 / $62,840</div><div class="s">session expansion remains healthy</div></div>
         <div class="spot-kpi"><div class="k">Quoted depth</div><div class="v mono" id="spotDepthTag">$14.8M</div><div class="s">within 10 bps on major venues</div></div>
         <div class="spot-kpi"><div class="k">24h notional</div><div class="v mono" id="spotVolumeTag">$2.1B</div><div class="s">aggregated spot routing</div></div>
       </div>
@@ -4953,7 +4444,7 @@
         <div class="card">
           <div class="chart-top">
             <div class="asset-price">
-              <span class="big mono" id="spotPrice">$77,417.71</span>
+              <span class="big mono" id="spotPrice">$63,903.09</span>
               <span class="chg up-pill">+1.82% · +$1,867.14</span>
             </div>
             <div class="tf-pills" id="spotTfPills">
@@ -4975,10 +4466,10 @@
               <div class="spot-panel-box">
                 <div class="hd">Liquidity map</div>
                 <div class="spot-heatmap" id="spotHeatBars">
-                  <div class="bar" style="--w:62%"><span><b>$104.4k bids</b><em>stacked</em></span></div>
-                  <div class="bar" style="--w:54%"><span><b>$104.1k bids</b><em>reload zone</em></span></div>
-                  <div class="bar sell" style="--w:49%"><span><b>$104.9k asks</b><em>local cap</em></span></div>
-                  <div class="bar sell" style="--w:68%"><span><b>$105.2k asks</b><em>take-profit wall</em></span></div>
+                  <div class="bar" style="--w:62%"><span><b>$63.8k bids</b><em>stacked</em></span></div>
+                  <div class="bar" style="--w:54%"><span><b>$63.7k bids</b><em>reload zone</em></span></div>
+                  <div class="bar sell" style="--w:49%"><span><b>$64.0k asks</b><em>local cap</em></span></div>
+                  <div class="bar sell" style="--w:68%"><span><b>$64.2k asks</b><em>take-profit wall</em></span></div>
                 </div>
               </div>
               <div class="spot-panel-box">
@@ -5007,8 +4498,8 @@
                 <div class="spot-ai-row"><span>Liquidity skew</span><strong id="spotAiLiquidity">Bid support</strong></div>
               </div>
               <div class="spot-ai-list">
-                <div class="spot-ai-row"><span>Invalidation</span><strong class="down mono" id="spotAiInvalid">$102,940</strong></div>
-                <div class="spot-ai-row"><span>Upside magnet</span><strong class="up mono" id="spotAiTarget">$105,120</strong></div>
+          <div class="spot-ai-row"><span>Invalidation</span><strong class="down mono" id="spotAiInvalid">$61,940</strong></div>
+          <div class="spot-ai-row"><span>Upside magnet</span><strong class="up mono" id="spotAiTarget">$64,120</strong></div>
                 <div class="spot-ai-row"><span>Risk mode</span><strong id="spotAiRisk">Normal size</strong></div>
               </div>
             </div>
@@ -5031,10 +4522,10 @@
                 <button class="sell" data-side="sell">Sell</button>
               </div>
               <label id="spotPriceLbl" style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Price</label>
-              <div id="spotOrderPrice" class="mono spot-fieldbox">77,417.71 USDT</div>
+              <div id="spotOrderPrice" class="mono spot-fieldbox">63,903.09 USDT</div>
               <div id="spotStopRow" style="display:none">
                 <label style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Trigger price</label>
-                <div id="spotTriggerPrice" class="mono spot-fieldbox">103,800.00 USDT</div>
+                <div id="spotTriggerPrice" class="mono spot-fieldbox">63,500.00 USDT</div>
               </div>
               <div id="spotTwapRow" style="display:none">
                 <label style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Duration · Slices</label>
@@ -5045,9 +4536,9 @@
               <div class="spot-allocator" id="spotAllocator">
                 <button data-pct="25">25%</button><button data-pct="50">50%</button><button data-pct="75">75%</button><button data-pct="100">100%</button>
               </div>
-              <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--silver4);margin-bottom:12px"><span>Total</span><span class="mono" id="spotOrderTotal">521.09 USDT</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--silver4);margin-bottom:12px"><span>Total</span><span class="mono" id="spotOrderTotal">319.52 USDT</span></div>
               <div class="spot-balance-row"><span>Available</span><strong id="spotAvailBal">12,840.22 USDT</strong></div>
-              <div class="spot-balance-row"><span>Estimated fee</span><strong id="spotFeeTag">0.10% · 0.52 USDT</strong></div>
+              <div class="spot-balance-row"><span>Estimated fee</span><strong id="spotFeeTag">0.10% · 0.32 USDT</strong></div>
               <button class="btn-primary" id="spotOrderSubmit" style="width:100%;justify-content:center" onclick="submitSpotOrder()">Buy BTC</button>
             </div>
           </div>
@@ -5175,7 +4666,7 @@
           <div></div><div>Asset</div><div style="text-align:right">Balance</div><div style="text-align:right">Price</div><div style="text-align:right">Value</div>
         </div>
         <div id="walletAssetsList">
-          <div class="asset-row"><span class="coin-ico btc">₿</span><div class="nm">Bitcoin<small>BTC</small></div><div class="col">0.09842 BTC</div><div class="col">$77,418</div><div class="col" style="color:var(--silver1);font-weight:700">$7,619.67</div></div>
+          <div class="asset-row"><span class="coin-ico btc">₿</span><div class="nm">Bitcoin<small>BTC</small></div><div class="col">0.09842 BTC</div><div class="col">$63,903</div><div class="col" style="color:var(--silver1);font-weight:700">$6,289.37</div></div>
           <div class="asset-row"><span class="coin-ico eth">Ξ</span><div class="nm">Ethereum<small>ETH</small></div><div class="col">0.4820 ETH</div><div class="col">$3,684</div><div class="col" style="color:var(--silver1);font-weight:700">$1,775.76</div></div>
           <div class="asset-row"><span class="coin-ico usdt">$</span><div class="nm">Tether<small>USDT</small></div><div class="col">564.33 USDT</div><div class="col">$1.0002</div><div class="col" style="color:var(--silver1);font-weight:700">$564.44</div></div>
           <div class="asset-row"><span class="coin-ico sol">S</span><div class="nm">Solana<small>SOL</small></div><div class="col">1.3600 SOL</div><div class="col">$182.27</div><div class="col" style="color:var(--silver1);font-weight:700">$247.89</div></div>
@@ -5357,8 +4848,8 @@
 
           <div class="wl-sep"></div>
           <div class="wl-head"><span>Market stats</span><span>24h</span></div>
-          <div class="fut-stat"><span>Mark price</span><span class="mono">$104,212.50</span></div>
-          <div class="fut-stat"><span>Index price</span><span class="mono">$77,417.71</span></div>
+          <div class="fut-stat"><span>Mark price</span><span class="mono">$63,890.03</span></div>
+          <div class="fut-stat"><span>Index price</span><span class="mono">$63,903.09</span></div>
           <div class="fut-stat"><span>Open interest</span><span class="mono">$284.6M</span></div>
           <div class="fut-stat"><span>24h volume</span><span class="mono">$2.1B</span></div>
           <div class="fut-stat"><span>Next funding</span><span class="mono" id="fundCd">02:48:12</span></div>
@@ -5376,7 +4867,7 @@
                   <span class="pay" style="background:rgba(77,158,255,0.18);color:var(--steel1);padding:1px 6px;border-radius:4px">PERP</span>
                 </div>
                 <div class="bo-price">
-                  <span class="big mono" id="futPrice">$77,417.71</span>
+                  <span class="big mono" id="futPrice">$63,903.09</span>
                   <span class="pip up">+1.82%</span>
                 </div>
               </div>
@@ -5398,7 +4889,7 @@
               </div>
               <div class="box">
                 <div class="k">Session range</div>
-                <div class="v mono" id="futRangeTag">$102,840 – $105,120</div>
+                <div class="v mono" id="futRangeTag">$62,840 – $64,120</div>
                 <div class="s">Asia low → EU breakout</div>
               </div>
               <div class="box">
@@ -5503,7 +4994,7 @@
 
           <div class="stake-v2">
             <div class="top"><span class="lbl">Price</span><span class="pct-hint">USDT</span></div>
-            <div class="input"><input type="number" value="77417.71" step="0.1"/><span class="currency">USDT</span></div>
+            <div class="input"><input type="number" value="63903.09" step="0.1"/><span class="currency">USDT</span></div>
           </div>
           <div class="stake-v2">
             <div class="top"><span class="lbl">Size</span><span class="pct-hint">0.25 BTC ≈ $26,054</span></div>
@@ -6251,9 +5742,7 @@
       <button type="button" class="wm-close" aria-label="Close" onclick="closeConnectModal()">✕</button>
     </div>
     <div class="wm-body">
-      <!-- Primary: Email + Google. Pass `event` so cnShowEmail/cnConnect can
-           check isTrusted and block Chrome autofill's synthetic clicks that
-           previously auto-opened the email form on page load. -->
+      <!-- Primary: Email + Google -->
       <button type="button" class="cn-row primary" onclick="cnShowEmail(event)">
         <span class="ico email"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></svg></span>
         <span class="lbl">Log in with Email</span>
@@ -6465,7 +5954,7 @@
   </div>
 </div>
 
-<script src="grom-instruments.js?v=20260518-pricefix2"></script>
+<script src="grom-instruments.js?v=20260424x"></script>
 <script src="grom-i18n.js"></script>
 <script>
 if (location.protocol !== 'file:') {
@@ -6474,11 +5963,9 @@ if (location.protocol !== 'file:') {
   walletModule.src = 'grom-wallet.js?v=20260607a';
   document.head.appendChild(walletModule);
 
-  // Privy auth module (email OTP + Google OAuth). Without this, Войти/Регистрация
-  // modal would be a static UI with no real authentication backend.
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = 'grom-privy.js?v=20260607a';
+  privyModule.src = 'grom-privy.js?v=20260606b';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -6828,34 +6315,103 @@ function openConnectModal() {
   if (ov) ov.classList.add('open');
   var ef = document.getElementById('cnEmailForm');
   if (ef) ef.style.display = 'none';
+
+  // Reset modal state: Privy's showEmailForm() hides main rows (Email/Google/wallets)
+  // and shows its inline OTP form. If the user closed the modal mid-flow and reopens it,
+  // we need to restore the main rows so they can pick a different provider.
+  try {
+    document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(function (el) {
+      el.style.display = '';
+    });
+    document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note, #connectModal .wm-body > .cn-foot').forEach(function (el) {
+      el.style.display = '';
+    });
+    var pv = document.getElementById('privyInlineForm');
+    if (pv) pv.style.display = 'none';
+  } catch (_) {}
 }
 window.openConnectModal = openConnectModal;
 function closeConnectModal() {
   var ov = document.getElementById('connectModal');
   if (ov) ov.classList.remove('open');
 }
-function cnShowEmail() {
-  var ef = document.getElementById('cnEmailForm');
-  if (!ef) return;
-  ef.style.display = ef.style.display === 'none' ? '' : 'none';
-  if (ef.style.display === '') {
-    var inp = document.getElementById('cnEmail');
-    if (inp) inp.focus();
+function cnShowEmail(ev) {
+  // Block synthetic clicks (Chrome autofill / focus-as-click / .click() calls
+  // from extensions or assistive tech). Only a real user mouse/keyboard click
+  // has event.isTrusted === true.
+  if (ev && ev.isTrusted === false) return;
+  // Mark this as an explicit user click so the modal-open guard in grom-privy.js
+  // does NOT roll back to main rows. Without this flag, the 150ms cleanup would
+  // undo the user's choice of opening the email form.
+  window.__gromUserClickedEmail = true;
+  // Real Privy email OTP flow (grom-privy.js exposes window.privyLogin).
+  if (typeof window.privyLogin === 'function') {
+    // Hide the legacy fake-email form so it doesn't sit next to Privy's UI.
+    var ef = document.getElementById('cnEmailForm');
+    if (ef) ef.style.display = 'none';
+    window.privyLogin('email');
+    return;
   }
+  // Fallback if grom-privy.js hasn't loaded yet — show a brief notice and try again.
+  toast('Sign-in client loading… try again in a moment.', 'info');
+  setTimeout(function () {
+    if (typeof window.privyLogin === 'function') window.privyLogin('email');
+  }, 800);
 }
-function cnSubmitEmail() {
+async function cnSubmitEmail() {
   var v = (document.getElementById('cnEmail')?.value || '').trim();
   if (!v || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { toast('Enter a valid email', 'error'); return; }
-  GROM_CONN = { connected: true, label: v, method: 'email' };
-  try { localStorage.setItem('grom_jwt', 'demo-session'); } catch (_) {}
-  try { localStorage.setItem('grom_wallet_label', v); } catch (_) {}
-  setWalletLabel(v.length > 18 ? v.slice(0, 15) + '…' : v);
-  updateAuthUi();
-  closeConnectModal();
-  toast('Embedded wallet created · ' + v, 'success');
+  var btn = document.querySelector('#cnEmailForm button');
+  var oldText = btn ? btn.textContent : '';
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+    var res = await fetch('/auth/email-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: v })
+    });
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok || !data.token) throw new Error(data.error || 'email_login_failed');
+    GROM_CONN = { connected: true, label: v, method: 'email' };
+    try { localStorage.setItem('grom_jwt', data.token); } catch (_) {}
+    try { localStorage.setItem('grom_wallet_label', v); } catch (_) {}
+    try { localStorage.setItem('grom_user', JSON.stringify(data.user || {})); } catch (_) {}
+    setWalletLabel(v.length > 18 ? v.slice(0, 15) + '…' : v);
+    updateAuthUi();
+    closeConnectModal();
+    if (window.gromWS && typeof window.gromWS.connect === 'function') window.gromWS.connect();
+    toast('Email login connected · ' + v, 'success');
+  } catch (err) {
+    toast('Email login failed: ' + ((err && err.message) || 'try again'), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = oldText || 'Continue'; }
+  }
 }
-function cnConnect(name, kind) {
-  // Simulate provider handshake — in production this dispatches to Privy / WalletConnect / injected.
+function cnConnect(name, kind, ev) {
+  // Block synthetic clicks (Chrome autofill / focus-as-click / .click() from
+  // extensions). A synthetic click on Google would trigger an unwanted OAuth
+  // redirect; isTrusted=false means "not a real user interaction".
+  if (ev && ev.isTrusted === false) return;
+  // Real provider dispatch.
+  // Social logins (Google/Apple/Farcaster) go through Privy OAuth (PKCE redirect).
+  if (kind === 'gg' || kind === 'apple' || kind === 'farcaster') {
+    if (typeof window.privyLogin === 'function') {
+      var provider = kind === 'gg' ? 'google' : kind;
+      window.privyLogin(provider);
+      return;
+    }
+    toast('Sign-in client loading… try again in a moment.', 'info');
+    return;
+  }
+  // External wallets (MetaMask / WalletConnect / Binance Web3 / Trust / OKX / Coinbase)
+  // are handled by grom-wallet.js (window.gromWalletConnect when present).
+  if (typeof window.gromWalletConnect === 'function') {
+    window.gromWalletConnect(kind, name);
+    return;
+  }
+  // Last-resort fallback: legacy demo simulation. This should not run on production
+  // once grom-wallet.js + grom-privy.js are loaded — kept only so the UI degrades
+  // gracefully if the modules fail to download.
   var fakeAddr = '0x' + Math.random().toString(16).slice(2, 10) + '…' + Math.random().toString(16).slice(2, 6);
   GROM_CONN = { connected: true, label: name + ' · ' + fakeAddr, method: kind };
   try { localStorage.setItem('grom_jwt', 'demo-session'); } catch (_) {}
@@ -6863,7 +6419,7 @@ function cnConnect(name, kind) {
   setWalletLabel(fakeAddr);
   updateAuthUi();
   closeConnectModal();
-  toast(name + ' connected · ' + fakeAddr, 'success');
+  toast(name + ' connected · ' + fakeAddr + ' (demo)', 'success');
 }
 function connectWallet() { openConnectModal(); }
 var _wc = document.getElementById('walletChip');
@@ -6898,14 +6454,13 @@ const boState = {
   expirySec: 5,
   roundLen: 5,
   elapsed: 13,
-  strike: 77417.71,
+  strike: 63892.65,
   account: 'demo',
   balance: { demo: 50000, live: 12847.32 },
   positions: [],
   wlTab: 'all',
   sound: false
 };
-window.boState = boState;
 var boAudioCtx = null;
 var boAudioUnlocked = false;
 
@@ -7015,14 +6570,15 @@ function refreshPayout() {
   if (lose) lose.textContent = '−$' + stake.toFixed(2);
   if (hint) hint.textContent = bal ? (stake / bal * 100).toFixed(2) + '% of balance' : '';
 }
-function syncBinaryStrike(force) {
-  var px = priceForPair(boState.pair);
-  var ref = boState.strike || 0;
-  if (force || !ref || Math.abs(px - ref) / Math.max(1e-9, Math.abs(ref)) > 0.2) {
-    boState.strike = px;
-    var lock = document.getElementById('strikeLock'); if (lock) lock.textContent = (px < 100 ? '' : '$') + fmt(px, px < 20 ? 5 : 2);
-    var hs = document.getElementById('hudStrike'); if (hs) hs.textContent = (px < 100 ? '' : '$') + fmt(px, px < 20 ? 5 : 2);
-  }
+  function syncBinaryStrike(force) {
+    var px = priceForPair(boState.pair);
+    if (!Number.isFinite(px) || px <= 0) return;
+    var ref = boState.strike || 0;
+    if (force || !ref || Math.abs(px - ref) / Math.max(1e-9, Math.abs(ref)) > 0.08) {
+      boState.strike = px;
+      var lock = document.getElementById('strikeLock'); if (lock) lock.textContent = (px < 100 ? '' : '$') + fmt(px, px < 20 ? 5 : 2);
+      var hs = document.getElementById('hudStrike'); if (hs) hs.textContent = (px < 100 ? '' : '$') + fmt(px, px < 20 ? 5 : 2);
+    }
 }
 
 function ensureCountdownMarkup() {
@@ -7147,7 +6703,7 @@ document.addEventListener('click', e => {
     document.querySelectorAll('#boChart-tf button').forEach(x => x.classList.remove('active'));
     tf.classList.add('active');
     var map = { '5S': 5, '15S': 15, '1M': 60, '5M': 300, '15M': 900 };
-    __boTfSec = map[(tf.textContent || '').trim().toUpperCase()] || 15;
+    __boTfSec = map[(tf.textContent || '').trim().toUpperCase()] || 5;
     drawChart('boChart');
   }
   const stf = e.target.closest('#spotTfPills button');
@@ -7167,14 +6723,15 @@ document.addEventListener('click', e => {
   // Watchlist
   const w = e.target.closest('#wlList .wl-item');
   if (w) {
-    document.querySelectorAll('#wlList .wl-item').forEach(x => x.classList.remove('active'));
-    w.classList.add('active');
-    boState.pair = w.dataset.pair;
-    boState.payout = (+w.dataset.pay) / 100;
-    boState.strike = +w.dataset.price || priceForPair(boState.pair);
-    var ppx = priceForPair(boState.pair);
-    var fresh = buildSeriesAround(ppx, boSeries.length || 60);
-    boSeries = fresh;
+      document.querySelectorAll('#wlList .wl-item').forEach(x => x.classList.remove('active'));
+      w.classList.add('active');
+      boState.pair = w.dataset.pair;
+      boState.payout = (+w.dataset.pay) / 100;
+      var ppx = priceForPair(boState.pair);
+      var listedPx = Number(w.dataset.price);
+      boState.strike = (Number.isFinite(listedPx) && listedPx > 0 && Number.isFinite(ppx) && ppx > 0 && Math.abs(listedPx - ppx) / Math.max(listedPx, ppx, 1) <= 0.08) ? listedPx : ppx;
+      var fresh = buildSeriesAround(ppx, boSeries.length || 60);
+      boSeries = fresh;
     boSeries[boSeries.length - 1] = ppx;
     const tag = document.getElementById('boAssetTag');
     if (tag) {
@@ -7348,7 +6905,6 @@ document.addEventListener('DOMContentLoaded', () => {
   updateFuturesBoard();
   var pairsStat = document.getElementById('lsPairs');
   if (pairsStat) pairsStat.textContent = '420';
-  if (typeof renderDashboardWatchlist === 'function') renderDashboardWatchlist();
 });
 
 /* ========== Futures ========== */
@@ -7371,6 +6927,24 @@ document.addEventListener('input', e => {
 });
 function updateFuturesBoard() {
   var px = priceForPair(futDeskState.pair);
+  var futBase = String(futDeskState.pair || 'BTC/USDT').split('/')[0] || 'BTC';
+  var futQuote = String(futDeskState.pair || 'BTC/USDT').split('/')[1] || 'USDT';
+  var futPriceEl = document.getElementById('futPrice');
+  if (futPriceEl && Number.isFinite(px)) futPriceEl.textContent = '$' + marketFmt(px);
+  var stakeBlocks = document.querySelectorAll('#page-futures .stake-v2');
+  var futPriceInput = stakeBlocks[0] ? stakeBlocks[0].querySelector('input[type="number"]') : null;
+  var futSizeInput = stakeBlocks[1] ? stakeBlocks[1].querySelector('input[type="number"]') : null;
+  if (futPriceInput && document.activeElement !== futPriceInput && Number.isFinite(px)) {
+    futPriceInput.value = px < 20 ? px.toFixed(4) : px.toFixed(2);
+  }
+  var futSize = parseFloat(futSizeInput && futSizeInput.value) || 0.25;
+  var futPriceHint = stakeBlocks[0] ? stakeBlocks[0].querySelector('.pct-hint') : null;
+  var futSizeHint = stakeBlocks[1] ? stakeBlocks[1].querySelector('.pct-hint') : null;
+  if (futPriceHint) futPriceHint.textContent = futQuote;
+  if (futSizeHint && Number.isFinite(px)) futSizeHint.textContent = fmt(futSize, futSize < 1 ? 3 : 2) + ' ' + futBase + ' ≈ $' + fmt(px * futSize, 0);
+  var futPayVals = document.querySelectorAll('#page-futures .pay-panel .v');
+  if (futPayVals[0] && Number.isFinite(px)) futPayVals[0].textContent = '$' + fmt((px * futSize) / Math.max(1, futDeskState.leverage), 2);
+  if (futPayVals[1] && Number.isFinite(px)) futPayVals[1].textContent = '$' + fmt(px * (futDeskState.side === 'long' ? 0.954 : 1.046), 0);
   futState.markSpread += (Math.random() - 0.5) * 0.9;
   futState.flowBias = Math.max(0.7, Math.min(1.9, futState.flowBias + (Math.random() - 0.5) * 0.04));
   futState.sessionLow = Math.min(futState.sessionLow, px - (30 + Math.random() * 60));
@@ -7527,70 +7101,11 @@ function toggleDrawer(force) {
 })();
 
 /* Prices + chart */
-let btcPrice = 77417.71, ethPrice = 2146.13, solPrice = 85.29;
-var GROM_CORE_PRICE_FALLBACKS = {
-  BTC: 77417.71,
-  ETH: 2146.13,
-  SOL: 85.29,
-  BNB: 641.33,
-  XRP: 1.39,
-  ADA: 0.2508,
-  DOGE: 0.10644,
-  AVAX: 9.17,
-  LINK: 9.55
-};
-
-function readCachedLivePrice(base, fallback) {
-  try {
-    var b = String(base || '').toUpperCase();
-    var raw = localStorage.getItem('grom_live_price_' + b);
-    var val = Number(raw);
-    var anchor = GROM_CORE_PRICE_FALLBACKS[b] || fallback;
-    if (Number.isFinite(val) && val > 0) {
-      if (Number.isFinite(anchor) && anchor > 0 && Math.abs(val - anchor) / anchor > 0.22) {
-        localStorage.removeItem('grom_live_price_' + b);
-        return fallback;
-      }
-      return val;
-    }
-    return fallback;
-  } catch (_) {
-    return fallback;
-  }
-}
-
-function cacheLivePrice(base, price) {
-  try {
-    var val = Number(price);
-    if (Number.isFinite(val) && val > 0) {
-      localStorage.setItem('grom_live_price_' + String(base || '').toUpperCase(), String(val));
-    }
-  } catch (_) {}
-}
-
-btcPrice = readCachedLivePrice('BTC', btcPrice);
-ethPrice = readCachedLivePrice('ETH', ethPrice);
-solPrice = readCachedLivePrice('SOL', solPrice);
-if (window.boState && boState.pair === 'BTC/USDT') boState.strike = btcPrice;
+let btcPrice = 63903.09, ethPrice = 1780.30, solPrice = 69.17;
 
 // Live price feed from backend WebSocket (prices.<asset> channel).
 // Updates global price variables so all consumers (charts, watchlists, KPIs) see real numbers.
 window.__lpPrev = window.__lpPrev || {};
-function shouldAcceptExternalLivePrice(base, price) {
-  var b = String(base || '').toUpperCase();
-  var p = Number(price);
-  if (!b || !Number.isFinite(p) || p <= 0) return false;
-  var cached = readCachedLivePrice(b, NaN);
-  var trusted = NaN;
-  try {
-    if (typeof window.gromLivePrice === 'function') trusted = Number(window.gromLivePrice(b + 'USDT'));
-  } catch (_) {}
-  var current = Number.isFinite(trusted) && trusted > 0 ? trusted : (Number.isFinite(cached) ? cached : priceForPair(b + '/USDT'));
-  if (Number.isFinite(trusted) && trusted > 0) cacheLivePrice(b, trusted);
-  if (!Number.isFinite(current) || current <= 0) return true;
-  var drift = Math.abs(p - current) / current;
-  return drift <= 0.18;
-}
 function updateLandingTicker(base, price) {
   var ids = { BTC: 'lp-tk-btc', ETH: 'lp-tk-eth', SOL: 'lp-tk-sol', BNB: 'lp-tk-bnb', XRP: 'lp-tk-xrp' };
   var id = ids[base];
@@ -7614,6 +7129,23 @@ function updateLandingTicker(base, price) {
     setTimeout(function () { delete window.__lpPrev[base]; }, 30000);
   }
 }
+function gromScheduleMarketUiRefresh() {
+  if (window.__gromPriceUiRaf) return;
+  window.__gromPriceUiRaf = requestAnimationFrame(function () {
+    window.__gromPriceUiRaf = null;
+    try { if (typeof updatePairCards === 'function') updatePairCards(); } catch (_) {}
+    try { if (typeof updateSpotBoard === 'function' && window.spotState) updateSpotBoard(spotState.pair); } catch (_) {}
+    try { if (typeof updateFuturesBoard === 'function' && window.futDeskState) updateFuturesBoard(); } catch (_) {}
+    try {
+      if (typeof drawChart === 'function') {
+        ['boChart', 'spotChart', 'futChart'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el && el.offsetParent !== null) drawChart(id);
+        });
+      }
+    } catch (_) {}
+  });
+}
 window.addEventListener('grom-ws-price', function (ev) {
   var detail = ev && ev.detail;
   if (!detail || !detail.data) return;
@@ -7626,7 +7158,6 @@ window.addEventListener('grom-ws-price', function (ev) {
     if (m) asset = m[1].toUpperCase();
   }
   var base = asset.split('/')[0];
-  if (!shouldAcceptExternalLivePrice(base, price)) return;
   switch (base) {
     case 'BTC':  btcPrice  = price; break;
     case 'ETH':  ethPrice  = price; break;
@@ -7640,7 +7171,6 @@ window.addEventListener('grom-ws-price', function (ev) {
     default:
       if (typeof extraCryptoPrices !== 'undefined' && base) extraCryptoPrices[base] = price;
   }
-  try { cacheLivePrice(base, price); } catch (_) {}
   // Update landing ticker card (top of page-landing)
   try { updateLandingTicker(base, price); } catch (_) {}
   // Update visible price badge for the asset across all pages.
@@ -7664,6 +7194,7 @@ window.addEventListener('grom-ws-price', function (ev) {
       if (fp) fp.textContent = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
   } catch (_) {}
+  try { gromScheduleMarketUiRefresh(); } catch (_) {}
 });
 function buildSeriesAround(anchor, len) {
   var base = Math.max(0.0001, Number(anchor) || 1);
@@ -7682,7 +7213,7 @@ futSeries[futSeries.length - 1] = btcPrice;
 let boSeries = buildSeriesAround(btcPrice, 60);
 boSeries[boSeries.length - 1] = btcPrice;
 var __boChartMode = 'candles';
-var __boTfSec = 15;
+var __boTfSec = 5;
 var spotState = { pair: 'BTC/USDT' };
 var futDeskState = { pair: 'BTC/USDT', leverage: 25, mode: 'cross', side: 'long' };
 var listUiState = {
@@ -7691,7 +7222,7 @@ var listUiState = {
   futuresFilter: 'all'
 };
 
-let bnbPrice = 641.33, xrpPrice = 1.39, adaPrice = 0.2508, dogePrice = 0.10644, avaxPrice = 9.17, linkPrice = 9.55, eurPrice = 1.0842, gbpPrice = 193.482, xauPrice = 2487.30, aaplPrice = 206.8, tslaPrice = 173.4;
+let bnbPrice = 608.18, xrpPrice = 2.16, adaPrice = 0.58, dogePrice = 0.18, avaxPrice = 22.40, linkPrice = 13.80, eurPrice = 1.0842, gbpPrice = 193.482, xauPrice = 2487.30, aaplPrice = 206.8, tslaPrice = 173.4;
 let msftPrice = 417.2, nvdaPrice = 922.4;
 const extraCryptoPrices = {
   TON: 6.42,
@@ -7730,15 +7261,15 @@ const extraCryptoDrift = {
   OP: 0.03
 };
 const marketPairs = [
-  { fav: true,  sym: 'BTC/USDT',  name: 'Bitcoin',   coin: 'btc',  gliph: '₿', price: 77417.71, chg: -1.065, vol: '2.1B' },
-  { fav: true,  sym: 'ETH/USDT',  name: 'Ethereum',  coin: 'eth',  gliph: 'Ξ', price: 2146.13,   chg: -2.012, vol: '1.4B' },
-  { fav: true,  sym: 'SOL/USDT',  name: 'Solana',    coin: 'sol',  gliph: 'S', price: 85.29,    chg: -1.308, vol: '620M' },
-  { fav: true,  sym: 'BNB/USDT',  name: 'BNB',       coin: 'bnb',  gliph: 'B', price: 641.33,    chg: -1.861, vol: '520M' },
-  { fav: false, sym: 'XRP/USDT',  name: 'XRP',       coin: 'xrp',  gliph: 'X', price: 1.39,      chg: -2.016, vol: '480M' },
-  { fav: false, sym: 'ADA/USDT',  name: 'Cardano',   coin: 'ada',  gliph: 'A', price: 0.2508,     chg: -1.686, vol: '210M' },
-  { fav: false, sym: 'DOGE/USDT', name: 'Dogecoin',  coin: 'doge', gliph: 'Ð', price: 0.10644,    chg: -4.358, vol: '340M' },
-  { fav: false, sym: 'AVAX/USDT', name: 'Avalanche', coin: 'avax', gliph: 'A', price: 9.17,     chg: -1.504, vol: '180M' },
-  { fav: false, sym: 'LINK/USDT', name: 'Chainlink', coin: 'link', gliph: 'L', price: 9.55,     chg: -2.252, vol: '210M' },
+  { fav: true,  sym: 'BTC/USDT',  name: 'Bitcoin',   coin: 'btc',  gliph: '₿', price: 63903.09, chg: 1.82, vol: '1.31B' },
+  { fav: true,  sym: 'ETH/USDT',  name: 'Ethereum',  coin: 'eth',  gliph: 'Ξ', price: 1780.30,  chg: 0.94, vol: '840M' },
+  { fav: true,  sym: 'SOL/USDT',  name: 'Solana',    coin: 'sol',  gliph: 'S', price: 69.17,    chg: -2.10, vol: '420M' },
+  { fav: true,  sym: 'BNB/USDT',  name: 'BNB',       coin: 'bnb',  gliph: 'B', price: 608.18,   chg: 0.33, vol: '390M' },
+  { fav: false, sym: 'XRP/USDT',  name: 'XRP',       coin: 'xrp',  gliph: 'X', price: 2.16,     chg: 1.74, vol: '330M' },
+  { fav: false, sym: 'ADA/USDT',  name: 'Cardano',   coin: 'ada',  gliph: 'A', price: 0.58,     chg: -1.22, vol: '170M' },
+  { fav: false, sym: 'DOGE/USDT', name: 'Dogecoin',  coin: 'doge', gliph: 'Ð', price: 0.18,     chg: 3.18, vol: '290M' },
+  { fav: false, sym: 'AVAX/USDT', name: 'Avalanche', coin: 'avax', gliph: 'A', price: 22.40,    chg: -0.56, vol: '120M' },
+  { fav: false, sym: 'LINK/USDT', name: 'Chainlink', coin: 'link', gliph: 'L', price: 13.80,    chg: 0.85, vol: '160M' },
   { fav: false, sym: 'TON/USDT',  name: 'Toncoin',   coin: 'ton',  gliph: 'T', price: 6.42,      chg: 0.76, vol: '390M' },
   { fav: false, sym: 'TRX/USDT',  name: 'TRON',      coin: 'trx',  gliph: 'T', price: 0.1462,    chg: 0.48, vol: '160M' },
   { fav: false, sym: 'DOT/USDT',  name: 'Polkadot',  coin: 'dot',  gliph: 'D', price: 7.11,      chg: -0.22, vol: '145M' },
@@ -7826,10 +7357,10 @@ function marketFmt(v) {
   return fmt(n, 2);
 }
 
-function priceForPair(sym) {
-  var s = String(sym || '').toUpperCase();
-  var base = s.split('/')[0].replace(/[^A-Z]/g, '');
-  if (base === 'BTC') return btcPrice;
+    function priceForPair(sym) {
+      var s = String(sym || '').toUpperCase();
+      var base = s.split('/')[0].replace(/[^A-Z]/g, '');
+      if (base === 'BTC') return btcPrice;
   if (base === 'ETH') return ethPrice;
   if (base === 'SOL') return solPrice;
   if (base === 'BNB') return bnbPrice;
@@ -7845,142 +7376,36 @@ function priceForPair(sym) {
   if (base === 'AAPL') return aaplPrice;
   if (base === 'TSLA') return tslaPrice;
   if (base === 'MSFT') return msftPrice;
-  if (base === 'NVDA') return nvdaPrice;
-  return btcPrice;
-}
-
-
-
-var GROM_LIVE_SYMBOLS = ['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT','LINKUSDT'];
-var GROM_LIVE_BASES = { BTCUSDT:'BTC', ETHUSDT:'ETH', SOLUSDT:'SOL', BNBUSDT:'BNB', XRPUSDT:'XRP', ADAUSDT:'ADA', DOGEUSDT:'DOGE', AVAXUSDT:'AVAX', LINKUSDT:'LINK' };
-var gromLivePriceReady = false;
-
-function resetSeriesAround(series, anchor) {
-  var a = Number(anchor);
-  if (!Array.isArray(series) || !Number.isFinite(a) || a <= 0) return;
-  var len = Math.max(series.length || 0, 80);
-  var fresh = buildSeriesAround(a, len);
-  series.length = 0;
-  fresh.forEach(function (v) { series.push(v); });
-  series[series.length - 1] = a;
-}
-
-function resetTradingSeriesForLive(base, price, force) {
-  var a = Number(price);
-  if (!Number.isFinite(a) || a <= 0) return;
-  if (base === 'BTC' || force) resetSeriesAround(btcHistory, a);
-  if (window.boState && String(boState.pair || '').toUpperCase().indexOf(base + '/') === 0) {
-    resetSeriesAround(boSeries, a);
-    boState.strike = a;
-    syncBinaryStrike(true);
-  }
-  if (window.spotState && String(spotState.pair || '').toUpperCase().indexOf(base + '/') === 0) resetSeriesAround(spotSeries, a);
-  if (window.futDeskState && String(futDeskState.pair || '').toUpperCase().indexOf(base + '/') === 0) {
-    resetSeriesAround(futSeries, a);
-    if (window.futState) {
-      futState.sessionLow = a * 0.994;
-      futState.sessionHigh = a * 1.006;
-      futState.liqTop = a * 1.018;
-      futState.liqBottom = a * 0.982;
+      if (base === 'NVDA') return nvdaPrice;
+      return btcPrice;
     }
-  }
-}
 
-function setAssetLivePrice(base, price, changePct) {
-  if (!Number.isFinite(price) || price <= 0 || !base) return;
-  var previousPrice = priceForPair(base + '/USDT');
-  if (base === 'BTC') btcPrice = price;
-  else if (base === 'ETH') ethPrice = price;
-  else if (base === 'SOL') solPrice = price;
-  else if (base === 'BNB') bnbPrice = price;
-  else if (base === 'XRP') xrpPrice = price;
-  else if (base === 'ADA') adaPrice = price;
-  else if (base === 'DOGE') dogePrice = price;
-  else if (base === 'AVAX') avaxPrice = price;
-  else if (base === 'LINK') linkPrice = price;
-  else if (extraCryptoPrices && extraCryptoPrices[base] != null) extraCryptoPrices[base] = price;
-  cacheLivePrice(base, price);
-
-  var jumpedFromStaleFallback = Number.isFinite(previousPrice) && previousPrice > 0 && Math.abs(previousPrice - price) / price > 0.035;
-  if (!gromLivePriceReady && jumpedFromStaleFallback) resetTradingSeriesForLive(base, price, base === 'BTC');
-
-  var pair = base + '/USDT';
-  marketPairs.forEach(function (p) {
-    if (p.sym === pair) {
-      p.price = price;
-      if (Number.isFinite(changePct)) p.chg = changePct;
+    function safePairPrice(sym, fallback) {
+      var px = Number(priceForPair(sym));
+      if (Number.isFinite(px) && px > 0) return px;
+      var fb = Number(fallback);
+      if (Number.isFinite(fb) && fb > 0) return fb;
+      return 1;
     }
-  });
 
-  var pxId = 'px-' + base.toLowerCase();
-  var pxEl = document.getElementById(pxId);
-  if (pxEl) pxEl.textContent = '$' + marketFmt(price);
-  if (base === 'BTC') {
-    var landingPx = document.getElementById('landingBtcPrice');
-    if (landingPx) landingPx.textContent = '$' + marketFmt(price);
-  }
-
-  if (window.boState && String(boState.pair || '').toUpperCase().indexOf(base + '/') === 0) {
-    var bp = document.getElementById('boPrice');
-    if (bp) bp.textContent = '$' + marketFmt(price);
-    if (!gromLivePriceReady) {
-      boState.strike = price;
-      syncBinaryStrike(true);
+    function priceBandIsStale(low, high, px, tolerance) {
+      px = Number(px);
+      low = Number(low);
+      high = Number(high);
+      if (!Number.isFinite(px) || px <= 0) return false;
+      if (!Number.isFinite(low) || !Number.isFinite(high) || low <= 0 || high <= 0 || high <= low) return true;
+      var mid = (low + high) / 2;
+      return Math.abs(mid - px) / Math.max(mid, px, 1) > (tolerance || 0.12);
     }
-  }
-  if (window.spotState && String(spotState.pair || '').toUpperCase().indexOf(base + '/') === 0) {
-    var sp = document.getElementById('spotPrice');
-    if (sp) sp.textContent = '$' + marketFmt(price);
-  }
-  if (window.futDeskState && String(futDeskState.pair || '').toUpperCase().indexOf(base + '/') === 0) {
-    var fp = document.getElementById('futPrice');
-    if (fp) fp.textContent = '$' + marketFmt(price);
-    document.querySelectorAll('#page-futures .stake-v2 input[type="number"]').forEach(function (input, idx) {
-      if (idx === 0) input.value = marketFmt(price).replace(/,/g, '');
-    });
-  }
-}
 
-window.__gromApplyWsTick = function gromApplyWsTick(asset, price) {
-  var base = String(asset || '').toUpperCase().split('/')[0];
-  var px = Number(price);
-  if (!shouldAcceptExternalLivePrice(base, px)) return;
-  setAssetLivePrice(base, px, NaN);
-};
-
-async function refreshLivePrices() {
-  var url = 'https://api.binance.com/api/v3/ticker/24hr?symbols=' + encodeURIComponent(JSON.stringify(GROM_LIVE_SYMBOLS));
-  try {
-    var res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error('binance ' + res.status);
-    var rows = await res.json();
-    rows.forEach(function (row) {
-      var base = GROM_LIVE_BASES[row.symbol];
-      setAssetLivePrice(base, Number(row.lastPrice), Number(row.priceChangePercent));
-    });
-    gromLivePriceReady = true;
-    reseedSeriesIfNeeded(btcHistory, btcPrice);
-    reseedSeriesIfNeeded(boSeries, priceForPair(boState.pair));
-    reseedSeriesIfNeeded(spotSeries, priceForPair(spotState.pair));
-    reseedSeriesIfNeeded(futSeries, priceForPair(futDeskState.pair));
-    updateQuoteRows();
-    renderBinaryWatchlist(document.querySelector('#page-binary .wl-search input')?.value || '');
-    applyWlTabFilter();
-    renderFuturesList(document.querySelector('#page-futures .wl-search input')?.value || '');
-    renderMarkets();
-    updateFuturesBoard();
-    drawChart('boChart');
-    drawChart('spotChart');
-    drawChart('futChart');
-  } catch (err) {
-    try {
-      var cb = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot', { cache: 'no-store' }).then(function (r) { return r.json(); });
-      if (cb && cb.data) setAssetLivePrice('BTC', Number(cb.data.amount), NaN);
-    } catch (_) {}
-  }
-}
-refreshLivePrices();
-setInterval(refreshLivePrices, 12000);
+    function resetFuturesPriceBands(px) {
+      px = Number(px);
+      if (!Number.isFinite(px) || px <= 0) px = safePairPrice(futDeskState && futDeskState.pair, btcPrice);
+      futState.sessionLow = px * 0.986;
+      futState.sessionHigh = px * 1.014;
+      futState.liqTop = px * 1.019;
+      futState.liqBottom = px * 0.981;
+    }
 
 function reseedSeriesIfNeeded(series, anchor) {
   var a = Number(anchor);
@@ -7995,54 +7420,16 @@ function reseedSeriesIfNeeded(series, anchor) {
   }
 }
 
-function sanitizeChartSeries(series, anchor) {
-  var a = Number(anchor);
-  if (!Array.isArray(series) || !series.length || !Number.isFinite(a) || a <= 0) return;
-  var bad = 0;
-  var minV = Infinity;
-  var maxV = -Infinity;
-  for (var i = 0; i < series.length; i++) {
-    var v = Number(series[i]);
-    if (!Number.isFinite(v) || v <= 0 || Math.abs(v - a) / a > 0.08) bad++;
-    if (Number.isFinite(v)) {
-      minV = Math.min(minV, v);
-      maxV = Math.max(maxV, v);
-    }
-  }
-  var rangeTooWide = Number.isFinite(minV) && Number.isFinite(maxV) && (maxV - minV) / a > 0.12;
-  if (bad > 0 || rangeTooWide) resetSeriesAround(series, a);
-}
-
-function appendSeriesTick(series, anchor, volatility) {
-  var a = Number(anchor);
-  if (!Array.isArray(series) || !Number.isFinite(a) || a <= 0) return a;
-  if (!series.length) resetSeriesAround(series, a);
-  var prev = Number(series[series.length - 1]);
-  if (!Number.isFinite(prev) || prev <= 0 || Math.abs(prev - a) / a > 0.02) prev = a;
-  var vol = Math.max(0.00012, Number(volatility) || 0.00045);
-  var pull = (a - prev) * 0.22;
-  var pulse = Math.sin(Date.now() / 1700 + series.length * 0.37) * a * vol * 0.55;
-  var noise = (Math.random() - 0.5) * a * vol;
-  var next = prev + pull + pulse + noise;
-  var band = Math.max(a * vol * 8, a * 0.0018);
-  next = Math.max(a - band, Math.min(a + band, next));
-  series.shift();
-  series.push(next);
-  return next;
-}
-
 function tickPrices() {
-  if (!gromLivePriceReady) {
-    btcPrice += (Math.random() - 0.48) * 80;
-    ethPrice += (Math.random() - 0.49) * 8;
-    solPrice += (Math.random() - 0.5) * 0.6;
-    bnbPrice += (Math.random() - 0.5) * 1.2;
-    xrpPrice += (Math.random() - 0.5) * 0.03;
-    adaPrice += (Math.random() - 0.5) * 0.008;
-    dogePrice += (Math.random() - 0.5) * 0.004;
-    avaxPrice += (Math.random() - 0.5) * 0.35;
-    linkPrice += (Math.random() - 0.5) * 0.15;
-  }
+  btcPrice += (Math.random() - 0.48) * 80;
+  ethPrice += (Math.random() - 0.49) * 8;
+  solPrice += (Math.random() - 0.5) * 0.6;
+  bnbPrice += (Math.random() - 0.5) * 1.2;
+  xrpPrice += (Math.random() - 0.5) * 0.03;
+  adaPrice += (Math.random() - 0.5) * 0.008;
+  dogePrice += (Math.random() - 0.5) * 0.004;
+  avaxPrice += (Math.random() - 0.5) * 0.35;
+  linkPrice += (Math.random() - 0.5) * 0.15;
   Object.keys(extraCryptoPrices).forEach(function (asset) {
     var drift = extraCryptoDrift[asset] || Math.max(0.02, extraCryptoPrices[asset] * 0.01);
     extraCryptoPrices[asset] += (Math.random() - 0.5) * drift;
@@ -8056,10 +7443,10 @@ function tickPrices() {
   msftPrice += (Math.random() - 0.5) * 1.1;
   nvdaPrice += (Math.random() - 0.5) * 2.4;
   reseedSeriesIfNeeded(btcHistory, btcPrice);
-  appendSeriesTick(btcHistory, btcPrice, 0.00055);
+  btcHistory.shift(); btcHistory.push(btcPrice);
   var pairPx = priceForPair(boState.pair);
   reseedSeriesIfNeeded(boSeries, pairPx);
-  appendSeriesTick(boSeries, pairPx, 0.00075);
+  boSeries.shift(); boSeries.push(pairPx);
   const a = document.getElementById('px-btc'); if (a) a.textContent = '$' + fmt(btcPrice);
   const b = document.getElementById('px-eth'); if (b) b.textContent = '$' + fmt(ethPrice);
   const c = document.getElementById('px-sol'); if (c) c.textContent = '$' + fmt(solPrice);
@@ -8082,10 +7469,10 @@ function tickPrices() {
   }
   var spotAnchor = priceForPair(spotState.pair);
   reseedSeriesIfNeeded(spotSeries, spotAnchor);
-  appendSeriesTick(spotSeries, spotAnchor, 0.00055);
+  spotSeries.shift(); spotSeries.push(spotAnchor);
   var futAnchor = priceForPair(futDeskState.pair);
   reseedSeriesIfNeeded(futSeries, futAnchor);
-  appendSeriesTick(futSeries, futAnchor, 0.00065);
+  futSeries.shift(); futSeries.push(futAnchor);
   syncBinaryStrike(false);
   updateSpotBoard(spotState.pair);
   updateFuturesBoard();
@@ -8263,41 +7650,6 @@ function renderSvgChart(id, W, H, hist, candles, plotCandles, min, max, lastPx, 
       parts.push('<text x="' + (leftPad + 6) + '" y="' + (volTop + 11) + '" fill="' + COLOR_AXIS + '" font-size="10" font-family="ui-monospace,monospace">Vol</text>');
     }
   }
-  if (isBO && typeof boState !== 'undefined') {
-    var strike = Number(boState.strike || lastPx);
-    if (Number.isFinite(strike) && strike >= min && strike <= max) {
-      var sy = y(strike);
-      parts.push('<line x1="' + leftPad + '" y1="' + sy + '" x2="' + (leftPad + plotW) + '" y2="' + sy + '" stroke="rgba(245,185,77,0.92)" stroke-width="1.2" stroke-dasharray="6 4"/>');
-      parts.push('<rect x="' + (leftPad + 8) + '" y="' + (sy - 12) + '" width="92" height="22" rx="6" fill="rgba(245,185,77,0.95)"/>');
-      parts.push('<text x="' + (leftPad + 54) + '" y="' + (sy + 3) + '" fill="#07101f" font-size="10" font-weight="900" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, monospace">STRIKE ' + marketFmt(strike) + '</text>');
-    }
-    var lenR = Math.max(1, boState.roundLen || boState.expirySec || 60);
-    var remR = typeof getBinaryRoundRemainSec === 'function' ? getBinaryRoundRemainSec() : lenR;
-    var pctDone = Math.min(1, Math.max(0, 1 - remR / lenR));
-    var expiryX = leftPad + plotW * (0.78 + pctDone * 0.18);
-    parts.push('<defs><linearGradient id="' + id + '-expiryGrad" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="rgba(245,185,77,0)"/><stop offset="1" stop-color="rgba(245,185,77,0.13)"/></linearGradient></defs>');
-    parts.push('<rect x="' + expiryX + '" y="' + topPad + '" width="' + Math.max(0, leftPad + plotW - expiryX) + '" height="' + plotH + '" fill="url(#' + id + '-expiryGrad)"/>');
-    parts.push('<line x1="' + expiryX + '" y1="' + topPad + '" x2="' + expiryX + '" y2="' + (topPad + plotH) + '" stroke="rgba(245,185,77,0.78)" stroke-width="1.3" stroke-dasharray="3 3"/>');
-    (boState.positions || []).slice(0, 6).forEach(function (p, idx) {
-      if (!Number.isFinite(p.strike) || p.strike < min || p.strike > max) return;
-      var py = y(p.strike);
-      var px = Math.max(leftPad + 24, expiryX - 30 - idx * 18);
-      var upMarker = p.dir === 'UP';
-      parts.push('<circle cx="' + px + '" cy="' + py + '" r="6" fill="' + (upMarker ? '#22c17c' : '#e8576b') + '" stroke="#07101f" stroke-width="1.5"/>');
-      parts.push('<text x="' + px + '" y="' + (py + 3) + '" fill="#fff" font-size="8" font-weight="900" text-anchor="middle" font-family="ui-monospace,monospace">' + (upMarker ? '▲' : '▼') + '</text>');
-    });
-    if (boState.lastDeal && Number.isFinite(boState.lastDeal.strike) && boState.lastDeal.strike >= min && boState.lastDeal.strike <= max) {
-      var ld = boState.lastDeal;
-      var ly = y(ld.strike);
-      var lx = Math.max(leftPad + 100, Math.min(leftPad + plotW - 95, expiryX - 92));
-      var isUpDeal = ld.dir === 'UP';
-      parts.push('<rect x="' + (lx - 84) + '" y="' + (ly - 19) + '" width="168" height="38" rx="9" fill="rgba(7,11,22,0.94)" stroke="' + (isUpDeal ? 'rgba(34,193,124,0.9)' : 'rgba(232,87,107,0.9)') + '" stroke-width="1.1"/>');
-      parts.push('<rect x="' + (lx - 78) + '" y="' + (ly - 13) + '" width="26" height="26" rx="13" fill="' + (isUpDeal ? '#22c17c' : '#e8576b') + '"/>');
-      parts.push('<text x="' + (lx - 65) + '" y="' + (ly + 5) + '" fill="#fff" font-size="12" font-weight="900" text-anchor="middle">' + (isUpDeal ? '▲' : '▼') + '</text>');
-      parts.push('<text x="' + (lx - 44) + '" y="' + (ly - 2) + '" fill="#fff" font-size="10.5" font-weight="800" font-family="ui-monospace,monospace">' + ld.dir + ' ' + money(ld.stake) + '</text>');
-      parts.push('<text x="' + (lx - 44) + '" y="' + (ly + 12) + '" fill="rgba(200,212,232,0.78)" font-size="9.5" font-family="ui-monospace,monospace">entry ' + marketFmt(ld.strike) + '</text>');
-    }
-  }
   var lastY = y(lastPx);
   if (lastY >= topPad && lastY <= topPad + plotH) {
     parts.push('<line x1="' + leftPad + '" y1="' + lastY + '" x2="' + (leftPad + plotW) + '" y2="' + lastY + '" stroke="rgba(77,158,255,0.55)" stroke-width="1" stroke-dasharray="4 4"/>');
@@ -8308,16 +7660,583 @@ function renderSvgChart(id, W, H, hist, candles, plotCandles, min, max, lastPx, 
   svg.innerHTML = parts.join('');
 }
 
-function syncExpiryWall() {
-  var wall = document.getElementById('boExpiryWall');
-  if (!wall || typeof boState === 'undefined') return;
-  var len = Math.max(1, boState.roundLen || boState.expirySec || 60);
-  var remain = typeof getBinaryRoundRemainSec === 'function' ? getBinaryRoundRemainSec() : len;
-  var pctDone = Math.min(1, Math.max(0, 1 - remain / len));
-  wall.style.left = (78 + pctDone * 18).toFixed(2) + '%';
-}
+/* ============================================================================
+ * Professional TradingView-style charts via lightweight-charts library.
+ * Same engine used on Binance/OKX. Replaces old canvas drawChart() across
+ * Spot/Futures/Binary desks. PocketOption-style area mode for Binary.
+ * ========================================================================== */
+window.__gromTV = window.__gromTVCharts = window.__gromTVCharts || {};
+var GROM_TV_DATA_VERSION = '20260605-stable-v3';
 
+/* Direct Binance public WebSocket for real-time prices.
+ * Used as a fallback when our backend WS is offline (current red OFFLINE badge state).
+ * No auth needed, no API key. Updates global price vars + dispatches grom-ws-price events.
+ */
+(function gromBinanceDirectFeed() {
+  if (window.__gromBinanceDirectWS) return;
+  var pairs = [
+    { sym: 'btcusdt', base: 'BTC' },
+    { sym: 'ethusdt', base: 'ETH' },
+    { sym: 'solusdt', base: 'SOL' },
+    { sym: 'bnbusdt', base: 'BNB' },
+    { sym: 'xrpusdt', base: 'XRP' },
+    { sym: 'adausdt', base: 'ADA' },
+    { sym: 'dogeusdt', base: 'DOGE' },
+    { sym: 'avaxusdt', base: 'AVAX' },
+    { sym: 'linkusdt', base: 'LINK' },
+  ];
+  var backoff = 1000;
+  function connect() {
+    try {
+      var streams = pairs.map(function (p) { return p.sym + '@trade'; }).join('/');
+      var ws = new WebSocket('wss://stream.binance.com:9443/stream?streams=' + streams);
+      window.__gromBinanceDirectWS = ws;
+      ws.onopen = function () { backoff = 1000; console.log('[grom-binance-direct] connected'); };
+      ws.onmessage = function (ev) {
+        try {
+          var msg = JSON.parse(ev.data);
+          var d = msg.data || msg;
+          if (!d || !d.s || !d.p) return;
+          var sym = d.s.toLowerCase();
+          var pair = pairs.find(function (p) { return p.sym === sym; });
+          if (!pair) return;
+          var price = Number(d.p);
+          if (!isFinite(price) || price <= 0) return;
+          // Update global price vars (same names used across the app)
+          switch (pair.base) {
+            case 'BTC': window.btcPrice = price; break;
+            case 'ETH': window.ethPrice = price; break;
+            case 'SOL': window.solPrice = price; break;
+            case 'BNB': if (typeof bnbPrice !== 'undefined') window.bnbPrice = price; break;
+            case 'XRP': if (typeof xrpPrice !== 'undefined') window.xrpPrice = price; break;
+            case 'ADA': if (typeof adaPrice !== 'undefined') window.adaPrice = price; break;
+            case 'DOGE': if (typeof dogePrice !== 'undefined') window.dogePrice = price; break;
+            case 'AVAX': if (typeof avaxPrice !== 'undefined') window.avaxPrice = price; break;
+            case 'LINK': if (typeof linkPrice !== 'undefined') window.linkPrice = price; break;
+          }
+          // Dispatch same event our backend WS would emit — landing ticker, charts, etc. consume this
+          try {
+            window.dispatchEvent(new CustomEvent('grom-ws-price', {
+              detail: { channel: 'prices.' + pair.base + '/USDT', data: { asset: pair.base + '/USDT', price: price, source: 'binance-direct', ts: Date.now() } }
+            }));
+          } catch (_) {}
+        } catch (_) {}
+      };
+      ws.onclose = function () {
+        window.__gromBinanceDirectWS = null;
+        setTimeout(connect, backoff);
+        backoff = Math.min(backoff * 2, 30000);
+      };
+      ws.onerror = function () { try { ws.close(); } catch (_) {} };
+    } catch (e) {
+      setTimeout(connect, backoff);
+      backoff = Math.min(backoff * 2, 30000);
+    }
+  }
+  // Boot
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(connect, 500); });
+  else setTimeout(connect, 500);
+})();
+// Inject CSS to widen chart containers + push price scale to the right edge.
+(function () {
+  if (document.getElementById('grom-tv-widen')) return;
+  var s = document.createElement('style');
+  s.id = 'grom-tv-widen';
+  s.textContent = [
+    /* trading chart containers — full width, no inner padding */
+    '#boChart, #spotChart, #futChart { width: 100% !important; min-height: 360px; padding: 0 !important; margin: 0 !important; box-sizing: border-box; overflow:hidden; border-radius: 0 0 14px 14px; }',
+    /* parents that wrap the chart — kill horizontal padding so chart goes edge-to-edge */
+    '.chart-wrap, .bo-chart-shell, .spot-chart-shell, .fut-chart-shell, .chart-shell { padding-left: 0 !important; padding-right: 0 !important; }',
+    '.chart-wrap { padding-top: 0 !important; padding-bottom: 0 !important; }',
+    '.bo-chart-body { background: radial-gradient(circle at 72% 22%, rgba(0,194,255,.10), transparent 34%), radial-gradient(circle at 12% 86%, rgba(245,185,77,.08), transparent 30%); }',
+    '.grom-tv-watermark { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:1; pointer-events:none; font-size:clamp(42px,8vw,108px); font-weight:900; letter-spacing:.18em; color:rgba(109,167,255,.035); text-shadow:0 0 42px rgba(0,194,255,.08); }',
+    '.grom-tv-badge { position:absolute; top:10px; right:10px; z-index:6; display:flex; gap:7px; flex-wrap:wrap; justify-content:flex-end; pointer-events:none; max-width:72%; }',
+    '.grom-tv-badge span { border:1px solid rgba(122,162,199,.18); background:rgba(7,11,22,.68); backdrop-filter:blur(12px); color:#b8c7d9; border-radius:999px; padding:5px 8px; font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; box-shadow:0 8px 24px rgba(0,0,0,.18); }',
+    '.grom-tv-badge span.hot { color:#22c17c; border-color:rgba(34,193,124,.34); background:rgba(34,193,124,.10); }',
+    '.grom-tv-badge span.warn { color:#f5b94d; border-color:rgba(245,185,77,.38); background:rgba(245,185,77,.10); }',
+    '.grom-tv-expiry { position:absolute; top:0; bottom:0; z-index:2; width:1px; pointer-events:none; background:linear-gradient(180deg, transparent, rgba(245,185,77,.86), transparent); box-shadow:0 0 22px rgba(245,185,77,.45); }',
+    '.grom-tv-expiry::after { content:"EXPIRY"; position:absolute; bottom:10px; left:8px; color:#0a1224; background:#f5b94d; border-radius:5px; padding:3px 6px; font-size:9px; font-weight:900; letter-spacing:.08em; }',
+    '.grom-tv-expiry::before { content:""; position:absolute; top:0; bottom:0; left:0; width:220px; background:linear-gradient(90deg, rgba(245,185,77,.10), transparent); }',
+    /* price-scale font / size tweak — tighter labels */
+    '#boChart .tv-lightweight-charts, #spotChart .tv-lightweight-charts, #futChart .tv-lightweight-charts { font-feature-settings: "tnum" 1; }',
+    '@media (max-width: 720px) { #boChart, #spotChart, #futChart { min-height: 330px; } .grom-tv-badge { position:static; padding:8px 10px 0; max-width:none; justify-content:flex-start; } }',
+  ].join('\n');
+  document.head.appendChild(s);
+})();
+function _gromTVColors() {
+  return {
+    bg: 'transparent', grid: 'rgba(122,162,199,0.075)', text: '#9bb3c7',
+    up: '#20d08a', down: '#ff5d72', area: 'rgba(0,194,255,0.25)', line: '#00d4ff',
+  };
+}
+function _gromTVCreate(container, mode) {
+  if (typeof LightweightCharts === 'undefined') return null;
+  var col = _gromTVColors();
+  var chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth || 600,
+    height: container.clientHeight || 360,
+    layout: { background: { type: 'solid', color: col.bg }, textColor: col.text, fontFamily: 'ui-sans-serif, system-ui, sans-serif' },
+    grid: { vertLines: { color: col.grid }, horzLines: { color: col.grid } },
+    timeScale: { borderColor: 'transparent', borderVisible: false, timeVisible: true, secondsVisible: true, rightOffset: 4, barSpacing: 10, minBarSpacing: 4, fixLeftEdge: true },
+    rightPriceScale: {
+      borderColor: 'transparent', borderVisible: false,
+      scaleMargins: { top: 0.06, bottom: 0.08 },
+      entireTextOnly: true, alignLabels: true,
+      ticksVisible: false,
+      minimumWidth: 56,
+    },
+    leftPriceScale: { visible: false },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Magnet,
+      vertLine: { color: 'rgba(0,194,255,0.4)', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#00c2ff' },
+      horzLine: { color: 'rgba(0,194,255,0.4)', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#00c2ff' },
+    },
+    handleScroll: { mouseWheel: true, pressedMouseMove: true },
+    handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+  });
+  var series;
+  if (mode === 'candles' || mode === 'heikin') {
+    series = chart.addCandlestickSeries({
+      upColor: col.up, downColor: col.down,
+      borderUpColor: col.up, borderDownColor: col.down,
+      wickUpColor: col.up, wickDownColor: col.down,
+    });
+  } else if (mode === 'bars') {
+    series = chart.addBarSeries({
+      upColor: col.up,
+      downColor: col.down,
+      thinBars: false,
+    });
+  } else if (mode === 'area') {
+    series = chart.addAreaSeries({
+      lineColor: '#00d4ff',
+      topColor: 'rgba(0,212,255,0.45)',
+      bottomColor: 'rgba(0,212,255,0.01)',
+      lineWidth: 3,
+      priceLineVisible: true,
+      priceLineColor: '#00d4ff',
+      priceLineWidth: 2,
+      priceLineStyle: LightweightCharts.LineStyle.Dashed,
+      crosshairMarkerRadius: 7,
+      crosshairMarkerBorderWidth: 3,
+      crosshairMarkerBorderColor: '#00d4ff',
+      crosshairMarkerBackgroundColor: '#fff',
+      lastValueVisible: true,
+    });
+  } else {
+    series = chart.addLineSeries({ color: col.line, lineWidth: 2 });
+  }
+  return { chart: chart, series: series, mode: mode, candles: [], lastBucket: null, priceLines: [] };
+}
+function _gromTVBucketTime(ts, intervalSec) {
+  return Math.floor(ts / 1000 / intervalSec) * intervalSec;
+}
+function _gromTVAggregate(state, price, ts, intervalSec) {
+  price = Number(price);
+  if (!Number.isFinite(price) || price <= 0) return null;
+  var jumpLimit = 0.022;
+  var lastClose = _gromTVLastClose(state);
+  if (!lastClose || Math.abs(price - lastClose) / Math.max(price, lastClose) > jumpLimit) {
+    _gromTVSeedCandles(state, price, ts, intervalSec);
+    return state.candles[state.candles.length - 1] || null;
+  }
+  var bucket = _gromTVBucketTime(ts, intervalSec);
+  var last = state.candles[state.candles.length - 1];
+  if (!last || last.time !== bucket) {
+    var prev = last ? Number(last.close) || price : price;
+    if (Math.abs(price - prev) / Math.max(price, prev) > jumpLimit) {
+      _gromTVSeedCandles(state, price, ts, intervalSec);
+      return state.candles[state.candles.length - 1] || null;
+    }
+    if (Math.abs(price - prev) / Math.max(price, prev) > 0.012) {
+      prev = price * (1 + (Math.random() - 0.5) * 0.001);
+    }
+    var spread = Math.max(price * 0.00018, Math.abs(price - prev) * 0.35);
+    var newC = {
+      time: bucket,
+      open: prev,
+      high: Math.max(prev, price) + spread * 0.35,
+      low: Math.min(prev, price) - spread * 0.35,
+      close: price,
+      volume: Math.max(80, Math.round((Math.abs(price - prev) / Math.max(price, 1)) * 60000 + 120 + Math.random() * 520))
+    };
+    var floor = price * 0.988;
+    var ceil = price * 1.012;
+    newC.high = Math.min(ceil, newC.high);
+    newC.low = Math.max(floor, newC.low);
+    state.candles.push(newC);
+    if (state.candles.length > 300) state.candles.shift();
+    state.anchorPrice = price;
+    return newC;
+  } else {
+    var old = Number(last.close) || price;
+    if (Math.abs(price - old) / Math.max(price, old) > jumpLimit) {
+      _gromTVSeedCandles(state, price, ts, intervalSec);
+      return state.candles[state.candles.length - 1] || null;
+    }
+    var liveOpen = Number(last.open) || price;
+    if (Math.abs(price - liveOpen) / Math.max(price, liveOpen) > 0.012) {
+      last.open = price * (1 + (Math.random() - 0.5) * 0.001);
+    }
+    last.close = price;
+    last.high = Math.max(Number(last.high) || price, Math.max(Number(last.open) || price, price));
+    last.low = Math.min(Number(last.low) || price, Math.min(Number(last.open) || price, price));
+    last.high = Math.min(last.high, price * 1.012);
+    last.low = Math.max(last.low, price * 0.988);
+    last.volume = Math.max(60, Number(last.volume || 0) + Math.round((Math.abs(price - old) / Math.max(price, 1)) * 50000 + Math.random() * 80));
+    state.anchorPrice = price;
+    return last;
+  }
+}
+function _gromComputeSMA(candles, period) {
+  var out = [];
+  for (var i = 0; i < candles.length; i++) {
+    if (i < period - 1) continue;
+    var sum = 0;
+    for (var j = i - period + 1; j <= i; j++) sum += candles[j].close;
+    out.push({ time: candles[i].time, value: sum / period });
+  }
+  return out;
+}
+function _gromComputeVWAP(candles) {
+  var out = [];
+  var pv = 0;
+  var vv = 0;
+  for (var i = 0; i < candles.length; i++) {
+    var k = candles[i];
+    var typical = (k.high + k.low + k.close) / 3;
+    var vol = Number(k.volume || 1);
+    pv += typical * vol;
+    vv += vol;
+    out.push({ time: k.time, value: pv / Math.max(vv, 1) });
+  }
+  return out;
+}
+function _gromToHeikinSeries(candles) {
+  var out = [];
+  var prev = null;
+  for (var i = 0; i < candles.length; i++) {
+    var k = candles[i];
+    var close = (k.open + k.high + k.low + k.close) / 4;
+    var open = prev ? (prev.open + prev.close) / 2 : (k.open + k.close) / 2;
+    var high = Math.max(k.high, open, close);
+    var low = Math.min(k.low, open, close);
+    var row = { time: k.time, open: open, high: high, low: low, close: close };
+    out.push(row);
+    prev = row;
+  }
+  return out;
+}
+function _gromActiveText(selector, fallback) {
+  var el = document.querySelector(selector);
+  return (el ? (el.textContent || '').trim() : fallback || '').toLowerCase();
+}
+function _gromIntervalForChart(id, mode) {
+  if (id === 'boChart') return Math.max(1, Number(window.__boTfSec || 5));
+  if (id === 'spotChart') {
+    var t = _gromActiveText('#spotTfPills button.active', '15m').toUpperCase();
+    var map = { '1M': 60, '5M': 300, '15M': 900, '1H': 3600, '4H': 14400, '1D': 86400 };
+    return map[t] || 900;
+  }
+  return mode === 'area' ? 5 : 60;
+}
+function _gromPriceFormatFor(px) {
+  if (px < 0.001) return { type: 'price', precision: 8, minMove: 0.00000001 };
+  if (px < 1) return { type: 'price', precision: 5, minMove: 0.00001 };
+  if (px < 100) return { type: 'price', precision: 3, minMove: 0.001 };
+  return { type: 'price', precision: 2, minMove: 0.01 };
+}
+function _gromTVLastClose(state) {
+  if (!state || !Array.isArray(state.candles) || !state.candles.length) return null;
+  var last = state.candles[state.candles.length - 1];
+  var value = Number(last.close || last.open);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+function _gromTVNeedsReseed(state, px) {
+  px = Number(px);
+  if (!Number.isFinite(px) || px <= 0) return false;
+  if (!state || !Array.isArray(state.candles) || !state.candles.length) return true;
+  var last = _gromTVLastClose(state);
+  if (!last) return true;
+  if (Math.abs(px - last) / Math.max(px, last) > 0.022) return true;
+  var recent = state.candles.slice(-96);
+  var min = Infinity;
+  var max = -Infinity;
+  for (var i = 0; i < recent.length; i++) {
+    var k = recent[i] || {};
+    var open = Number(k.open);
+    var high = Number(k.high);
+    var low = Number(k.low);
+    var close = Number(k.close);
+    if (![open, high, low, close].every(function (v) { return Number.isFinite(v) && v > 0; })) return true;
+    min = Math.min(min, low);
+    max = Math.max(max, high);
+    if (high > px * 1.08 || low < px * 0.92) return true;
+    if (Math.abs(close - px) / Math.max(px, close) > 0.045) return true;
+  }
+  return Number.isFinite(min) && Number.isFinite(max) && (max - min) / px > 0.10;
+}
+function _gromTVSeedCandles(state, px, now, intervalSec) {
+  px = Number(px);
+  if (!Number.isFinite(px) || px <= 0) return;
+  state.candles = [];
+  state.lastBucket = null;
+  state.anchorPrice = px;
+  var floor = px * 0.992;
+  var ceil = px * 1.008;
+  var seedPrice = px * (1 + (Math.random() - 0.5) * 0.006);
+  for (var i = 140; i >= 1; i--) {
+    var t = _gromTVBucketTime(now - i * intervalSec * 1000, intervalSec);
+    var open = Math.min(ceil, Math.max(floor, seedPrice));
+    var wave = Math.sin(i * 0.19) * px * 0.0009;
+    var pull = (px - open) * (i < 18 ? 0.18 : 0.025);
+    var close = Math.min(ceil, Math.max(floor, open + pull + wave * 0.08 + (Math.random() - 0.5) * px * 0.00045));
+    var wick = Math.max(px * 0.00012, Math.abs(close - open) * 0.35);
+    var high = Math.min(ceil, Math.max(open, close) + Math.random() * wick);
+    var low = Math.max(floor, Math.min(open, close) - Math.random() * wick);
+    var vol = Math.round((Math.random() * 0.7 + 0.35) * 1200);
+    state.candles.push({ time: t, open: open, high: high, low: low, close: close, volume: vol });
+    seedPrice = close;
+  }
+  var last = state.candles[state.candles.length - 1];
+  if (last) {
+    last.open = px * (1 + (Math.random() - 0.5) * 0.0012);
+    last.close = px;
+    last.high = Math.min(ceil, Math.max(last.open, px) * 1.00025);
+    last.low = Math.max(floor, Math.min(last.open, px) * 0.99975);
+    last.volume = Math.max(last.volume || 0, 900);
+    state.lastBucket = last.time;
+  }
+}
+function gromDrawTVChart(id, opts) {
+  opts = opts || {};
+  var c = document.getElementById(id);
+  if (!c) return;
+  if (typeof LightweightCharts === 'undefined') { return false; }
+  // Binary → respects active tab (Line/Candles/Bars/HA); Spot/Futures → candles with volume + MA.
+  // Default: Binary=area (PocketOption-style glow), Spot/Futures=candles.
+  var mode = opts.mode;
+  if (!mode) {
+    if (id === 'boChart') {
+      // Look at active Binary chart-type tab — class "active" on Line/Candles/Bars/HA buttons
+      var activeTab = document.querySelector('#boChart-type button.active, #page-binary .chart-type-tabs .active, .bo-chart-tabs .active, [data-bo-chart-type].active');
+      var t = activeTab ? (activeTab.dataset.boChartType || activeTab.textContent || '').toLowerCase().trim() : '';
+      if (window.__boChartMode === 'line') mode = 'area';
+      else if (window.__boChartMode === 'bars') mode = 'bars';
+      else if (window.__boChartMode === 'heikin') mode = 'heikin';
+      else if (window.__boChartMode === 'candles') mode = 'candles';
+      if (t.indexOf('candle') >= 0) mode = 'candles';
+      else if (t.indexOf('bar') >= 0)  mode = 'bars';
+      else if (t.indexOf('ha') >= 0)   mode = 'heikin';
+      else if (!mode)                   mode = 'area';
+    } else mode = 'candles';
+  }
+  if (mode === 'heikin') mode = 'heikin';
+  // Replace non-div containers (old canvas/svg) with div
+  if (c.tagName.toLowerCase() !== 'div') {
+    var div = document.createElement('div');
+    div.id = id;
+    div.style.cssText = 'width:100%;height:' + (c.clientHeight || 380) + 'px;min-height:320px;position:relative';
+    c.parentNode.replaceChild(div, c);
+    c = div;
+  }
+  c.style.position = 'relative';
+  if (!c.style.minHeight) c.style.minHeight = '320px';
+
+  // Resolve pair before creating state so pair/timeframe switches reset old candles.
+  var pair = '';
+  if (id === 'boChart' && window.boState) pair = boState.pair;
+  else if (id === 'spotChart' && window.spotState) pair = spotState.pair;
+  else if (id === 'futChart' && window.futDeskState) pair = futDeskState.pair;
+  pair = pair || 'BTC/USDT';
+  var intervalSec = opts.intervalSec || _gromIntervalForChart(id, mode);
+  var state = window.__gromTVCharts[id];
+  if (state && (state.pair !== pair || state.intervalSec !== intervalSec)) {
+    try { state.chart.remove(); } catch (_) {}
+    state = null;
+  }
+  if (!state || state.mode !== mode) {
+    if (state && state.chart) { try { state.chart.remove(); } catch (_) {} }
+    c.innerHTML = '';
+    state = _gromTVCreate(c, mode);
+    if (!state) return false;
+    state.id = id; state.mode = mode; state.pair = pair; state.intervalSec = intervalSec;
+    window.__gromTVCharts[id] = state;
+    // Add MA7 + MA25 indicators for candles mode
+    if (mode === 'candles' || mode === 'heikin' || mode === 'bars') {
+      state.ma7  = state.chart.addLineSeries({ color: '#f5b94d', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      state.ma25 = state.chart.addLineSeries({ color: '#9d6cf5', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      state.vwap = state.chart.addLineSeries({ color: '#00d4ff', lineWidth: 1.25, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: LightweightCharts.LineStyle.Dotted });
+      // Add volume histogram on separate pane (bottom 20%)
+      state.volSeries = state.chart.addHistogramSeries({
+        color: 'rgba(122,162,199,0.35)',
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'volume',
+      });
+      state.chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      // Compress price scale margins so volume fits
+      state.chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.08, bottom: 0.22 } });
+      // Legend overlay for MA values
+      var legend = document.createElement('div');
+      legend.style.cssText = 'position:absolute;top:8px;left:10px;z-index:5;font-size:11px;font-family:ui-sans-serif,system-ui;color:#9bb3c7;pointer-events:none;display:flex;gap:14px';
+      legend.innerHTML = '<span style="color:#f5b94d">MA(7) <b id="' + id + '_ma7v" style="font-weight:700">—</b></span><span style="color:#9d6cf5">MA(25) <b id="' + id + '_ma25v" style="font-weight:700">—</b></span><span style="color:#00d4ff">VWAP <b id="' + id + '_vwapv" style="font-weight:700">—</b></span>';
+      c.appendChild(legend);
+    }
+    var wm = document.createElement('div');
+    wm.className = 'grom-tv-watermark';
+    wm.textContent = id === 'boChart' ? 'BINARY' : (id === 'futChart' ? 'PERP' : 'GROM');
+    c.appendChild(wm);
+    var badge = document.createElement('div');
+    badge.className = 'grom-tv-badge';
+    badge.id = id + '_badges';
+    c.appendChild(badge);
+    if (typeof ResizeObserver !== 'undefined') {
+      var ro = new ResizeObserver(function () {
+        state.chart.applyOptions({ width: c.clientWidth, height: c.clientHeight || 380 });
+      });
+      ro.observe(c);
+    }
+  }
+  // Resolve pair → current price
+  var px = (typeof priceForPair === 'function') ? priceForPair(pair || 'BTC/USDT') : 100;
+  try { state.series.applyOptions({ priceFormat: _gromPriceFormatFor(px) }); } catch (_) {}
+  var now = Date.now();
+
+  if (!state.candles.length || _gromTVNeedsReseed(state, px)) {
+    _gromTVSeedCandles(state, px, now, intervalSec);
+  }
+  _gromTVAggregate(state, px, now, intervalSec);
+
+  if (mode === 'candles' || mode === 'heikin' || mode === 'bars') {
+    var ohlcData = state.candles.map(function (k) { return { time: k.time, open: k.open, high: k.high, low: k.low, close: k.close }; });
+    if (mode === 'heikin') ohlcData = _gromToHeikinSeries(state.candles);
+    state.series.setData(ohlcData);
+    if (state.ma7)  state.ma7.setData(_gromComputeSMA(state.candles, 7));
+    if (state.ma25) state.ma25.setData(_gromComputeSMA(state.candles, 25));
+    if (state.vwap) state.vwap.setData(_gromComputeVWAP(state.candles));
+    if (state.volSeries) {
+      var col = _gromTVColors();
+      state.volSeries.setData(state.candles.map(function (k) {
+        return { time: k.time, value: Number(k.volume || 100), color: k.close >= k.open ? 'rgba(34,193,124,0.45)' : 'rgba(232,87,107,0.45)' };
+      }));
+    }
+    // Update legend
+    var ma7Arr  = _gromComputeSMA(state.candles, 7);
+    var ma25Arr = _gromComputeSMA(state.candles, 25);
+    var vwapArr = _gromComputeVWAP(state.candles);
+    var ma7v  = ma7Arr.length  ? ma7Arr[ma7Arr.length - 1].value  : null;
+    var ma25v = ma25Arr.length ? ma25Arr[ma25Arr.length - 1].value : null;
+    var vwapv = vwapArr.length ? vwapArr[vwapArr.length - 1].value : null;
+    var fmtN = function (n) { return n == null ? '—' : (n > 1000 ? n.toFixed(2) : n.toFixed(4)); };
+    var el7 = document.getElementById(id + '_ma7v'); if (el7) el7.textContent = fmtN(ma7v);
+    var el25 = document.getElementById(id + '_ma25v'); if (el25) el25.textContent = fmtN(ma25v);
+    var elVwap = document.getElementById(id + '_vwapv'); if (elVwap) elVwap.textContent = fmtN(vwapv);
+  } else {
+    state.series.setData(state.candles.map(function (k) { return { time: k.time, value: k.close }; }));
+  }
+  if (state.priceLines && state.priceLines.length) {
+    state.priceLines.forEach(function (line) { try { state.series.removePriceLine(line); } catch (_) {} });
+  }
+  state.priceLines = [];
+  var badgeEl = document.getElementById(id + '_badges');
+  if (badgeEl) {
+    var last = state.candles[state.candles.length - 1] || { close: px, open: px };
+    var impulse = ((last.close - last.open) / Math.max(last.open, 1)) * 100;
+    if (id === 'spotChart') {
+      badgeEl.innerHTML = '<span class="hot">AI liquidity map</span><span>VWAP bands</span><span>' + pair + '</span>';
+    } else if (id === 'futChart') {
+      badgeEl.innerHTML = '<span class="warn">Funding live</span><span>Liquidation heat</span><span>' + (futDeskState && futDeskState.leverage ? futDeskState.leverage : 25) + 'x</span>';
+    } else {
+      badgeEl.innerHTML = '<span class="hot">1-tap expiry</span><span>Strike radar</span><span>' + (impulse >= 0 ? '+' : '') + impulse.toFixed(2) + '% candle</span>';
+    }
+  }
+  if (id === 'spotChart') {
+    var vwapLine = _gromComputeVWAP(state.candles).slice(-1)[0];
+    if (vwapLine && Number.isFinite(vwapLine.value)) {
+      state.priceLines.push(state.series.createPriceLine({
+        price: vwapLine.value,
+        color: 'rgba(0,212,255,.72)',
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dotted,
+        axisLabelVisible: true,
+        title: 'VWAP',
+      }));
+    }
+  }
+  if (id === 'futChart' && typeof futState !== 'undefined') {
+    [
+      { price: futState.liqTop, title: 'SHORT LIQ', color: 'rgba(255,93,114,.86)' },
+      { price: futState.liqBottom, title: 'LONG LIQ', color: 'rgba(32,208,138,.86)' }
+    ].forEach(function (line) {
+      if (Number.isFinite(line.price)) {
+        state.priceLines.push(state.series.createPriceLine({
+          price: line.price,
+          color: line.color,
+          lineWidth: 2,
+          lineStyle: LightweightCharts.LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: line.title,
+        }));
+      }
+    });
+  }
+  // Binary: strike line (PocketOption-style yellow dashed)
+  if (id === 'boChart' && window.boState && boState.strike) {
+    state.strikeLine = state.series.createPriceLine({
+      price: Number(boState.strike),
+      color: '#f5b94d', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: true, title: 'STRIKE',
+    });
+    state.priceLines.push(state.strikeLine);
+    var exp = c.querySelector('.grom-tv-expiry');
+    if (!exp) {
+      exp = document.createElement('div');
+      exp.className = 'grom-tv-expiry';
+      c.appendChild(exp);
+    }
+    var pctDone = Math.max(0, Math.min(1, Number(boState.elapsed || 0) / Math.max(1, Number(boState.roundLen || 1))));
+    exp.style.left = Math.round(78 + pctDone * 16) + '%';
+  } else {
+    var oldExp = c.querySelector('.grom-tv-expiry');
+    if (oldExp) oldExp.remove();
+  }
+  return true;
+}
+window.gromDrawTVChart = gromDrawTVChart;
+
+// Trading desk charts: prefer the professional lightweight renderer, with SVG
+// fallback if the vendor script is unavailable.
+var _gromTVChartIds = ['boChart', 'spotChart', 'futChart'];
 function drawChart(id) {
+  if (_gromTVChartIds.indexOf(id) !== -1) {
+    if (typeof window.gromDrawTVChart === 'function') {
+      try {
+        var rendered = window.gromDrawTVChart(id);
+        if (rendered !== false) return rendered;
+      } catch (err) {
+        console.warn('[grom-chart] lightweight renderer failed, falling back', id, err);
+      }
+    }
+    if (typeof window._gromOldDrawChart === 'function') return window._gromOldDrawChart(id);
+    if (typeof _origDrawChart === 'function') return _origDrawChart(id);
+    return;
+  }
+  // Other charts (sparklines, mini-tape) — use legacy canvas
+  if (typeof window._gromOldDrawChart === 'function') return window._gromOldDrawChart(id);
+}
+window.drawChart = drawChart;
+// Auto-redraw desk charts every second to flush real-time price updates.
+setInterval(function () {
+  _gromTVChartIds.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el && el.offsetParent !== null) { // only if visible
+      try { drawChart(id); } catch (_) {}
+    }
+  });
+}, 1000);
+
+// Keep legacy implementation under different name (defined below as _origDrawChart).
+function _origDrawChart(id) {
   const c = document.getElementById(id);
   if (!c) return;
   var parent = c.parentElement;
@@ -8343,8 +8262,6 @@ function drawChart(id) {
   c.style.display = 'block';
 
   const hist = id === 'boChart' ? boSeries : (id === 'spotChart' ? spotSeries : (id === 'futChart' ? futSeries : btcHistory));
-  const anchorPx = id === 'boChart' ? priceForPair(boState.pair) : (id === 'spotChart' ? priceForPair(spotState.pair) : (id === 'futChart' ? priceForPair(futDeskState.pair) : btcPrice));
-  sanitizeChartSeries(hist, anchorPx);
   const candles = [];
   var group = id === 'boChart' ? Math.max(1, Math.round(__boTfSec / 5)) : 2;
   for (let i = 0; i < hist.length; i += group) {
@@ -8363,11 +8280,10 @@ function drawChart(id) {
   const barsMode = id === 'boChart' && __boChartMode === 'bars';
   let plotCandles = candles;
   if (id === 'boChart' && __boChartMode === 'heikin') plotCandles = toHeikinAshi(candles);
-  const lastPx = anchorPx;
-  const min = Math.min(lastPx, lineMode ? Math.min(...hist) : Math.min(...plotCandles.map(k => k.l)));
-  const max = Math.max(lastPx, lineMode ? Math.max(...hist) : Math.max(...plotCandles.map(k => k.h)));
+  const min = lineMode ? Math.min(...hist) : Math.min(...plotCandles.map(k => k.l));
+  const max = lineMode ? Math.max(...hist) : Math.max(...plotCandles.map(k => k.h));
+  const lastPx = id === 'boChart' ? priceForPair(boState.pair) : (id === 'spotChart' ? priceForPair(spotState.pair) : (id === 'futChart' ? priceForPair(futDeskState.pair) : btcPrice));
   renderSvgChart(id, W, H, hist, candles, plotCandles, min, max, lastPx, lineMode, barsMode);
-  syncExpiryWall();
   return;
   const ctx = c.getContext('2d');
   if (!ctx) return;
@@ -8534,6 +8450,8 @@ function drawChart(id) {
     });
   }
 }
+// Wire legacy fallback so drawChart() above can call old canvas renderer when TV lib missing.
+window._gromOldDrawChart = _origDrawChart;
 
 setInterval(tickPrices, 1200);
 setTimeout(tickPrices, 100);
@@ -8832,6 +8750,22 @@ window.addEventListener('grom-ws-event', function (ev) {
 
 function updateSpotBoard(sym) {
   var px = priceForPair(sym);
+  var pairParts = String(sym || 'BTC/USDT').split('/');
+  var base = pairParts[0] || 'BTC';
+  var quote = pairParts[1] || 'USDT';
+  var amountMap = { BTC: 0.005, ETH: 0.05, SOL: 2, BNB: 0.2, XRP: 200, ADA: 400, DOGE: 600, AVAX: 8, LINK: 15, TON: 35, TRX: 900, DOT: 40, ATOM: 25, NEAR: 30, LTC: 1.5, BCH: 0.3, SUI: 150, PEPE: 2500000, SHIB: 1800000, APT: 18, UNI: 16, ETC: 7, ICP: 12, ARB: 180, OP: 90 };
+  var amount = amountMap[base] || 10;
+  var total = Number.isFinite(px) ? px * amount : 0;
+  var op = document.getElementById('spotOrderPrice');
+  if (op && Number.isFinite(px)) op.textContent = marketFmt(px) + ' ' + quote;
+  var trg = document.getElementById('spotTriggerPrice');
+  if (trg && Number.isFinite(px)) trg.textContent = marketFmt(px * 0.994) + ' ' + quote;
+  var oa = document.getElementById('spotOrderAmount');
+  if (oa) oa.textContent = amount.toFixed(base === 'BTC' ? 5 : 2) + ' ' + base;
+  var ot = document.getElementById('spotOrderTotal');
+  if (ot) ot.textContent = fmt(total, total < 20 ? 4 : 2) + ' ' + quote;
+  var fee = document.getElementById('spotFeeTag');
+  if (fee) fee.textContent = '0.10% · ' + fmt(total * 0.001, 2) + ' ' + quote;
   var depth = document.getElementById('spotDepthTag');
   if (depth) depth.textContent = '$' + fmt(Math.max(2.8, Math.abs(px) * 0.00014), 1) + 'M';
   var vol = document.getElementById('spotVolumeTag');
@@ -8910,10 +8844,15 @@ function setFuturesPair(sym) {
   if (costEl) costEl.textContent = '$' + fmt((px * 0.25) / Math.max(1, futDeskState.leverage), 2);
   var liqEl = Array.from(document.querySelectorAll('#page-futures .pay-panel .v.loss')).shift();
   if (liqEl) liqEl.textContent = '$' + fmt(px * (futDeskState.side === 'long' ? 0.954 : 1.046), 0);
-  var sizeHint = document.querySelector('#page-futures .stake-v2 .pct-hint');
-  if (sizeHint) sizeHint.textContent = '0.25 ' + base + ' ≈ $' + fmt(px * 0.25, 0);
-  var priceInput = document.querySelector('#page-futures .stake-v2 input[type="number"]');
-  if (priceInput) priceInput.value = px < 20 ? px.toFixed(4) : px.toFixed(2);
+  var stakeBlocks = document.querySelectorAll('#page-futures .stake-v2');
+  var priceHint = stakeBlocks[0] ? stakeBlocks[0].querySelector('.pct-hint') : null;
+  var sizeHint = stakeBlocks[1] ? stakeBlocks[1].querySelector('.pct-hint') : null;
+  var priceInput = stakeBlocks[0] ? stakeBlocks[0].querySelector('input[type="number"]') : null;
+  var sizeInput = stakeBlocks[1] ? stakeBlocks[1].querySelector('input[type="number"]') : null;
+  var size = parseFloat(sizeInput && sizeInput.value) || 0.25;
+  if (priceHint) priceHint.textContent = futDeskState.pair.split('/')[1] || 'USDT';
+  if (sizeHint) sizeHint.textContent = fmt(size, size < 1 ? 3 : 2) + ' ' + base + ' ≈ $' + fmt(px * size, 0);
+  if (priceInput && document.activeElement !== priceInput) priceInput.value = px < 20 ? px.toFixed(4) : px.toFixed(2);
   futState.sessionLow = px * 0.986;
   futState.sessionHigh = px * 1.014;
   futState.liqTop = px * 1.019;
@@ -9274,6 +9213,8 @@ function setSpotPair(sym) {
   var total = Number.isFinite(px) ? px * amount : 0;
   var op = document.getElementById('spotOrderPrice');
   if (op && Number.isFinite(px)) op.textContent = marketFmt(px) + ' ' + quote;
+  var trg = document.getElementById('spotTriggerPrice');
+  if (trg && Number.isFinite(px)) trg.textContent = marketFmt(px * 0.994) + ' ' + quote;
   var oa = document.getElementById('spotOrderAmount');
   if (oa) oa.textContent = amount.toFixed(base === 'BTC' ? 5 : 2) + ' ' + base;
   var ot = document.getElementById('spotOrderTotal');
@@ -9536,7 +9477,6 @@ function updateQuoteRows() {
       payEl.style.color = sign > 0 ? 'var(--warn)' : 'var(--danger)';
     }
   });
-  updateDashboardWatchlistPrices();
   renderMarkets();
 }
 
@@ -9544,7 +9484,15 @@ async function fetchLiveQuotes() {
   try {
     var data = window.gromApiFetch ? await window.gromApiFetch('/api/market/quotes') : null;
     if (data && data.crypto) {
-      // /api/market/quotes can lag behind live feeds; never let it overwrite core crypto chart prices.
+      btcPrice = Number(data.crypto.BTC || btcPrice);
+      ethPrice = Number(data.crypto.ETH || ethPrice);
+      solPrice = Number(data.crypto.SOL || solPrice);
+      bnbPrice = Number(data.crypto.BNB || bnbPrice);
+      xrpPrice = Number(data.crypto.XRP || xrpPrice);
+      adaPrice = Number(data.crypto.ADA || adaPrice);
+      dogePrice = Number(data.crypto.DOGE || dogePrice);
+      avaxPrice = Number(data.crypto.AVAX || avaxPrice);
+      linkPrice = Number(data.crypto.LINK || linkPrice);
       Object.keys(extraCryptoPrices).forEach(function (asset) {
         if (data.crypto[asset] != null) extraCryptoPrices[asset] = Number(data.crypto[asset]);
       });
@@ -9663,16 +9611,24 @@ function exportHistoryCsv() {
     return '';
   }
 
+  var __devLoginDisabled = false;
   async function ensureApiToken() {
     var token = '';
     try { token = localStorage.getItem('grom_jwt') || ''; } catch (_) {}
     if (token && token !== 'demo-session') return token;
+    if (__devLoginDisabled) return '';
     try {
       var res = await fetch(apiBase() + '/auth/dev-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      if (!res.ok) return token && token !== 'demo-session' ? token : '';
+      if (!res.ok) {
+        // Disable dev-login attempts for this session — not available in production.
+        if (res.status === 404 || res.status === 403 || res.status === 401) {
+          __devLoginDisabled = true;
+        }
+        return token && token !== 'demo-session' ? token : '';
+      }
       var data = await res.json();
       if (data && data.token) {
         try { localStorage.setItem('grom_jwt', data.token); } catch (_) {}
@@ -9682,7 +9638,9 @@ function exportHistoryCsv() {
         }
         return data.token;
       }
-    } catch (_) {}
+    } catch (_) {
+      __devLoginDisabled = true;
+    }
     return token && token !== 'demo-session' ? token : '';
   }
 
@@ -10688,8 +10646,7 @@ function renderDepositNetworks() {
   var sel = document.getElementById('wmDepAsset');
   if (!sel) return;
   var asset = sel.value;
-  var netMap = (typeof DEP_NETS === 'object' && DEP_NETS) ? DEP_NETS : {};
-  var nets = netMap[asset] || [];
+  var nets = DEP_NETS[asset] || [];
   var grid = document.getElementById('wmDepNetGrid');
   if (!grid) return;
   grid.innerHTML = nets.map(function (n, i) {
@@ -10743,8 +10700,7 @@ async function applyDepositNetwork(asset, n) {
     grid.querySelectorAll('.net-chip').forEach(function (x) { x.classList.remove('active'); });
     b.classList.add('active');
     var asset = document.getElementById('wmDepAsset').value;
-    var netMap = (typeof DEP_NETS === 'object' && DEP_NETS) ? DEP_NETS : {};
-    var n = (netMap[asset] || []).find(function (x) { return x.id === b.dataset.net; });
+    var n = (DEP_NETS[asset] || []).find(function (x) { return x.id === b.dataset.net; });
     applyDepositNetwork(asset, n);
   });
   renderDepositNetworks();
@@ -10753,7 +10709,7 @@ async function applyDepositNetwork(asset, n) {
 /* ========== Fiat on-ramp ========== */
 var FIAT_PROV = { moonpay: { fee: 0.029, name: 'MoonPay' }, transak: { fee: 0.025, name: 'Transak' }, ramp: { fee: 0.026, name: 'Ramp' } };
 var FIAT_FX = { USD: 1, EUR: 1.08, GBP: 1.27 };
-var FIAT_COIN_PX = { USDT: 1, USDC: 1, BTC: 104000, ETH: 3680, SOL: 182 };
+var FIAT_COIN_PX = { USDT: 1, USDC: 1, BTC: 63903, ETH: 1780, SOL: 69 };
 function currentProv() {
   var b = document.querySelector('#fiatProviders .prov.active');
   return b ? b.dataset.prov : 'moonpay';
@@ -10820,195 +10776,6 @@ function submitSwap() {
   closeWalletModal();
   toast('Swap ' + amt + ' ' + from + ' → ' + to + ' submitted', 'success');
 }
-
-/* ========== i18n: common UI + landing page ========== */
-var GROM_LANG_LABELS = {
-  en: 'English',
-  ru: 'Русский',
-  es: 'Español',
-  ar: 'العربية',
-  zh: '中文',
-  hi: 'हिन्दी',
-  tr: 'Türkçe'
-};
-var GROM_I18N = {
-  en: {
-    top_brand_sub: 'Finance Hub', nav_dashboard: 'Dashboard', nav_spot: 'Spot', nav_binary: 'Binary', nav_markets: 'Markets', nav_deposit: 'Deposit', nav_wallet: 'Wallet', nav_history: 'History', nav_settings: 'Settings', nav_help: 'Help', auth_logout: 'Logout', wallet_deposit: 'Deposit',
-    lp_eyebrow: '⚡ Hybrid Exchange · CEX Speed + DEX Freedom',
-    lp_h1: 'Trade crypto at the speed of thought.',
-    lp_h1_sub: 'Spot · Futures · Binary Options · On-chain swaps. One account. Sub-millisecond fills. Your keys when you want them. Bank-grade security from day one.',
-    lp_cta_primary: 'Start trading →', lp_cta_demo: 'Try with $50K demo',
-    lp_trust_1: '8 chains', lp_trust_2: '20+ pairs', lp_trust_3: '87% binary payout', lp_trust_4: '100× max leverage',
-    lp_spot_h: 'Spot', lp_spot_p: 'FIFO matching engine. Liquidity aggregated from Binance · Kraken · Coinbase. Maker 5 bps · Taker 10 bps. Real-time orderbook depth.', lp_spot_cta: 'Open Spot desk →',
-    lp_fut_h: 'Futures', lp_fut_p: 'Perpetuals up to 100× leverage. Cross or isolated margin. Mark price · funding · liquidation · TP/SL — full risk engine on every position.', lp_fut_cta: 'Open Futures desk →',
-    lp_bin_h: 'Binary Options', lp_bin_p: '5s · 15s · 30s · 1m · 5m · 15m expiries. 87% payout on win. $50K demo balance to practice — no deposit, no KYC.', lp_bin_cta: 'Try Binary now →',
-    lp_why_h: 'The next-generation exchange', lp_why_p: 'Most exchanges force you to choose: CEX for speed but you give up your keys, or DEX for self-custody but high fees and slow swaps. GROM gives you both.',
-    lp_why_1_h: 'Hybrid Custody', lp_why_1_p: 'Trading balances custodied for instant fills. On-chain swaps via 1inch — your keys, your transaction. Switch between modes in one click.',
-    lp_why_2_h: 'Maximum Security', lp_why_2_p: 'MPC hot-wallet · Email OTP + TOTP 2FA · 24h address whitelist · Manual review > $10k · 90%+ in cold storage · Insurance fund for liquidations.',
-    lp_why_3_h: 'Real Liquidity', lp_why_3_p: 'Aggregated price feed from top-3 CEX: Binance · Kraken · Coinbase. Market-maker bot keeps spreads tight from day one.',
-    lp_why_4_h: 'Multi-Chain Native', lp_why_4_p: 'Ethereum · Arbitrum · Polygon · Base · BNB Chain · TRON · Bitcoin · Solana. Deposit USDT on Tron for a low fee. Withdraw to any address.',
-    lp_why_5_h: 'Pro Tools', lp_why_5_p: 'Real-time orderbook depth · Candle/line charts · RSI · MACD · order-flow signals · WebSocket push · API keys for algo traders.',
-    lp_why_6_h: 'Easy Onboarding', lp_why_6_p: 'Trade small limits without friction. Connect with Privy, MetaMask, Trust, Binance Web3 Wallet, or email + Google. 30 seconds to start.',
-    lp_how_h: 'Start trading in under 60 seconds',
-    lp_how_1_h: 'Connect wallet or sign up', lp_how_1_p: 'Privy embedded wallet, MetaMask, Trust, Binance Web3 Wallet, or email + Google login. No password needed.',
-    lp_how_2_h: 'Deposit or swap', lp_how_2_p: 'Deposit USDT or skip deposit and swap on-chain via 1inch directly from your own wallet.',
-    lp_how_3_h: 'Trade anything', lp_how_3_p: 'BTC, ETH, SOL, BNB and more. Try Binary Options first with $50K demo balance — zero risk.',
-    lp_sec_badge: '🛡 Security-first exchange', lp_sec_h: 'Built like a bank, fast like a DEX', lp_sec_p: 'Most new exchanges launch with a “we’ll add 2FA later” promise. GROM launched with protections on.',
-    lp_sec_1: '🔑 MPC hot-wallet — No single private key sitting on one server. Compromise requires multiple independent key shards.',
-    lp_sec_2: '📧 3-step withdrawal — Email OTP + TOTP 2FA + whitelisted address with a 24-hour cooldown.',
-    lp_sec_3: '👁 Manual review — Large withdrawals require admin approval with reason logged to immutable audit trail.',
-    lp_sec_4: '❄ Cold storage 90%+ — Auto-sweep moves excess out of hot wallet. Multi-sig keeps reserves offline.',
-    lp_sec_5: '💰 Insurance fund — USDT pool covers negative-equity liquidations on Futures. No socialized losses.',
-    lp_sec_6: '🔍 SOC 2 in progress — External testing and bug bounty program planned as the platform scales.',
-    lp_final_h: 'Ready to trade smarter?', lp_final_p: 'Hybrid CEX/DEX. Real liquidity. Bank-grade security. Open your account in 30 seconds — first trade in 60.', lp_final_signin: 'Sign in / Sign up', lp_final_tiny: 'No deposit required for Binary demo · 8 chains · Hybrid custody · Sub-millisecond fills · 24/7 support'
-  },
-  ru: {
-    top_brand_sub: 'Финансовый хаб', nav_dashboard: 'Главная', nav_spot: 'Спот', nav_binary: 'Binary', nav_markets: 'Рынки', nav_deposit: 'Депозит', nav_wallet: 'Кошелёк', nav_history: 'История', nav_settings: 'Настройки', nav_help: 'Помощь', auth_logout: 'Выход', wallet_deposit: 'Депозит',
-    lp_eyebrow: '⚡ Гибридная биржа · скорость CEX + свобода DEX', lp_h1: 'Торгуйте криптой со скоростью мысли.', lp_h1_sub: 'Спот · Фьючерсы · Бинарные опционы · on-chain swaps. Один аккаунт. Мгновенное исполнение. Ваши ключи, когда это нужно. Банковый уровень защиты с первого дня.', lp_cta_primary: 'Начать торговлю →', lp_cta_demo: 'Попробовать демо $50K', lp_trust_1: '8 сетей', lp_trust_2: '20+ пар', lp_trust_3: '87% выплата Binary', lp_trust_4: '100× плечо',
-    lp_spot_h: 'Спот', lp_spot_p: 'FIFO matching engine. Ликвидность из Binance · Kraken · Coinbase. Maker 5 bps · Taker 10 bps. Живая глубина стакана.', lp_spot_cta: 'Открыть Spot →', lp_fut_h: 'Фьючерсы', lp_fut_p: 'Перпетуалы до 100×. Cross/isolated margin. Mark price · funding · liquidation · TP/SL — полный risk engine.', lp_fut_cta: 'Открыть Futures →', lp_bin_h: 'Бинарные опционы', lp_bin_p: 'Экспирации 5s · 15s · 30s · 1m · 5m · 15m. Выплата 87%. Демо $50K без депозита и KYC.', lp_bin_cta: 'Попробовать Binary →',
-    lp_why_h: 'Биржа нового поколения', lp_why_p: 'Обычно нужно выбирать: CEX для скорости, но без контроля ключей, или DEX для self-custody, но с комиссиями и медленными свапами. GROM даёт оба варианта.', lp_why_1_h: 'Гибридное хранение', lp_why_1_p: 'Торговый баланс хранится для быстрых сделок. On-chain swaps через 1inch — ваши ключи, ваша транзакция.', lp_why_2_h: 'Максимальная защита', lp_why_2_p: 'MPC hot-wallet · Email OTP + TOTP 2FA · whitelist 24h · manual review > $10k · cold storage 90%+.', lp_why_3_h: 'Реальная ликвидность', lp_why_3_p: 'Фиды из Binance · Kraken · Coinbase. Market-maker держит узкие спреды с первого дня.', lp_why_4_h: 'Мультисетевой подход', lp_why_4_p: 'Ethereum · Arbitrum · Polygon · Base · BNB Chain · TRON · Bitcoin · Solana. Депозит USDT и вывод на любой адрес.', lp_why_5_h: 'Профессиональные инструменты', lp_why_5_p: 'Стакан, свечи, line charts, RSI, MACD, order-flow, WebSocket push и API для алготрейдеров.', lp_why_6_h: 'Лёгкий старт', lp_why_6_p: 'Подключение через Privy, MetaMask, Trust, Binance Web3 Wallet или email + Google. Старт за 30 секунд.',
-    lp_how_h: 'Начните торговать меньше чем за 60 секунд', lp_how_1_h: 'Подключите кошелёк или аккаунт', lp_how_1_p: 'Privy, MetaMask, Trust, Binance Web3 Wallet или email + Google. Без пароля.', lp_how_2_h: 'Пополните или сделайте swap', lp_how_2_p: 'Пополните USDT или сделайте on-chain swap через 1inch прямо из своего кошелька.', lp_how_3_h: 'Торгуйте чем угодно', lp_how_3_p: 'BTC, ETH, SOL, BNB и другие. Сначала попробуйте Binary на демо $50K без риска.',
-    lp_sec_badge: '🛡 Биржа с приоритетом безопасности', lp_sec_h: 'Защита как у банка, скорость как у DEX', lp_sec_p: 'GROM запускается сразу с защитой, а не обещанием добавить её позже.', lp_sec_1: '🔑 MPC hot-wallet — нет одного приватного ключа на сервере.', lp_sec_2: '📧 3 шага вывода — Email OTP + TOTP 2FA + whitelist с cooldown 24h.', lp_sec_3: '👁 Manual review — крупные выводы проходят админ-проверку.', lp_sec_4: '❄ Cold storage 90%+ — резервы уходят в offline multi-sig.', lp_sec_5: '💰 Insurance fund — пул USDT покрывает negative-equity liquidation.', lp_sec_6: '🔍 SOC 2 в процессе — аудит и bug bounty по мере роста.', lp_final_h: 'Готовы торговать умнее?', lp_final_p: 'Гибрид CEX/DEX. Реальная ликвидность. Банковская защита. Аккаунт за 30 секунд.', lp_final_signin: 'Войти / Регистрация', lp_final_tiny: 'Для Binary demo депозит не нужен · 8 сетей · Hybrid custody · быстрое исполнение · 24/7 support'
-  },
-  es: {
-    top_brand_sub: 'Centro financiero', nav_dashboard: 'Inicio', nav_spot: 'Spot', nav_binary: 'Binary', nav_markets: 'Mercados', nav_deposit: 'Depositar', nav_wallet: 'Cartera', nav_history: 'Historial', nav_settings: 'Ajustes', nav_help: 'Ayuda', auth_logout: 'Salir', wallet_deposit: 'Depositar',
-    lp_eyebrow: '⚡ Exchange híbrido · velocidad CEX + libertad DEX', lp_h1: 'Opera cripto a la velocidad del pensamiento.', lp_h1_sub: 'Spot · Futuros · Opciones binarias · swaps on-chain. Una cuenta, ejecución rápida y seguridad bancaria desde el primer día.', lp_cta_primary: 'Empezar a operar →', lp_cta_demo: 'Probar demo de $50K', lp_trust_1: '8 redes', lp_trust_2: '20+ pares', lp_trust_3: '87% payout Binary', lp_trust_4: '100× apalancamiento',
-    lp_spot_h: 'Spot', lp_spot_p: 'Motor FIFO con liquidez de Binance · Kraken · Coinbase, comisiones claras y profundidad en tiempo real.', lp_spot_cta: 'Abrir Spot →', lp_fut_h: 'Futuros', lp_fut_p: 'Perpetuos hasta 100× con margen cross/isolated, funding, liquidación y TP/SL.', lp_fut_cta: 'Abrir Futuros →', lp_bin_h: 'Opciones binarias', lp_bin_p: 'Expiraciones de 5s a 15m. 87% de payout. Demo de $50K sin depósito ni KYC.', lp_bin_cta: 'Probar Binary →',
-    lp_why_h: 'El exchange de nueva generación', lp_why_p: 'No elijas entre velocidad CEX y autocustodia DEX. GROM une ambos mundos.', lp_why_1_h: 'Custodia híbrida', lp_why_1_p: 'Balance de trading para ejecución instantánea y swaps on-chain vía 1inch con tus propias claves.', lp_why_2_h: 'Máxima seguridad', lp_why_2_p: 'MPC, OTP, TOTP 2FA, whitelist de direcciones, revisión manual y cold storage.', lp_why_3_h: 'Liquidez real', lp_why_3_p: 'Feeds agregados de Binance, Kraken y Coinbase con spreads ajustados.', lp_why_4_h: 'Multicadena nativo', lp_why_4_p: 'Ethereum, Arbitrum, Polygon, Base, BNB Chain, TRON, Bitcoin y Solana.', lp_why_5_h: 'Herramientas pro', lp_why_5_p: 'Orderbook, velas, RSI, MACD, order-flow, WebSocket y API.', lp_why_6_h: 'Inicio fácil', lp_why_6_p: 'Privy, MetaMask, Trust, Binance Web3 Wallet o email + Google en 30 segundos.',
-    lp_how_h: 'Empieza en menos de 60 segundos', lp_how_1_h: 'Conecta o regístrate', lp_how_1_p: 'Wallet integrada, MetaMask, Trust, Binance Web3 Wallet o Google.', lp_how_2_h: 'Deposita o haz swap', lp_how_2_p: 'Deposita USDT o usa 1inch desde tu wallet.', lp_how_3_h: 'Opera cualquier mercado', lp_how_3_p: 'BTC, ETH, SOL, BNB y más. Prueba Binary con demo de $50K.',
-    lp_sec_badge: '🛡 Exchange centrado en seguridad', lp_sec_h: 'Seguro como banco, rápido como DEX', lp_sec_p: 'GROM nace con protecciones activas desde el día uno.', lp_sec_1: '🔑 MPC hot-wallet — sin una sola clave privada en un servidor.', lp_sec_2: '📧 Retiro en 3 pasos — OTP, TOTP 2FA y whitelist 24h.', lp_sec_3: '👁 Revisión manual — retiros grandes con aprobación admin.', lp_sec_4: '❄ Cold storage 90%+ — reservas offline en multi-sig.', lp_sec_5: '💰 Fondo de seguro — cubre liquidaciones negativas.', lp_sec_6: '🔍 SOC 2 en progreso — auditorías y bug bounty.', lp_final_h: '¿Listo para operar mejor?', lp_final_p: 'CEX/DEX híbrido. Liquidez real. Seguridad bancaria. Cuenta en 30 segundos.', lp_final_signin: 'Iniciar / Registrarse', lp_final_tiny: 'Demo Binary sin depósito · 8 redes · custodia híbrida · ejecución rápida · soporte 24/7'
-  },
-  ar: {
-    top_brand_sub: 'مركز مالي', nav_dashboard: 'الرئيسية', nav_spot: 'سبوت', nav_binary: 'باينري', nav_markets: 'الأسواق', nav_deposit: 'إيداع', nav_wallet: 'المحفظة', nav_history: 'السجل', nav_settings: 'الإعدادات', nav_help: 'مساعدة', auth_logout: 'خروج', wallet_deposit: 'إيداع',
-    lp_eyebrow: '⚡ منصة هجينة · سرعة CEX وحرية DEX', lp_h1: 'تداول العملات الرقمية بسرعة التفكير.', lp_h1_sub: 'سبوت · فيوتشرز · خيارات ثنائية · مبادلات على السلسلة. حساب واحد، تنفيذ سريع وأمان بنكي من اليوم الأول.', lp_cta_primary: 'ابدأ التداول →', lp_cta_demo: 'جرّب حساب $50K التجريبي', lp_trust_1: '8 شبكات', lp_trust_2: '20+ زوج', lp_trust_3: '87% عائد Binary', lp_trust_4: 'رافعة 100×',
-    lp_spot_h: 'سبوت', lp_spot_p: 'محرك FIFO وسيولة من Binance وKraken وCoinbase مع عمق مباشر.', lp_spot_cta: 'افتح سبوت →', lp_fut_h: 'فيوتشرز', lp_fut_p: 'عقود دائمة حتى 100× مع هامش cross/isolated وتمويل وتصفية وTP/SL.', lp_fut_cta: 'افتح فيوتشرز →', lp_bin_h: 'خيارات ثنائية', lp_bin_p: 'انتهاءات من 5 ثوانٍ إلى 15 دقيقة. عائد 87%. حساب تجريبي $50K بدون إيداع أو KYC.', lp_bin_cta: 'جرّب Binary →',
-    lp_why_h: 'منصة الجيل الجديد', lp_why_p: 'لا تختار بين سرعة CEX والتحكم الذاتي في DEX. GROM يجمع الاثنين.', lp_why_1_h: 'حفظ هجين', lp_why_1_p: 'رصيد تداول للتنفيذ الفوري ومبادلات on-chain عبر 1inch بمفاتيحك.', lp_why_2_h: 'أمان أقصى', lp_why_2_p: 'MPC وOTP وTOTP 2FA وقائمة عناوين ومراجعة يدوية وتخزين بارد.', lp_why_3_h: 'سيولة حقيقية', lp_why_3_p: 'أسعار مجمعة من Binance وKraken وCoinbase وفروقات ضيقة.', lp_why_4_h: 'متعدد الشبكات', lp_why_4_p: 'Ethereum وArbitrum وPolygon وBase وBNB Chain وTRON وBitcoin وSolana.', lp_why_5_h: 'أدوات احترافية', lp_why_5_p: 'دفتر أوامر، شموع، RSI، MACD، تدفق أوامر، WebSocket وAPI.', lp_why_6_h: 'بدء سهل', lp_why_6_p: 'Privy أو MetaMask أو Trust أو Binance Web3 Wallet أو email + Google خلال 30 ثانية.',
-    lp_how_h: 'ابدأ خلال أقل من 60 ثانية', lp_how_1_h: 'اتصل أو سجّل', lp_how_1_p: 'محفظة مدمجة أو MetaMask أو Trust أو Binance Web3 Wallet أو Google.', lp_how_2_h: 'أودع أو بدّل', lp_how_2_p: 'أودع USDT أو استخدم 1inch من محفظتك.', lp_how_3_h: 'تداول أي سوق', lp_how_3_p: 'BTC وETH وSOL وBNB والمزيد. جرّب Binary بحساب $50K.',
-    lp_sec_badge: '🛡 منصة أمان أولاً', lp_sec_h: 'أمان بنكي وسرعة DEX', lp_sec_p: 'GROM يبدأ بحماية مفعّلة من اليوم الأول.', lp_sec_1: '🔑 MPC hot-wallet — لا يوجد مفتاح خاص واحد على خادم.', lp_sec_2: '📧 سحب بثلاث خطوات — OTP وTOTP 2FA وقائمة 24h.', lp_sec_3: '👁 مراجعة يدوية — السحوبات الكبيرة بموافقة إدارية.', lp_sec_4: '❄ تخزين بارد 90%+ — احتياطي offline multi-sig.', lp_sec_5: '💰 صندوق تأمين — يغطي التصفية السلبية.', lp_sec_6: '🔍 SOC 2 قيد العمل — تدقيق وبرنامج مكافآت.', lp_final_h: 'جاهز لتداول أذكى؟', lp_final_p: 'CEX/DEX هجين، سيولة حقيقية، أمان بنكي. حساب خلال 30 ثانية.', lp_final_signin: 'تسجيل / إنشاء حساب', lp_final_tiny: 'Demo بدون إيداع · 8 شبكات · حفظ هجين · تنفيذ سريع · دعم 24/7'
-  }
-};
-GROM_I18N.zh = Object.assign({}, GROM_I18N.en, {
-  top_brand_sub:'金融中心', nav_dashboard:'主页', nav_spot:'现货', nav_binary:'Binary', nav_markets:'市场', nav_deposit:'充值', nav_wallet:'钱包', nav_history:'历史', nav_settings:'设置', nav_help:'帮助', auth_logout:'退出', wallet_deposit:'充值',
-  lp_eyebrow:'⚡ 混合交易所 · CEX 速度 + DEX 自由', lp_h1:'以思考般的速度交易加密资产。', lp_h1_sub:'现货 · 合约 · 二元期权 · 链上兑换。一个账户，快速成交，银行级安全。', lp_cta_primary:'开始交易 →', lp_cta_demo:'体验 $50K 模拟账户', lp_trust_1:'8 条链', lp_trust_2:'20+ 交易对', lp_trust_3:'Binary 87% 收益', lp_trust_4:'最高 100× 杠杆',
-  lp_spot_h:'现货', lp_spot_p:'FIFO 撮合引擎，聚合 Binance、Kraken、Coinbase 流动性，实时订单簿深度。', lp_spot_cta:'打开现货 →', lp_fut_h:'合约', lp_fut_p:'永续合约最高 100×，支持 cross/isolated、资金费率、强平和 TP/SL。', lp_fut_cta:'打开合约 →', lp_bin_h:'二元期权', lp_bin_p:'5 秒到 15 分钟到期，胜出收益 87%，$50K 模拟账户无需充值或 KYC。', lp_bin_cta:'体验 Binary →',
-  lp_why_h:'下一代交易所', lp_why_p:'无需在 CEX 速度和 DEX 自托管之间二选一，GROM 同时提供两者。', lp_why_1_h:'混合托管', lp_why_1_p:'交易余额用于即时成交，链上 swap 通过 1inch 使用你的密钥完成。', lp_why_2_h:'最高安全', lp_why_2_p:'MPC、OTP、TOTP 2FA、地址白名单、人工审核与冷存储。', lp_why_3_h:'真实流动性', lp_why_3_p:'聚合 Binance、Kraken、Coinbase 价格，保持更紧价差。', lp_why_4_h:'原生多链', lp_why_4_p:'支持 Ethereum、Arbitrum、Polygon、Base、BNB Chain、TRON、Bitcoin、Solana。', lp_why_5_h:'专业工具', lp_why_5_p:'订单簿、K 线、RSI、MACD、订单流、WebSocket 和 API。', lp_why_6_h:'轻松开始', lp_why_6_p:'用 Privy、MetaMask、Trust、Binance Web3 Wallet 或 email + Google 快速开始。',
-  lp_how_h:'60 秒内开始交易', lp_how_1_h:'连接钱包或注册', lp_how_1_p:'嵌入式钱包、MetaMask、Trust、Binance Web3 Wallet 或 Google。', lp_how_2_h:'充值或兑换', lp_how_2_p:'充值 USDT，或直接用 1inch 从你的钱包链上兑换。', lp_how_3_h:'交易任意市场', lp_how_3_p:'BTC、ETH、SOL、BNB 等。先用 $50K 模拟账户体验 Binary。',
-  lp_sec_badge:'🛡 安全优先的交易所', lp_sec_h:'银行级安全，DEX 级速度', lp_sec_p:'GROM 从第一天就启用核心安全保护。', lp_sec_1:'🔑 MPC 热钱包 — 没有单一私钥存放在服务器。', lp_sec_2:'📧 三步提现 — OTP、TOTP 2FA 和 24h 地址白名单。', lp_sec_3:'👁 人工审核 — 大额提现需要管理员批准。', lp_sec_4:'❄ 90%+ 冷存储 — 多签储备离线保存。', lp_sec_5:'💰 保险基金 — 覆盖合约负权益强平。', lp_sec_6:'🔍 SOC 2 进行中 — 安全测试和漏洞奖励计划。', lp_final_h:'准备更聪明地交易？', lp_final_p:'混合 CEX/DEX，真实流动性，银行级安全，30 秒开户。', lp_final_signin:'登录 / 注册', lp_final_tiny:'Binary 模拟无需充值 · 8 条链 · 混合托管 · 快速成交 · 24/7 支持'
-});
-GROM_I18N.hi = Object.assign({}, GROM_I18N.en, {
-  top_brand_sub:'फाइनेंस हब', nav_dashboard:'मुख्य', nav_spot:'स्पॉट', nav_binary:'Binary', nav_markets:'मार्केट', nav_deposit:'जमा', nav_wallet:'वॉलेट', nav_history:'इतिहास', nav_settings:'सेटिंग्स', nav_help:'मदद', auth_logout:'लॉगआउट', wallet_deposit:'जमा',
-  lp_eyebrow:'⚡ हाइब्रिड एक्सचेंज · CEX गति + DEX स्वतंत्रता', lp_h1:'क्रिप्टो को विचार की गति से ट्रेड करें।', lp_h1_sub:'स्पॉट · फ्यूचर्स · बाइनरी ऑप्शन · ऑन-चेन स्वैप। एक अकाउंट, तेज execution और बैंक-ग्रेड सुरक्षा।', lp_cta_primary:'ट्रेड शुरू करें →', lp_cta_demo:'$50K डेमो आज़माएँ', lp_trust_1:'8 चेन', lp_trust_2:'20+ पेयर', lp_trust_3:'87% Binary payout', lp_trust_4:'100× leverage',
-  lp_spot_h:'स्पॉट', lp_spot_p:'FIFO matching engine, Binance · Kraken · Coinbase liquidity और live orderbook depth.', lp_spot_cta:'Spot खोलें →', lp_fut_h:'फ्यूचर्स', lp_fut_p:'100× तक perpetuals, cross/isolated margin, funding, liquidation और TP/SL.', lp_fut_cta:'Futures खोलें →', lp_bin_h:'बाइनरी ऑप्शन', lp_bin_p:'5s से 15m expiry, 87% payout, $50K demo balance बिना deposit या KYC.', lp_bin_cta:'Binary आज़माएँ →',
-  lp_why_h:'नेक्स्ट-जेनरेशन एक्सचेंज', lp_why_p:'CEX की गति और DEX self-custody में चुनाव न करें। GROM दोनों देता है।', lp_why_1_h:'हाइब्रिड कस्टडी', lp_why_1_p:'Trading balance instant fills के लिए, और 1inch swaps आपके keys से।', lp_why_2_h:'अधिकतम सुरक्षा', lp_why_2_p:'MPC, OTP, TOTP 2FA, address whitelist, manual review और cold storage।', lp_why_3_h:'वास्तविक liquidity', lp_why_3_p:'Binance, Kraken और Coinbase से aggregated prices और tight spreads।', lp_why_4_h:'Multi-chain native', lp_why_4_p:'Ethereum, Arbitrum, Polygon, Base, BNB Chain, TRON, Bitcoin और Solana।', lp_why_5_h:'Pro tools', lp_why_5_p:'Orderbook, candles, RSI, MACD, order-flow, WebSocket और API।', lp_why_6_h:'आसान onboarding', lp_why_6_p:'Privy, MetaMask, Trust, Binance Web3 Wallet या email + Google से 30 सेकंड में शुरू करें।',
-  lp_how_h:'60 सेकंड से कम में शुरू करें', lp_how_1_h:'Wallet connect या sign up', lp_how_1_p:'Embedded wallet, MetaMask, Trust, Binance Web3 Wallet या Google login।', lp_how_2_h:'Deposit या swap', lp_how_2_p:'USDT deposit करें या अपने wallet से 1inch on-chain swap करें।', lp_how_3_h:'कुछ भी trade करें', lp_how_3_p:'BTC, ETH, SOL, BNB और अधिक। पहले $50K demo पर Binary आज़माएँ।',
-  lp_sec_badge:'🛡 Security-first exchange', lp_sec_h:'बैंक जैसी सुरक्षा, DEX जैसी गति', lp_sec_p:'GROM पहले दिन से protections enabled लेकर आता है।', lp_sec_1:'🔑 MPC hot-wallet — server पर single private key नहीं।', lp_sec_2:'📧 3-step withdrawal — OTP, TOTP 2FA और 24h whitelist।', lp_sec_3:'👁 Manual review — बड़े withdrawals admin approval से।', lp_sec_4:'❄ 90%+ cold storage — reserves offline multi-sig में।', lp_sec_5:'💰 Insurance fund — negative-equity liquidation cover करता है।', lp_sec_6:'🔍 SOC 2 progress — testing और bug bounty planned।', lp_final_h:'स्मार्ट ट्रेडिंग के लिए तैयार?', lp_final_p:'हाइब्रिड CEX/DEX, वास्तविक liquidity, बैंक-ग्रेड सुरक्षा। 30 सेकंड में अकाउंट।', lp_final_signin:'लॉगिन / साइन अप', lp_final_tiny:'Binary demo बिना deposit · 8 chains · hybrid custody · fast execution · 24/7 support'
-});
-GROM_I18N.tr = Object.assign({}, GROM_I18N.en, {
-  top_brand_sub:'Finans Merkezi', nav_dashboard:'Ana sayfa', nav_spot:'Spot', nav_binary:'Binary', nav_markets:'Piyasalar', nav_deposit:'Yatır', nav_wallet:'Cüzdan', nav_history:'Geçmiş', nav_settings:'Ayarlar', nav_help:'Yardım', auth_logout:'Çıkış', wallet_deposit:'Yatır',
-  lp_eyebrow:'⚡ Hibrit borsa · CEX hızı + DEX özgürlüğü', lp_h1:'Kriptoyu düşünce hızında trade edin.', lp_h1_sub:'Spot · Futures · Binary Options · zincir üstü swap. Tek hesap, hızlı emir ve banka seviyesinde güvenlik.', lp_cta_primary:'Trade başlat →', lp_cta_demo:'$50K demo dene', lp_trust_1:'8 zincir', lp_trust_2:'20+ parite', lp_trust_3:'87% Binary ödeme', lp_trust_4:'100× kaldıraç',
-  lp_spot_h:'Spot', lp_spot_p:'FIFO matching engine, Binance · Kraken · Coinbase likiditesi ve canlı orderbook derinliği.', lp_spot_cta:'Spot aç →', lp_fut_h:'Futures', lp_fut_p:'100× kadar perpetuals, cross/isolated margin, funding, liquidation ve TP/SL.', lp_fut_cta:'Futures aç →', lp_bin_h:'Binary Options', lp_bin_p:'5s ile 15m arası expiry. 87% payout. Depozito ve KYC olmadan $50K demo.', lp_bin_cta:'Binary dene →',
-  lp_why_h:'Yeni nesil borsa', lp_why_p:'CEX hızı ile DEX öz saklama arasında seçim yapmayın. GROM ikisini birleştirir.', lp_why_1_h:'Hibrit saklama', lp_why_1_p:'Trading balance hızlı execution için, 1inch swap ise kendi key’lerinizle.', lp_why_2_h:'Maksimum güvenlik', lp_why_2_p:'MPC, OTP, TOTP 2FA, adres whitelist, manual review ve cold storage.', lp_why_3_h:'Gerçek likidite', lp_why_3_p:'Binance, Kraken ve Coinbase feed’leriyle sıkı spread.', lp_why_4_h:'Multi-chain native', lp_why_4_p:'Ethereum, Arbitrum, Polygon, Base, BNB Chain, TRON, Bitcoin ve Solana.', lp_why_5_h:'Pro araçlar', lp_why_5_p:'Orderbook, mum grafikler, RSI, MACD, order-flow, WebSocket ve API.', lp_why_6_h:'Kolay başlangıç', lp_why_6_p:'Privy, MetaMask, Trust, Binance Web3 Wallet veya email + Google ile 30 saniyede başlayın.',
-  lp_how_h:'60 saniyeden kısa sürede başlayın', lp_how_1_h:'Wallet bağla veya kayıt ol', lp_how_1_p:'Embedded wallet, MetaMask, Trust, Binance Web3 Wallet veya Google login.', lp_how_2_h:'Yatır veya swap yap', lp_how_2_p:'USDT yatırın ya da kendi wallet’ınızdan 1inch ile on-chain swap yapın.', lp_how_3_h:'Her şeyi trade edin', lp_how_3_p:'BTC, ETH, SOL, BNB ve daha fazlası. Önce $50K demo ile Binary deneyin.',
-  lp_sec_badge:'🛡 Güvenlik öncelikli borsa', lp_sec_h:'Banka gibi güvenli, DEX gibi hızlı', lp_sec_p:'GROM güvenlik korumaları açık şekilde başlar.', lp_sec_1:'🔑 MPC hot-wallet — tek private key sunucuda tutulmaz.', lp_sec_2:'📧 3 adımlı çekim — OTP, TOTP 2FA ve 24h whitelist.', lp_sec_3:'👁 Manual review — büyük çekimler admin onayı ister.', lp_sec_4:'❄ 90%+ cold storage — rezervler offline multi-sig’de.', lp_sec_5:'💰 Insurance fund — negatif equity liquidation için koruma.', lp_sec_6:'🔍 SOC 2 süreçte — testler ve bug bounty planlı.', lp_final_h:'Daha akıllı trade etmeye hazır mısınız?', lp_final_p:'Hibrit CEX/DEX. Gerçek likidite. Banka seviyesinde güvenlik. 30 saniyede hesap.', lp_final_signin:'Giriş / Kayıt', lp_final_tiny:'Binary demo için depozito gerekmez · 8 zincir · hibrit saklama · hızlı execution · 24/7 destek'
-});
-var GROM_LANDING_BINDINGS = {
-  '.lp-eyebrow':'lp_eyebrow', '.lp-h1':'lp_h1', '.lp-h1-sub':'lp_h1_sub',
-  '.lp-hero-left .lp-btn-primary':'lp_cta_primary', '.lp-hero-left .lp-btn-secondary':'lp_cta_demo',
-  '.lp-trust-strip span:nth-child(1)':'lp_trust_1', '.lp-trust-strip span:nth-child(2)':'lp_trust_2', '.lp-trust-strip span:nth-child(3)':'lp_trust_3', '.lp-trust-strip span:nth-child(4)':'lp_trust_4',
-  '.lp-products .lp-product-card:nth-child(1) h3':'lp_spot_h', '.lp-products .lp-product-card:nth-child(1) p':'lp_spot_p', '.lp-products .lp-product-card:nth-child(1) .lp-p-cta':'lp_spot_cta',
-  '.lp-products .lp-product-card:nth-child(2) h3':'lp_fut_h', '.lp-products .lp-product-card:nth-child(2) p':'lp_fut_p', '.lp-products .lp-product-card:nth-child(2) .lp-p-cta':'lp_fut_cta',
-  '.lp-products .lp-product-card:nth-child(3) h3':'lp_bin_h', '.lp-products .lp-product-card:nth-child(3) p':'lp_bin_p', '.lp-products .lp-product-card:nth-child(3) .lp-p-cta':'lp_bin_cta',
-  '.lp-why > .lp-h2':'lp_why_h', '.lp-why > p':'lp_why_p',
-  '.lp-why-cell:nth-child(1) h4':'lp_why_1_h', '.lp-why-cell:nth-child(1) p':'lp_why_1_p', '.lp-why-cell:nth-child(2) h4':'lp_why_2_h', '.lp-why-cell:nth-child(2) p':'lp_why_2_p', '.lp-why-cell:nth-child(3) h4':'lp_why_3_h', '.lp-why-cell:nth-child(3) p':'lp_why_3_p', '.lp-why-cell:nth-child(4) h4':'lp_why_4_h', '.lp-why-cell:nth-child(4) p':'lp_why_4_p', '.lp-why-cell:nth-child(5) h4':'lp_why_5_h', '.lp-why-cell:nth-child(5) p':'lp_why_5_p', '.lp-why-cell:nth-child(6) h4':'lp_why_6_h', '.lp-why-cell:nth-child(6) p':'lp_why_6_p',
-  '.lp-how > .lp-h2':'lp_how_h', '.lp-how-step:nth-child(1) h4':'lp_how_1_h', '.lp-how-step:nth-child(1) p':'lp_how_1_p', '.lp-how-step:nth-child(2) h4':'lp_how_2_h', '.lp-how-step:nth-child(2) p':'lp_how_2_p', '.lp-how-step:nth-child(3) h4':'lp_how_3_h', '.lp-how-step:nth-child(3) p':'lp_how_3_p',
-  '.lp-sec-badge':'lp_sec_badge', '.lp-security .lp-h2':'lp_sec_h', '.lp-security > p':'lp_sec_p', '.lp-sec-item:nth-child(1)':'lp_sec_1', '.lp-sec-item:nth-child(2)':'lp_sec_2', '.lp-sec-item:nth-child(3)':'lp_sec_3', '.lp-sec-item:nth-child(4)':'lp_sec_4', '.lp-sec-item:nth-child(5)':'lp_sec_5', '.lp-sec-item:nth-child(6)':'lp_sec_6',
-  '.lp-final-h':'lp_final_h', '.lp-final-sub':'lp_final_p', '.lp-final-cta .lp-btn-primary':'lp_cta_primary', '.lp-final-cta .lp-btn-secondary':'lp_final_signin', '.lp-final-tiny':'lp_final_tiny'
-};
-function getGromLang() {
-  try { return localStorage.getItem('grom_lang_v2') || 'en'; } catch (_) { return 'en'; }
-}
-function t(key) {
-  if (key === 'top_brand_sub') return 'FINANCE HUB';
-  var lang = getGromLang();
-  var dict = (typeof GROM_I18N === 'object' && GROM_I18N) ? GROM_I18N : (window.GROM_I18N || window.GROM_STR || {});
-  var pack = dict[lang] || dict.en || {};
-  return (pack && pack[key]) || (dict.en && dict.en[key]) || key;
-}
-function setTextBySelector(selector, key) {
-  var el = document.querySelector(selector);
-  if (el) el.textContent = t(key);
-}
-function applyI18n() {
-  var lang = getGromLang();
-  document.documentElement.lang = lang;
-  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-  document.querySelectorAll('.tb-sub').forEach(function (el) { el.textContent = 'FINANCE HUB'; });
-  document.querySelectorAll('[data-i18n]').forEach(function (el) {
-    var key = el.getAttribute('data-i18n');
-    if (key) el.textContent = t(key);
-  });
-  document.querySelectorAll('.tb-sub').forEach(function (el) { el.textContent = 'FINANCE HUB'; });
-  var bindings = (typeof GROM_LANDING_BINDINGS === 'object' && GROM_LANDING_BINDINGS) ? GROM_LANDING_BINDINGS : {};
-  Object.keys(bindings).forEach(function (selector) {
-    setTextBySelector('#page-landing ' + selector, bindings[selector]);
-  });
-  document.querySelectorAll('#setLangSeg button[data-lng]').forEach(function (btn) {
-    btn.classList.toggle('active', btn.dataset.lng === lang);
-  });
-  var pop = document.getElementById('langPopover');
-  if (pop) pop.querySelectorAll('button').forEach(function (btn) {
-    var code = (btn.id || '').replace(/^lang/, '').toLowerCase();
-    btn.classList.toggle('active', code === lang);
-  });
-  if (typeof updateAuthUi === 'function') setTimeout(updateAuthUi, 0);
-}
-function setGromLang(lang) {
-  var dict = (typeof GROM_I18N === 'object' && GROM_I18N) ? GROM_I18N : (window.GROM_I18N || window.GROM_STR || {});
-  if (!dict[lang]) lang = 'en';
-  try { localStorage.setItem('grom_lang_v2', lang); } catch (_) {}
-  applyI18n();
-}
-window.getGromLang = getGromLang;
-window.setGromLang = setGromLang;
-window.applyI18n = applyI18n;
-(function wireGromI18n() {
-  var ids = { langEn:'en', langRu:'ru', langEs:'es', langAr:'ar', langZh:'zh', langHi:'hi', langTr:'tr' };
-  Object.keys(ids).forEach(function (id) {
-    var btn = document.getElementById(id);
-    if (btn && !btn.dataset.i18nWired) {
-      btn.dataset.i18nWired = '1';
-      btn.addEventListener('click', function () {
-        setGromLang(ids[id]);
-        var pop = document.getElementById('langPopover');
-        if (pop) pop.hidden = true;
-      });
-    }
-  });
-  var globe = document.getElementById('langGlobeBtn');
-  var pop = document.getElementById('langPopover');
-  if (globe && pop && !globe.dataset.i18nWired) {
-    globe.dataset.i18nWired = '1';
-    globe.addEventListener('click', function (e) {
-      e.stopPropagation();
-      pop.hidden = !pop.hidden;
-      globe.setAttribute('aria-expanded', pop.hidden ? 'false' : 'true');
-    });
-    document.addEventListener('click', function (e) {
-      if (!pop.hidden && !e.target.closest('.lang-pop-wrap')) pop.hidden = true;
-    });
-  }
-  document.addEventListener('click', function (e) {
-    var btn = e.target.closest('#langGlobeBtn');
-    if (!btn) return;
-    var menu = document.getElementById('langPopover');
-    if (!menu) return;
-    e.preventDefault();
-    e.stopPropagation();
-    menu.hidden = !menu.hidden;
-    btn.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
-  }, true);
-  applyI18n();
-})();
 
 /* ========== Settings ========== */
 function saveSettings() {
@@ -11254,139 +11021,6 @@ function instrumentIcoHtmlLive(p) {
   var letters = (p.base || p.symbol || p.sym || '?').slice(0, 3);
   return '<span class="coin-ico ' + ((p.base || '').toLowerCase()) + '">' + letters + '</span>';
 }
-
-var DASH_WATCH_MAX = 16;
-function dashWatchChangePct(p) {
-  if (!p) return 0;
-  var compact = String(p.sym || '').replace('/', '');
-  if (typeof window.gromLiveChange === 'function') {
-    var live = window.gromLiveChange(compact);
-    if (Number.isFinite(live)) return live;
-  }
-  var ch = Number(p.chg);
-  return Number.isFinite(ch) ? ch : 0;
-}
-function dashWatchSpark(sym, up) {
-  var seed = 0;
-  var s = String(sym || '');
-  for (var i = 0; i < s.length; i++) seed = (seed * 31 + s.charCodeAt(i)) % 100000;
-  var n = 22, w = 64, h = 26, pad = 3;
-  var pts = [];
-  var v = 50;
-  for (var k = 0; k < n; k++) {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    var noise = ((seed % 1000) / 1000 - 0.5) * 18;
-    var trend = (up ? 1 : -1) * (k / n) * 16;
-    v = 50 + trend + noise + Math.sin(k * 0.7 + (seed % 7)) * 6;
-    pts.push(v);
-  }
-  var min = Math.min.apply(null, pts), max = Math.max.apply(null, pts);
-  var span = (max - min) || 1;
-  var step = (w - pad * 2) / (n - 1);
-  var coords = pts.map(function (val, i) {
-    var x = pad + i * step;
-    var y = pad + (1 - (val - min) / span) * (h - pad * 2);
-    return [x, y];
-  });
-  var line = coords.map(function (c, i) { return (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ' ' + c[1].toFixed(1); }).join(' ');
-  var area = line + ' L' + coords[coords.length - 1][0].toFixed(1) + ' ' + h + ' L' + coords[0][0].toFixed(1) + ' ' + h + ' Z';
-  var stroke = up ? '#2ee79b' : '#ff7088';
-  var gid = 'ms-grad-' + (up ? 'u' : 'd');
-  return '<svg class="dash-watch-spark" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true">' +
-    '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
-    '<stop offset="0%" stop-color="' + stroke + '" stop-opacity="0.32"/>' +
-    '<stop offset="100%" stop-color="' + stroke + '" stop-opacity="0"/>' +
-    '</linearGradient></defs>' +
-    '<path d="' + area + '" fill="url(#' + gid + ')"/>' +
-    '<path d="' + line + '" fill="none" stroke="' + stroke + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-    '</svg>';
-}
-function dashWatchIcoHtml(p) {
-  var base = String(p.sym || '').split('/')[0];
-  var compact = String(p.sym || '').replace('/', '');
-  if (typeof instrumentIcoHtmlLive === 'function') {
-    var it = (typeof window.gromGetInstrument === 'function') ? window.gromGetInstrument(compact) : null;
-    return instrumentIcoHtmlLive({
-      sym: p.sym,
-      base: base,
-      name: p.name,
-      coin: p.coin,
-      glyph: p.gliph,
-      type: 'crypto',
-      logo: it && it.logo ? it.logo : null
-    });
-  }
-  return '<span class="coin-ico ' + (p.coin || '') + '">' + (p.gliph || base.charAt(0)) + '</span>';
-}
-function renderDashboardWatchlist() {
-  var host = document.getElementById('watchlist');
-  if (!host) return;
-  var rows = marketPairs.filter(function (p) {
-    return p && p.sym && String(p.sym).toUpperCase().indexOf('/USDT') >= 0;
-  }).slice(0, DASH_WATCH_MAX);
-  var head = '<div class="dash-watch-head"><span>Asset</span><span></span><span>7d</span><span>Price</span><span>24h</span></div>';
-  host.innerHTML = head + rows.map(function (p) {
-    var px = priceForPair(p.sym);
-    if (Number.isFinite(px)) p.price = px;
-    var chg = dashWatchChangePct(p);
-    var up = chg >= 0;
-    var chgCls = up ? 'up' : 'down';
-    var chgTxt = (up ? '+' : '') + chg.toFixed(2) + '%';
-    return '<div class="watch-row dash-watch-row" role="listitem" data-sym="' + p.sym + '" data-px="' + px + '" onclick="openSpotPair(\'' + p.sym + '\')">' +
-      dashWatchIcoHtml(p) +
-      '<div class="dash-watch-meta"><div class="name">' + (p.name || p.sym) + '</div><div class="ticker">' + p.sym + '</div></div>' +
-      dashWatchSpark(p.sym, up) +
-      '<div class="price">$' + marketFmt(px) + '</div>' +
-      '<div class="chg ' + chgCls + '">' + chgTxt + '</div>' +
-      '</div>';
-  }).join('');
-}
-function updateDashboardWatchlistPrices() {
-  var host = document.getElementById('watchlist');
-  if (!host) return;
-  if (!host.querySelector('.dash-watch-row')) {
-    renderDashboardWatchlist();
-    return;
-  }
-  host.querySelectorAll('.dash-watch-row').forEach(function (row) {
-    var sym = row.dataset.sym;
-    var meta = pairMeta(sym);
-    var px = priceForPair(sym);
-    if (!Number.isFinite(px)) return;
-    if (meta) meta.price = px;
-    var prevPx = Number(row.dataset.px);
-    var pxEl = row.querySelector('.price');
-    if (pxEl) {
-      pxEl.textContent = '$' + marketFmt(px);
-      if (Number.isFinite(prevPx) && Math.abs(px - prevPx) / Math.max(1e-9, prevPx) > 0.00005) {
-        var dir = px > prevPx ? 'flash-up' : 'flash-down';
-        pxEl.classList.remove('flash-up', 'flash-down');
-        void pxEl.offsetWidth;
-        pxEl.classList.add(dir);
-        setTimeout(function () { pxEl.classList.remove('flash-up', 'flash-down'); }, 650);
-      }
-    }
-    row.dataset.px = String(px);
-    var chgEl = row.querySelector('.chg');
-    if (chgEl && meta) {
-      var chg = dashWatchChangePct(meta);
-      var up = chg >= 0;
-      var wasUp = chgEl.classList.contains('up');
-      chgEl.textContent = (up ? '+' : '') + chg.toFixed(2) + '%';
-      chgEl.className = 'chg ' + (up ? 'up' : 'down');
-      if (up !== wasUp) {
-        var sparkEl = row.querySelector('.dash-watch-spark');
-        if (sparkEl) {
-          var wrap = document.createElement('div');
-          wrap.innerHTML = dashWatchSpark(sym, up);
-          var fresh = wrap.firstChild;
-          if (fresh) sparkEl.parentNode.replaceChild(fresh, sparkEl);
-        }
-      }
-    }
-  });
-}
-
 window.openSpotPair = function openSpotPairLive(sym) {
   var it = (typeof window.gromGetInstrument === 'function') ? window.gromGetInstrument(sym) : null;
   var type = it ? it.type : 'crypto';
@@ -11632,11 +11266,14 @@ async function gdel(path) {
 window.submitFuturesOrder = async function (side) {
   var contract = (typeof futDeskState !== 'undefined' && futDeskState.pair) ? futDeskState.pair : 'BTC/USDT';
   var leverage = (typeof futDeskState !== 'undefined' && futDeskState.leverage) ? futDeskState.leverage : 25;
-  var size = parseFloat((document.querySelector('#page-futures .stake-v2 input')?.value || '0.25')) || 0.25;
+  var futStakeBlocks = document.querySelectorAll('#page-futures .stake-v2');
+  var futPriceNode = futStakeBlocks[0] ? futStakeBlocks[0].querySelector('input[type="number"]') : null;
+  var futSizeNode = futStakeBlocks[1] ? futStakeBlocks[1].querySelector('input[type="number"]') : null;
+  var size = parseFloat((futSizeNode && futSizeNode.value) || '0.25') || 0.25;
   var typeBtn = document.querySelector('#page-futures .bo-chip-row button.active, #page-futures .order-type.active');
   var type = (typeBtn?.textContent || 'limit').trim().toLowerCase();
   if (type !== 'market' && type !== 'limit' && type !== 'stop') type = 'limit';
-  var price = parseFloat((document.querySelector('#page-futures .stake-v2 input[type="number"]')?.value || '0')) || null;
+  var price = parseFloat((futPriceNode && futPriceNode.value) || '0') || null;
   var reduceOnly = !!document.querySelector('#page-futures .flag-chip.on[data-flag="reduce"]');
   var postOnly   = !!document.querySelector('#page-futures .flag-chip.on[data-flag="post"]');
   var body = { contract, side, type, size, leverage, reduceOnly, postOnly };

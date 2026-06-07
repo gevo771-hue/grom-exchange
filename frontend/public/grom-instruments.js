@@ -367,6 +367,27 @@ ETFS.forEach(function (e) {
 /* ---------- Seed prices (детерминированный псевдо-рандом для не-крипты) ----------
  * Хеш по символу → стартовая цена. Мутация в ±0.5% в gromLivePrice.
  * Для крипты — переписывается реальной ценой из Binance WS. */
+var CORE_PRICE_FALLBACKS = {
+  BTC: 77417.71,
+  ETH: 2146.13,
+  SOL: 85.29,
+  BNB: 641.33,
+  XRP: 1.39,
+  ADA: 0.2508,
+  DOGE: 0.10644,
+  AVAX: 9.17,
+  LINK: 9.55
+};
+
+function cachedCorePrice(base) {
+  var b = String(base || '').toUpperCase();
+  try {
+    var cached = Number(localStorage.getItem('grom_live_price_' + b));
+    if (isFinite(cached) && cached > 0) return cached;
+  } catch (_) {}
+  return CORE_PRICE_FALLBACKS[b] || null;
+}
+
 function hashStr(s) {
   var h = 2166136261 >>> 0;
   for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
@@ -377,6 +398,8 @@ function seedPrice(it) {
   var r = (h % 10000) / 10000;
   switch (it.type) {
     case 'crypto':
+      var core = cachedCorePrice(it.base);
+      if (core != null) return core;
       if (it.base === 'BTC') return 60000 + r * 50000;
       if (it.base === 'ETH') return 2000 + r * 2500;
       if (it.base === 'BNB') return 400 + r * 400;
@@ -461,6 +484,10 @@ function connectBinanceWS() {
           var p = parseFloat(t.c);
           if (!isFinite(p) || p <= 0) continue;
           PRICES[t.s] = p;
+          try {
+            var instrument = window.gromGetInstrument ? window.gromGetInstrument(t.s) : null;
+            if (instrument && instrument.base) localStorage.setItem('grom_live_price_' + instrument.base, String(p));
+          } catch (_) {}
           if (t.o) {
             var open = parseFloat(t.o);
             if (isFinite(open) && open > 0) CHANGES[t.s] = ((p - open) / open) * 100;

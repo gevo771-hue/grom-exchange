@@ -60,6 +60,7 @@
     --danger-bg: rgba(232, 87, 107, 0.12);
     --warn: #f5b94d;
     --warn-bg: rgba(245, 185, 77, 0.12);
+    --accent: #4d9eff;
 
     --shadow-1: 0 1px 2px rgba(0,0,0,0.45);
     --shadow-2: 0 4px 18px rgba(0,0,0,0.5);
@@ -191,7 +192,7 @@
   }
   .logo-img-shell--header {
     padding: 0;
-    min-height: 48px;
+    min-height: 40px;
     box-sizing: border-box;
   }
   .grom-logo:hover .logo-img-shell {
@@ -266,12 +267,14 @@
   .logo-svg--header { width: 44px; height: 44px; }
   .logo-raster--header {
     display: block;
-    height: 38px;
+    height: 40px;
     width: auto;
-    max-height: 38px;
+    max-height: 40px;
     aspect-ratio: 441 / 462;
     object-fit: contain;
     object-position: center;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
   }
   @keyframes grom-landing-logo-float {
     0%, 100% { transform: translateY(0); }
@@ -591,6 +594,36 @@
     background: var(--steel2);
     box-shadow: 0 0 0 2px rgba(8, 12, 20, 0.9);
   }
+  .grom-ws-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-right: 4px;
+    padding: 0 9px;
+    height: 24px;
+    border-radius: 12px;
+    font-size: 9.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.05);
+    color: #9aa3b2;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: background 200ms ease, border-color 200ms ease, color 200ms ease;
+    flex-shrink: 0;
+    cursor: default;
+  }
+  .grom-ws-pill.is-live {
+    color: rgba(58, 210, 127, 0.95);
+    background: rgba(58, 210, 127, 0.1);
+    border-color: rgba(58, 210, 127, 0.25);
+  }
+  .grom-ws-pill.is-offline {
+    color: rgba(255, 92, 122, 0.9);
+    background: rgba(255, 92, 122, 0.08);
+    border-color: rgba(255, 92, 122, 0.2);
+  }
+  .grom-ws-pill .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: #9aa3b2; }
   body.landing-layout .shell { grid-template-columns: 1fr; }
   body.landing-layout .sidebar { display: none; }
   body.landing-layout main { padding-top: 12px; }
@@ -1315,6 +1348,114 @@
   .chg.up { color: var(--success); }
   .chg.down { color: var(--danger); }
 
+  /* Market snapshot — premium live watchlist */
+  .card--market-snap {
+    overflow: hidden;
+    background: linear-gradient(168deg, rgba(12, 20, 36, 0.94) 0%, rgba(7, 11, 20, 0.9) 100%);
+    border-color: rgba(77, 158, 255, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .card--market-snap .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 13px 16px 11px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .card--market-snap .card-head h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 14px;
+  }
+  .ms-live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 10px rgba(58, 210, 127, 0.7);
+    animation: ms-pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes ms-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.86); }
+  }
+  .ms-head-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(58, 210, 127, 0.95);
+    background: rgba(58, 210, 127, 0.1);
+    border: 1px solid rgba(58, 210, 127, 0.22);
+  }
+  .dash-watchlist {
+    max-height: 360px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 6px 8px 10px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(77, 158, 255, 0.28) transparent;
+  }
+  .dash-watchlist::-webkit-scrollbar { width: 4px; }
+  .dash-watchlist::-webkit-scrollbar-thumb { background: rgba(77, 158, 255, 0.32); border-radius: 4px; }
+  .dw-row {
+    display: grid;
+    grid-template-columns: 18px 34px minmax(0, 1fr) 72px minmax(76px, auto);
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    border: 1px solid transparent;
+  }
+  .dw-row:hover {
+    background: rgba(77, 158, 255, 0.08);
+    border-color: rgba(77, 158, 255, 0.14);
+  }
+  .dw-row.flash-up { animation: dw-flash-up 0.55s ease; }
+  .dw-row.flash-down { animation: dw-flash-down 0.55s ease; }
+  @keyframes dw-flash-up { from { background: rgba(34, 193, 124, 0.2); } to { background: transparent; } }
+  @keyframes dw-flash-down { from { background: rgba(232, 87, 107, 0.2); } to { background: transparent; } }
+  .dw-rank { font-size: 10px; font-weight: 700; color: var(--silver5); text-align: center; }
+  .dw-row .coin-ico { width: 32px; height: 32px; font-size: 11px; }
+  .dw-info { min-width: 0; }
+  .dw-name {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--silver1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .dw-pair { display: block; font-size: 10.5px; color: var(--silver5); margin-top: 1px; }
+  .dw-spark { opacity: 0.88; }
+  .dw-spark svg { display: block; width: 72px; height: 22px; }
+  .dw-price-col { text-align: right; }
+  .dw-price {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--silver1);
+    font-variant-numeric: tabular-nums;
+  }
+  .dw-chg { display: block; font-size: 11px; font-weight: 600; margin-top: 2px; }
+  .dw-chg.up { color: var(--success); }
+  .dw-chg.down { color: var(--danger); }
+  @media (max-width: 560px) {
+    .dw-row { grid-template-columns: 34px minmax(0, 1fr) minmax(72px, auto); gap: 7px; padding: 8px 6px; }
+    .dw-rank, .dw-spark { display: none; }
+  }
+
   .qa-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 12px; }
   .qa {
     display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
@@ -1894,6 +2035,53 @@
   .bo-hud-top .grp { display: flex; align-items: center; gap: 10px; }
   .bo-hud-top .sep { width: 1px; height: 24px; background: rgba(200,212,232,0.08); }
   .bo-asset {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .bo-asset .bo-asset-label,
+  .bo-asset .fut-asset-label {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--silver1);
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+  }
+  .bo-asset .bo-asset-ico {
+    flex-shrink: 0;
+    display: inline-flex;
+  }
+  .bo-asset .bo-asset-ico .coin-ico {
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
+  }
+  #page-futures .bo-panel-v2 {
+    max-height: none;
+    overflow: visible;
+    gap: 12px;
+  }
+  #page-futures .bo-panel-v2 .bo-buttons-v2 {
+    flex-shrink: 0;
+  }
+  #page-futures aside.wl {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  #page-futures #futList .wl-item .coin-ico,
+  #page-futures #futList .wl-item .coin-ico img {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+  #page-futures #futList .wl-item {
+    align-items: center;
+  }
+  .bo-asset-base {
     display: flex; align-items: center; gap: 10px;
     padding: 6px 12px 6px 8px;
     background: rgba(7,11,22,0.55);
@@ -2409,16 +2597,26 @@
   .fut-kpi .s.down { color: var(--danger); font-weight: 700; }
   @media (max-width: 980px) { .fut-kpis { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 560px) { .fut-kpis { grid-template-columns: 1fr; } }
-  .fut-shell { display: grid; grid-template-columns: 260px minmax(0,1fr) 340px; gap: 14px; }
+  .fut-shell { display: grid; grid-template-columns: 260px minmax(0,1fr) 340px; gap: 14px; align-items: start; }
+  .fut-shell > * { min-width: 0; }
+  .fut-main-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  #page-futures .bo-chart-card { min-height: 420px; }
   @media (max-width: 1400px) { .fut-shell { grid-template-columns: 230px minmax(0,1fr) 320px; } }
-  @media (max-width: 1180px) { .fut-shell { grid-template-columns: 1fr; } }
-  #page-futures aside.wl { max-height: 690px; overflow: hidden; padding-right: 4px; }
+  @media (max-width: 1180px) {
+    .fut-shell { grid-template-columns: 1fr; }
+    #page-futures aside.wl { max-height: none; overflow: visible; }
+    #page-futures .bo-panel-v2 { max-height: none; overflow: visible; }
+  }
+  #page-futures aside.wl { max-height: min(78vh, 720px); overflow: hidden; padding-right: 4px; }
   #page-futures #futList {
-    max-height: min(44vh, 520px);
+    flex: 1 1 auto;
+    min-height: 120px;
+    max-height: min(52vh, 560px);
     overflow-y: auto;
     overflow-x: hidden;
     padding-right: 2px;
     margin-bottom: 10px;
+    -webkit-overflow-scrolling: touch;
   }
   .fut-stat {
     display: flex; justify-content: space-between; padding: 7px 8px;
@@ -2838,6 +3036,7 @@
     gap: 12px;
     align-items: stretch;
   }
+  #page-binary #boChart .grom-tv-badge { display: none !important; }
   #page-spot .chart-top {
     background: radial-gradient(circle at 10% 0%, rgba(77,158,255,0.13), transparent 34%), rgba(9,14,25,0.62);
   }
@@ -2977,7 +3176,16 @@
     font-size: 14px;
     letter-spacing: 0.02em;
   }
+  .spot-trade-card #spotOrderSubmit.spot-submit-sell {
+    background: linear-gradient(135deg, #e8576b 0%, #a0293d 100%);
+    border-color: rgba(232, 87, 107, 0.45);
+    box-shadow: 0 8px 22px rgba(232, 87, 107, 0.35);
+  }
+  .spot-trade-card #spotOrderSubmit.spot-submit-sell:hover {
+    filter: brightness(1.06);
+  }
   .spot-fieldbox {
+    width: 100%;
     padding: 10px 12px;
     background: rgba(7,11,22,0.74);
     border: 1px solid rgba(200,212,232,0.11);
@@ -2985,7 +3193,49 @@
     margin: 6px 0 10px;
     font-size: 15px;
     color: var(--silver1);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    box-sizing: border-box;
   }
+  input.spot-fieldbox:focus {
+    outline: none;
+    border-color: rgba(77,158,255,0.45);
+    box-shadow: 0 0 0 2px rgba(77,158,255,0.12);
+  }
+  /* Hub pages — wallet, history, referral, settings, help, markets, dashboard */
+  #page-wallet .wallet-hero,
+  #page-referral .ref-hero,
+  #page-history .summary-chip,
+  #page-help .support-card {
+    border: 1px solid rgba(200,212,232,0.09);
+    background: linear-gradient(180deg, rgba(15,24,44,0.58), rgba(11,18,32,0.48));
+  }
+  #page-landing .lp-live-ticker {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0 0 40px;
+    width: 100%;
+  }
+  #page-landing .lp-tk-cell {
+    cursor: pointer;
+    padding: 12px 10px;
+    background: linear-gradient(180deg, rgba(16,26,44,.82), rgba(11,18,32,.62));
+    border: 1px solid rgba(122,162,199,.14);
+    border-radius: 12px;
+    transition: border-color .2s, transform .2s;
+  }
+  #page-landing .lp-tk-cell:hover { border-color: rgba(0,194,255,.35); transform: translateY(-2px); }
+  #page-landing .lp-tk-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-width: 0; }
+  #page-landing .lp-tk-head .coin-ico,
+  #page-landing .lp-tk-head .fx-pair-ico { width: 24px; height: 24px; flex-shrink: 0; }
+  #page-landing .lp-tk-name { font-size: 12px; font-weight: 700; color: #e8f1fa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #page-landing .lp-tk-quote { font-size: 10px; color: #7aa2c7; }
+  #page-landing .lp-tk-px { font-family: ui-monospace, monospace; font-size: 15px; font-weight: 700; color: #e8f1fa; }
+  #page-landing .lp-tk-chg { font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600; margin-top: 2px; }
+  #page-landing .lp-tk-chg.up { color: #0ecb81; }
+  #page-landing .lp-tk-chg.down { color: #f6465d; }
+  @media (max-width: 1200px) { #page-landing .lp-live-ticker { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { #page-landing .lp-live-ticker { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   #askList, #bidList {
     max-height: 168px;
     overflow: hidden;
@@ -3048,6 +3298,13 @@
   .spot-ai-row .up { color: var(--success); }
   .spot-ai-row .down { color: var(--danger); }
   @media (max-width: 1180px) { .spot-ai-grid { grid-template-columns: 1fr; } }
+  .dash-ai-card .spot-ai-grid { grid-template-columns: 1.2fr 0.8fr; }
+  @media (max-width: 720px) { .dash-ai-card .spot-ai-grid { grid-template-columns: 1fr; } }
+  #page-futures .fut-ai-card { margin-top: 0; }
+  @media (max-width: 900px) {
+    #page-futures .fut-ai-card .spot-ai-grid { grid-template-columns: 1fr; }
+    #page-binary .bo-pro-grid { gap: 8px; }
+  }
   .spot-allocator {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -3076,7 +3333,11 @@
   .side-toggle button.sell.active { background: rgba(232,87,107,0.2); color: var(--danger); }
 
   /* MARKETS */
-  .mkt-head, .mkt-row { display: grid; grid-template-columns: 30px minmax(280px, 2.2fr) 1.1fr 0.8fr 0.8fr 1.2fr 100px; gap: 14px; padding: 12px 16px; align-items: center; }
+  .mkt-head, .mkt-row { display: grid; grid-template-columns: 30px minmax(0, 2.2fr) 1.1fr 0.8fr 0.8fr 1.2fr 100px; gap: 14px; padding: 12px 16px; align-items: center; }
+  .mkt-row .name { min-width: 0; }
+  .mkt-row .pair-copy { min-width: 0; overflow: hidden; }
+  .mkt-row .pair-symbol,
+  .mkt-row .pair-meta { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mkt-head { font-size: 11px; color: var(--silver5); text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid rgba(200,212,232,0.06); }
   .mkt-row { border-bottom: 1px solid rgba(200,212,232,0.05); font-size: 13px; }
   .mkt-row:hover { background: linear-gradient(90deg, rgba(28, 46, 71, 0.42), rgba(12, 19, 31, 0.18)); }
@@ -3312,8 +3573,8 @@
     .page-subtitle { font-size: 13px; }
     /* Binary: subtitle in toolbar — ~½ размера мобильного подзаголовка (13px → 7px) */
     #page-binary .bo-page-toolbar .page-subtitle {
-      font-size: 7px;
-      line-height: 1.35;
+      font-size: 11px;
+      line-height: 1.4;
       letter-spacing: 0.01em;
     }
 
@@ -3344,14 +3605,125 @@
       margin: 10px 0 4px;
     }
 
-    /* Futures: stack */
-    .fut-shell { grid-template-columns: 1fr !important; }
+    /* Futures: mobile stack — full scroll, no clip */
+    #page-futures {
+      overflow: visible !important;
+      width: 100%;
+      max-width: 100%;
+      padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    }
+    #page-futures .page-subtitle { margin-bottom: 14px; }
+    #page-futures .fut-shell {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 10px !important;
+      min-height: 0 !important;
+      width: 100%;
+    }
+    #page-futures .fut-shell > aside.wl { order: 1; }
+    #page-futures .fut-shell > .fut-main-col { order: 2; }
+    #page-futures .fut-shell > .bo-panel-v2 { order: 3; }
+    #page-futures .fut-shell > * {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      flex-shrink: 0;
+    }
+    #page-futures aside.wl {
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 10px !important;
+    }
+    #page-futures #futList {
+      max-height: 200px !important;
+      min-height: 0 !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch;
+    }
+    #page-futures .wl-cats { margin: 4px 0 !important; }
+    #page-futures .wl-tabs { flex-wrap: wrap; }
+    #page-futures .wl-tools { margin-bottom: 6px; }
+    #page-futures .bo-panel-v2 {
+      max-height: none !important;
+      overflow: visible !important;
+      padding: 12px !important;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(15,24,44,0.72), rgba(11,18,32,0.62));
+      border: 1px solid rgba(200,212,232,0.1);
+      box-sizing: border-box;
+    }
+    #page-futures .bo-chart-card {
+      min-height: 0 !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    #page-futures .bo-chart-body {
+      min-height: 260px !important;
+      height: 260px !important;
+      overflow: hidden;
+      border-radius: 0 0 14px 14px;
+    }
+    #page-futures #futChart {
+      min-height: 260px !important;
+      height: 260px !important;
+    }
+    #page-futures .bo-hud-top { flex-wrap: wrap; gap: 8px; padding: 10px !important; }
+    #page-futures .bo-hud-top .sep { display: none; }
+    #page-futures .bo-hud-top .grp { min-width: 0; flex: 1 1 100%; }
+    #page-futures .bo-hud-top .bo-chip-row {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      flex-wrap: nowrap;
+    }
+    #page-futures .bo-price .big { font-size: 18px !important; }
+    #page-futures .fut-ai-card .card-head { padding: 10px 12px !important; }
+    #page-futures .fut-ai-card .card-body { padding: 10px 12px !important; }
+    #page-futures .fut-ai-card .spot-ai-grid { gap: 8px !important; }
+    #page-futures .fut-form-flags { gap: 6px !important; }
+    #page-futures .fut-form-flags .flag-chip { font-size: 10px !important; padding: 6px 8px !important; }
+    #page-futures .bo-buttons-v2 {
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding-bottom: 6px;
+      position: sticky;
+      bottom: 0;
+      z-index: 4;
+      background: linear-gradient(180deg, transparent, rgba(11,18,32,0.92) 24%);
+      padding-top: 8px;
+      margin: 0 -4px;
+    }
+    #page-futures .bo-btn-v2 {
+      min-height: 50px;
+      padding: 10px 8px;
+    }
+    #page-futures .desk-card { display: none; }
+    #page-futures .risk-gov { margin-bottom: 4px; }
+    #page-futures .card { overflow: visible !important; }
+    #page-futures .card-head { flex-wrap: wrap; gap: 8px; }
+    #page-futures .card-head .tf-pills { width: 100%; flex-wrap: wrap; }
+    main:has(#page-futures.active) {
+      overflow: visible !important;
+      padding-bottom: 20px !important;
+    }
     .pos-table-head, .pos-row {
       grid-template-columns: 1fr 1fr;
       gap: 6px;
       font-size: 11px;
     }
     .pos-table-head > *:nth-child(n+3), .pos-row > *:nth-child(n+3) { display: none; }
+    #page-futures .pos-table-head,
+    #page-futures .pos-row {
+      grid-template-columns: 1.3fr 1fr auto !important;
+      gap: 8px;
+      align-items: center;
+    }
+    #page-futures .pos-table-head > *:nth-child(n+3),
+    #page-futures .pos-row > *:nth-child(n+3) { display: none; }
+    #page-futures .pos-table-head > *:nth-child(6),
+    #page-futures .pos-row > *:nth-child(6),
+    #page-futures .pos-table-head > *:last-child,
+    #page-futures .pos-row > *:last-child { display: block !important; }
 
     /* Referral: stack */
     .ref-kpis { grid-template-columns: repeat(2,1fr); }
@@ -3449,6 +3821,101 @@
     .page-subtitle { font-size: 12.5px; }
     .kpi-val { font-size: 16px; }
   }
+
+  /* P0 — mobile overflow containment */
+  html { overflow-x: clip; }
+  .shell, main, .page, .page.active, .card {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  #page-landing, #page-landing .lp-wrap {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  #page-landing .lp-h1,
+  #page-landing .lp-h1-sub,
+  #page-landing .lp-final-tiny {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  #page-landing .lp-trust-strip { max-width: 100%; }
+  #page-landing .lp-trust-strip > * { min-width: 0; flex: 0 1 auto; }
+  @media (max-width: 900px) {
+    #page-markets .markets-cat-row {
+      flex-direction: column;
+      align-items: stretch !important;
+      gap: 8px !important;
+      padding: 0 10px 10px !important;
+    }
+    #page-markets .markets-cat-row input {
+      margin-left: 0 !important;
+      min-width: 0 !important;
+      max-width: none !important;
+      width: 100% !important;
+    }
+    #page-markets .card { overflow: hidden; }
+    #page-markets .card-head .tf-pills { width: 100%; flex-wrap: wrap; }
+    .mkt-head, .mkt-row {
+      grid-template-columns: 20px minmax(0, 1fr) 78px 48px !important;
+      gap: 5px !important;
+      padding: 8px 8px !important;
+    }
+    .mkt-row > *:nth-child(3) {
+      font-size: 11px !important;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mkt-row > *:nth-child(5),
+    .mkt-row > *:nth-child(6),
+    .mkt-row > *:nth-child(7),
+    .mkt-head > *:nth-child(5),
+    .mkt-head > *:nth-child(6),
+    .mkt-head > *:nth-child(7) { display: none !important; }
+    .topbar .right { min-width: 0; flex-shrink: 1; gap: 6px; }
+    .topbar-ico-group {
+      gap: 0;
+      padding: 3px 4px;
+      border-radius: 12px;
+      background: rgba(6, 10, 18, 0.82);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-color: rgba(255, 255, 255, 0.07);
+      max-width: min(100%, calc(100vw - 168px));
+    }
+    .topbar-ico-group .topbar-ico,
+    .topbar-ico-group #notifBtn,
+    .topbar-ico-group .lang-pop-wrap > .topbar-ico {
+      width: 32px !important;
+      height: 32px !important;
+      border-radius: 8px;
+    }
+    .topbar-ico-group .topbar-ico svg,
+    .topbar-ico-group #notifBtn svg,
+    .topbar-ico-group .lang-pop-wrap > .topbar-ico svg {
+      width: 16px !important;
+      height: 16px !important;
+    }
+    #gromWsIndicator {
+      order: -1;
+      margin-right: 2px !important;
+      padding: 0 7px !important;
+      height: 26px !important;
+      font-size: 8.5px !important;
+      letter-spacing: 0.04em !important;
+      max-width: none;
+      border-radius: 13px;
+    }
+    #gromWsIndicator .dot { width: 5px !important; height: 5px !important; }
+    .topbar-ico-group #topHelpBtn { display: none; }
+    .spot-quickbar, .tf-pills, .bo-chip-row, .bo-hud-top .grp {
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .page-subtitle { overflow-wrap: anywhere; }
+  }
 </style>
 <!-- TradingView lightweight-charts: professional candles/area/line — same library Binance/OKX use. MIT license, ~300KB. -->
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
@@ -3531,7 +3998,7 @@
     </button>
     <a href="#" class="grom-logo" id="logoHome" aria-label="GROM — Finance Hub">
       <span class="logo-img-shell logo-img-shell--header">
-        <img class="logo-raster logo-raster--header" src="assets/grom-brand-header.png" width="441" height="462" alt="" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='assets/grom-brand-header-clear.png'}else{this.onerror=null;this.src='assets/grom-brand-mark.png'}" />
+        <img class="logo-raster logo-raster--header" src="assets/grom-brand-header-clear.png" width="441" height="462" alt="" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='assets/grom-brand-mark-clear.png'}else{this.onerror=null;this.src='assets/grom-brand-mark.png'}" />
       </span>
       <span class="topbar-brand-lockup">
         <span class="tb-name">GROM</span>
@@ -3543,9 +4010,8 @@
     <button type="button" class="hub-link" data-page="dashboard" data-i18n="nav_dashboard">Dashboard</button>
     <button type="button" class="hub-link" data-page="spot" data-i18n="nav_spot">Spot</button>
     <button type="button" class="hub-link" data-page="binary" data-i18n="nav_binary">Binary</button>
-    <button type="button" class="hub-link" data-page="futures">Futures</button>
+    <button type="button" class="hub-link" data-page="futures" data-i18n="nav_futures">Futures</button>
     <button type="button" class="hub-link" data-page="markets" data-i18n="nav_markets">Markets</button>
-    <button type="button" class="hub-link" data-page="wallet" data-i18n="nav_deposit">Deposit</button>
   </nav>
   <div class="right">
     <div class="topbar-ico-group" role="toolbar" aria-label="Search, alerts, language and help">
@@ -3598,10 +4064,10 @@
     <div class="nav-item" data-page="dashboard"><span class="ico"><svg width="18" height="18"><use href="#i-dashboard"/></svg></span><span class="nav-label" data-i18n="nav_dashboard">Dashboard</span></div>
     <div class="nav-item" data-page="spot"><span class="ico"><svg width="18" height="18"><use href="#i-spot"/></svg></span><span class="nav-label" data-i18n="nav_spot">Spot</span></div>
     <div class="nav-item" data-page="binary"><span class="ico"><svg width="18" height="18"><use href="#i-binary"/></svg></span><span class="nav-label" data-i18n="nav_binary">Binary</span><span class="badge new" data-i18n="badge_hot">HOT</span></div>
-    <div class="nav-item" data-page="futures"><span class="ico" style="font-weight:800;font-size:13px;color:var(--steel1)">Ƒ</span><span class="nav-label">Futures</span><span class="badge new" style="background:#4d9eff">NEW</span></div>
+    <div class="nav-item" data-page="futures"><span class="ico" style="font-weight:800;font-size:13px;color:var(--steel1)">Ƒ</span><span class="nav-label" data-i18n="nav_futures">Futures</span><span class="badge new" data-i18n="badge_new">NEW</span></div>
     <div class="nav-item" data-page="markets"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="nav-label" data-i18n="nav_markets">Markets</span></div>
     <div class="nav-item" data-page="wallet"><span class="ico"><svg width="18" height="18"><use href="#i-wallet"/></svg></span><span class="nav-label" data-i18n="nav_wallet">Wallet</span></div>
-    <div class="nav-item" data-page="referral"><span class="ico" style="font-size:14px">🎁</span><span class="nav-label">Referral</span><span class="badge new" style="background:var(--warn);color:#0a1224">$</span></div>
+    <div class="nav-item" data-page="referral"><span class="ico" style="font-size:14px">🎁</span><span class="nav-label" data-i18n="nav_referral">Referral</span><span class="badge new" style="background:var(--warn);color:#0a1224">$</span></div>
     <div class="nav-item" data-page="history"><span class="ico"><svg width="18" height="18"><use href="#i-history"/></svg></span><span class="nav-label" data-i18n="nav_history">History</span></div>
 
     <h4>General</h4>
@@ -3737,7 +4203,10 @@
           #page-landing .lp-final-tiny{font-size:11px;margin-top:14px}
         }
         @media(max-width:420px){
-          #page-landing .lp-h1{font-size:30px}
+          #page-landing .lp-wrap{padding-left:12px;padding-right:12px}
+          #page-landing .lp-h1{font-size:27px;line-height:1.12}
+          #page-landing .lp-h1-sub{font-size:13.5px}
+          #page-landing .lp-trust-strip{gap:8px 14px}
           #page-landing .lp-h2{font-size:24px}
           #page-landing .lp-final-h{font-size:24px}
           #page-landing .lp-trust-strip{gap:10px;font-size:11px}
@@ -3757,11 +4226,11 @@
             <p class="lp-h1-sub">Spot · Futures · Binary Options · On-chain swaps. One account. Sub-millisecond fills. Your keys when you want them. Bank-grade security from day one.</p>
             <div class="lp-cta-row">
               <button class="lp-btn-primary" onclick="show('binary')">Start trading →</button>
-              <button class="lp-btn-secondary" onclick="show('binary')">Try with $50K demo</button>
+              <button class="lp-btn-secondary" onclick="show('dashboard')">Explore dashboard</button>
             </div>
             <div class="lp-trust-strip">
               <span><b>8</b> chains</span>
-              <span><b>20+</b> pairs</span>
+              <span><b>365+</b> pairs</span>
               <span><b>87%</b> binary payout</span>
               <span><b>100×</b> max leverage</span>
             </div>
@@ -3783,6 +4252,8 @@
             </div>
           </div>
         </div>
+
+        <div id="landingTicker" class="lp-live-ticker" aria-label="Live market prices"></div>
 
         <!-- 3 PRODUCT CARDS -->
         <div class="lp-products">
@@ -3991,7 +4462,7 @@
         <div class="lp-section" style="margin-top:60px">
           <div class="lp-eyebrow" style="text-align:center;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--steel1);font-weight:700;margin-bottom:8px">Live markets</div>
           <h2 style="text-align:center;font-size:32px;font-weight:800;margin:0 0 24px;background:linear-gradient(135deg,#e8f1fa 30%,#00c2ff 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Real-time prices, no demo data</h2>
-          <div id="landingTicker" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0 auto;max-width:1100px"></div>
+          <div id="landingTickerLegacy" style="display:none"></div>
         </div>
         <div class="lp-section" style="margin-top:60px;padding:28px 24px;background:linear-gradient(180deg,rgba(11,18,32,.5),rgba(8,12,20,.3));border:1px solid rgba(122,162,199,.12);border-radius:18px">
           <div style="text-align:center;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--silver5);font-weight:700;margin-bottom:18px">Aggregated liquidity from</div>
@@ -4061,7 +4532,7 @@
           <div class="banner-content">
             <div class="banner-ico">⚡</div>
             <div class="banner-eyebrow">BINARY OPTIONS</div>
-            <h3>UP / DOWN · payouts to 94%</h3>
+            <h3>UP / DOWN · payouts to 87%</h3>
             <p>5s to 1h expirations. Hard-capped risk · no liquidations.</p>
             <div class="banner-cta">Trade Binary →</div>
           </div>
@@ -4083,50 +4554,48 @@
       <div class="stats-grid">
         <div class="stat-card has-tip" data-tip="Total value of all assets in your connected wallet">
           <div class="label">Portfolio value</div>
-          <div class="value mono">$12,847.32</div>
-          <div class="delta up">▲ 2.41% · $302.11 today</div>
+          <div class="value mono" id="dashPortfolioVal">$12,847.32</div>
+          <div class="delta up" id="dashPortfolioDelta">▲ 2.41% · $302.11 today</div>
         </div>
         <div class="stat-card">
           <div class="label">24h P&amp;L</div>
-          <div class="value mono" style="color:var(--success)">+$302.11</div>
-          <div class="delta up">▲ 8 wins / 3 losses</div>
+          <div class="value mono" id="dashPnlVal" style="color:var(--success)">+$302.11</div>
+          <div class="delta up" id="dashPnlMeta">▲ 8 wins / 3 losses</div>
         </div>
         <div class="stat-card">
           <div class="label">Open positions</div>
-          <div class="value mono">3</div>
-          <div class="delta" style="color:var(--silver4)">2 spot · 1 binary</div>
+          <div class="value mono" id="dashOpenPos">3</div>
+          <div class="delta" id="dashOpenMeta" style="color:var(--silver4)">2 spot · 1 binary</div>
         </div>
         <div class="stat-card">
           <div class="label">Binary win-rate (7d)</div>
-          <div class="value mono">64%</div>
-          <div class="delta up">▲ 6 pts vs last week</div>
+          <div class="value mono" id="dashWinRate">64%</div>
+          <div class="delta up" id="dashWinMeta">▲ 6 pts vs last week</div>
         </div>
       </div>
 
       <div class="grid-2">
         <div class="card">
           <div class="card-head">
-            <h3>Get started · 0 of 5 done</h3>
+            <h3 id="dashCheckTitle">Get started · 0 of 5 done</h3>
             <span class="sub">Takes ~3 minutes</span>
           </div>
-          <div class="progress"><span style="width:0%"></span></div>
-          <div class="checklist">
-            <div class="check-row"><div class="check-circle"></div><div class="body"><div class="title">Connect a wallet</div><div class="desc">MetaMask, Trust Wallet, Binance Web3 Wallet, WalletConnect, or email login.</div></div><a class="cta" onclick="connectWallet()">Connect →</a></div>
-            <div class="check-row"><div class="check-circle"></div><div class="body"><div class="title">Verify email</div><div class="desc">Unlock account recovery and faster support replies.</div></div><a class="cta" onclick="connectWallet()">Start →</a></div>
-            <div class="check-row"><div class="check-circle"></div><div class="body"><div class="title">Fund your account</div><div class="desc">Deposit USDT, BTC, ETH, or buy with an on-ramp.</div></div><a class="cta" onclick="show('wallet')">Open wallet →</a></div>
-            <div class="check-row"><div class="check-circle"></div><div class="body"><div class="title">Complete KYC Tier 2</div><div class="desc">Required for limits above $500/day</div></div><a class="cta" onclick="openHelpTopic('kyc')">Read requirements →</a></div>
-            <div class="check-row"><div class="check-circle"></div><div class="body"><div class="title">Place your first binary trade</div><div class="desc">Start with a 60s paper trade — no risk.</div></div><a class="cta" onclick="show('binary')">Open desk →</a></div>
+          <div class="progress"><span id="dashCheckProgress" style="width:0%"></span></div>
+          <div class="checklist" id="dashChecklist">
+            <div class="check-row" data-step="wallet"><div class="check-circle"></div><div class="body"><div class="title">Connect a wallet</div><div class="desc">MetaMask, Trust Wallet, Binance Web3 Wallet, WalletConnect, or email login.</div></div><a class="cta" onclick="connectWallet()">Connect →</a></div>
+            <div class="check-row" data-step="email"><div class="check-circle"></div><div class="body"><div class="title">Verify email</div><div class="desc">Unlock account recovery and faster support replies.</div></div><a class="cta" onclick="show('settings')">Start →</a></div>
+            <div class="check-row" data-step="fund"><div class="check-circle"></div><div class="body"><div class="title">Fund your account</div><div class="desc">Deposit USDT, BTC, ETH, or buy with an on-ramp.</div></div><a class="cta" onclick="show('wallet')">Open wallet →</a></div>
+            <div class="check-row" data-step="kyc"><div class="check-circle"></div><div class="body"><div class="title">Complete KYC Tier 2</div><div class="desc">Required for limits above $500/day</div></div><a class="cta" onclick="openHelpTopic('kyc')">Read requirements →</a></div>
+            <div class="check-row" data-step="trade"><div class="check-circle"></div><div class="body"><div class="title">Place your first binary trade</div><div class="desc">Start with a 60s paper trade — no risk.</div></div><a class="cta" onclick="show('binary')">Open desk →</a></div>
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-head"><h3>Market snapshot</h3><span class="sub">Live prices</span></div>
-          <div id="watchlist">
-            <div class="watch-row" onclick="openSpotPair('BTC/USDT')"><span class="coin-ico btc">₿</span><div><div class="name">Bitcoin</div><div class="ticker">BTC/USDT</div></div><div class="price" id="px-btc">$63,903.09</div><div class="chg up">+1.82%</div></div>
-            <div class="watch-row" onclick="openSpotPair('ETH/USDT')"><span class="coin-ico eth">Ξ</span><div><div class="name">Ethereum</div><div class="ticker">ETH/USDT</div></div><div class="price" id="px-eth">$3,684.15</div><div class="chg up">+0.94%</div></div>
-            <div class="watch-row" onclick="openSpotPair('SOL/USDT')"><span class="coin-ico sol">S</span><div><div class="name">Solana</div><div class="ticker">SOL/USDT</div></div><div class="price" id="px-sol">$182.27</div><div class="chg down">-2.10%</div></div>
-            <div class="watch-row" onclick="openSpotPair('BNB/USDT')"><span class="coin-ico bnb">B</span><div><div class="name">BNB</div><div class="ticker">BNB/USDT</div></div><div class="price" id="px-bnb">$612.88</div><div class="chg up">+0.33%</div></div>
+        <div class="card card--market-snap">
+          <div class="card-head">
+            <h3><span class="ms-live-dot" aria-hidden="true"></span>Market snapshot</h3>
+            <span class="ms-head-badge"><span class="ms-live-dot" aria-hidden="true"></span>Live</span>
           </div>
+          <div id="watchlist" class="dash-watchlist" aria-label="Top markets by volume"></div>
         </div>
       </div>
 
@@ -4136,9 +4605,30 @@
           <button class="qa" onclick="show('binary')"><span class="ico"><svg width="18" height="18"><use href="#i-binary"/></svg></span><span class="t">Place binary option</span><span class="d">60s UP/DOWN with fixed payout</span></button>
           <button class="qa" onclick="show('spot')"><span class="ico"><svg width="18" height="18"><use href="#i-spot"/></svg></span><span class="t">Spot trade</span><span class="d">Limit, market, stop orders</span></button>
           <button class="qa" onclick="show('wallet')"><span class="ico"><svg width="18" height="18"><use href="#i-deposit"/></svg></span><span class="t">Deposit crypto</span><span class="d">BTC, ETH, USDT, USDC</span></button>
-          <button class="qa" onclick="show('markets')"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="t">Browse markets</span><span class="d">80+ trading pairs</span></button>
+          <button class="qa" onclick="show('markets')"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="t">Browse markets</span><span class="d">365+ trading pairs</span></button>
           <button class="qa" onclick="show('history')"><span class="ico"><svg width="18" height="18"><use href="#i-history"/></svg></span><span class="t">View history</span><span class="d">All trades &amp; transfers</span></button>
           <button class="qa" onclick="startTour()"><span class="ico"><svg width="18" height="18"><use href="#i-help"/></svg></span><span class="t">Take the tour</span><span class="d">90-second walkthrough</span></button>
+        </div>
+      </div>
+
+      <div class="card spot-ai-card dash-ai-card">
+        <div class="card-head">
+          <h3>AI market brief</h3>
+          <span class="sub" id="dashAiStamp">model v2.4 · live</span>
+        </div>
+        <div class="card-body">
+          <div class="spot-ai-grid">
+            <div class="ai-thesis">
+              <div class="ai-k">Session bias</div>
+              <div class="ai-v" id="dashAiBias">Neutral bullish</div>
+              <div class="ai-p" id="dashAiText">BTC holds above local value with bids reloading under VWAP. Prefer pullback entries over breakout chase.</div>
+            </div>
+            <div class="spot-ai-list">
+              <div class="spot-ai-row"><span>Top mover</span><strong id="dashAiMover">DOGE +4.8%</strong></div>
+              <div class="spot-ai-row"><span>Risk mode</span><strong id="dashAiRisk">Normal size</strong></div>
+              <div class="spot-ai-row"><span>Desk focus</span><strong id="dashAiFocus">Spot · BTC</strong></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -4205,8 +4695,8 @@
           <div class="bo-hud-top">
             <div class="grp">
               <div class="bo-asset" id="boAssetTag">
-                <span class="coin-ico btc" style="width:22px;height:22px;font-size:10px">₿</span>
-                BTC/USDT
+                <span class="bo-asset-ico" id="boAssetIco"><span class="coin-ico btc" style="width:22px;height:22px;font-size:10px">₿</span></span>
+                <span class="bo-asset-label" id="boAssetLabel">BTC/USDT</span>
                 <span class="pay">+92%</span>
               </div>
               <div class="bo-price">
@@ -4254,7 +4744,7 @@
               <div class="bo-depth-bars" id="boDepthMini"></div>
             </div>
             <div class="pro-card">
-              <div class="hd"><span>Desk guardrails</span><span>AI</span></div>
+              <div class="hd"><span>AI desk guardrails</span><span>AI</span></div>
               <div class="pulse-stack" id="boDeskPulse"></div>
             </div>
           </div>
@@ -4423,21 +4913,6 @@
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Spot Trade</span></div>
       <h1 class="page-title"><span class="spot-pair-wrap"><button type="button" class="spot-pair-btn" id="spotPairBtn"><span data-i18n="pg_spot_title" id="spotPairTitle">BTC/USDT</span> ▾</button><div class="spot-pair-pop" id="spotPairPop" hidden><input class="spot-pair-search" id="spotPairSearch" placeholder="Search pair..." /><div class="spot-pair-list" id="spotPairList"></div></div></span> <span class="tag">Spot</span></h1>
       <p class="page-subtitle">Professional spot desk with live market structure, liquidity context and cleaner execution for active crypto traders.</p>
-      <div class="spot-quickbar" aria-label="Quick spot pairs">
-        <button type="button" onclick="openSpotPair('BTC/USDT')"><span class="coin-ico btc" style="width:20px;height:20px;font-size:9px">₿</span>BTC</button>
-        <button type="button" onclick="openSpotPair('ETH/USDT')"><span class="coin-ico eth" style="width:20px;height:20px;font-size:9px">Ξ</span>ETH</button>
-        <button type="button" onclick="openSpotPair('SOL/USDT')"><span class="coin-ico sol" style="width:20px;height:20px;font-size:9px">S</span>SOL</button>
-        <button type="button" onclick="openSpotPair('BNB/USDT')"><span class="coin-ico bnb" style="width:20px;height:20px;font-size:9px">B</span>BNB</button>
-        <button type="button" onclick="openSpotPair('XRP/USDT')"><span class="coin-ico xrp" style="width:20px;height:20px;font-size:9px">X</span>XRP</button>
-        <button type="button" onclick="openSpotPair('LINK/USDT')"><span class="coin-ico link" style="width:20px;height:20px;font-size:9px">L</span>LINK</button>
-      </div>
-
-      <div class="spot-overview">
-        <div class="spot-kpi"><div class="k">24h change</div><div class="v mono" id="spotChangeBadge">+1.82%</div><div class="s up" id="spotChangeNote">buyers still control the session</div></div>
-        <div class="spot-kpi"><div class="k">24h high / low</div><div class="v mono" id="spotRangeTag">$64,120 / $62,840</div><div class="s">session expansion remains healthy</div></div>
-        <div class="spot-kpi"><div class="k">Quoted depth</div><div class="v mono" id="spotDepthTag">$14.8M</div><div class="s">within 10 bps on major venues</div></div>
-        <div class="spot-kpi"><div class="k">24h notional</div><div class="v mono" id="spotVolumeTag">$2.1B</div><div class="s">aggregated spot routing</div></div>
-      </div>
 
       <div class="spot-layout">
         <div class="spot-main">
@@ -4455,24 +4930,6 @@
             <div class="chart-wrap"><canvas id="spotChart" class="chart"></canvas></div>
             <div class="spot-market-panel">
               <div class="spot-panel-box">
-                <div class="hd">Market microstructure</div>
-                <div class="rows">
-                  <div class="row"><span>Best spread</span><strong id="spotSpreadTag">0.012%</strong></div>
-                  <div class="row"><span>Buy pressure</span><strong id="spotBuyPressure">58%</strong></div>
-                  <div class="row"><span>VWAP deviation</span><strong id="spotVwapDev">+0.24%</strong></div>
-                  <div class="row"><span>Trend regime</span><strong id="spotTrendRegime">Balanced trend</strong></div>
-                </div>
-              </div>
-              <div class="spot-panel-box">
-                <div class="hd">Liquidity map</div>
-                <div class="spot-heatmap" id="spotHeatBars">
-                  <div class="bar" style="--w:62%"><span><b>$63.8k bids</b><em>stacked</em></span></div>
-                  <div class="bar" style="--w:54%"><span><b>$63.7k bids</b><em>reload zone</em></span></div>
-                  <div class="bar sell" style="--w:49%"><span><b>$64.0k asks</b><em>local cap</em></span></div>
-                  <div class="bar sell" style="--w:68%"><span><b>$64.2k asks</b><em>take-profit wall</em></span></div>
-                </div>
-              </div>
-              <div class="spot-panel-box">
                 <div class="hd">Recent trades</div>
                 <div class="spot-trades" id="spotRecentTrades"></div>
               </div>
@@ -4482,7 +4939,7 @@
 
         <div class="card spot-ai-card">
           <div class="card-head">
-            <h3>AI deep market analysis</h3>
+            <h3>AI market analysis</h3>
             <span class="sub" id="spotAiStamp">model v2.4 · live context</span>
           </div>
           <div class="card-body">
@@ -4498,13 +4955,14 @@
                 <div class="spot-ai-row"><span>Liquidity skew</span><strong id="spotAiLiquidity">Bid support</strong></div>
               </div>
               <div class="spot-ai-list">
-          <div class="spot-ai-row"><span>Invalidation</span><strong class="down mono" id="spotAiInvalid">$61,940</strong></div>
-          <div class="spot-ai-row"><span>Upside magnet</span><strong class="up mono" id="spotAiTarget">$64,120</strong></div>
+                <div class="spot-ai-row"><span>Invalidation</span><strong class="down mono" id="spotAiInvalid">$61,940</strong></div>
+                <div class="spot-ai-row"><span>Upside magnet</span><strong class="up mono" id="spotAiTarget">$64,120</strong></div>
                 <div class="spot-ai-row"><span>Risk mode</span><strong id="spotAiRisk">Normal size</strong></div>
               </div>
             </div>
           </div>
         </div>
+
         </div>
 
         <div class="spot-side">
@@ -4521,18 +4979,18 @@
                 <button class="buy active" data-side="buy">Buy</button>
                 <button class="sell" data-side="sell">Sell</button>
               </div>
-              <label id="spotPriceLbl" style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Price</label>
-              <div id="spotOrderPrice" class="mono spot-fieldbox">63,903.09 USDT</div>
+              <label id="spotPriceLbl" for="spotOrderPrice" style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Price</label>
+              <input type="number" id="spotOrderPrice" class="mono spot-fieldbox" value="63903.09" min="0" step="any" inputmode="decimal" autocomplete="off" aria-label="Order price"/>
               <div id="spotStopRow" style="display:none">
-                <label style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Trigger price</label>
-                <div id="spotTriggerPrice" class="mono spot-fieldbox">63,500.00 USDT</div>
+                <label for="spotTriggerPrice" style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Trigger price</label>
+                <input type="number" id="spotTriggerPrice" class="mono spot-fieldbox" value="63500" min="0" step="any" inputmode="decimal" autocomplete="off"/>
               </div>
               <div id="spotTwapRow" style="display:none">
                 <label style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Duration · Slices</label>
-                <div class="mono spot-fieldbox">30 min · 12 slices</div>
+                <div class="mono spot-fieldbox" style="pointer-events:none">30 min · 12 slices</div>
               </div>
-              <label style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Amount</label>
-              <div id="spotOrderAmount" class="mono spot-fieldbox">0.00500 BTC</div>
+              <label for="spotOrderAmount" style="font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Amount</label>
+              <input type="number" id="spotOrderAmount" class="mono spot-fieldbox" value="0.005" min="0" step="any" inputmode="decimal" autocomplete="off" aria-label="Order amount"/>
               <div class="spot-allocator" id="spotAllocator">
                 <button data-pct="25">25%</button><button data-pct="50">50%</button><button data-pct="75">75%</button><button data-pct="100">100%</button>
               </div>
@@ -4682,7 +5140,7 @@
                 <span class="st ok">confirmed</span>
                 <div><div class="nm">USDT deposit · Tron (TRC-20)</div><div class="meta">14m ago · hash 0xa28f…71ce · 20/20 confirmations</div></div>
                 <div class="mono">250.00 USDT</div>
-                <button class="mini-btn" onclick="openExplorer(this)" data-tx="0x2c91...d4ee">Explorer</button>
+                <button class="mini-btn" type="button" onclick="toast('Demo transfer — connect wallet for live explorer links','info')">Details</button>
               </div>
               <div class="transfer-row">
                 <span class="st warn">pending</span>
@@ -4787,7 +5245,7 @@
           <h3>All activity</h3>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <div class="tf-pills" id="historyFilter">
-              <button type="button" class="active" data-filter="all">All</button><button type="button" data-filter="binary">Binary</button><button type="button" data-filter="spot">Spot</button><button type="button" data-filter="deposits">Deposits</button><button type="button" data-filter="withdrawals">Withdrawals</button>
+              <button type="button" class="active" data-filter="all">All</button><button type="button" data-filter="binary">Binary</button><button type="button" data-filter="spot">Spot</button><button type="button" data-filter="futures">Futures</button><button type="button" data-filter="deposits">Deposits</button><button type="button" data-filter="withdrawals">Withdrawals</button>
             </div>
             <button class="btn-ghost" type="button" onclick="exportHistoryCsv()">Export CSV</button>
           </div>
@@ -4810,14 +5268,7 @@
     <section class="page" id="page-futures">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Futures</span></div>
       <h1 class="page-title">Futures <span class="tag">Perpetuals</span></h1>
-      <p class="page-subtitle">Linear USDT-margined perpetual contracts. Up to 100× leverage, cross &amp; isolated margin, funding every 8h.</p>
-
-      <div class="fut-kpis">
-        <div class="fut-kpi"><div class="k">24h notional</div><div class="v mono">$8.42B</div><div class="s up">+14.8% vs yesterday</div></div>
-        <div class="fut-kpi"><div class="k">Open interest delta</div><div class="v mono">+$38.6M</div><div class="s up">Risk adding into upside continuation</div></div>
-        <div class="fut-kpi"><div class="k">Aggressor flow</div><div class="v mono">62% buys</div><div class="s">CVD rising across 5m / 15m</div></div>
-        <div class="fut-kpi"><div class="k">Liquidation heat</div><div class="v mono">$114M</div><div class="s down">Dense short cluster above local highs</div></div>
-      </div>
+      <p class="page-subtitle">USDT-margined perpetuals · up to 100× leverage · cross &amp; isolated margin.</p>
 
       <div class="fut-shell">
         <!-- Left: pair picker + market stats -->
@@ -4845,30 +5296,21 @@
             <button data-mode="compact">Compact</button>
           </div>
           <div id="futList"></div>
-
-          <div class="wl-sep"></div>
-          <div class="wl-head"><span>Market stats</span><span>24h</span></div>
-          <div class="fut-stat"><span>Mark price</span><span class="mono">$63,890.03</span></div>
-          <div class="fut-stat"><span>Index price</span><span class="mono">$63,903.09</span></div>
-          <div class="fut-stat"><span>Open interest</span><span class="mono">$284.6M</span></div>
-          <div class="fut-stat"><span>24h volume</span><span class="mono">$2.1B</span></div>
-          <div class="fut-stat"><span>Next funding</span><span class="mono" id="fundCd">02:48:12</span></div>
-          <div class="fut-stat"><span>Predicted funding</span><span class="mono" style="color:var(--warn)">+0.0082%</span></div>
         </aside>
 
         <!-- Center: chart + positions -->
-        <div style="display:flex;flex-direction:column;gap:12px">
-          <div class="bo-chart-card" style="min-height:440px">
+        <div class="fut-main-col">
+          <div class="bo-chart-card">
             <div class="bo-hud-top">
               <div class="grp">
-                <div class="bo-asset">
-                  <span class="coin-ico btc" style="width:22px;height:22px;font-size:10px">₿</span>
-                  BTCUSDT
+                <div class="bo-asset" id="futAssetTag">
+                  <span class="bo-asset-ico" id="futAssetIco"><span class="coin-ico btc" style="width:22px;height:22px;font-size:10px">₿</span></span>
+                  <span class="fut-asset-label" id="futAssetLabel">BTCUSDT</span>
                   <span class="pay" style="background:rgba(77,158,255,0.18);color:var(--steel1);padding:1px 6px;border-radius:4px">PERP</span>
                 </div>
                 <div class="bo-price">
                   <span class="big mono" id="futPrice">$63,903.09</span>
-                  <span class="pip up">+1.82%</span>
+                  <span class="pip up" id="futPip">+1.82%</span>
                 </div>
               </div>
               <div class="sep"></div>
@@ -4881,42 +5323,31 @@
               </div>
             </div>
             <div class="bo-chart-body"><canvas id="futChart" class="chart"></canvas></div>
-            <div class="fut-overlay">
-              <div class="box">
-                <div class="k">Mark vs index</div>
-                <div class="v mono" id="futMarkSpread">-5.90</div>
-                <div class="s">premium compressed · neutral basis</div>
-              </div>
-              <div class="box">
-                <div class="k">Session range</div>
-                <div class="v mono" id="futRangeTag">$62,840 – $64,120</div>
-                <div class="s">Asia low → EU breakout</div>
-              </div>
-              <div class="box">
-                <div class="k">Aggressor ratio</div>
-                <div class="v mono" id="futFlowTag">1.34 long bias</div>
-                <div class="s">top traders modestly net long</div>
-              </div>
-            </div>
-            <div class="hud-bar">
-              <span>Funding rate: <span class="mono" style="color:var(--warn)">+0.0082%</span> · 2h 48m</span>
-              <span>Long/Short ratio: <span class="mono" style="color:var(--success)">1.34</span></span>
-              <span>Basis: <span class="mono">-5.90</span></span>
-            </div>
           </div>
 
-          <div class="fut-pro-grid">
-            <div class="pro-card">
-              <div class="hd"><span>DOM depth</span><span>Top 8</span></div>
-              <div class="fut-dom" id="futDomDepth"></div>
+          <div class="card spot-ai-card fut-ai-card">
+            <div class="card-head">
+              <h3>AI futures analysis</h3>
+              <span class="sub" id="futAiStamp">model v2.4 · perp context</span>
             </div>
-            <div class="pro-card">
-              <div class="hd"><span>Liquidation heatmap</span><span id="futLiqSkew">Short-heavy</span></div>
-              <div class="liq-map" id="futLiqMap"></div>
-            </div>
-            <div class="pro-card">
-              <div class="hd"><span>Recent futures tape</span><span class="live">LIVE</span></div>
-              <div class="fut-tape" id="futRecentTape"></div>
+            <div class="card-body">
+              <div class="spot-ai-grid">
+                <div class="ai-thesis">
+                  <div class="ai-k">Primary thesis</div>
+                  <div class="ai-v" id="futAiBias">Neutral bullish</div>
+                  <div class="ai-p" id="futAiText">Funding is warming but basis remains compressed. Best risk sits on pullback into mark convergence, not late long chase.</div>
+                </div>
+                <div class="spot-ai-list">
+                  <div class="spot-ai-row"><span>Entry quality</span><strong id="futAiEntry">B+</strong></div>
+                  <div class="spot-ai-row"><span>Funding drag</span><strong id="futAiFunding">Manageable</strong></div>
+                  <div class="spot-ai-row"><span>Liq. distance</span><strong id="futAiLiqDist">4.6%</strong></div>
+                </div>
+                <div class="spot-ai-list">
+                  <div class="spot-ai-row"><span>Invalidation</span><strong class="down mono" id="futAiInvalid">$61,940</strong></div>
+                  <div class="spot-ai-row"><span>Upside magnet</span><strong class="up mono" id="futAiTarget">$64,120</strong></div>
+                  <div class="spot-ai-row"><span>Risk mode</span><strong id="futAiRisk">Normal size</strong></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -4940,28 +5371,10 @@
             </div>
             <div id="futPositionsBody"></div>
           </div>
-
-          <div class="fut-band">
-            <div class="fut-band-card">
-              <div class="hd">Liquidation map</div>
-              <div class="val mono">$105.4k / $102.8k</div>
-              <div class="note">Nearest dense short-liquidation band above, long-liquidation pocket stacked below prior VWAP.</div>
-            </div>
-            <div class="fut-band-card">
-              <div class="hd">Order-flow read</div>
-              <div class="val mono">CVD +18.2M</div>
-              <div class="note">Buyers have controlled the last 3 impulse legs, but funding is warming up and could punish late longs.</div>
-            </div>
-            <div class="fut-band-card">
-              <div class="hd">Execution idea</div>
-              <div class="val mono">Pullback > breakout</div>
-              <div class="note">Best risk sits on retrace into mark/index convergence, not on emotional chase above local highs.</div>
-            </div>
-          </div>
         </div>
 
         <!-- Right: order form -->
-        <div class="bo-panel-v2">
+        <div class="bo-panel-v2 fut-order-panel">
           <div class="acct-switch">
             <button class="active">Cross<span class="bal mono" style="color:var(--silver5);font-size:10.5px">$50,000</span></button>
             <button>Isolated<span class="bal mono" style="color:var(--silver5);font-size:10.5px">per-position</span></button>
@@ -4994,11 +5407,11 @@
 
           <div class="stake-v2">
             <div class="top"><span class="lbl">Price</span><span class="pct-hint">USDT</span></div>
-            <div class="input"><input type="number" value="63903.09" step="0.1"/><span class="currency">USDT</span></div>
+            <div class="input"><input type="number" id="futPriceInput" value="63903.09" min="0" step="any" inputmode="decimal" autocomplete="off"/><span class="currency">USDT</span></div>
           </div>
           <div class="stake-v2">
-            <div class="top"><span class="lbl">Size</span><span class="pct-hint">0.25 BTC ≈ $26,054</span></div>
-            <div class="input"><input type="number" value="0.25" step="0.001"/><span class="currency">BTC</span></div>
+            <div class="top"><span class="lbl">Size</span><span class="pct-hint" id="futSizeHint">0.25 BTC ≈ $26,054</span></div>
+            <div class="input"><input type="number" id="futSizeInput" value="0.25" min="0" step="any" inputmode="decimal" autocomplete="off"/><span class="currency" id="futSizeCurrency">BTC</span></div>
             <div class="presets">
               <button>25%</button><button>50%</button><button>75%</button><button>100%</button>
               <button>Max</button>
@@ -5503,8 +5916,8 @@
     <!-- SETTINGS -->
     <section class="page" id="page-settings">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Settings</span></div>
-      <h1 class="page-title">Settings</h1>
-      <p class="page-subtitle">Account, security, notifications and regional preferences.</p>
+      <h1 class="page-title" data-i18n="pg_settings_title">Settings</h1>
+      <p class="page-subtitle" data-i18n="pg_settings_sub">Account, security, notifications and regional preferences.</p>
 
       <div class="card">
         <div class="card-head"><h3>Profile</h3></div>
@@ -5580,10 +5993,10 @@
       <div class="card">
         <div class="card-head"><h3>Notifications</h3></div>
         <div class="card-body">
-          <div class="set-row"><div class="set-lbl">Order fills &amp; wins</div><label class="set-toggle"><input type="checkbox" checked><span class="tg"></span></label></div>
-          <div class="set-row"><div class="set-lbl">Deposits &amp; withdrawals</div><label class="set-toggle"><input type="checkbox" checked><span class="tg"></span></label></div>
-          <div class="set-row"><div class="set-lbl">Weekly digest</div><label class="set-toggle"><input type="checkbox"><span class="tg"></span></label></div>
-          <div class="set-row"><div class="set-lbl">Product updates</div><label class="set-toggle"><input type="checkbox"><span class="tg"></span></label></div>
+          <div class="set-row"><div class="set-lbl">Order fills &amp; wins</div><label class="set-toggle"><input type="checkbox" id="setNotifFills" checked><span class="tg"></span></label></div>
+          <div class="set-row"><div class="set-lbl">Deposits &amp; withdrawals</div><label class="set-toggle"><input type="checkbox" id="setNotifTransfers" checked><span class="tg"></span></label></div>
+          <div class="set-row"><div class="set-lbl">Weekly digest</div><label class="set-toggle"><input type="checkbox" id="setNotifDigest"><span class="tg"></span></label></div>
+          <div class="set-row"><div class="set-lbl">Product updates</div><label class="set-toggle"><input type="checkbox" id="setNotifProduct"><span class="tg"></span></label></div>
         </div>
       </div>
 
@@ -5638,8 +6051,8 @@
     <!-- HELP -->
     <section class="page" id="page-help">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Help</span></div>
-      <h1 class="page-title">Help &amp; support</h1>
-      <p class="page-subtitle">Search the knowledge base, start the tour, or reach a human 24/7.</p>
+      <h1 class="page-title" data-i18n="pg_help_title">Help &amp; support</h1>
+      <p class="page-subtitle" data-i18n="pg_help_sub">Search the knowledge base, start the tour, or reach a human 24/7.</p>
 
       <div class="support-grid">
         <div class="support-card">
@@ -5678,8 +6091,8 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h3>Frequently asked</h3><span class="sub">8 articles</span></div>
-        <details class="faq"><summary>Is GROM really non-custodial?</summary><p>Yes. Your keys never leave your wallet — GROM only asks you to sign trade intents with WalletConnect / SIWE. Cold-storage multi-sig covers operational liquidity only.</p></details>
+        <div class="card-head"><h3>Frequently asked</h3><span class="sub">6 articles</span></div>
+        <details class="faq"><summary>How does hybrid custody work?</summary><p>Trading balances (Spot, Futures, Binary) are custodied for instant fills and risk controls. On-chain swaps and withdrawals use your connected wallet — your keys, your transaction. You choose the mode per action.</p></details>
         <details class="faq"><summary>What are the binary options payouts?</summary><p>Payouts are fixed per pair (85–94%) and shown before you place the trade. Maximum loss is capped at your stake. No margin, no liquidations.</p></details>
         <details class="faq"><summary>How do deposits work?</summary><p>Every supported asset has a unique on-chain address. Deposits credit after N confirmations (6 for BTC, 12 for ETH). USDT is accepted on ERC-20, TRC-20 and BEP-20.</p></details>
         <details class="faq"><summary>What fees does GROM charge?</summary><p>Spot: 0.10% maker / 0.10% taker. Futures: 0.02% maker / 0.05% taker. Binary: no spread — payout is net. Withdrawals: network fee only.</p></details>
@@ -6166,6 +6579,8 @@ function show(page) {
       if (typeof initSpotTradeControls === 'function') initSpotTradeControls();
     }
     if (page === 'binary') {
+      if (typeof rebuildBinaryPairs === 'function') rebuildBinaryPairs();
+      if (typeof renderBinaryWatchlist === 'function') renderBinaryWatchlist(document.querySelector('#page-binary .wl-search input')?.value || '');
       if (typeof renderBinaryProPanels === 'function') renderBinaryProPanels();
       if (typeof drawChart === 'function') drawChart('boChart');
     }
@@ -6179,6 +6594,12 @@ function show(page) {
     if ((page === 'wallet' || page === 'history') && typeof hydrateWalletSlice === 'function') {
       hydrateWalletSlice();
     }
+    if (page === 'dashboard') {
+      if (typeof updateDashboardFromWallet === 'function') updateDashboardFromWallet();
+      if (typeof updateOnboardingChecklist === 'function') updateOnboardingChecklist();
+      if (typeof renderDashboardWatchlist === 'function') renderDashboardWatchlist();
+    }
+    if (page === 'history' && typeof applyHistoryFilter === 'function') applyHistoryFilter();
   });
   setTimeout(function () {
     if (page === 'markets' && typeof renderMarkets === 'function') renderMarkets();
@@ -6230,6 +6651,9 @@ window.addEventListener('load', function () {
   }
   if (typeof initSpotTradeControls === 'function') {
     setTimeout(initSpotTradeControls, 140);
+  }
+  if (typeof updateOnboardingChecklist === 'function') {
+    setTimeout(updateOnboardingChecklist, 200);
   }
 });
 
@@ -6618,10 +7042,14 @@ function getWlCat(sym) {
 }
 
 function applyWlTabFilter() {
+  var tab = boState.wlTab || 'all';
   document.querySelectorAll('#wlList .wl-item').forEach(function (row) {
-    var cat = row.dataset.cat || getWlCat(row.dataset.pair || '');
+    if (!row.dataset.pair) return;
+    var sym = row.dataset.pair || '';
     var fav = row.dataset.fav === '1';
-    var show = boState.wlTab === 'all' || (boState.wlTab === 'fav' ? fav : cat === boState.wlTab);
+    var show = tab === 'all'
+      || (tab === 'fav' && fav)
+      || (tab !== 'fav' && tab !== 'all' && binaryMatchesCat(sym, tab));
     row.style.display = show ? '' : 'none';
   });
 }
@@ -6733,19 +7161,9 @@ document.addEventListener('click', e => {
       var fresh = buildSeriesAround(ppx, boSeries.length || 60);
       boSeries = fresh;
     boSeries[boSeries.length - 1] = ppx;
-    const tag = document.getElementById('boAssetTag');
-    if (tag) {
-      const payEl = tag.querySelector('.pay');
-      if (payEl) payEl.textContent = '+' + w.dataset.pay + '%';
-      var visual = pairVisual(w.dataset.pair);
-      var ico = tag.querySelector('.coin-ico');
-      if (ico) {
-        ico.className = 'coin-ico ' + (visual.coin || '');
-        ico.textContent = visual.glyph;
-      }
-      var textNode = Array.from(tag.childNodes).find(function (n) { return n.nodeType === 3; });
-      if (textNode) textNode.nodeValue = ' ' + w.dataset.pair + ' ';
-    }
+    updateBinaryAssetTag(w.dataset.pair, w.dataset.pay);
+    var boEl = document.getElementById('boPrice');
+    if (boEl) boEl.textContent = formatDeskPrice(boState.pair, ppx);
     const lock = document.getElementById('strikeLock'); if (lock) lock.textContent = (boState.strike < 100 ? '' : '$') + fmt(boState.strike, boState.strike < 20 ? 5 : 2);
     const hs = document.getElementById('hudStrike'); if (hs) hs.textContent = (boState.strike < 100 ? '' : '$') + fmt(boState.strike, boState.strike < 20 ? 5 : 2);
     refreshPayout();
@@ -6886,8 +7304,12 @@ setInterval(() => {
 document.addEventListener('DOMContentLoaded', () => {
   try { boState.sound = localStorage.getItem('grom_bo_sound') === '1'; } catch (_) {}
   renderBinaryWatchlist('');
+  rebuildFuturesPairs();
   renderFuturesList('');
   wireListSearches();
+  updateBinaryAssetTag(boState.pair);
+  updateFuturesAssetTag(futDeskState.pair);
+  syncTradingDeskPrices();
   ensureCountdownMarkup();
   watchCountdownIntegrity();
   updateBoSoundBtn();
@@ -6900,9 +7322,18 @@ document.addEventListener('DOMContentLoaded', () => {
   syncBinaryStrike(true);
   setSpotPair(spotState.pair);
   setFuturesPair(futDeskState.pair);
+  renderDashboardWatchlist();
   renderBinaryProPanels();
-  renderFuturesProPanels();
+  updateDashboardAiBrief();
   updateFuturesBoard();
+  var futPriceInput = document.getElementById('futPriceInput');
+  if (futPriceInput) {
+    futPriceInput.addEventListener('input', function () { futPriceInput.setCustomValidity(''); });
+    futPriceInput.addEventListener('blur', function () {
+      var n = parseNumberInput(futPriceInput.value);
+      if (Number.isFinite(n) && n > 0) futPriceInput.value = formatOrderPrice(n);
+    });
+  }
   var pairsStat = document.getElementById('lsPairs');
   if (pairsStat) pairsStat.textContent = '420';
 });
@@ -6931,17 +7362,21 @@ function updateFuturesBoard() {
   var futQuote = String(futDeskState.pair || 'BTC/USDT').split('/')[1] || 'USDT';
   var futPriceEl = document.getElementById('futPrice');
   if (futPriceEl && Number.isFinite(px)) futPriceEl.textContent = '$' + marketFmt(px);
-  var stakeBlocks = document.querySelectorAll('#page-futures .stake-v2');
-  var futPriceInput = stakeBlocks[0] ? stakeBlocks[0].querySelector('input[type="number"]') : null;
-  var futSizeInput = stakeBlocks[1] ? stakeBlocks[1].querySelector('input[type="number"]') : null;
-  if (futPriceInput && document.activeElement !== futPriceInput && Number.isFinite(px)) {
-    futPriceInput.value = px < 20 ? px.toFixed(4) : px.toFixed(2);
-  }
+  if (Number.isFinite(px)) syncFutPriceInput(px);
+  var futSizeInput = document.getElementById('futSizeInput');
   var futSize = parseFloat(futSizeInput && futSizeInput.value) || 0.25;
-  var futPriceHint = stakeBlocks[0] ? stakeBlocks[0].querySelector('.pct-hint') : null;
-  var futSizeHint = stakeBlocks[1] ? stakeBlocks[1].querySelector('.pct-hint') : null;
+  var futPriceHint = document.querySelector('#page-futures .stake-v2 .pct-hint');
+  var futSizeHint = document.getElementById('futSizeHint');
   if (futPriceHint) futPriceHint.textContent = futQuote;
   if (futSizeHint && Number.isFinite(px)) futSizeHint.textContent = fmt(futSize, futSize < 1 ? 3 : 2) + ' ' + futBase + ' ≈ $' + fmt(px * futSize, 0);
+  var futPip = document.getElementById('futPip');
+  if (futPip) {
+    var meta = pairMeta(futDeskState.pair);
+    var chg = meta && Number.isFinite(meta.chg) ? meta.chg : 0;
+    futPip.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+    futPip.className = 'pip ' + (chg >= 0 ? 'up' : 'down');
+  }
+  updateFuturesAiAnalysis(futDeskState.pair);
   var futPayVals = document.querySelectorAll('#page-futures .pay-panel .v');
   if (futPayVals[0] && Number.isFinite(px)) futPayVals[0].textContent = '$' + fmt((px * futSize) / Math.max(1, futDeskState.leverage), 2);
   if (futPayVals[1] && Number.isFinite(px)) futPayVals[1].textContent = '$' + fmt(px * (futDeskState.side === 'long' ? 0.954 : 1.046), 0);
@@ -7102,6 +7537,19 @@ function toggleDrawer(force) {
 
 /* Prices + chart */
 let btcPrice = 63903.09, ethPrice = 1780.30, solPrice = 69.17;
+window.__gromLiveFeedActive = window.__gromLiveFeedActive || false;
+window.__gromLastLiveTick = window.__gromLastLiveTick || 0;
+
+function gromMarkLiveFeed() {
+  window.__gromLiveFeedActive = true;
+  window.__gromLastLiveTick = Date.now();
+  try { window.dispatchEvent(new CustomEvent('grom-public-feed', { detail: { active: true } })); } catch (_) {}
+  var helpTag = document.getElementById('helpStatusTag');
+  if (helpTag) {
+    helpTag.textContent = '● All systems operational';
+    helpTag.style.color = 'var(--success)';
+  }
+}
 
 // Live price feed from backend WebSocket (prices.<asset> channel).
 // Updates global price variables so all consumers (charts, watchlists, KPIs) see real numbers.
@@ -7136,6 +7584,7 @@ function gromScheduleMarketUiRefresh() {
     try { if (typeof updatePairCards === 'function') updatePairCards(); } catch (_) {}
     try { if (typeof updateSpotBoard === 'function' && window.spotState) updateSpotBoard(spotState.pair); } catch (_) {}
     try { if (typeof updateFuturesBoard === 'function' && window.futDeskState) updateFuturesBoard(); } catch (_) {}
+    try { if (typeof syncTradingDeskPrices === 'function') syncTradingDeskPrices(); } catch (_) {}
     try {
       if (typeof drawChart === 'function') {
         ['boChart', 'spotChart', 'futChart'].forEach(function (id) {
@@ -7151,6 +7600,7 @@ window.addEventListener('grom-ws-price', function (ev) {
   if (!detail || !detail.data) return;
   var price = Number(detail.data.price);
   if (!Number.isFinite(price) || price <= 0) return;
+  gromMarkLiveFeed();
   var asset = String(detail.data.asset || '').toUpperCase();
   // Channel name fallback if asset not in data
   if (!asset && detail.channel) {
@@ -7179,20 +7629,8 @@ window.addEventListener('grom-ws-price', function (ev) {
     var pxEl = document.getElementById(pxId);
     if (pxEl) pxEl.textContent = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   } catch (_) {}
-  // Refresh active page price displays (binary strike, spot/futures headers)
   try {
-    if (window.boState && boState.pair && boState.pair.startsWith(base)) {
-      var bp = document.getElementById('boPrice');
-      if (bp) bp.textContent = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-    if (window.spotState && spotState.pair && spotState.pair.startsWith(base)) {
-      var sp = document.getElementById('spotPrice');
-      if (sp) sp.textContent = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-    if (window.futDeskState && futDeskState.pair && futDeskState.pair.startsWith(base)) {
-      var fp = document.getElementById('futPrice');
-      if (fp) fp.textContent = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
+    if (typeof syncTradingDeskPrices === 'function') syncTradingDeskPrices();
   } catch (_) {}
   try { gromScheduleMarketUiRefresh(); } catch (_) {}
 });
@@ -7214,16 +7652,54 @@ let boSeries = buildSeriesAround(btcPrice, 60);
 boSeries[boSeries.length - 1] = btcPrice;
 var __boChartMode = 'candles';
 var __boTfSec = 5;
-var spotState = { pair: 'BTC/USDT' };
+var spotState = { pair: 'BTC/USDT', side: 'buy', orderType: 'limit' };
 var futDeskState = { pair: 'BTC/USDT', leverage: 25, mode: 'cross', side: 'long' };
 var listUiState = {
   binaryMode: 'comfortable',
   futuresMode: 'comfortable',
-  futuresFilter: 'all'
+  futuresFilter: 'all',
+  futuresCat: 'all'
 };
 
 let bnbPrice = 608.18, xrpPrice = 2.16, adaPrice = 0.58, dogePrice = 0.18, avaxPrice = 22.40, linkPrice = 13.80, eurPrice = 1.0842, gbpPrice = 193.482, xauPrice = 2487.30, aaplPrice = 206.8, tslaPrice = 173.4;
 let msftPrice = 417.2, nvdaPrice = 922.4;
+
+function gromSyncCorePricesFromLive() {
+  if (typeof window.gromLivePrice !== 'function') return false;
+  var synced = false;
+  var core = [
+    { sym: 'BTCUSDT', set: function (p) { btcPrice = p; } },
+    { sym: 'ETHUSDT', set: function (p) { ethPrice = p; } },
+    { sym: 'SOLUSDT', set: function (p) { solPrice = p; } },
+    { sym: 'BNBUSDT', set: function (p) { bnbPrice = p; } },
+    { sym: 'XRPUSDT', set: function (p) { xrpPrice = p; } },
+    { sym: 'ADAUSDT', set: function (p) { adaPrice = p; } },
+    { sym: 'DOGEUSDT', set: function (p) { dogePrice = p; } },
+    { sym: 'AVAXUSDT', set: function (p) { avaxPrice = p; } },
+    { sym: 'LINKUSDT', set: function (p) { linkPrice = p; } }
+  ];
+  core.forEach(function (row) {
+    var px = Number(window.gromLivePrice(row.sym));
+    if (!Number.isFinite(px) || px <= 0) return;
+    row.set(px);
+    synced = true;
+    var base = row.sym.replace('USDT', '');
+    if (typeof marketPairs !== 'undefined' && Array.isArray(marketPairs)) {
+      marketPairs.forEach(function (mp) {
+        if (mp.sym === base + '/USDT') mp.price = px;
+      });
+    }
+  });
+  if (synced) gromMarkLiveFeed();
+  return synced;
+}
+if (typeof window.gromOnPriceUpdate === 'function') {
+  window.gromOnPriceUpdate(function () {
+    gromSyncCorePricesFromLive();
+    if (typeof updateQuoteRows === 'function') updateQuoteRows();
+  });
+}
+setTimeout(function () { gromSyncCorePricesFromLive(); }, 1500);
 const extraCryptoPrices = {
   TON: 6.42,
   TRX: 0.1462,
@@ -7287,7 +7763,7 @@ const marketPairs = [
   { fav: false, sym: 'ARB/USDT',  name: 'Arbitrum',  coin: 'arb',  gliph: 'A', price: 1.06,      chg: 1.08, vol: '142M' },
   { fav: false, sym: 'OP/USDT',   name: 'Optimism',  coin: 'op',   gliph: 'O', price: 2.91,      chg: 0.64, vol: '117M' }
 ];
-const binaryPairs = [
+var binaryPairs = [
   { sym: 'BTC/USDT', pay: 92, cat: 'crypto', tier: 'bluechip', ai: true },
   { sym: 'ETH/USDT', pay: 91, cat: 'crypto', tier: 'bluechip', ai: true },
   { sym: 'SOL/USDT', pay: 88, cat: 'crypto', tier: 'momentum', ai: true },
@@ -7311,21 +7787,123 @@ const binaryPairs = [
   { sym: 'OP/USDT', pay: 87, cat: 'crypto', tier: 'alts', ai: false },
   { sym: 'EUR/USD',  pay: 94, cat: 'fx', tier: 'fx', ai: false },
   { sym: 'GBP/JPY',  pay: 92, cat: 'fx', tier: 'fx', ai: false },
-  { sym: 'XAU/USD',  pay: 90, cat: 'otc', tier: 'macro', ai: true },
+  { sym: 'XAU/USD',  pay: 90, cat: 'commodity', tier: 'macro', ai: true, fav: true },
   { sym: 'AAPL/USD', pay: 84, cat: 'otc', tier: 'equity', ai: false },
   { sym: 'TSLA/USD', pay: 84, cat: 'otc', tier: 'equity', ai: true },
   { sym: 'MSFT/USD', pay: 84, cat: 'otc', tier: 'equity', ai: false },
   { sym: 'NVDA/USD', pay: 83, cat: 'otc', tier: 'equity', ai: true }
 ];
-const futuresPairs = marketPairs.map(function (p, idx) {
-  return {
-    sym: p.sym,
-    fundingBase: (idx % 4 === 2 ? -1 : 1) * (0.0012 + idx * 0.00023),
-    rank: idx,
-    ai: idx < 6 || ['LINK/USDT','TON/USDT','ARB/USDT'].indexOf(p.sym) !== -1,
-    fresh: idx >= 14
-  };
-});
+var futuresPairs = [];
+
+function instrumentSymSlash(it) {
+  if (!it) return '';
+  if (it.base && it.quote) return String(it.base).toUpperCase() + '/' + String(it.quote).toUpperCase();
+  var s = String(it.symbol || '').toUpperCase();
+  if (s.indexOf('/') >= 0) return s;
+  if (s.endsWith('USDT') && s.length > 4) return s.slice(0, -4) + '/USDT';
+  if (s.endsWith('USD') && s.length > 3) return s.slice(0, -3) + '/USD';
+  return s;
+}
+
+function futuresInstrumentType(sym) {
+  var it = (typeof window.gromGetInstrument === 'function') ? window.gromGetInstrument(sym) : null;
+  if (it && it.type) return it.type;
+  return 'crypto';
+}
+
+function futuresMatchesCat(sym, cat) {
+  if (!cat || cat === 'all') return true;
+  var t = futuresInstrumentType(sym);
+  if (cat === 'index') return t === 'index' || t === 'etf' || t === 'stock';
+  return t === cat;
+}
+
+function binaryInstrumentType(sym) {
+  return futuresInstrumentType(sym);
+}
+
+function binaryMatchesCat(sym, cat) {
+  if (!cat || cat === 'all') return true;
+  if (cat === 'fav') return false;
+  var row = binaryPairs.find(function (r) { return r.sym === sym; });
+  if (row && row.cat) {
+    if (cat === 'commodity') return row.cat === 'commodity' || row.cat === 'otc' && /XAU|XAG|WTI|BRENT|OIL|GAS/i.test(sym);
+    if (row.cat === cat) return true;
+  }
+  var t = binaryInstrumentType(sym);
+  if (cat === 'commodity') return t === 'commodity';
+  if (cat === 'fx') return t === 'fx';
+  if (cat === 'crypto') return t === 'crypto';
+  return t === cat;
+}
+
+function rebuildFuturesPairs() {
+  var rows = [];
+  var seen = {};
+  if (typeof window.gromInstrumentsByType === 'function') {
+    var all = window.gromInstrumentsByType('all');
+    for (var i = 0; i < all.length; i++) {
+      var it = all[i];
+      var sym = instrumentSymSlash(it);
+      if (!sym || seen[sym]) continue;
+      seen[sym] = 1;
+      rows.push({
+        sym: sym,
+        type: it.type || 'crypto',
+        fundingBase: (i % 4 === 2 ? -1 : 1) * (0.0012 + (i % 9) * 0.00017),
+        rank: i,
+        ai: i < 14 || sym.indexOf('BTC') >= 0 || sym.indexOf('ETH') >= 0,
+        fresh: i >= 18 && i < 50
+      });
+    }
+  }
+  if (!rows.length) {
+    rows = marketPairs.map(function (p, idx) {
+      return {
+        sym: p.sym,
+        type: 'crypto',
+        fundingBase: (idx % 4 === 2 ? -1 : 1) * (0.0012 + idx * 0.00023),
+        rank: idx,
+        ai: idx < 6 || ['LINK/USDT', 'TON/USDT', 'ARB/USDT'].indexOf(p.sym) !== -1,
+        fresh: idx >= 14
+      };
+    });
+  }
+  futuresPairs = rows;
+  return rows;
+}
+rebuildFuturesPairs();
+
+function rebuildBinaryPairs() {
+  var rows = [];
+  var seen = {};
+  if (typeof window.gromInstrumentsByType === 'function') {
+    var all = window.gromInstrumentsByType('all');
+    for (var i = 0; i < all.length; i++) {
+      var it = all[i];
+      var sym = instrumentSymSlash(it);
+      if (!sym || seen[sym]) continue;
+      seen[sym] = 1;
+      var t = it.type || 'crypto';
+      var cat = (t === 'stock' || t === 'index' || t === 'etf') ? 'otc' : t;
+      rows.push({
+        sym: sym,
+        pay: Math.max(83, 92 - Math.floor(i / 10)),
+        cat: cat,
+        type: t,
+        tier: i < 8 ? 'bluechip' : (i < 20 ? 'momentum' : 'alts'),
+        ai: i < 16 || sym.indexOf('BTC') >= 0 || sym.indexOf('ETH') >= 0,
+        fav: i < 10 || sym.indexOf('BTC') >= 0 || sym.indexOf('ETH') >= 0 || sym.indexOf('XAU') >= 0
+      });
+    }
+  }
+  if (rows.length) {
+    binaryPairs.length = 0;
+    Array.prototype.push.apply(binaryPairs, rows);
+  }
+  return binaryPairs;
+}
+rebuildBinaryPairs();
 
 function pairMeta(sym) {
   return marketPairs.find(function (p) { return p.sym === sym; }) || null;
@@ -7357,9 +7935,39 @@ function marketFmt(v) {
   return fmt(n, 2);
 }
 
+function formatOrderPrice(px) {
+  var n = Number(px);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  if (n >= 1000) return n.toFixed(2);
+  if (n >= 20) return n.toFixed(2);
+  if (n >= 1) return n.toFixed(4);
+  if (n >= 0.01) return n.toFixed(6);
+  return n.toFixed(8);
+}
+
+function syncFutPriceInput(px) {
+  var el = document.getElementById('futPriceInput');
+  if (!el || document.activeElement === el) return;
+  var formatted = formatOrderPrice(px);
+  if (formatted) {
+    el.value = formatted;
+    el.setCustomValidity('');
+  }
+}
+
+function parseNumberInput(val) {
+  if (val == null || val === '') return NaN;
+  return parseFloat(String(val).replace(/,/g, '.').replace(/\s/g, ''));
+}
+
     function priceForPair(sym) {
       var s = String(sym || '').toUpperCase();
       var base = s.split('/')[0].replace(/[^A-Z]/g, '');
+      if (typeof window.gromLivePrice === 'function') {
+        var liveSym = base + (s.indexOf('USDT') >= 0 ? 'USDT' : (s.indexOf('USD') >= 0 ? 'USD' : 'USDT'));
+        var livePx = Number(window.gromLivePrice(liveSym));
+        if (Number.isFinite(livePx) && livePx > 0) return livePx;
+      }
       if (base === 'BTC') return btcPrice;
   if (base === 'ETH') return ethPrice;
   if (base === 'SOL') return solPrice;
@@ -7420,7 +8028,50 @@ function reseedSeriesIfNeeded(series, anchor) {
   }
 }
 
+function formatDeskPrice(sym, px) {
+  var n = Number(px);
+  if (!Number.isFinite(n)) return '—';
+  var showDollar = !(n < 100 && String(sym).indexOf('USD') !== -1 && String(sym).indexOf('BTC') === -1);
+  return (showDollar ? '$' : '') + marketFmt(n);
+}
+
+function syncTradingDeskPrices() {
+  var pairPx = priceForPair(boState.pair);
+  var boEl = document.getElementById('boPrice');
+  if (boEl) boEl.textContent = formatDeskPrice(boState.pair, pairPx);
+  var pip = document.getElementById('boPip');
+  if (pip && typeof boState !== 'undefined') {
+    var ref = boState.strike || pairPx || 1;
+    var deltaPct = ((pairPx - ref) / Math.max(ref, 1e-9)) * 100;
+    pip.textContent = (deltaPct >= 0 ? '+' : '') + deltaPct.toFixed(2) + '%';
+    pip.className = 'pip ' + (deltaPct >= 0 ? 'up' : 'down');
+  }
+  var spotEl = document.getElementById('spotPrice');
+  if (spotEl) {
+    var spotPx = priceForPair(spotState.pair);
+    if (Number.isFinite(spotPx)) spotEl.textContent = '$' + marketFmt(spotPx);
+  }
+  var futEl = document.getElementById('futPrice');
+  if (futEl) futEl.textContent = '$' + marketFmt(priceForPair(futDeskState.pair));
+}
+
 function tickPrices() {
+  if (window.__gromLiveFeedActive && Date.now() - (window.__gromLastLiveTick || 0) < 20000) {
+    gromSyncCorePricesFromLive();
+    var pairPxLive = priceForPair(boState.pair);
+    reseedSeriesIfNeeded(btcHistory, btcPrice);
+    reseedSeriesIfNeeded(boSeries, pairPxLive);
+    reseedSeriesIfNeeded(spotSeries, priceForPair(spotState.pair));
+    reseedSeriesIfNeeded(futSeries, priceForPair(futDeskState.pair));
+    syncBinaryStrike(false);
+    syncTradingDeskPrices();
+    updateSpotBoard(spotState.pair);
+    updateFuturesBoard();
+    renderBinaryProPanels();
+    updateQuoteRows();
+    drawChart('boChart'); drawChart('spotChart'); drawChart('futChart');
+    return;
+  }
   btcPrice += (Math.random() - 0.48) * 80;
   ethPrice += (Math.random() - 0.49) * 8;
   solPrice += (Math.random() - 0.5) * 0.6;
@@ -7450,23 +8101,7 @@ function tickPrices() {
   const a = document.getElementById('px-btc'); if (a) a.textContent = '$' + fmt(btcPrice);
   const b = document.getElementById('px-eth'); if (b) b.textContent = '$' + fmt(ethPrice);
   const c = document.getElementById('px-sol'); if (c) c.textContent = '$' + fmt(solPrice);
-  var curPx = pairPx;
-  const d = document.getElementById('boPrice');
-  if (d) d.textContent = (curPx < 100 && String(boState.pair).indexOf('USD') !== -1 && String(boState.pair).indexOf('BTC') === -1 ? '' : '$') + fmt(curPx, curPx < 20 ? 5 : 2);
-  const e = document.getElementById('spotPrice');
-  if (e) {
-    var spotPx = priceForPair(spotState.pair);
-    if (Number.isFinite(spotPx)) e.textContent = '$' + marketFmt(spotPx);
-  }
-  const f = document.getElementById('futPrice');
-  if (f) f.textContent = '$' + marketFmt(priceForPair(futDeskState.pair));
-  const pip = document.getElementById('boPip');
-  if (pip && typeof boState !== 'undefined') {
-    var ref = boState.strike || 1;
-    var deltaPct = ((curPx - ref) / ref) * 100;
-    pip.textContent = (deltaPct >= 0 ? '+' : '') + deltaPct.toFixed(2) + '%';
-    pip.className = 'pip ' + (deltaPct >= 0 ? 'up' : 'down');
-  }
+  syncTradingDeskPrices();
   var spotAnchor = priceForPair(spotState.pair);
   reseedSeriesIfNeeded(spotSeries, spotAnchor);
   spotSeries.shift(); spotSeries.push(spotAnchor);
@@ -7750,8 +8385,11 @@ var GROM_TV_DATA_VERSION = '20260605-stable-v3';
     '.chart-wrap { padding-top: 0 !important; padding-bottom: 0 !important; }',
     '.bo-chart-body { background: radial-gradient(circle at 72% 22%, rgba(0,194,255,.10), transparent 34%), radial-gradient(circle at 12% 86%, rgba(245,185,77,.08), transparent 30%); }',
     '.grom-tv-watermark { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:1; pointer-events:none; font-size:clamp(42px,8vw,108px); font-weight:900; letter-spacing:.18em; color:rgba(109,167,255,.035); text-shadow:0 0 42px rgba(0,194,255,.08); }',
-    '.grom-tv-badge { position:absolute; top:10px; right:10px; z-index:6; display:flex; gap:7px; flex-wrap:wrap; justify-content:flex-end; pointer-events:none; max-width:72%; }',
-    '.grom-tv-badge span { border:1px solid rgba(122,162,199,.18); background:rgba(7,11,22,.68); backdrop-filter:blur(12px); color:#b8c7d9; border-radius:999px; padding:5px 8px; font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; box-shadow:0 8px 24px rgba(0,0,0,.18); }',
+    '.grom-tv-toolbar { position:absolute; top:8px; left:10px; right:10px; z-index:6; display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:8px 12px; pointer-events:none; }',
+    '.grom-tv-legend { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; font-size:10px; font-family:ui-sans-serif,system-ui;color:#9bb3c7; max-width:min(58%,420px); line-height:1.35; }',
+    '.grom-tv-legend b { font-weight:700; font-variant-numeric:tabular-nums; }',
+    '.grom-tv-badge { position:static; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; pointer-events:none; max-width:min(42%,360px); margin-left:auto; }',
+    '.grom-tv-badge span { border:1px solid rgba(122,162,199,.18); background:rgba(7,11,22,.68); backdrop-filter:blur(12px); color:#b8c7d9; border-radius:999px; padding:4px 7px; font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; box-shadow:0 8px 24px rgba(0,0,0,.18); white-space:nowrap; }',
     '.grom-tv-badge span.hot { color:#22c17c; border-color:rgba(34,193,124,.34); background:rgba(34,193,124,.10); }',
     '.grom-tv-badge span.warn { color:#f5b94d; border-color:rgba(245,185,77,.38); background:rgba(245,185,77,.10); }',
     '.grom-tv-expiry { position:absolute; top:0; bottom:0; z-index:2; width:1px; pointer-events:none; background:linear-gradient(180deg, transparent, rgba(245,185,77,.86), transparent); box-shadow:0 0 22px rgba(245,185,77,.45); }',
@@ -7759,7 +8397,8 @@ var GROM_TV_DATA_VERSION = '20260605-stable-v3';
     '.grom-tv-expiry::before { content:""; position:absolute; top:0; bottom:0; left:0; width:220px; background:linear-gradient(90deg, rgba(245,185,77,.10), transparent); }',
     /* price-scale font / size tweak — tighter labels */
     '#boChart .tv-lightweight-charts, #spotChart .tv-lightweight-charts, #futChart .tv-lightweight-charts { font-feature-settings: "tnum" 1; }',
-    '@media (max-width: 720px) { #boChart, #spotChart, #futChart { min-height: 330px; } .grom-tv-badge { position:static; padding:8px 10px 0; max-width:none; justify-content:flex-start; } }',
+    '@media (max-width: 900px) { #futChart { min-height: 260px !important; height: 260px !important; } }',
+    '@media (max-width: 720px) { #boChart, #spotChart { min-height: 330px; } #futChart { min-height: 260px !important; height: 260px !important; } .grom-tv-toolbar { flex-direction:column; align-items:stretch; gap:6px; } .grom-tv-legend, .grom-tv-badge { max-width:100%; justify-content:flex-start; margin-left:0; } }',
   ].join('\n');
   document.head.appendChild(s);
 })();
@@ -7933,10 +8572,14 @@ function _gromActiveText(selector, fallback) {
 }
 function _gromIntervalForChart(id, mode) {
   if (id === 'boChart') return Math.max(1, Number(window.__boTfSec || 5));
+  var tfMap = { '1M': 60, '5M': 300, '15M': 900, '1H': 3600, '4H': 14400, '1D': 86400 };
   if (id === 'spotChart') {
-    var t = _gromActiveText('#spotTfPills button.active', '15m').toUpperCase();
-    var map = { '1M': 60, '5M': 300, '15M': 900, '1H': 3600, '4H': 14400, '1D': 86400 };
-    return map[t] || 900;
+    var tSpot = _gromActiveText('#spotTfPills button.active', '15m').toUpperCase();
+    return tfMap[tSpot] || 900;
+  }
+  if (id === 'futChart') {
+    var tFut = _gromActiveText('#page-futures .bo-hud-top .bo-chip-row button.active', '15m').toUpperCase();
+    return tfMap[tFut] || 900;
   }
   return mode === 'area' ? 5 : 60;
 }
@@ -8075,21 +8718,26 @@ function gromDrawTVChart(id, opts) {
       });
       state.chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
       // Compress price scale margins so volume fits
-      state.chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.08, bottom: 0.22 } });
-      // Legend overlay for MA values
-      var legend = document.createElement('div');
-      legend.style.cssText = 'position:absolute;top:8px;left:10px;z-index:5;font-size:11px;font-family:ui-sans-serif,system-ui;color:#9bb3c7;pointer-events:none;display:flex;gap:14px';
-      legend.innerHTML = '<span style="color:#f5b94d">MA(7) <b id="' + id + '_ma7v" style="font-weight:700">—</b></span><span style="color:#9d6cf5">MA(25) <b id="' + id + '_ma25v" style="font-weight:700">—</b></span><span style="color:#00d4ff">VWAP <b id="' + id + '_vwapv" style="font-weight:700">—</b></span>';
-      c.appendChild(legend);
+      state.chart.priceScale('right').applyOptions({ scaleMargins: { top: id === 'boChart' ? 0.08 : 0.14, bottom: 0.22 } });
     }
     var wm = document.createElement('div');
     wm.className = 'grom-tv-watermark';
     wm.textContent = id === 'boChart' ? 'BINARY' : (id === 'futChart' ? 'PERP' : 'GROM');
     c.appendChild(wm);
+    var toolbar = document.createElement('div');
+    toolbar.className = 'grom-tv-toolbar';
+    toolbar.id = id + '_toolbar';
+    if ((mode === 'candles' || mode === 'heikin' || mode === 'bars') && id !== 'boChart') {
+      var legend = document.createElement('div');
+      legend.className = 'grom-tv-legend';
+      legend.innerHTML = '<span style="color:#f5b94d">MA(7) <b id="' + id + '_ma7v">—</b></span><span style="color:#9d6cf5">MA(25) <b id="' + id + '_ma25v">—</b></span><span style="color:#00d4ff">VWAP <b id="' + id + '_vwapv">—</b></span>';
+      toolbar.appendChild(legend);
+    }
     var badge = document.createElement('div');
     badge.className = 'grom-tv-badge';
     badge.id = id + '_badges';
-    c.appendChild(badge);
+    toolbar.appendChild(badge);
+    c.appendChild(toolbar);
     if (typeof ResizeObserver !== 'undefined') {
       var ro = new ResizeObserver(function () {
         state.chart.applyOptions({ width: c.clientWidth, height: c.clientHeight || 380 });
@@ -8142,12 +8790,18 @@ function gromDrawTVChart(id, opts) {
   if (badgeEl) {
     var last = state.candles[state.candles.length - 1] || { close: px, open: px };
     var impulse = ((last.close - last.open) / Math.max(last.open, 1)) * 100;
-    if (id === 'spotChart') {
-      badgeEl.innerHTML = '<span class="hot">AI liquidity map</span><span>VWAP bands</span><span>' + pair + '</span>';
+    if (id === 'boChart') {
+      badgeEl.innerHTML = '';
+      badgeEl.style.display = 'none';
+    } else if (id === 'spotChart') {
+      badgeEl.style.display = '';
+      badgeEl.innerHTML = '<span class="hot">Live</span><span>' + pair + '</span>';
     } else if (id === 'futChart') {
-      badgeEl.innerHTML = '<span class="warn">Funding live</span><span>Liquidation heat</span><span>' + (futDeskState && futDeskState.leverage ? futDeskState.leverage : 25) + 'x</span>';
+      badgeEl.style.display = '';
+      badgeEl.innerHTML = '<span class="warn">Funding</span><span>' + (futDeskState && futDeskState.leverage ? futDeskState.leverage : 25) + '×</span>';
     } else {
-      badgeEl.innerHTML = '<span class="hot">1-tap expiry</span><span>Strike radar</span><span>' + (impulse >= 0 ? '+' : '') + impulse.toFixed(2) + '% candle</span>';
+      badgeEl.style.display = '';
+      badgeEl.innerHTML = '<span class="hot">Live</span><span>' + (impulse >= 0 ? '+' : '') + impulse.toFixed(2) + '%</span>';
     }
   }
   if (id === 'spotChart') {
@@ -8757,15 +9411,12 @@ function updateSpotBoard(sym) {
   var amount = amountMap[base] || 10;
   var total = Number.isFinite(px) ? px * amount : 0;
   var op = document.getElementById('spotOrderPrice');
-  if (op && Number.isFinite(px)) op.textContent = marketFmt(px) + ' ' + quote;
+  if (op && Number.isFinite(px)) op.value = String(px);
   var trg = document.getElementById('spotTriggerPrice');
-  if (trg && Number.isFinite(px)) trg.textContent = marketFmt(px * 0.994) + ' ' + quote;
+  if (trg && Number.isFinite(px)) trg.value = String(Number((px * 0.994).toFixed(px >= 100 ? 2 : 4)));
   var oa = document.getElementById('spotOrderAmount');
-  if (oa) oa.textContent = amount.toFixed(base === 'BTC' ? 5 : 2) + ' ' + base;
-  var ot = document.getElementById('spotOrderTotal');
-  if (ot) ot.textContent = fmt(total, total < 20 ? 4 : 2) + ' ' + quote;
-  var fee = document.getElementById('spotFeeTag');
-  if (fee) fee.textContent = '0.10% · ' + fmt(total * 0.001, 2) + ' ' + quote;
+  if (oa) oa.value = String(Number(amount.toFixed(base === 'BTC' ? 5 : 4)));
+  if (typeof syncSpotOrderTotals === 'function') syncSpotOrderTotals();
   var depth = document.getElementById('spotDepthTag');
   if (depth) depth.textContent = '$' + fmt(Math.max(2.8, Math.abs(px) * 0.00014), 1) + 'M';
   var vol = document.getElementById('spotVolumeTag');
@@ -8783,6 +9434,59 @@ function updateSpotBoard(sym) {
   renderSpotRecentTrades(sym);
   renderSpotLiquidity(sym);
   updateSpotAiAnalysis(sym);
+}
+
+function updateDashboardAiBrief() {
+  var px = priceForPair('BTC/USDT');
+  var drift = Math.sin(px / 4800);
+  var bullish = drift >= -0.1;
+  var bias = document.getElementById('dashAiBias');
+  if (bias) bias.textContent = bullish ? 'Neutral bullish' : 'Cautious bearish';
+  var text = document.getElementById('dashAiText');
+  if (text) {
+    text.textContent = bullish
+      ? 'BTC holds above local value with bids reloading under VWAP. Favor pullback entries on majors; avoid chasing green candles.'
+      : 'Momentum is fading across majors. Reduce size until VWAP is reclaimed and funding pressure cools.';
+  }
+  var top = marketPairs.slice().sort(function (a, b) { return Math.abs(b.chg) - Math.abs(a.chg); })[0];
+  var mover = document.getElementById('dashAiMover');
+  if (mover && top) mover.textContent = top.name + ' ' + (top.chg >= 0 ? '+' : '') + top.chg.toFixed(1) + '%';
+  var risk = document.getElementById('dashAiRisk');
+  if (risk) risk.textContent = Math.abs(drift) > 0.55 ? 'Half size' : 'Normal size';
+  var focus = document.getElementById('dashAiFocus');
+  if (focus) focus.textContent = bullish ? 'Spot · BTC' : 'Binary · short exp';
+  var stamp = document.getElementById('dashAiStamp');
+  if (stamp) stamp.textContent = 'model v2.4 · live · ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
+function updateFuturesAiAnalysis(sym) {
+  var px = priceForPair(sym);
+  var base = String(sym || 'BTC/USDT').split('/')[0];
+  var drift = Math.sin(px / 4200 + futDeskState.leverage * 0.02);
+  var bullish = drift >= -0.08;
+  var strength = Math.round(54 + Math.abs(drift) * 30);
+  var bias = document.getElementById('futAiBias');
+  if (bias) bias.textContent = bullish ? 'Neutral bullish' : 'Cautious bearish';
+  var text = document.getElementById('futAiText');
+  if (text) {
+    text.textContent = bullish
+      ? base + ' perp is holding mark/index convergence with manageable funding drag. Prefer pullback entries over breakout chase above local highs.'
+      : base + ' perp is losing impulse while offers reload above market. Tighten size or wait for basis compression before adding risk.';
+  }
+  var entry = document.getElementById('futAiEntry');
+  if (entry) entry.textContent = strength > 74 ? 'A-' : strength > 60 ? 'B+' : 'B-';
+  var funding = document.getElementById('futAiFunding');
+  if (funding) funding.textContent = Math.abs(drift) > 0.5 ? 'Elevated' : 'Manageable';
+  var liqDist = document.getElementById('futAiLiqDist');
+  if (liqDist) liqDist.textContent = (4.2 + Math.abs(drift) * 1.8).toFixed(1) + '%';
+  var invalid = document.getElementById('futAiInvalid');
+  if (invalid) invalid.textContent = '$' + marketFmt(px * (bullish ? 0.984 : 0.99));
+  var target = document.getElementById('futAiTarget');
+  if (target) target.textContent = '$' + marketFmt(px * (bullish ? 1.014 : 1.008));
+  var risk = document.getElementById('futAiRisk');
+  if (risk) risk.textContent = strength > 74 ? 'Normal size' : 'Half size';
+  var stamp = document.getElementById('futAiStamp');
+  if (stamp) stamp.textContent = 'model v2.4 · ' + base + ' perp';
 }
 
 function updateSpotAiAnalysis(sym) {
@@ -8827,17 +9531,7 @@ function setFuturesPair(sym) {
   });
   var priceEl = document.getElementById('futPrice');
   if (priceEl) priceEl.textContent = '$' + marketFmt(px);
-  var assetTag = document.querySelector('#page-futures .bo-asset');
-  if (assetTag) {
-    var visual = pairVisual(futDeskState.pair);
-    var ico = assetTag.querySelector('.coin-ico');
-    if (ico) {
-      ico.className = 'coin-ico ' + (visual.coin || '');
-      ico.textContent = visual.glyph;
-    }
-    var textNode = Array.from(assetTag.childNodes).find(function (n) { return n.nodeType === 3; });
-    if (textNode) textNode.nodeValue = ' ' + base + 'USDT ';
-  }
+  updateFuturesAssetTag(futDeskState.pair);
   var mark = document.querySelector('#page-futures .fut-stat .mono');
   if (mark) mark.textContent = '$' + marketFmt(px * 0.9999);
   var costEl = Array.from(document.querySelectorAll('#page-futures .pay-panel .v')).find(function (el) { return el.textContent.indexOf('$') !== -1; });
@@ -8852,7 +9546,9 @@ function setFuturesPair(sym) {
   var size = parseFloat(sizeInput && sizeInput.value) || 0.25;
   if (priceHint) priceHint.textContent = futDeskState.pair.split('/')[1] || 'USDT';
   if (sizeHint) sizeHint.textContent = fmt(size, size < 1 ? 3 : 2) + ' ' + base + ' ≈ $' + fmt(px * size, 0);
-  if (priceInput && document.activeElement !== priceInput) priceInput.value = px < 20 ? px.toFixed(4) : px.toFixed(2);
+  syncFutPriceInput(px);
+  var sizeCur = document.getElementById('futSizeCurrency');
+  if (sizeCur) sizeCur.textContent = base;
   futState.sessionLow = px * 0.986;
   futState.sessionHigh = px * 1.014;
   futState.liqTop = px * 1.019;
@@ -8862,7 +9558,6 @@ function setFuturesPair(sym) {
   for (var i = 0; i < fresh.length; i++) futSeries[i] = fresh[i];
   futSeries[futSeries.length - 1] = px;
   updateFuturesBoard();
-  renderFuturesProPanels();
   drawChart('futChart');
   // Real-time futures: subscribe + pull funding/liquidations for the new contract.
   if (typeof subscribeFuturesContract === 'function') subscribeFuturesContract(futDeskState.pair);
@@ -9199,6 +9894,31 @@ window.addEventListener('grom-ws-event', function (ev) {
   }
 });
 
+function syncSpotOrderTotals() {
+  var quote = (spotState.pair || 'BTC/USDT').split('/')[1] || 'USDT';
+  var px = parseFloat(document.getElementById('spotOrderPrice')?.value || '0');
+  if (!Number.isFinite(px) || px <= 0) px = priceForPair(spotState.pair);
+  var amt = parseFloat(document.getElementById('spotOrderAmount')?.value || '0') || 0;
+  var total = px * amt;
+  var ot = document.getElementById('spotOrderTotal');
+  if (ot) ot.textContent = fmt(total, total < 20 ? 4 : 2) + ' ' + quote;
+  var fee = document.getElementById('spotFeeTag');
+  if (fee) fee.textContent = '0.10% · ' + fmt(total * 0.001, 2) + ' ' + quote;
+}
+
+function syncSpotOrderSubmitButton(baseOverride) {
+  var sb = document.getElementById('spotOrderSubmit');
+  if (!sb) return;
+  var base = baseOverride || (spotState.pair || 'BTC/USDT').split('/')[0] || 'BTC';
+  var side = spotState.side || 'buy';
+  var sellBtn = document.querySelector('#spotSideToggle button.sell.active');
+  if (sellBtn) side = 'sell';
+  else if (document.querySelector('#spotSideToggle button.buy.active')) side = 'buy';
+  spotState.side = side;
+  sb.textContent = (side === 'sell' ? 'Sell ' : 'Buy ') + base;
+  sb.classList.toggle('spot-submit-sell', side === 'sell');
+}
+
 function setSpotPair(sym) {
   spotState.pair = sym || 'BTC/USDT';
   var t = document.getElementById('spotPairTitle');
@@ -9212,15 +9932,13 @@ function setSpotPair(sym) {
   var amount = amountMap[base] || 10;
   var total = Number.isFinite(px) ? px * amount : 0;
   var op = document.getElementById('spotOrderPrice');
-  if (op && Number.isFinite(px)) op.textContent = marketFmt(px) + ' ' + quote;
+  if (op && Number.isFinite(px)) op.value = String(px);
   var trg = document.getElementById('spotTriggerPrice');
-  if (trg && Number.isFinite(px)) trg.textContent = marketFmt(px * 0.994) + ' ' + quote;
+  if (trg && Number.isFinite(px)) trg.value = String(Number((px * 0.994).toFixed(px >= 100 ? 2 : 4)));
   var oa = document.getElementById('spotOrderAmount');
-  if (oa) oa.textContent = amount.toFixed(base === 'BTC' ? 5 : 2) + ' ' + base;
-  var ot = document.getElementById('spotOrderTotal');
-  if (ot) ot.textContent = fmt(total, total < 20 ? 4 : 2) + ' ' + quote;
-  var sb = document.getElementById('spotOrderSubmit');
-  if (sb) sb.textContent = 'Buy ' + base;
+  if (oa) oa.value = String(Number(amount.toFixed(base === 'BTC' ? 5 : 4)));
+  if (typeof syncSpotOrderTotals === 'function') syncSpotOrderTotals();
+  syncSpotOrderSubmitButton(base);
   var chg = document.getElementById('spotChangeBadge');
   if (chg) chg.textContent = ((Math.sin(px / 5000) * 2.2) >= 0 ? '+' : '') + (Math.sin(px / 5000) * 2.2).toFixed(2) + '%';
   var chgNote = document.getElementById('spotChangeNote');
@@ -9320,47 +10038,92 @@ function initMarketsFilter() {
 function renderBinaryWatchlist(filter) {
   var host = document.getElementById('wlList');
   if (!host) return;
+  if (!binaryPairs.length && typeof rebuildBinaryPairs === 'function') rebuildBinaryPairs();
   var shell = host.closest('.wl');
   if (shell) shell.classList.toggle('compact', listUiState.binaryMode === 'compact');
   var q = String(filter || '').trim().toUpperCase();
+  var tab = boState.wlTab || 'all';
   var rows = binaryPairs.filter(function (row) {
-    if (!q) return true;
     var visual = pairVisual(row.sym);
-    return row.sym.indexOf(q) !== -1 || String(visual.label || '').toUpperCase().indexOf(q) !== -1;
+    var passSearch = !q || row.sym.indexOf(q) !== -1 || String(visual.label || '').toUpperCase().indexOf(q) !== -1;
+    var passTab = tab === 'all' || (tab === 'fav' ? (row.fav || /BTC|ETH|SOL|BNB|XRP|DOGE|LINK|AVAX/i.test(row.sym)) : binaryMatchesCat(row.sym, tab));
+    return passSearch && passTab;
   });
-  host.innerHTML = rows.map(function (row, idx) {
-    var visual = pairVisual(row.sym);
+  if (!rows.length) {
+    host.innerHTML = '<div class="wl-item" style="opacity:.65;cursor:default;padding:14px 10px"><div><div class="nm">No pairs in this category</div><div class="px" style="font-size:11px">Try All or another filter.</div></div></div>';
+    return;
+  }
+  host.innerHTML = rows.map(function (row) {
     var px = priceForPair(row.sym);
-    var delta = Math.sin((idx + 1) * 0.9) * 0.22;
-    var badge = row.ai ? ' · AI' : (row.tier ? ' · ' + row.tier : '');
-    return '<div class="wl-item' + (row.sym === boState.pair ? ' active' : '') + '" data-pair="' + row.sym + '" data-price="' + px + '" data-pay="' + row.pay + '" data-cat="' + row.cat + '" data-fav="' + (idx < 6 ? '1' : '0') + '">' +
-      '<span class="coin-ico ' + (visual.coin || '') + '" style="width:22px;height:22px;font-size:10px">' + visual.glyph + '</span>' +
-      '<div><div class="nm">' + row.sym + ' <span class="chg ' + (delta >= 0 ? 'up' : 'down') + '">' + (delta >= 0 ? '+' : '') + delta.toFixed(2) + '%</span></div><div class="px mono">' + (px >= 100 || row.sym.indexOf('USD') === -1 || row.sym.indexOf('BTC') !== -1 ? '$' : '') + marketFmt(px) + '<span style="color:var(--silver5);font-size:10px;margin-left:5px">' + badge + '</span></div></div>' +
+    var chg = (typeof window.gromLiveChange === 'function') ? Number(window.gromLiveChange(row.sym.replace('/', ''))) : NaN;
+    if (!Number.isFinite(chg)) {
+      var meta = pairMeta(row.sym);
+      chg = meta && Number.isFinite(meta.chg) ? meta.chg : (Math.sin(px / 5000) * 0.65);
+    }
+    var badge = row.ai ? ' · AI' : '';
+    var isFav = row.fav ? '1' : '0';
+    return '<div class="wl-item' + (row.sym === boState.pair ? ' active' : '') + '" data-pair="' + row.sym + '" data-price="' + px + '" data-pay="' + row.pay + '" data-cat="' + (row.cat || 'crypto') + '" data-fav="' + isFav + '">' +
+      futuresRowIcoHtml(row.sym) +
+      '<div><div class="nm">' + row.sym + ' <span class="chg ' + (chg >= 0 ? 'up' : 'down') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</span></div><div class="px mono">' + (px >= 100 || row.sym.indexOf('BTC') !== -1 ? '$' : '') + marketFmt(px) + '<span style="color:var(--silver5);font-size:10px;margin-left:5px">' + badge + '</span></div></div>' +
       '<div class="pay">+' + row.pay + '%</div></div>';
   }).join('');
+}
+
+function futuresRowIcoHtml(sym) {
+  if (typeof dashWatchIcoHtml === 'function') return dashWatchIcoHtml(sym);
+  var visual = pairVisual(sym);
+  return '<span class="coin-ico ' + (visual.coin || '') + '">' + visual.glyph + '</span>';
+}
+
+function updateBinaryAssetTag(sym, payPct) {
+  var tag = document.getElementById('boAssetTag');
+  if (!tag) return;
+  var payEl = tag.querySelector('.pay');
+  if (payEl && payPct != null) payEl.textContent = '+' + payPct + '%';
+  var lbl = document.getElementById('boAssetLabel');
+  if (lbl) lbl.textContent = sym || boState.pair || 'BTC/USDT';
+  var icoHost = document.getElementById('boAssetIco');
+  if (icoHost) icoHost.innerHTML = futuresRowIcoHtml(sym || boState.pair);
+}
+
+function updateFuturesAssetTag(sym) {
+  var base = String(sym || 'BTC/USDT').split('/')[0];
+  var lbl = document.getElementById('futAssetLabel');
+  if (lbl) lbl.textContent = base + 'USDT';
+  var icoHost = document.getElementById('futAssetIco');
+  if (icoHost) icoHost.innerHTML = futuresRowIcoHtml(sym);
 }
 
 function renderFuturesList(filter) {
   var host = document.getElementById('futList');
   if (!host) return;
+  if (!futuresPairs.length && typeof rebuildFuturesPairs === 'function') rebuildFuturesPairs();
   var shell = host.closest('.wl');
   if (shell) shell.classList.toggle('compact', listUiState.futuresMode === 'compact');
   var q = String(filter || '').trim().toUpperCase();
+  var cat = listUiState.futuresCat || 'all';
   var rows = futuresPairs.filter(function (row) {
     var visual = pairVisual(row.sym);
     var f = listUiState.futuresFilter;
-    var passFilter = f === 'all' || (f === 'top' && row.rank < 10) || (f === 'new' && row.fresh) || (f === 'ai' && row.ai);
-    return passFilter && (!q || row.sym.replace('/', '').indexOf(q) !== -1 || String(visual.label || '').toUpperCase().indexOf(q) !== -1);
+    var passTab = f === 'all' || (f === 'top' && row.rank < 12) || (f === 'new' && row.fresh) || (f === 'ai' && row.ai);
+    var passCat = futuresMatchesCat(row.sym, cat);
+    return passTab && passCat && (!q || row.sym.replace('/', '').indexOf(q) !== -1 || String(visual.label || '').toUpperCase().indexOf(q) !== -1);
   });
+  if (!rows.length) {
+    host.innerHTML = '<div class="wl-item" style="opacity:0.65;cursor:default"><div><div class="nm">No contracts</div><div class="px">Try another category or search.</div></div></div>';
+    return;
+  }
   host.innerHTML = rows.map(function (row) {
-    var visual = pairVisual(row.sym);
     var px = priceForPair(row.sym);
-    var chg = Math.sin(px / 5000) * 0.65;
+    var chg = (typeof window.gromLiveChange === 'function') ? Number(window.gromLiveChange(row.sym.replace('/', ''))) : NaN;
+    if (!Number.isFinite(chg)) {
+      var meta = pairMeta(row.sym);
+      chg = meta && Number.isFinite(meta.chg) ? meta.chg : (Math.sin(px / 5000) * 0.65);
+    }
     var funding = row.fundingBase + Math.abs(Math.sin(px / 7000)) * 0.0012;
-    var tag = row.ai ? ' · AI pick' : (row.fresh ? ' · new' : ' · perp');
     return '<div class="wl-item' + (row.sym === futDeskState.pair ? ' active' : '') + '" data-pair="' + row.sym + '">' +
-      '<span class="coin-ico ' + (visual.coin || '') + '" style="width:22px;height:22px;font-size:10px">' + visual.glyph + '</span>' +
-      '<div><div class="nm">' + row.sym.replace('/', '') + ' <span class="chg ' + (chg >= 0 ? 'up' : 'down') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</span></div><div class="px mono">$' + marketFmt(px) + '<span style="color:var(--silver5);font-size:10px;margin-left:5px">' + tag + '</span></div></div>' +
+      futuresRowIcoHtml(row.sym) +
+      '<div><div class="nm">' + row.sym.replace('/', '') + ' <span class="chg ' + (chg >= 0 ? 'up' : 'down') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</span></div><div class="px mono">$' + marketFmt(px) + '</div></div>' +
       '<div class="pay" style="color:' + (funding >= 0 ? 'var(--warn)' : 'var(--danger)') + '">' + (funding >= 0 ? '+' : '-') + Math.abs(funding).toFixed(4) + '%</div></div>';
   }).join('');
 }
@@ -9413,6 +10176,35 @@ function wireListSearches() {
       renderFuturesList(document.querySelector('#page-futures .wl-search input')?.value || '');
     });
   }
+  var futCats = document.getElementById('futCats');
+  if (futCats && !futCats.dataset.wired) {
+    futCats.dataset.wired = '1';
+    futCats.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-cat]');
+      if (!b) return;
+      futCats.querySelectorAll('button').forEach(function (x) {
+        x.classList.remove('active');
+        x.style.background = 'transparent';
+        x.style.color = 'var(--silver4)';
+      });
+      b.classList.add('active');
+      b.style.background = 'rgba(77,158,255,0.18)';
+      b.style.color = 'var(--silver1)';
+      listUiState.futuresCat = b.dataset.cat || 'all';
+      renderFuturesList(document.querySelector('#page-futures .wl-search input')?.value || '');
+    });
+  }
+  document.querySelectorAll('#page-futures .bo-hud-top .bo-chip-row button').forEach(function (btn) {
+    if (btn.dataset.futTfWired) return;
+    btn.dataset.futTfWired = '1';
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#page-futures .bo-hud-top .bo-chip-row button').forEach(function (x) { x.classList.remove('active'); });
+      btn.classList.add('active');
+      var st = window.__gromTVCharts && window.__gromTVCharts.futChart;
+      if (st && st.chart) { try { st.chart.remove(); } catch (_) {} delete window.__gromTVCharts.futChart; }
+      drawChart('futChart');
+    });
+  });
 }
 
 function initBinaryWatchlistMeta() {
@@ -9478,23 +10270,35 @@ function updateQuoteRows() {
     }
   });
   renderMarkets();
+  if (typeof updateDashboardWatchlistPrices === 'function') updateDashboardWatchlistPrices();
+  if (typeof updateDashboardAiBrief === 'function') updateDashboardAiBrief();
 }
 
 async function fetchLiveQuotes() {
   try {
     var data = window.gromApiFetch ? await window.gromApiFetch('/api/market/quotes') : null;
     if (data && data.crypto) {
-      btcPrice = Number(data.crypto.BTC || btcPrice);
-      ethPrice = Number(data.crypto.ETH || ethPrice);
-      solPrice = Number(data.crypto.SOL || solPrice);
-      bnbPrice = Number(data.crypto.BNB || bnbPrice);
-      xrpPrice = Number(data.crypto.XRP || xrpPrice);
-      adaPrice = Number(data.crypto.ADA || adaPrice);
-      dogePrice = Number(data.crypto.DOGE || dogePrice);
-      avaxPrice = Number(data.crypto.AVAX || avaxPrice);
-      linkPrice = Number(data.crypto.LINK || linkPrice);
+      // Never let stale /api/market/quotes overwrite live Binance-backed core prices.
+      if (!window.__gromLiveFeedActive) {
+        btcPrice = Number(data.crypto.BTC || btcPrice);
+        ethPrice = Number(data.crypto.ETH || ethPrice);
+        solPrice = Number(data.crypto.SOL || solPrice);
+        bnbPrice = Number(data.crypto.BNB || bnbPrice);
+        xrpPrice = Number(data.crypto.XRP || xrpPrice);
+        adaPrice = Number(data.crypto.ADA || adaPrice);
+        dogePrice = Number(data.crypto.DOGE || dogePrice);
+        avaxPrice = Number(data.crypto.AVAX || avaxPrice);
+        linkPrice = Number(data.crypto.LINK || linkPrice);
+      }
       Object.keys(extraCryptoPrices).forEach(function (asset) {
-        if (data.crypto[asset] != null) extraCryptoPrices[asset] = Number(data.crypto[asset]);
+        if (data.crypto[asset] == null) return;
+        var next = Number(data.crypto[asset]);
+        if (!Number.isFinite(next)) return;
+        if (window.__gromLiveFeedActive && typeof window.gromLivePrice === 'function') {
+          var live = Number(window.gromLivePrice(asset + 'USDT'));
+          if (Number.isFinite(live) && live > 0 && Math.abs(next - live) / live > 0.15) return;
+        }
+        extraCryptoPrices[asset] = next;
       });
     }
     if (data && data.fx) {
@@ -9546,8 +10350,8 @@ function updateHistorySummary() {
     var stakeTxt = stakeEl ? (stakeEl.textContent || '').replace(/,/g, '') : '';
     var pnlNum = parseFloat(pnlTxt.replace(/[^\d.+-]/g, ''));
     var stakeNum = parseFloat(stakeTxt.replace(/[^\d.+-]/g, ''));
-    if ((kind === 'binary' || kind === 'spot') && Number.isFinite(pnlNum)) pnl += pnlNum;
-    if (kind === 'binary' || kind === 'spot') trades += 1;
+    if ((kind === 'binary' || kind === 'spot' || kind === 'futures') && Number.isFinite(pnlNum)) pnl += pnlNum;
+    if (kind === 'binary' || kind === 'spot' || kind === 'futures') trades += 1;
     if (kind === 'deposits' && Number.isFinite(stakeNum)) deposits += stakeNum;
     if (kind === 'withdrawals' && Number.isFinite(stakeNum)) withdrawals += stakeNum;
   });
@@ -9602,11 +10406,6 @@ function exportHistoryCsv() {
     loaded: false,
     backendReady: false,
   };
-  var spotUiState = {
-    side: 'buy',
-    type: 'limit',
-  };
-
   function apiBase() {
     return '';
   }
@@ -9728,6 +10527,9 @@ function exportHistoryCsv() {
     renderConnectedWalletsList();
     var assetCountEl = document.getElementById('walletAssetCount');
     if (assetCountEl) assetCountEl.textContent = String(summary.assetCount || 0) + ' tokens';
+
+    if (typeof updateDashboardFromWallet === 'function') updateDashboardFromWallet(data);
+    if (typeof updateOnboardingChecklist === 'function') updateOnboardingChecklist();
 
     var assetsHost = document.getElementById('walletAssetsList');
     if (assetsHost && Array.isArray(data.assets)) {
@@ -10082,26 +10884,24 @@ function exportHistoryCsv() {
   };
   window.submitSpotOrder = async function submitSpotOrder() {
     var pair = (typeof spotState !== 'undefined' && spotState.pair) ? spotState.pair : 'BTC/USDT';
-    var priceText = document.getElementById('spotOrderPrice')?.textContent || '0';
-    var amountText = document.getElementById('spotOrderAmount')?.textContent || '0';
-    var price = parseFloat(String(priceText).replace(/[^\d.]/g, '')) || 0;
-    var amount = parseFloat(String(amountText).replace(/[^\d.]/g, '')) || 0;
+    var price = parseFloat(document.getElementById('spotOrderPrice')?.value || '0') || 0;
+    var amount = parseFloat(document.getElementById('spotOrderAmount')?.value || '0') || 0;
     if (!amount || amount <= 0) { toast('Order amount is empty', 'error'); return; }
     try {
       var result = await apiFetch('/api/spot/orders', {
         method: 'POST',
         body: JSON.stringify({
           pair: pair,
-          side: spotUiState.side,
-          type: spotUiState.type,
+          side: spotState.side || 'buy',
+          type: spotState.orderType || 'limit',
           price: price,
           amount: amount,
         }),
       });
       var status = result && result.order ? result.order.status : '';
-      if (status === 'filled') toast((spotUiState.side === 'buy' ? 'Buy' : 'Sell') + ' order filled · ' + pair, 'success');
-      else if (status === 'partial') toast((spotUiState.side === 'buy' ? 'Buy' : 'Sell') + ' order partially filled · ' + pair, 'info');
-      else toast((spotUiState.side === 'buy' ? 'Buy' : 'Sell') + ' order resting · ' + pair, 'success');
+      if (status === 'filled') toast((spotState.side === 'buy' ? 'Buy' : 'Sell') + ' order filled · ' + pair, 'success');
+      else if (status === 'partial') toast((spotState.side === 'buy' ? 'Buy' : 'Sell') + ' order partially filled · ' + pair, 'info');
+      else toast((spotState.side === 'buy' ? 'Buy' : 'Sell') + ' order resting · ' + pair, 'success');
       hydrateWalletSlice(true);
     } catch (err) {
       if (err && err.status === 400) toast('Not enough available balance for this order', 'error');
@@ -10119,7 +10919,7 @@ function exportHistoryCsv() {
       tabs.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
       b.classList.add('active');
       var label = (b.textContent || '').toLowerCase();
-      spotUiState.type = label.indexOf('market') !== -1 ? 'market' : label.indexOf('stop') !== -1 ? 'stop' : 'limit';
+      spotState.orderType = label.indexOf('market') !== -1 ? 'market' : label.indexOf('stop') !== -1 ? 'stop' : 'limit';
     });
     var side = card.querySelector('.side-toggle');
     if (side) side.addEventListener('click', function (e) {
@@ -10127,8 +10927,9 @@ function exportHistoryCsv() {
       if (!b) return;
       side.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
       b.classList.add('active');
-      spotUiState.side = b.classList.contains('sell') ? 'sell' : 'buy';
-      if (typeof setSpotPair === 'function') setSpotPair(spotState.pair);
+      spotState.side = b.classList.contains('sell') ? 'sell' : 'buy';
+      if (typeof syncSpotOrderSubmitButton === 'function') syncSpotOrderSubmitButton();
+      else if (typeof setSpotPair === 'function') setSpotPair(spotState.pair);
     });
     var alloc = card.querySelector('.spot-allocator');
     if (alloc) alloc.addEventListener('click', function (e) {
@@ -10144,7 +10945,7 @@ function exportHistoryCsv() {
       var quoteRow = data.assets.find(function (row) { return row.asset === quote; });
       var baseRow = data.assets.find(function (row) { return row.asset === base; });
       var nextAmount = 0;
-      if (spotUiState.side === 'buy') {
+      if (spotState.side === 'buy') {
         var quoteAvail = quoteRow ? Math.max(Number(quoteRow.amount || 0) - Number(quoteRow.locked || 0), 0) : 0;
         nextAmount = (quoteAvail * (pct / 100)) / Math.max(price, 0.0000001);
       } else {
@@ -10152,9 +10953,16 @@ function exportHistoryCsv() {
         nextAmount = baseAvail * (pct / 100);
       }
       var amountEl = document.getElementById('spotOrderAmount');
-      if (amountEl) amountEl.textContent = nextAmount.toFixed(base === 'BTC' ? 5 : nextAmount >= 10 ? 2 : 4) + ' ' + base;
-      var totalEl = document.getElementById('spotOrderTotal');
-      if (totalEl) totalEl.textContent = (nextAmount * price).toFixed(nextAmount * price < 20 ? 4 : 2) + ' ' + quote;
+      if (amountEl) amountEl.value = String(Number(nextAmount.toFixed(base === 'BTC' ? 5 : nextAmount >= 10 ? 2 : 4)));
+      if (typeof syncSpotOrderTotals === 'function') syncSpotOrderTotals();
+    });
+    ['spotOrderPrice', 'spotOrderAmount'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el || el.dataset.wired === '1') return;
+      el.dataset.wired = '1';
+      el.addEventListener('input', function () {
+        if (typeof syncSpotOrderTotals === 'function') syncSpotOrderTotals();
+      });
     });
   };
 })();
@@ -10175,8 +10983,10 @@ function exportHistoryCsv() {
   var state = {
     socket: null,
     es: null,
-    transport: null,        // 'ws' | 'sse' | null
+    publicSocket: null,
+    transport: null,        // 'ws' | 'sse' | 'feed' | null
     connected: false,
+    publicFeed: false,
     backoff: 1000,
     backoffMax: 30000,
     wsFailures: 0,
@@ -10200,7 +11010,7 @@ function exportHistoryCsv() {
   }
 
   function defaultPriceChannels() {
-    return ['prices.BTC/USDT', 'prices.ETH/USDT', 'prices.SOL/USDT', 'prices.XRP/USDT'];
+    return ['price:BTC/USDT', 'price:ETH/USDT', 'price:SOL/USDT', 'price:BNB/USDT', 'price:XRP/USDT'];
   }
 
   function defaultUserChannels() {
@@ -10217,30 +11027,30 @@ function exportHistoryCsv() {
     if (state.indicator) return state.indicator;
     var el = document.createElement('span');
     el.id = 'gromWsIndicator';
+    el.className = 'grom-ws-pill is-offline';
     el.title = 'Realtime feed';
-    el.style.cssText = [
-      'display:inline-flex','align-items:center','gap:4px','margin-right:6px',
-      'padding:0 8px','height:22px','border-radius:11px',
-      'font-size:10px','letter-spacing:0.04em','text-transform:uppercase',
-      'font-weight:700','background:rgba(255,255,255,0.06)','color:#9aa3b2',
-      'border:1px solid rgba(255,255,255,0.1)','transition:all 200ms ease',
-    ].join(';');
-    el.innerHTML = '<span class="dot" style="width:6px;height:6px;border-radius:50%;background:#9aa3b2"></span><span class="lbl">offline</span>';
+    el.innerHTML = '<span class="dot"></span><span class="lbl">offline</span>';
     var group = document.querySelector('.topbar .right .topbar-ico-group');
     if (group) group.insertBefore(el, group.firstChild);
     state.indicator = el;
     return el;
   }
 
+  function refreshIndicator() {
+    var on = state.connected || state.publicFeed;
+    var transport = state.connected ? state.transport : (state.publicFeed ? 'feed' : null);
+    setIndicator(on, transport);
+  }
+
   function setIndicator(connected, transport) {
     var el = ensureIndicator();
     if (!el) return;
     var color = connected ? '#3ad27f' : '#ff5c7a';
-    var label = connected ? (transport === 'sse' ? 'sse' : 'live') : 'offline';
+    var label = connected ? 'live' : 'offline';
+    el.classList.toggle('is-live', !!connected);
+    el.classList.toggle('is-offline', !connected);
     el.querySelector('.dot').style.background = color;
     el.querySelector('.lbl').textContent = label;
-    el.style.color = connected ? color : '#ff5c7a';
-    el.style.borderColor = connected ? 'rgba(58,210,127,0.3)' : 'rgba(255,92,122,0.3)';
   }
 
   function emit(name, payload) {
@@ -10308,10 +11118,56 @@ function exportHistoryCsv() {
     return '/api/stream/sse?' + qs;
   }
 
+  function closePublicWs() {
+    if (!state.publicSocket) return;
+    try { state.publicSocket.close(); } catch (_) {}
+    state.publicSocket = null;
+    state.publicFeed = false;
+  }
+
+  function openPublicWs() {
+    if (state.closed) return;
+    if (state.publicSocket && state.publicSocket.readyState <= 1) return;
+    try {
+      var ws = new WebSocket(wsUrl(''));
+      state.publicSocket = ws;
+      ws.addEventListener('open', function () {
+        state.publicFeed = true;
+        state.backoff = 1000;
+        refreshIndicator();
+        var channels = defaultPriceChannels();
+        try { ws.send(JSON.stringify({ type: 'subscribe', channels: channels })); } catch (_) {}
+        channels.forEach(function (c) { subs.add(c); });
+        emit('connect', { transport: 'feed' });
+      });
+      ws.addEventListener('message', function (ev) {
+        var msg; try { msg = JSON.parse(ev.data); } catch (_) { return; }
+        if (msg.type === 'event') {
+          window.__gromLastLiveTick = Date.now();
+          window.__gromLiveFeedActive = true;
+          dispatchEvent(msg.channel, msg.data);
+        }
+      });
+      ws.addEventListener('close', function () {
+        state.publicFeed = false;
+        state.publicSocket = null;
+        refreshIndicator();
+        if (!state.closed && !state.connected) {
+          setTimeout(openPublicWs, Math.min(state.backoff, state.backoffMax));
+          state.backoff = Math.min(state.backoff * 2, state.backoffMax);
+        }
+      });
+      ws.addEventListener('error', function () { try { ws.close(); } catch (_) {} });
+    } catch (_) {
+      setTimeout(openPublicWs, state.backoff);
+    }
+  }
+
   function openWs() {
     if (state.closed) return;
     var token = getToken();
-    if (!token || token === 'demo-session') return; // wait until login
+    if (!token || token === 'demo-session') return;
+    closePublicWs();
     var payload = decodeJwt(token);
     state.sub = payload && payload.sub ? String(payload.sub) : null;
     if (!state.sub) return;
@@ -10324,7 +11180,7 @@ function exportHistoryCsv() {
         state.transport = 'ws';
         state.backoff = 1000;
         state.wsFailures = 0;
-        setIndicator(true, 'ws');
+        refreshIndicator();
         // Re-subscribe to defaults + previously subscribed
         var channels = defaultUserChannels().concat(defaultPriceChannels());
         subs.forEach(function (c) { if (channels.indexOf(c) === -1) channels.push(c); });
@@ -10340,7 +11196,7 @@ function exportHistoryCsv() {
         var wasConnected = state.connected;
         state.connected = false;
         state.transport = null;
-        setIndicator(false);
+        refreshIndicator();
         if (wasConnected) emit('disconnect', {});
         if (state.closed) return;
         state.wsFailures++;
@@ -10371,7 +11227,7 @@ function exportHistoryCsv() {
         state.connected = true;
         state.transport = 'sse';
         state.backoff = 1000;
-        setIndicator(true, 'sse');
+        refreshIndicator();
         emit('connect', { transport: 'sse' });
       });
       es.addEventListener('message', function (ev) {
@@ -10384,7 +11240,7 @@ function exportHistoryCsv() {
         var wasConnected = state.connected;
         state.connected = false;
         state.transport = null;
-        setIndicator(false);
+        refreshIndicator();
         if (wasConnected) emit('disconnect', {});
         try { es.close(); } catch (_) {}
         state.es = null;
@@ -10420,8 +11276,8 @@ function exportHistoryCsv() {
     if (state.closed) return;
     var token = getToken();
     if (!token || token === 'demo-session') {
-      // Try again shortly — token is normally fetched async
-      setTimeout(connect, 1500);
+      if (!state.publicFeed && !state.publicSocket) openPublicWs();
+      setTimeout(connect, 5000);
       return;
     }
     if (state.connected) return;
@@ -10458,7 +11314,7 @@ function exportHistoryCsv() {
 
   window.gromWS = {
     connect: connect,
-    close: function () { state.closed = true; closeWs(); closeSse(); setIndicator(false); },
+    close: function () { state.closed = true; closeWs(); closeSse(); closePublicWs(); setIndicator(false); },
     subscribe: subscribe,
     unsubscribe: unsubscribe,
     on: on,
@@ -10471,16 +11327,21 @@ function exportHistoryCsv() {
       state.wsFailures = 0;
       state.backoff = 1000;
       closeWs(); closeSse();
-      state.connected = false; setIndicator(false);
+      state.connected = false; closePublicWs(); refreshIndicator();
       if (ev.newValue) connect();
     }
   });
 
+  window.addEventListener('grom-public-feed', function (ev) {
+    state.publicFeed = !!(ev && ev.detail && ev.detail.active);
+    refreshIndicator();
+  });
+
   // Boot
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { ensureIndicator(); setIndicator(false); setTimeout(connect, 800); });
+    document.addEventListener('DOMContentLoaded', function () { ensureIndicator(); refreshIndicator(); setTimeout(connect, 800); });
   } else {
-    ensureIndicator(); setIndicator(false); setTimeout(connect, 800);
+    ensureIndicator(); refreshIndicator(); setTimeout(connect, 800);
   }
 })();
 (function initHistoryFilter() {
@@ -10787,7 +11648,12 @@ function saveSettings() {
   try {
     if (name)  localStorage.setItem('grom_set_name', name);
     if (email) localStorage.setItem('grom_set_email', email);
+    localStorage.setItem('grom_notif_fills', document.getElementById('setNotifFills')?.checked ? '1' : '0');
+    localStorage.setItem('grom_notif_transfers', document.getElementById('setNotifTransfers')?.checked ? '1' : '0');
+    localStorage.setItem('grom_notif_digest', document.getElementById('setNotifDigest')?.checked ? '1' : '0');
+    localStorage.setItem('grom_notif_product', document.getElementById('setNotifProduct')?.checked ? '1' : '0');
   } catch (_) {}
+  if (typeof updateOnboardingChecklist === 'function') updateOnboardingChecklist();
   toast('Settings saved', 'success');
 }
 (function wireSettings() {
@@ -10797,23 +11663,28 @@ function saveSettings() {
     var e = localStorage.getItem('grom_set_email');
     if (n) { var en = document.getElementById('setName'); if (en) en.value = n; }
     if (e) { var ee = document.getElementById('setEmail'); if (ee) ee.value = e; }
+    var nf = localStorage.getItem('grom_notif_fills');
+    var nt = localStorage.getItem('grom_notif_transfers');
+    var nd = localStorage.getItem('grom_notif_digest');
+    var np = localStorage.getItem('grom_notif_product');
+    if (nf != null) { var el = document.getElementById('setNotifFills'); if (el) el.checked = nf === '1'; }
+    if (nt != null) { var el2 = document.getElementById('setNotifTransfers'); if (el2) el2.checked = nt === '1'; }
+    if (nd != null) { var el3 = document.getElementById('setNotifDigest'); if (el3) el3.checked = nd === '1'; }
+    if (np != null) { var el4 = document.getElementById('setNotifProduct'); if (el4) el4.checked = np === '1'; }
   } catch (_) {}
   // Language seg → hooks into existing i18n
   var lng = document.getElementById('setLangSeg');
   if (lng) {
     lng.addEventListener('click', function (e) {
       var b = e.target.closest('button[data-lng]'); if (!b) return;
-      if (typeof setGromLang === 'function') setGromLang(b.dataset.lng);
-      var labels = {
-        en: 'English',
-        ru: 'Русский',
-        es: 'Español',
-        ar: 'العربية',
-        zh: '中文',
-        hi: 'हिन्दी',
-        tr: 'Türkçe'
-      };
-      toast('Language: ' + (labels[b.dataset.lng] || b.dataset.lng), 'info');
+      var code = b.dataset.lng;
+      if (code === 'ru' || code === 'en') {
+        if (typeof setGromLang === 'function') setGromLang(code);
+        lng.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.lng === code); });
+        toast('Language: ' + (code === 'ru' ? 'Русский' : 'English'), 'success');
+      } else {
+        toast('This language is coming soon — use English or Russian for now', 'info');
+      }
     });
   }
   // Theme seg (stubbed — body data-theme attr only)
@@ -10836,7 +11707,15 @@ function saveSettings() {
       var priceEl = row.querySelector(side === 'bid' ? '.bid' : '.ask');
       var sizeEl  = row.querySelectorAll('.mono')[0];
       if (!priceEl) return;
-      var price = priceEl.textContent.trim();
+      var price = priceEl.textContent.trim().replace(/[^\d.]/g, '');
+      var priceInput = document.getElementById('spotOrderPrice');
+      if (priceInput && price) priceInput.value = price;
+      if (sizeEl) {
+        var size = sizeEl.textContent.trim().replace(/[^\d.]/g, '');
+        var amtInput = document.getElementById('spotOrderAmount');
+        if (amtInput && size) amtInput.value = size;
+      }
+      if (typeof syncSpotOrderTotals === 'function') syncSpotOrderTotals();
       toast(side.toUpperCase() + ' @ ' + price + ' prefilled', 'info');
       // Side-toggle auto-flip: click asks → Buy, bids → Sell (taker style)
       var wrap = document.querySelector('#page-spot .side-toggle');
@@ -10972,16 +11851,82 @@ if (typeof renderCmdk === 'function') {
     });
   };
 }
+function updateDashboardFromWallet(data) {
+  var overview = data || window.__gromWalletOverview;
+  if (!overview || !overview.summary) return;
+  var s = overview.summary;
+  var totalEl = document.getElementById('dashPortfolioVal');
+  if (totalEl) totalEl.textContent = s.totalUsdLabel || ('$' + Number(s.totalUsd || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  var deltaEl = document.getElementById('dashPortfolioDelta');
+  if (deltaEl) {
+    var dp = Number(s.deltaPct || 0);
+    var du = Number(s.deltaUsd || 0);
+    deltaEl.textContent = (dp >= 0 ? '▲ ' : '▼ ') + Math.abs(dp).toFixed(2) + '% · ' + (du >= 0 ? '+' : '-') + '$' + Math.abs(du).toFixed(2) + ' today';
+    deltaEl.className = 'delta ' + (du >= 0 ? 'up' : 'down');
+  }
+  var pnlEl = document.getElementById('dashPnlVal');
+  if (pnlEl) {
+    var du2 = Number(s.deltaUsd || 0);
+    pnlEl.textContent = (du2 >= 0 ? '+' : '-') + '$' + Math.abs(du2).toFixed(2);
+    pnlEl.style.color = du2 >= 0 ? 'var(--success)' : 'var(--danger)';
+  }
+}
+
+function updateOnboardingChecklist() {
+  var host = document.getElementById('dashChecklist');
+  if (!host) return;
+  var jwt = '';
+  try { jwt = localStorage.getItem('grom_jwt') || ''; } catch (_) {}
+  var email = '';
+  try { email = localStorage.getItem('grom_set_email') || ''; } catch (_) {}
+  var funded = false;
+  var ov = window.__gromWalletOverview;
+  if (ov && ov.summary) funded = Number(ov.summary.totalUsd || 0) > 50;
+  var traded = !!document.querySelector('#historyList .hist-row[data-kind="binary"]');
+  var steps = {
+    wallet: !!(jwt || (window.GROM_CONN && GROM_CONN.label)),
+    email: !!email,
+    fund: funded,
+    kyc: false,
+    trade: traded,
+  };
+  try { steps.kyc = localStorage.getItem('grom_kyc_t2') === '1'; } catch (_) {}
+  var done = 0;
+  host.querySelectorAll('.check-row[data-step]').forEach(function (row) {
+    var key = row.dataset.step;
+    var ok = !!steps[key];
+    row.classList.toggle('done', ok);
+    if (ok) done += 1;
+  });
+  var title = document.getElementById('dashCheckTitle');
+  if (title) title.textContent = 'Get started · ' + done + ' of 5 done';
+  var bar = document.getElementById('dashCheckProgress');
+  if (bar) bar.style.width = Math.round((done / 5) * 100) + '%';
+}
+
+function lpSymToPair(sym) {
+  var s = String(sym || '').toUpperCase();
+  if (s.indexOf('/') >= 0) return s;
+  if (s.endsWith('USDT') && s.length > 4) return s.slice(0, -4) + '/USDT';
+  return s;
+}
+
 (function wireLandingTicker() {
   function paint() {
     var host = document.getElementById('landingTicker');
-    if (!host || !Array.isArray(window.GROM_INSTRUMENTS)) return;
-    var top = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT'];
+    if (!host) return;
+    var top = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'LINKUSDT', 'AVAXUSDT'];
     host.innerHTML = top.map(function (sym) {
-      var it = (typeof window.gromGetInstrument === 'function') ? window.gromGetInstrument(sym) : null;
-      var px = (typeof window.gromLivePrice === 'function') ? window.gromLivePrice(sym) : 0;
-      var chg = (typeof window.gromLiveChange === 'function') ? window.gromLiveChange(sym) : 0;
-      return '<div onclick="show(\'spot\')" style="cursor:pointer;padding:14px;background:linear-gradient(180deg,rgba(16,26,44,.8),rgba(11,18,32,.6));border:1px solid rgba(122,162,199,.14);border-radius:12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#00c2ff,#0091c4);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#001a26">' + ((it && it.base) ? it.base.slice(0,3) : sym.slice(0,3)) + '</span><span style="font-size:13px;font-weight:700;color:#e8f1fa">' + ((it && it.base) ? it.base : sym) + '</span><span style="font-size:10px;color:#7aa2c7">/USDT</span></div><div style="font-family:ui-monospace,monospace;font-size:16px;font-weight:700;color:#e8f1fa">$' + marketFmt(px || 0) + '</div><div style="font-family:ui-monospace,monospace;font-size:11.5px;color:' + (chg >= 0 ? '#0ecb81' : '#f6465d') + ';font-weight:600;margin-top:2px">' + (chg >= 0 ? '▲ +' : '▼ ') + Number(chg || 0).toFixed(2) + '%</div></div>';
+      var pair = lpSymToPair(sym);
+      var base = pair.split('/')[0];
+      var px = (typeof window.gromLivePrice === 'function') ? window.gromLivePrice(sym) : (typeof priceForPair === 'function' ? priceForPair(pair) : 0);
+      var chg = (typeof window.gromLiveChange === 'function') ? Number(window.gromLiveChange(sym)) : 0;
+      if (!Number.isFinite(chg)) chg = 0;
+      var ico = (typeof dashWatchIcoHtml === 'function') ? dashWatchIcoHtml(pair) : ('<span class="coin-ico">' + base.slice(0, 1) + '</span>');
+      return '<div class="lp-tk-cell" onclick="show(\'spot\');if(typeof setSpotPair===\'function\')setSpotPair(\'' + pair + '\')">' +
+        '<div class="lp-tk-head">' + ico + '<div><div class="lp-tk-name">' + base + '<span class="lp-tk-quote">/USDT</span></div></div></div>' +
+        '<div class="lp-tk-px">$' + marketFmt(px || 0) + '</div>' +
+        '<div class="lp-tk-chg ' + (chg >= 0 ? 'up' : 'down') + '">' + (chg >= 0 ? '▲ +' : '▼ ') + Math.abs(chg).toFixed(2) + '%</div></div>';
     }).join('');
   }
   paint();
@@ -10999,6 +11944,97 @@ window.toggleFav = function toggleFav(sym) {
   try { localStorage.setItem('grom:fav', JSON.stringify(marketsFav)); } catch (_) {}
   renderMarketsEnhanced();
 };
+var DASH_WATCH_SYMS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT', 'LINK/USDT', 'AVAX/USDT'];
+
+function dashWatchInstrument(sym) {
+  if (typeof window.gromGetInstrument === 'function') {
+    var it = window.gromGetInstrument(sym);
+    if (it) return it;
+  }
+  var meta = pairMeta(sym);
+  if (meta) {
+    return { sym: sym, base: sym.split('/')[0], name: meta.name, coin: meta.coin, logo: null };
+  }
+  return { sym: sym, base: sym.split('/')[0], name: sym };
+}
+
+function dashWatchIcoHtml(sym) {
+  var p = dashWatchInstrument(sym);
+  if (typeof instrumentIcoHtmlLive === 'function') return instrumentIcoHtmlLive(p);
+  var meta = pairMeta(sym) || {};
+  return '<span class="coin-ico ' + (meta.coin || '') + '">' + (meta.gliph || sym.charAt(0)) + '</span>';
+}
+
+function dashWatchSpark(up, sym) {
+  var seed = 0;
+  String(sym || '').split('').forEach(function (c, i) { seed += c.charCodeAt(0) * (i + 1); });
+  var pts = [];
+  for (var i = 0; i < 20; i++) {
+    var wobble = Math.sin((seed + i) * 0.41) * 3.2 + (up ? i * 0.08 : -i * 0.05);
+    pts.push(10 + wobble + Math.cos(i * 0.55 + seed) * 2);
+  }
+  var min = Math.min.apply(null, pts);
+  var max = Math.max.apply(null, pts);
+  var path = pts.map(function (v, i) {
+    return (i === 0 ? 'M' : 'L') + ' ' + (i * 5) + ' ' + (20 - ((v - min) / (max - min || 1)) * 16);
+  }).join(' ');
+  return '<svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" width="72" height="22"><path d="' + path + '" fill="none" stroke="' + (up ? '#22c17c' : '#e8576b') + '" stroke-width="1.5"/></svg>';
+}
+
+function renderDashboardWatchlist() {
+  var host = document.getElementById('watchlist');
+  if (!host) return;
+  host.className = 'dash-watchlist';
+  host.innerHTML = DASH_WATCH_SYMS.map(function (sym, idx) {
+    var meta = pairMeta(sym) || {};
+    var px = priceForPair(sym);
+    var chg = Number(meta.chg);
+    if (!Number.isFinite(chg)) chg = 0;
+    var up = chg >= 0;
+    return '<div class="dw-row" data-sym="' + sym + '" onclick="openSpotPair(\'' + sym + '\')">' +
+      '<span class="dw-rank">' + (idx + 1) + '</span>' +
+      dashWatchIcoHtml(sym) +
+      '<div class="dw-info"><span class="dw-name">' + (meta.name || sym) + '</span><span class="dw-pair">' + sym + '</span></div>' +
+      '<div class="dw-spark">' + dashWatchSpark(up, sym) + '</div>' +
+      '<div class="dw-price-col"><span class="dw-price mono" data-px>$' + marketFmt(px) + '</span>' +
+      '<span class="dw-chg ' + (up ? 'up' : 'down') + '" data-chg>' + (up ? '+' : '') + chg.toFixed(2) + '%</span></div>' +
+      '</div>';
+  }).join('');
+}
+
+function updateDashboardWatchlistPrices() {
+  var host = document.getElementById('watchlist');
+  if (!host) return;
+  host.querySelectorAll('.dw-row').forEach(function (row) {
+    var sym = row.dataset.sym;
+    if (!sym) return;
+    var px = priceForPair(sym);
+    var pxEl = row.querySelector('[data-px]');
+    if (pxEl) {
+      var prev = parseFloat(pxEl.dataset.prev || '0');
+      pxEl.textContent = '$' + marketFmt(px);
+      if (prev && Math.abs(prev - px) > 1e-9) {
+        row.classList.remove('flash-up', 'flash-down');
+        row.classList.add(px > prev ? 'flash-up' : 'flash-down');
+        setTimeout(function () { row.classList.remove('flash-up', 'flash-down'); }, 550);
+      }
+      pxEl.dataset.prev = String(px);
+    }
+    var meta = pairMeta(sym);
+    if (meta && meta.chg != null) {
+      var chgEl = row.querySelector('[data-chg]');
+      if (chgEl) {
+        var chg = Number(meta.chg);
+        var up = chg >= 0;
+        chgEl.textContent = (up ? '+' : '') + chg.toFixed(2) + '%';
+        chgEl.className = 'dw-chg ' + (up ? 'up' : 'down');
+      }
+      var sparkEl = row.querySelector('.dw-spark');
+      if (sparkEl) sparkEl.innerHTML = dashWatchSpark(meta.chg >= 0, sym);
+    }
+  });
+}
+
 function gromLogoCascade(sym) {
   var s = String(sym || '').toLowerCase().replace(/usdt$|usdc$/, '').replace(/[^a-z0-9]/g, '');
   var fb = String(sym || '?').slice(0, 3).toUpperCase();
@@ -11125,7 +12161,11 @@ document.addEventListener('click', function (e) {
     boCatBtn.style.background = 'rgba(77,158,255,0.18)';
     boCatBtn.style.color = 'var(--silver1)';
     boState.wlTab = boCatBtn.dataset.cat || 'all';
-    applyWlTabFilter();
+    if (typeof renderBinaryWatchlist === 'function') {
+      renderBinaryWatchlist(document.querySelector('#page-binary .wl-search input')?.value || '');
+    } else {
+      applyWlTabFilter();
+    }
   }
   var futCatBtn = e.target.closest('#futCats button[data-cat]');
   if (futCatBtn) {
@@ -11137,8 +12177,7 @@ document.addEventListener('click', function (e) {
     futCatBtn.classList.add('active');
     futCatBtn.style.background = 'rgba(77,158,255,0.18)';
     futCatBtn.style.color = 'var(--silver1)';
-    var map = { all: 'all', crypto: 'top', fx: 'ai', commodity: 'new', index: 'all' };
-    listUiState.futuresFilter = map[futCatBtn.dataset.cat] || 'all';
+    listUiState.futuresCat = futCatBtn.dataset.cat || 'all';
     if (typeof renderFuturesList === 'function') {
       renderFuturesList(document.querySelector('#page-futures .wl-search input')?.value || '');
     }
@@ -11155,18 +12194,20 @@ document.addEventListener('click', function (e) {
   if (otype) {
     document.querySelectorAll('#spotOrderTabs button').forEach(function (x) { x.classList.remove('active'); });
     otype.classList.add('active');
-    spotOrderState.type = otype.dataset.otype;
+    spotState.orderType = otype.dataset.otype;
     var stopRow = document.getElementById('spotStopRow');
     var twapRow = document.getElementById('spotTwapRow');
     var priceLbl = document.getElementById('spotPriceLbl');
-    if (stopRow) stopRow.style.display = spotOrderState.type === 'stop-limit' ? '' : 'none';
-    if (twapRow) twapRow.style.display = spotOrderState.type === 'twap' ? '' : 'none';
-    if (priceLbl) priceLbl.textContent = spotOrderState.type === 'market' ? 'Market price' : 'Price';
+    if (stopRow) stopRow.style.display = spotState.orderType === 'stop-limit' ? '' : 'none';
+    if (twapRow) twapRow.style.display = spotState.orderType === 'twap' ? '' : 'none';
+    if (priceLbl) priceLbl.textContent = spotState.orderType === 'market' ? 'Market price' : 'Price';
   }
   var sideBtn = e.target.closest('#spotSideToggle button[data-side]');
   if (sideBtn) {
     document.querySelectorAll('#spotSideToggle button').forEach(function (x) { x.classList.remove('active'); });
     sideBtn.classList.add('active');
+    spotState.side = sideBtn.dataset.side === 'sell' ? 'sell' : 'buy';
+    if (typeof syncSpotOrderSubmitButton === 'function') syncSpotOrderSubmitButton();
   }
   var allocBtn = e.target.closest('#spotAllocator button[data-pct]');
   if (allocBtn) {
@@ -11266,14 +12307,15 @@ async function gdel(path) {
 window.submitFuturesOrder = async function (side) {
   var contract = (typeof futDeskState !== 'undefined' && futDeskState.pair) ? futDeskState.pair : 'BTC/USDT';
   var leverage = (typeof futDeskState !== 'undefined' && futDeskState.leverage) ? futDeskState.leverage : 25;
-  var futStakeBlocks = document.querySelectorAll('#page-futures .stake-v2');
-  var futPriceNode = futStakeBlocks[0] ? futStakeBlocks[0].querySelector('input[type="number"]') : null;
-  var futSizeNode = futStakeBlocks[1] ? futStakeBlocks[1].querySelector('input[type="number"]') : null;
-  var size = parseFloat((futSizeNode && futSizeNode.value) || '0.25') || 0.25;
+  var futPriceNode = document.getElementById('futPriceInput');
+  var futSizeNode = document.getElementById('futSizeInput');
+  var size = parseNumberInput(futSizeNode && futSizeNode.value);
+  if (!Number.isFinite(size) || size <= 0) size = 0.25;
   var typeBtn = document.querySelector('#page-futures .bo-chip-row button.active, #page-futures .order-type.active');
   var type = (typeBtn?.textContent || 'limit').trim().toLowerCase();
   if (type !== 'market' && type !== 'limit' && type !== 'stop') type = 'limit';
-  var price = parseFloat((futPriceNode && futPriceNode.value) || '0') || null;
+  var price = parseNumberInput(futPriceNode && futPriceNode.value);
+  if (!Number.isFinite(price)) price = null;
   var reduceOnly = !!document.querySelector('#page-futures .flag-chip.on[data-flag="reduce"]');
   var postOnly   = !!document.querySelector('#page-futures .flag-chip.on[data-flag="post"]');
   var body = { contract, side, type, size, leverage, reduceOnly, postOnly };
@@ -11411,14 +12453,22 @@ window.escalateWithdrawal = async function () {
 
 /* ===== Referral X / Telegram share ===== */
 window.refShareX = function () {
-  var addr = (window.GROM_CONN && GROM_CONN.label) || '0x7a3f...c9e1';
-  var url  = 'https://grom.exchange/?ref=' + encodeURIComponent(addr);
-  var text = 'Trading on GROM — non-custodial, 0.10% spot fee, up to 100× futures.';
+  var linkEl = document.getElementById('refLink');
+  var url = linkEl ? String(linkEl.textContent || '').trim() : '';
+  if (!url || url.indexOf('http') !== 0) {
+    var code = document.getElementById('refCode')?.textContent?.trim() || 'GROM';
+    url = 'https://grom.exchange/r/' + encodeURIComponent(code.replace(/^GROM-?/i, ''));
+  }
+  var text = 'Trading on GROM — hybrid CEX/DEX, 0.10% spot fee, up to 100× futures.';
   window.open('https://x.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url), '_blank', 'noopener');
 };
 window.refShareTelegram = function () {
-  var addr = (window.GROM_CONN && GROM_CONN.label) || '0x7a3f...c9e1';
-  var url  = 'https://grom.exchange/?ref=' + encodeURIComponent(addr);
+  var linkEl = document.getElementById('refLink');
+  var url = linkEl ? String(linkEl.textContent || '').trim() : '';
+  if (!url || url.indexOf('http') !== 0) {
+    var code = document.getElementById('refCode')?.textContent?.trim() || 'GROM';
+    url = 'https://grom.exchange/r/' + encodeURIComponent(code.replace(/^GROM-?/i, ''));
+  }
   var text = 'Trade on GROM with my referral link';
   window.open('https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text), '_blank', 'noopener');
 };
@@ -11474,9 +12524,14 @@ window.boffDryRun = async function () {
 
 /* ===== Wallet/back-office mini buttons ===== */
 window.openExplorer = function (btn) {
-  var hash = btn?.dataset?.tx || '';
-  if (hash) window.open('https://etherscan.io/tx/' + hash, '_blank', 'noopener');
-  else toast('No transaction hash available', 'info');
+  var hash = String(btn?.dataset?.tx || '').trim();
+  if (!hash || hash.indexOf('…') !== -1 || hash.indexOf('...') !== -1) {
+    toast('Full transaction hash not available yet', 'info');
+    return;
+  }
+  var url = (typeof buildExplorerUrl === 'function') ? buildExplorerUrl(btn?.dataset?.network || 'ETH', hash) : ('https://etherscan.io/tx/' + hash);
+  if (url) window.open(url, '_blank', 'noopener');
+  else toast('Explorer not available for this network', 'info');
 };
 window.openWithdrawalDetails = async function (btn) {
   var wid = btn?.dataset?.w;

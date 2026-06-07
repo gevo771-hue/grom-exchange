@@ -448,6 +448,11 @@ function connectBinanceWS() {
     WS.onopen = function () {
       WS_RETRY = 0;
       console.log('[grom-instruments] Binance miniTicker stream connected');
+      try {
+        window.__gromLiveFeedActive = true;
+        window.__gromLastLiveTick = Date.now();
+        window.dispatchEvent(new CustomEvent('grom-public-feed', { detail: { active: true, source: 'binance' } }));
+      } catch (_) {}
     };
     WS.onmessage = function (ev) {
       try {
@@ -467,7 +472,14 @@ function connectBinanceWS() {
           }
           changed = true;
         }
-        if (changed) notifySubs();
+        if (changed) {
+          try {
+            window.__gromLiveFeedActive = true;
+            window.__gromLastLiveTick = Date.now();
+            window.dispatchEvent(new CustomEvent('grom-public-feed', { detail: { active: true, source: 'binance' } }));
+          } catch (_) {}
+          notifySubs();
+        }
       } catch (_) {}
     };
     WS.onclose = function () {

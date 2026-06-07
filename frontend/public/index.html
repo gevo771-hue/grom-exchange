@@ -1945,7 +1945,7 @@
         "chart"
         "watchlist"
         "panel";
-      gap: 10px;
+      gap: 12px;
     }
     #page-binary .bo-panel-v2 > .bo-panel-scroll { order: 1; }
     #page-binary .bo-panel-v2 > .acct-switch { order: 2; margin-bottom: 0; margin-top: 10px; }
@@ -2694,7 +2694,7 @@
         "contracts"
         "ai"
         "positions";
-      gap: 10px;
+      gap: 12px;
     }
     #page-futures .fut-main-col { display: contents; }
     #page-futures aside.wl { grid-area: contracts; max-height: none; overflow: visible; }
@@ -3078,7 +3078,7 @@
         "trade"
         "ai"
         "book";
-      gap: 10px;
+      gap: 12px;
     }
     #page-spot .spot-main,
     #page-spot .spot-side { display: contents; }
@@ -3638,21 +3638,50 @@
   .burger:hover { background: rgba(77,158,255,0.2); }
   .burger svg { width: 20px; height: 20px; }
 
-  /* Sticky mobile trade bar on binary page */
-  .mobile-trade-bar {
+  /* Sticky mobile trade docks (Binance/Bybit-style) */
+  .mobile-trade-bar,
+  .mobile-dock {
     display: none;
     position: fixed;
     bottom: 0; left: 0; right: 0;
-    z-index: 150;
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-    background: linear-gradient(180deg, rgba(11,18,32,0.85), rgba(8,12,20,0.98));
-    backdrop-filter: blur(14px);
-    border-top: 1px solid rgba(200,212,232,0.1);
+    z-index: 160;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    background: rgba(6, 9, 16, 0.94);
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    border-top: 1px solid rgba(255,255,255,0.07);
     gap: 10px;
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.45);
   }
-  .mobile-trade-bar button { flex: 1; padding: 14px; font-weight: 800; font-size: 15px; border-radius: 10px; color: #fff; }
-  .mobile-trade-bar .up { background: linear-gradient(135deg, #22c17c, #0e8a52); box-shadow: 0 4px 14px rgba(34,193,124,0.35); }
-  .mobile-trade-bar .down { background: linear-gradient(135deg, #e8576b, #a0293d); box-shadow: 0 4px 14px rgba(232,87,107,0.35); }
+  .mobile-trade-bar button,
+  .mobile-dock button {
+    flex: 1;
+    min-height: 48px;
+    padding: 12px 14px;
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 0.03em;
+    border-radius: 12px;
+    color: #fff;
+    border: 0;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.12s ease, filter 0.12s ease;
+  }
+  .mobile-trade-bar button:active,
+  .mobile-dock button:active { transform: scale(0.98); }
+  .mobile-trade-bar .up,
+  .mobile-dock .buy,
+  .mobile-dock .long {
+    background: linear-gradient(180deg, #0ecb81 0%, #0a9d63 100%);
+    box-shadow: 0 4px 16px rgba(14,203,129,0.32);
+  }
+  .mobile-trade-bar .down,
+  .mobile-dock .sell,
+  .mobile-dock .short {
+    background: linear-gradient(180deg, #f6465d 0%, #c93448 100%);
+    box-shadow: 0 4px 16px rgba(246,70,93,0.28);
+  }
 
   @media (max-width: 900px) {
     .burger { display: inline-flex; }
@@ -3701,37 +3730,158 @@
       background: linear-gradient(180deg, rgba(15,24,44,0.72), rgba(11,18,32,0.62));
       border: 1px solid rgba(200,212,232,0.1);
     }
-    body:has(#page-binary.active) .mobile-trade-bar { display: none !important; }
-    body:has(#page-binary.active) { padding-bottom: 16px !important; }
-    #page-binary .bo-buttons-v2 {
-      position: sticky;
-      bottom: calc(6px + env(safe-area-inset-bottom, 0px));
-      z-index: 5;
-      padding-top: 10px;
-      margin: 0 -2px;
-      background: linear-gradient(180deg, transparent, rgba(11,18,32,0.94) 28%);
+    body:has(#page-binary.active) .mobile-trade-bar { display: flex !important; }
+    body:has(#page-spot.active) .mobile-dock--spot { display: flex !important; }
+    body:has(#page-futures.active) .mobile-dock--fut { display: flex !important; }
+    body:has(#page-spot.active),
+    body:has(#page-futures.active),
+    body:has(#page-binary.active) {
+      padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
     }
+    main:has(#page-spot.active),
+    main:has(#page-futures.active),
+    main:has(#page-binary.active) {
+      padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    /* Trading pages — compact chrome */
+    #page-spot .breadcrumb,
+    #page-futures .breadcrumb,
+    #page-binary .breadcrumb { display: none; }
+    #page-spot .page-subtitle,
+    #page-futures .page-subtitle,
+    #page-binary .bo-page-toolbar .page-subtitle { display: none; }
+    #page-spot .page-title,
+    #page-futures .page-title,
+    #page-binary .page-title {
+      font-size: 17px !important;
+      margin: 0 0 10px !important;
+      letter-spacing: 0.01em;
+    }
+    #page-binary .bo-page-toolbar {
+      margin-bottom: 10px !important;
+      align-items: center;
+    }
+    #page-binary #boSoundToggle {
+      flex-shrink: 0;
+      font-size: 11px;
+      padding: 6px 10px;
+    }
+
+    /* Unified mobile trading cards */
+    #page-spot .spot-layout > .card,
+    #page-spot .spot-layout .spot-chart-card,
+    #page-futures .fut-shell > .card,
+    #page-futures .fut-shell .bo-chart-card,
+    #page-futures .fut-shell .bo-panel-v2,
+    #page-futures .fut-shell aside.wl,
+    #page-binary .bo-shell > .card,
+    #page-binary .bo-chart-card,
+    #page-binary .bo-panel-v2,
+    #page-binary .wl {
+      border-radius: 16px !important;
+      border: 1px solid rgba(255,255,255,0.06) !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.22) !important;
+      overflow: hidden;
+    }
+
+    #page-binary .bo-buttons-v2 { display: none !important; }
     #page-binary .bo-btn-v2 { min-height: 52px; }
     .bo-panel-v2 { max-height: none; }
-    #page-binary .wl { max-height: none; overflow: visible; }
-    .bo-chart-body { min-height: 280px !important; }
+    #page-binary .bo-pro-grid { display: none !important; }
+    #page-binary .bo-chart-body { min-height: 52vw !important; height: auto !important; max-height: 340px; }
+    #page-binary #boChart { min-height: 52vw !important; max-height: 340px; }
     .hud-card { min-width: auto; padding: 6px 8px; }
     .hud-card .v { font-size: 13px; }
     .hud-card .lbl { font-size: 9px; }
-    .bo-hud-top { padding: 10px 10px; gap: 8px; }
+    .bo-hud-top {
+      padding: 10px 12px !important;
+      gap: 8px;
+      flex-wrap: nowrap;
+      align-items: center;
+      background: rgba(8,12,20,0.55);
+    }
     .bo-hud-top .sep { display: none; }
-    .bo-chip-row button { padding: 5px 8px; font-size: 11px; }
-    #page-binary .wl #wlList {
-      order: 2;
-      max-height: 205px;
-      overflow-y: auto;
-      padding-right: 4px;
+    .bo-hud-top .grp:first-child { flex: 1 1 auto; min-width: 0; }
+    .bo-hud-top .grp:last-child { flex: 0 0 auto; max-width: 100%; }
+    .bo-chip-row {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      flex-wrap: nowrap;
+      max-width: 100%;
+      scrollbar-width: none;
     }
-    /* Binary mobile: список рынков выше, AI signal ниже */
+    .bo-chip-row::-webkit-scrollbar { display: none; }
+    .bo-chip-row button { padding: 6px 10px; font-size: 11px; flex-shrink: 0; }
+    .bo-price .big { font-size: 19px !important; }
+
+    /* Binary watchlist — horizontal pair strip */
+    #page-binary .wl {
+      max-height: none;
+      overflow: visible;
+      padding: 10px 0 8px !important;
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    #page-binary .wl-head,
+    #page-binary .wl-search { display: none; }
+    #page-binary .wl-cats,
+    #page-binary .wl-tools { margin: 0 12px 8px !important; }
+    #page-binary .wl-tabs { margin: 0 12px 8px !important; }
     #page-binary .wl .sig-card {
-      order: 3;
-      margin: 10px 0 4px;
+      order: 0;
+      margin: 0 12px 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(14,20,34,0.9);
+      border: 1px solid rgba(255,255,255,0.06);
     }
+    #page-binary .sig-card .sig-dial { width: 48px; height: 48px; }
+    #page-binary .sig-card .sig-dial svg { width: 48px; height: 48px; }
+    #page-binary #wlList {
+      order: 2;
+      display: flex;
+      flex-direction: row;
+      gap: 8px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      max-height: none;
+      padding: 2px 12px 4px;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    #page-binary #wlList::-webkit-scrollbar { display: none; }
+    #page-binary #wlList .wl-item {
+      flex: 0 0 132px;
+      scroll-snap-align: start;
+      padding: 10px 10px !important;
+      border-radius: 12px;
+      background: rgba(12,18,30,0.92);
+      border: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #page-binary #wlList .wl-item.active {
+      border-color: rgba(14,203,129,0.45);
+      background: rgba(14,203,129,0.08);
+    }
+    #page-binary #wlList .wl-item .spark { display: none; }
+
+    #page-binary .bo-panel-v2 {
+      padding: 14px 12px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+      gap: 10px;
+    }
+    #page-binary .bo-panel-v2 > .acct-switch {
+      order: 2;
+      margin: 8px 0 0 !important;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    #page-binary .countdown-v2 { padding: 10px 12px; border-radius: 12px; }
+    #page-binary .bo-panel-scroll { gap: 10px !important; }
 
     /* Futures: mobile stack — full scroll, no clip */
     #page-futures {
@@ -3754,13 +3904,41 @@
     #page-futures aside.wl {
       max-height: none !important;
       overflow: visible !important;
-      padding: 10px !important;
+      padding: 10px 0 8px !important;
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
     }
+    #page-futures .wl-head,
+    #page-futures .wl-search { display: none; }
+    #page-futures .wl-cats,
+    #page-futures .wl-tools,
+    #page-futures .wl-tabs { margin-left: 12px !important; margin-right: 12px !important; }
     #page-futures #futList {
-      max-height: 200px !important;
+      display: flex;
+      flex-direction: row;
+      gap: 8px;
+      max-height: none !important;
       min-height: 0 !important;
-      overflow-y: auto !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      padding: 2px 12px 6px;
+      scroll-snap-type: x mandatory;
       -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    #page-futures #futList::-webkit-scrollbar { display: none; }
+    #page-futures #futList .wl-item {
+      flex: 0 0 140px;
+      scroll-snap-align: start;
+      padding: 10px !important;
+      border-radius: 12px;
+      background: rgba(12,18,30,0.92);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    #page-futures #futList .wl-item.active {
+      border-color: rgba(77,158,255,0.45);
+      background: rgba(77,158,255,0.1);
     }
     #page-futures .wl-cats { margin: 4px 0 !important; }
     #page-futures .wl-tabs { flex-wrap: wrap; }
@@ -3780,15 +3958,17 @@
       overflow: visible !important;
     }
     #page-futures .bo-chart-body {
-      min-height: 260px !important;
-      height: 260px !important;
+      min-height: 52vw !important;
+      height: auto !important;
+      max-height: 360px;
       overflow: hidden;
-      border-radius: 0 0 14px 14px;
+      border-radius: 0 0 16px 16px;
     }
     #page-futures #futChart {
-      min-height: 260px !important;
-      height: 260px !important;
+      min-height: 52vw !important;
+      max-height: 360px;
     }
+    #page-futures .bo-buttons-v2 { display: none !important; }
     #page-futures .bo-hud-top { flex-wrap: wrap; gap: 8px; padding: 10px !important; }
     #page-futures .bo-hud-top .sep { display: none; }
     #page-futures .bo-hud-top .grp { min-width: 0; flex: 1 1 100%; }
@@ -3804,21 +3984,7 @@
     #page-futures .fut-ai-card .spot-ai-grid { gap: 8px !important; }
     #page-futures .fut-form-flags { gap: 6px !important; }
     #page-futures .fut-form-flags .flag-chip { font-size: 10px !important; padding: 6px 8px !important; }
-    #page-futures .bo-buttons-v2 {
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      padding-bottom: 6px;
-      position: sticky;
-      bottom: 0;
-      z-index: 4;
-      background: linear-gradient(180deg, transparent, rgba(11,18,32,0.92) 24%);
-      padding-top: 8px;
-      margin: 0 -4px;
-    }
-    #page-futures .bo-btn-v2 {
-      min-height: 50px;
-      padding: 10px 8px;
-    }
+    #page-futures .bo-btn-v2 { min-height: 50px; padding: 10px 8px; }
     #page-futures .desk-card { display: none; }
     #page-futures .risk-gov { margin-bottom: 4px; }
     #page-futures .card { overflow: visible !important; }
@@ -3858,23 +4024,58 @@
     #page-spot .spot-trade-card { position: static; }
     .spot-layout .card { overflow: hidden; }
     .spot-overview { display: none; }
-    #page-spot .spot-market-panel { display: grid; grid-template-columns: 1fr; }
-    #page-spot .spot-chart-shell { min-height: 390px; grid-template-columns: 1fr; }
-    #page-spot .chart-wrap { min-height: 300px; }
-    #page-spot .spot-trade-card .btn-primary,
-    #page-spot #spotOrderSubmit {
-      min-height: 50px;
-      font-size: 15px;
-      font-weight: 800;
+    #page-spot .spot-market-panel { display: none !important; }
+    #page-spot .spot-chart-shell {
+      min-height: 0;
+      grid-template-columns: 1fr;
     }
-    #askList, #bidList { max-height: 118px; }
-    .ob-row { grid-template-columns: 1fr auto auto; gap: 6px; padding: 3px 10px; font-size: 11px; }
-    .ob-row.hdr { font-size: 10px; }
-    #page-spot .chart-top { padding: 12px; }
-    #page-spot .asset-price { width: 100%; justify-content: space-between; }
-    #page-spot .tf-pills { width: 100%; }
+    #page-spot .chart-wrap {
+      min-height: 52vw;
+      max-height: 360px;
+    }
+    #page-spot #spotChart { min-height: 52vw; max-height: 360px; }
+    #page-spot .spot-trade-card .btn-primary,
+    #page-spot #spotOrderSubmit { display: none !important; }
+    #page-spot .spot-trade-card {
+      padding-bottom: 4px;
+    }
+    #page-spot .spot-order-tabs button {
+      min-height: 40px;
+      font-size: 12px;
+    }
+    #page-spot .side-toggle button { min-height: 44px; font-size: 14px; }
+    #page-spot .spot-fieldbox {
+      font-size: 16px;
+      padding: 12px 14px;
+      border-radius: 12px;
+    }
+    #page-spot .spot-allocator button { min-height: 36px; }
+    #askList, #bidList { max-height: 140px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .ob-row { grid-template-columns: 1fr auto auto; gap: 6px; padding: 4px 12px; font-size: 11.5px; }
+    .ob-row.hdr { font-size: 10px; position: sticky; top: 0; background: rgba(8,12,20,0.95); z-index: 1; }
+    #page-spot .chart-top {
+      padding: 10px 12px;
+      flex-wrap: nowrap;
+      gap: 8px;
+      background: rgba(8,12,20,0.55);
+    }
+    #page-spot .asset-price { flex: 1; min-width: 0; justify-content: flex-start; gap: 8px; }
+    #page-spot .asset-price .big { font-size: 18px !important; }
+    #page-spot .tf-pills { flex-shrink: 0; max-width: 52%; }
+    #page-spot .spot-ai-card .spot-ai-grid {
+      grid-template-columns: 1fr !important;
+      gap: 8px !important;
+    }
+    #page-spot .spot-ai-card .ai-p,
+    #page-futures .fut-ai-card .ai-p {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    #page-futures .fut-ai-card .spot-ai-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
 
-    .toasts { left: 12px; right: 12px; bottom: 80px; }
+    .toasts { left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
     .toast { min-width: auto; max-width: 100%; }
 
     /* Tighter cards */
@@ -6290,8 +6491,16 @@
   </div>
 </div>
 
-<!-- Mobile sticky trade bar (only shows on binary page via CSS :has) -->
-<div class="mobile-trade-bar">
+<!-- Mobile sticky trade docks -->
+<div class="mobile-dock mobile-dock--spot" role="toolbar" aria-label="Spot trade">
+  <button type="button" class="buy" data-spot-dock="buy">Buy</button>
+  <button type="button" class="sell" data-spot-dock="sell">Sell</button>
+</div>
+<div class="mobile-dock mobile-dock--fut" role="toolbar" aria-label="Futures trade">
+  <button type="button" class="long" onclick="submitFuturesOrder('buy')">Long</button>
+  <button type="button" class="short" onclick="submitFuturesOrder('sell')">Short</button>
+</div>
+<div class="mobile-trade-bar" role="toolbar" aria-label="Binary trade">
   <button class="up" type="button" data-bo-dir="UP" aria-label="Place UP option">▲ UP</button>
   <button class="down" type="button" data-bo-dir="DOWN" aria-label="Place DOWN option">▼ DOWN</button>
 </div>
@@ -12722,6 +12931,18 @@ document.addEventListener('click', function (e) {
     if (stopRow) stopRow.style.display = spotState.orderType === 'stop-limit' ? '' : 'none';
     if (twapRow) twapRow.style.display = spotState.orderType === 'twap' ? '' : 'none';
     if (priceLbl) priceLbl.textContent = spotState.orderType === 'market' ? 'Market price' : 'Price';
+  }
+  var spotDockBtn = e.target.closest('[data-spot-dock]');
+  if (spotDockBtn) {
+    var dockSide = spotDockBtn.getAttribute('data-spot-dock') === 'sell' ? 'sell' : 'buy';
+    document.querySelectorAll('#spotSideToggle button').forEach(function (x) {
+      x.classList.toggle('active', x.getAttribute('data-side') === dockSide);
+    });
+    spotState.side = dockSide;
+    if (typeof syncSpotOrderSubmitButton === 'function') syncSpotOrderSubmitButton();
+    var tradeCard = document.querySelector('.spot-trade-card');
+    if (tradeCard) tradeCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
   }
   var sideBtn = e.target.closest('#spotSideToggle button[data-side]');
   if (sideBtn) {

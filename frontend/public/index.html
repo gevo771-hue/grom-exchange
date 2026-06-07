@@ -594,6 +594,7 @@
     background: var(--steel2);
     box-shadow: 0 0 0 2px rgba(8, 12, 20, 0.9);
   }
+  #gromWsIndicator { display: none !important; }
   .grom-ws-pill {
     display: inline-flex;
     align-items: center;
@@ -2159,7 +2160,7 @@
   .grom-tv-bet-marker.up .grom-tv-bet-arrow { border-bottom: 7px solid #24d084; }
   .grom-tv-bet-marker.down .grom-tv-bet-arrow { border-top: 7px solid #ff6175; }
   .bo-hud-overlay {
-    position: absolute; top: 12px; left: 12px; right: 12px;
+    position: absolute; top: 12px; left: 12px; right: 72px;
     display: flex; justify-content: flex-end; pointer-events: none; gap: 10px;
   }
   .hud-card {
@@ -3050,7 +3051,7 @@
     border: 1px solid rgba(200,212,232,0.12);
     background: rgba(7,11,22,0.85); color: var(--silver1);
   }
-  .spot-pair-list { max-height: 220px; overflow-y: auto; }
+  .spot-pair-list { max-height: min(52vh, 380px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .spot-pair-item {
     display: grid; grid-template-columns: 1fr auto; gap: 8px;
     align-items: center; width: 100%; text-align: left;
@@ -3073,7 +3074,7 @@
       box-shadow: 0 24px 60px rgba(0,0,0,0.68);
     }
     .spot-pair-list {
-      max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 188px);
+      max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 160px);
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
     }
@@ -3630,12 +3631,34 @@
       letter-spacing: 0.01em;
     }
 
-    /* Binary: stack everything, add room for sticky trade bar */
-    .bo-shell { grid-template-columns: 1fr !important; gap: 10px; }
-    #page-binary.active ~ .mobile-trade-bar,
-    #page-binary.active + .mobile-trade-bar { display: flex; }
-    body:has(#page-binary.active) { padding-bottom: 80px; }
-    body:has(#page-binary.active) .mobile-trade-bar { display: flex; }
+    /* Binary mobile: chart → trade panel → watchlist */
+    .bo-shell {
+      display: flex !important;
+      flex-direction: column !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px;
+    }
+    #page-binary .bo-chart-card { order: 1 !important; }
+    #page-binary .bo-panel-v2 {
+      order: 2 !important;
+      max-height: none;
+      padding: 12px !important;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(15,24,44,0.72), rgba(11,18,32,0.62));
+      border: 1px solid rgba(200,212,232,0.1);
+    }
+    #page-binary .wl { order: 3 !important; }
+    body:has(#page-binary.active) .mobile-trade-bar { display: none !important; }
+    body:has(#page-binary.active) { padding-bottom: 16px !important; }
+    #page-binary .bo-buttons-v2 {
+      position: sticky;
+      bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+      z-index: 5;
+      padding-top: 10px;
+      margin: 0 -2px;
+      background: linear-gradient(180deg, transparent, rgba(11,18,32,0.94) 28%);
+    }
+    #page-binary .bo-btn-v2 { min-height: 52px; }
     .bo-panel-v2 { max-height: none; }
     #page-binary .wl { max-height: none; overflow: visible; }
     .bo-chart-body { min-height: 280px !important; }
@@ -3672,9 +3695,9 @@
       min-height: 0 !important;
       width: 100%;
     }
-    #page-futures .fut-shell > aside.wl { order: 1; }
-    #page-futures .fut-shell > .fut-main-col { order: 2; }
-    #page-futures .fut-shell > .bo-panel-v2 { order: 3; }
+    #page-futures .fut-shell > .fut-main-col { order: 1; }
+    #page-futures .fut-shell > .bo-panel-v2 { order: 2; }
+    #page-futures .fut-shell > aside.wl { order: 3; }
     #page-futures .fut-shell > * {
       width: 100% !important;
       max-width: 100% !important;
@@ -3784,14 +3807,30 @@
     .ref-table-head > *:nth-child(n+4), .ref-row > *:nth-child(n+4) { display: none; }
     .ref-table-head > *:last-child, .ref-row > *:last-child { display: block; }
 
-    /* Spot: stack */
-    .spot-layout { grid-template-columns: 1fr !important; }
+    /* Spot mobile: chart → order form → AI → order book */
+    #page-spot .spot-layout {
+      display: flex !important;
+      flex-direction: column !important;
+      grid-template-columns: 1fr !important;
+      gap: 10px;
+    }
+    #page-spot .spot-main,
+    #page-spot .spot-side { display: contents; }
+    #page-spot .spot-main > .card:first-of-type { order: 1; }
+    #page-spot .spot-side .spot-trade-card { order: 2; position: static; }
+    #page-spot .spot-main .spot-ai-card { order: 3; }
+    #page-spot .spot-side > .card:not(.spot-trade-card) { order: 4; }
     .spot-layout .card { overflow: hidden; }
     .spot-overview { display: none; }
     #page-spot .spot-market-panel { display: grid; grid-template-columns: 1fr; }
     #page-spot .spot-chart-shell { min-height: 390px; grid-template-columns: 1fr; }
     #page-spot .chart-wrap { min-height: 300px; }
-    #page-spot .spot-trade-card { position: static; order: -1; }
+    #page-spot .spot-trade-card .btn-primary,
+    #page-spot #spotOrderSubmit {
+      min-height: 50px;
+      font-size: 15px;
+      font-weight: 800;
+    }
     #askList, #bidList { max-height: 118px; }
     .ob-row { grid-template-columns: 1fr auto auto; gap: 6px; padding: 3px 10px; font-size: 11px; }
     .ob-row.hdr { font-size: 10px; }
@@ -3897,14 +3936,34 @@
     #page-markets .markets-cat-row {
       flex-direction: column;
       align-items: stretch !important;
-      gap: 8px !important;
-      padding: 0 10px 10px !important;
+      gap: 10px !important;
+      padding: 10px 12px 12px !important;
+      background: linear-gradient(180deg, rgba(7,11,22,0.2), rgba(7,11,22,0.45));
+      border-bottom: 1px solid rgba(200,212,232,0.06);
+    }
+    #page-markets .markets-cat-pills {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    #page-markets .markets-cat-pills::-webkit-scrollbar { display: none; }
+    #page-markets .markets-cat-pills .cat-pill {
+      flex: 0 0 auto;
+      padding: 9px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
     }
     #page-markets .markets-cat-row input {
       margin-left: 0 !important;
       min-width: 0 !important;
       max-width: none !important;
       width: 100% !important;
+      min-height: 42px;
+      font-size: 16px;
     }
     #page-markets .card { overflow: hidden; }
     #page-markets .card-head .tf-pills { width: 100%; flex-wrap: wrap; }
@@ -3949,17 +4008,6 @@
       width: 16px !important;
       height: 16px !important;
     }
-    #gromWsIndicator {
-      order: -1;
-      margin-right: 2px !important;
-      padding: 0 7px !important;
-      height: 26px !important;
-      font-size: 8.5px !important;
-      letter-spacing: 0.04em !important;
-      max-width: none;
-      border-radius: 13px;
-    }
-    #gromWsIndicator .dot { width: 5px !important; height: 5px !important; }
     .topbar-ico-group #topHelpBtn { display: none; }
     .spot-quickbar, .tf-pills, .bo-chip-row, .bo-hud-top .grp {
       max-width: 100%;
@@ -5090,12 +5138,14 @@
           </div>
         </div>
         <div class="markets-cat-row" style="display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 10px;align-items:center">
-          <button type="button" class="cat-pill active" data-cat="crypto">Crypto</button>
-          <button type="button" class="cat-pill" data-cat="fx">Forex</button>
-          <button type="button" class="cat-pill" data-cat="stock">Stocks</button>
-          <button type="button" class="cat-pill" data-cat="commodity">Commodities</button>
-          <button type="button" class="cat-pill" data-cat="index">Indices</button>
-          <button type="button" class="cat-pill" data-cat="etf">ETF</button>
+          <div class="markets-cat-pills" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <button type="button" class="cat-pill active" data-cat="crypto">Crypto</button>
+            <button type="button" class="cat-pill" data-cat="fx">Forex</button>
+            <button type="button" class="cat-pill" data-cat="stock">Stocks</button>
+            <button type="button" class="cat-pill" data-cat="commodity">Commodities</button>
+            <button type="button" class="cat-pill" data-cat="index">Indices</button>
+            <button type="button" class="cat-pill" data-cat="etf">ETF</button>
+          </div>
           <input id="marketsSearch" type="search" placeholder="Search ticker or name…" autocomplete="off" style="margin-left:auto;flex:1;min-width:160px;max-width:280px;background:rgba(11,18,32,.6);border:1px solid rgba(122,162,199,.2);border-radius:10px;padding:8px 12px;color:#e8f1fa;font:inherit;outline:none"/>
         </div>
         <div class="mkt-head">
@@ -8475,6 +8525,8 @@ var GROM_TV_DATA_VERSION = '20260605-stable-v3';
     '.grom-tv-legend { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; font-size:10px; font-family:ui-sans-serif,system-ui;color:#9bb3c7; max-width:min(58%,420px); line-height:1.35; }',
     '.grom-tv-legend b { font-weight:700; font-variant-numeric:tabular-nums; }',
     '.grom-tv-badge { position:static; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; pointer-events:none; max-width:min(42%,360px); margin-left:auto; }',
+    '#futChart .grom-tv-badge { margin-right: 68px; transform: translateX(-22px); max-width: min(36%, 300px); }',
+    '#futChart .grom-tv-toolbar { padding-right: 12px; }',
     '.grom-tv-badge span { border:1px solid rgba(122,162,199,.18); background:rgba(7,11,22,.68); backdrop-filter:blur(12px); color:#b8c7d9; border-radius:999px; padding:4px 7px; font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; box-shadow:0 8px 24px rgba(0,0,0,.18); white-space:nowrap; }',
     '.grom-tv-badge span.hot { color:#22c17c; border-color:rgba(34,193,124,.34); background:rgba(34,193,124,.10); }',
     '.grom-tv-badge span.warn { color:#f5b94d; border-color:rgba(245,185,77,.38); background:rgba(245,185,77,.10); }',
@@ -10198,13 +10250,36 @@ function setSpotPair(sym) {
   if (typeof subscribeSpotOrderbook === 'function') subscribeSpotOrderbook(spotState.pair);
 }
 
+function getSpotPairOptions() {
+  var out = [];
+  var seen = {};
+  function add(sym) {
+    var s = String(sym || '').trim().toUpperCase();
+    if (!s || seen[s]) return;
+    seen[s] = 1;
+    out.push(s);
+  }
+  if (Array.isArray(window.GROM_INSTRUMENTS) && window.GROM_INSTRUMENTS.length) {
+    window.GROM_INSTRUMENTS.forEach(function (it) {
+      if (!it || (it.type && it.type !== 'crypto')) return;
+      var slash = typeof instrumentSymSlash === 'function' ? instrumentSymSlash(it) : '';
+      if (slash && (slash.indexOf('/USDT') >= 0 || slash.indexOf('USDT') >= 0)) add(slash);
+    });
+  }
+  if (typeof marketPairs !== 'undefined' && Array.isArray(marketPairs)) {
+    marketPairs.forEach(function (p) { add(p.sym); });
+  }
+  pairs.forEach(function (p) { add(p.sym || p); });
+  return out.sort(function (a, b) { return a.localeCompare(b); });
+}
+
 function initSpotPairPicker() {
   var btn = document.getElementById('spotPairBtn');
   var pop = document.getElementById('spotPairPop');
   var inp = document.getElementById('spotPairSearch');
   var list = document.getElementById('spotPairList');
   if (!btn || !pop || !inp || !list) return;
-  var options = pairs.map(function (p) { return p.sym; }).filter(function (s, i, arr) { return arr.indexOf(s) === i; });
+  var options = getSpotPairOptions();
   function setOpen(open) {
     pop.hidden = !open;
     document.body.classList.toggle('spot-pair-open', !!open);
@@ -10215,7 +10290,7 @@ function initSpotPairPicker() {
   }
   function render(filter) {
     var f = String(filter || '').trim().toUpperCase();
-    var shown = options.filter(function (s) { return !f || s.indexOf(f) !== -1; }).slice(0, 24);
+    var shown = options.filter(function (s) { return !f || s.indexOf(f) !== -1; });
     list.innerHTML = shown.map(function (s) {
       var px = priceForPair(s);
       return '<button type="button" class="spot-pair-item" data-sym="' + s + '"><span>' + s + '</span><span class="mono">' + (Number.isFinite(px) ? ('$' + marketFmt(px)) : '-') + '</span></button>';
@@ -11248,15 +11323,8 @@ function exportHistoryCsv() {
 
   function ensureIndicator() {
     if (state.indicator) return state.indicator;
-    var el = document.createElement('span');
-    el.id = 'gromWsIndicator';
-    el.className = 'grom-ws-pill is-offline';
-    el.title = 'Realtime feed';
-    el.innerHTML = '<span class="dot"></span><span class="lbl">offline</span>';
-    var group = document.querySelector('.topbar .right .topbar-ico-group');
-    if (group) group.insertBefore(el, group.firstChild);
-    state.indicator = el;
-    return el;
+    state.indicator = { style: {}, classList: { toggle: function () {} }, querySelector: function () { return { style: {}, textContent: '' }; } };
+    return state.indicator;
   }
 
   function refreshIndicator() {

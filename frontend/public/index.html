@@ -3837,74 +3837,75 @@
       overflow-x: hidden;
       box-sizing: border-box;
     }
-    /* Binary watchlist — horizontal pair strip */
-    #page-binary .wl {
+    /* Binary + Futures: full watchlist panel on mobile (same content as desktop) */
+    #page-binary .wl,
+    #page-futures aside.wl {
+      display: flex !important;
+      flex-direction: column;
+      padding: 12px !important;
+      min-height: 0;
       max-height: none;
-      overflow: visible;
-      padding: 10px 0 8px !important;
-      background: transparent !important;
-      border: none !important;
-      box-shadow: none !important;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(15,24,44,0.72), rgba(11,18,32,0.62)) !important;
     }
     #page-binary .wl-head,
-    #page-binary .wl-search { display: none; }
-    #page-binary .wl-tools { margin: 0 12px 8px !important; }
-    #page-binary .wl-tabs { margin: 0 12px 8px !important; }
-    #page-binary .wl .sig-card {
-      order: 0;
-      margin: 0 12px 8px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      background: rgba(14,20,34,0.9);
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-    #page-binary .wl .sig-card { display: none !important; }
-    #page-binary .wl-cats.wl-cat-pills,
-    #page-futures .wl-cats.wl-cat-pills {
+    #page-binary .wl-search,
+    #page-futures .wl-head,
+    #page-futures .wl-search {
       display: flex !important;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      margin: 0 12px 8px !important;
-      padding: 2px 0 4px;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      gap: 6px;
     }
-    #page-binary .wl-cats.wl-cat-pills::-webkit-scrollbar,
-    #page-futures .wl-cats.wl-cat-pills::-webkit-scrollbar { display: none; }
+    #page-binary .wl .sig-card {
+      display: block !important;
+      flex-shrink: 0;
+      margin: 2px 0 6px;
+      padding: 10px 12px;
+    }
     #page-binary .sig-card .body { grid-template-columns: 48px 1fr; gap: 10px; }
     #page-binary .sig-card .sig-dial { width: 48px; height: 48px; }
     #page-binary .sig-card .sig-dial .pct { font-size: 11px; }
-    #page-binary #wlList {
-      order: 1;
-      display: flex;
-      flex-direction: row;
-      gap: 8px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      max-height: none;
-      padding: 2px 12px 4px;
-      scroll-snap-type: x mandatory;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
+    #page-binary .wl-cats.wl-cat-pills,
+    #page-futures .wl-cats.wl-cat-pills {
+      display: flex !important;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0 0 8px !important;
+      overflow: visible;
     }
-    #page-binary #wlList::-webkit-scrollbar { display: none; }
-    #page-binary #wlList .wl-item {
-      flex: 0 0 132px;
-      scroll-snap-align: start;
-      padding: 10px 10px !important;
-      border-radius: 12px;
-      background: rgba(12,18,30,0.92);
-      border: 1px solid rgba(255,255,255,0.06);
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+    #page-futures .wl-tabs {
+      display: flex !important;
+      flex-wrap: wrap;
+      margin: 0 0 8px !important;
+    }
+    #page-binary #wlList,
+    #page-futures #futList {
+      display: block;
+      flex: 1 1 auto;
+      min-height: 140px;
+      max-height: min(44vh, 360px);
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-right: 2px;
+      scroll-snap-type: none;
+    }
+    #page-binary #wlList .wl-item,
+    #page-futures #futList .wl-item {
+      display: grid !important;
+      grid-template-columns: 24px 1fr auto;
+      flex: unset;
+      padding: 9px 8px !important;
+      border-radius: 10px;
+      background: transparent;
+      border: none;
     }
     #page-binary #wlList .wl-item.active {
-      border-color: rgba(14,203,129,0.45);
-      background: rgba(14,203,129,0.08);
+      background: rgba(77,158,255,0.14);
+      box-shadow: inset 0 0 0 1px rgba(77,158,255,0.25);
     }
-    #page-binary #wlList .wl-item .spark { display: none; }
+    #page-futures #futList .wl-item.active {
+      background: rgba(77,158,255,0.14);
+      box-shadow: inset 0 0 0 1px rgba(77,158,255,0.25);
+    }
 
     #page-binary .bo-panel-v2 {
       padding: 14px 12px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
@@ -3935,7 +3936,6 @@
     #page-futures .fut-shell aside.wl,
     #page-futures .fut-positions-card,
     #page-futures .fut-ai-card { overflow: visible !important; }
-    #page-futures .wl-tabs { display: none !important; }
     #page-futures .page-subtitle { margin-bottom: 14px; }
     #page-futures .fut-shell {
       min-height: 0 !important;
@@ -3947,48 +3947,6 @@
       min-width: 0 !important;
       flex-shrink: 0;
     }
-    #page-futures aside.wl {
-      max-height: none !important;
-      overflow: visible !important;
-      padding: 10px 0 8px !important;
-      background: transparent !important;
-      border: none !important;
-      box-shadow: none !important;
-    }
-    #page-futures .wl-head,
-    #page-futures .wl-search { display: none; }
-    #page-futures .wl-cats,
-    #page-futures .wl-tools,
-    #page-futures .wl-tabs { margin-left: 12px !important; margin-right: 12px !important; }
-    #page-futures #futList {
-      display: flex;
-      flex-direction: row;
-      gap: 8px;
-      max-height: none !important;
-      min-height: 0 !important;
-      overflow-x: auto !important;
-      overflow-y: hidden !important;
-      padding: 2px 12px 6px;
-      scroll-snap-type: x mandatory;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-    }
-    #page-futures #futList::-webkit-scrollbar { display: none; }
-    #page-futures #futList .wl-item {
-      flex: 0 0 140px;
-      scroll-snap-align: start;
-      padding: 10px !important;
-      border-radius: 12px;
-      background: rgba(12,18,30,0.92);
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-    #page-futures #futList .wl-item.active {
-      border-color: rgba(77,158,255,0.45);
-      background: rgba(77,158,255,0.1);
-    }
-    #page-futures .wl-cats { margin: 4px 0 !important; }
-    #page-futures .wl-tabs { flex-wrap: wrap; }
-    #page-futures .wl-tools { margin-bottom: 6px; }
     #page-futures .bo-panel-v2 {
       max-height: none !important;
       overflow: visible !important;

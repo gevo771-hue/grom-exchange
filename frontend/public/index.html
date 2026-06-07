@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#080a0f" />
 <title>GROM</title>
 <meta name="description" content="GROM Exchange — hybrid CEX/DEX. Spot, Futures, Binary Options + on-chain swaps. One account, sub-millisecond fills, bank-grade security." />
@@ -25,9 +25,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Oxanium:wght@600;700;800&family=Rajdhani:wght@600;700&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600&display=swap" rel="stylesheet" />
 <link rel="manifest" href="/manifest.webmanifest" />
-<link rel="icon" type="image/png" href="/icon-192.png?v=20260607g" sizes="192x192" />
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260607g" sizes="180x180" />
-<link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png?v=20260607g" />
+<link rel="icon" type="image/png" href="/icon-192.png?v=20260608a" sizes="192x192" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260608a" sizes="180x180" />
+<link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png?v=20260608a" />
 <meta name="apple-mobile-web-app-title" content="GROM" />
 <meta name="application-name" content="GROM" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -2113,6 +2113,10 @@
     max-height: none;
     overflow: visible;
     gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
   #page-futures .bo-panel-v2 .bo-buttons-v2 {
     flex-shrink: 0;
@@ -2722,13 +2726,91 @@
       gap: 12px;
     }
     #page-futures .fut-main-col { display: contents; }
-    #page-futures .bo-chart-card { min-height: 0 !important; }
-    #page-futures aside.wl { grid-area: contracts; max-height: none; overflow: visible; }
+    #page-futures .bo-chart-card { min-height: 0 !important; width: 100%; max-width: 100%; }
+    #page-futures aside.wl { grid-area: contracts; max-height: none; overflow: visible; width: 100%; max-width: 100%; }
     #page-futures .fut-main-col > .bo-chart-card { grid-area: chart; }
-    #page-futures .fut-order-panel { grid-area: panel; }
-    #page-futures .fut-ai-card { grid-area: ai; }
-    #page-futures .fut-positions-card { grid-area: positions; }
+    #page-futures .fut-order-panel { grid-area: panel; width: 100%; max-width: 100%; }
+    #page-futures .fut-main-col > .fut-ai-card { grid-area: ai; }
+    #page-futures .fut-main-col > .fut-positions-card { grid-area: positions; }
     #page-futures .bo-panel-v2 { max-height: none; overflow: visible; }
+    #page-futures .fut-shell > *,
+    #page-futures .fut-main-col > * {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+  }
+  @media (max-width: 900px) {
+    #page-futures.active {
+      overflow-x: clip;
+      width: 100%;
+      max-width: 100%;
+      padding-left: max(0px, env(safe-area-inset-left, 0px));
+      padding-right: max(0px, env(safe-area-inset-right, 0px));
+      box-sizing: border-box;
+    }
+    #page-futures .fut-shell {
+      display: flex !important;
+      flex-direction: column !important;
+      grid-template-columns: minmax(0, 1fr) !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      gap: 12px !important;
+      transform: none !important;
+    }
+    #page-futures .fut-main-col { display: contents !important; }
+    #page-futures .fut-main-col > .bo-chart-card { order: 1 !important; }
+    #page-futures .fut-order-panel { order: 2 !important; }
+    #page-futures aside.wl { order: 3 !important; }
+    #page-futures .fut-main-col > .fut-ai-card { order: 4 !important; }
+    #page-futures .fut-main-col > .fut-positions-card { order: 5 !important; }
+    #page-futures .fut-shell > *,
+    #page-futures .fut-main-col > *,
+    #page-futures .bo-panel-v2,
+    #page-futures .bo-panel-v2 > *,
+    #page-futures .acct-switch,
+    #page-futures .side-toggle,
+    #page-futures .fut-form-flags,
+    #page-futures .bo-chip-row,
+    #page-futures .stake-v2,
+    #page-futures .bo-chart-card,
+    #page-futures .bo-chart-body,
+    #page-futures #futChart {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+    }
+    #page-futures .bo-panel-v2 {
+      overflow: visible !important;
+      max-height: none !important;
+    }
+    #page-futures .fut-form-flags {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+    #page-futures .bo-chip-row {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      width: 100% !important;
+    }
+    #page-futures .bo-chip-row button { flex: 1 1 auto; min-width: 0; }
+    #page-futures .grom-tv-toolbar,
+    #page-futures .grom-tv-wrap {
+      max-width: 100% !important;
+      overflow: hidden !important;
+    }
+    body:has(#page-futures.active) {
+      overflow-x: clip !important;
+    }
+    main:has(#page-futures.active) {
+      overflow-x: clip !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      padding-left: max(12px, env(safe-area-inset-left, 0px)) !important;
+      padding-right: max(12px, env(safe-area-inset-right, 0px)) !important;
+    }
   }
   #page-futures aside.wl { max-height: min(78vh, 720px); overflow: visible; padding-right: 4px; }
   #page-futures #futList,
@@ -6961,9 +7043,13 @@ function show(page) {
       if (typeof drawChart === 'function') drawChart('boChart');
     }
     if (page === 'futures') {
+      if (typeof fixFuturesMobileLayout === 'function') fixFuturesMobileLayout();
       if (typeof refreshTradingWatchlists === 'function') refreshTradingWatchlists();
       if (typeof updateFuturesBoard === 'function') updateFuturesBoard();
       if (typeof drawChart === 'function') drawChart('futChart');
+      requestAnimationFrame(function () {
+        if (typeof fixFuturesMobileLayout === 'function') fixFuturesMobileLayout();
+      });
       if (typeof loadFuturesOverview === 'function') loadFuturesOverview();
       if (typeof loadFundingForPair === 'function' && window.futDeskState) loadFundingForPair(futDeskState.pair);
       if (typeof loadLiquidationsForPair === 'function' && window.futDeskState) loadLiquidationsForPair(futDeskState.pair);
@@ -7886,7 +7972,12 @@ setInterval(() => {
 setInterval(updateFuturesBoard, 1800);
 // Futures chart draw (reuses drawChart)
 setInterval(() => { if (document.getElementById('futChart')) drawChart('futChart'); }, 1200);
-window.addEventListener('resize', () => { if (document.getElementById('futChart')) drawChart('futChart'); });
+window.addEventListener('resize', () => {
+  if (document.getElementById('futChart')) drawChart('futChart');
+  if (document.getElementById('page-futures')?.classList.contains('active') && typeof fixFuturesMobileLayout === 'function') {
+    fixFuturesMobileLayout();
+  }
+});
 
 /* ========== Referral ========== */
 function copyRef() {
@@ -10723,6 +10814,27 @@ function updateFuturesAssetTag(sym) {
   if (lbl) lbl.textContent = base + 'USDT';
   var icoHost = document.getElementById('futAssetIco');
   if (icoHost) icoHost.innerHTML = futuresRowIcoHtml(sym);
+}
+
+function fixFuturesMobileLayout() {
+  if (window.innerWidth > 900) return;
+  document.body.classList.remove('desk-pair-open', 'spot-pair-open');
+  window.scrollTo(0, 0);
+  var page = document.getElementById('page-futures');
+  var shell = page && page.querySelector('.fut-shell');
+  if (!shell) return;
+  shell.style.width = '100%';
+  shell.style.maxWidth = '100%';
+  shell.querySelectorAll('.fut-order-panel, .bo-chart-card, aside.wl, .fut-ai-card, .fut-positions-card').forEach(function (el) {
+    el.style.width = '100%';
+    el.style.maxWidth = '100%';
+    el.style.minWidth = '0';
+  });
+  var chart = document.getElementById('futChart');
+  if (chart && chart.parentElement) {
+    chart.parentElement.style.maxWidth = '100%';
+    chart.parentElement.style.overflow = 'hidden';
+  }
 }
 
 function refreshTradingWatchlists() {

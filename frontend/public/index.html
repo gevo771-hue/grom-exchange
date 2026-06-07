@@ -2385,22 +2385,27 @@
     background: linear-gradient(180deg, rgba(8, 11, 22, 0.2), rgba(8, 11, 22, 0.92));
     border-radius: 0 0 10px 10px;
   }
-  #page-binary .bo-page-toolbar {
+  #page-markets > .page-title,
+  #page-markets > .page-subtitle { display: none !important; }
+  #page-binary .bo-title-row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: 14px 20px;
-    margin: 0 0 22px;
+    gap: 10px 14px;
+    margin: 0 0 10px;
+    flex-wrap: nowrap;
   }
-  #page-binary .bo-page-toolbar .page-subtitle {
-    margin: 0;
+  #page-binary .bo-title-row .page-title {
+    margin: 0 !important;
     flex: 1 1 auto;
     min-width: 0;
   }
-  #page-binary .bo-page-toolbar #boSoundToggle {
+  #page-binary .bo-title-row #boSoundToggle {
     flex-shrink: 0;
-    margin-top: 1px;
+    margin: 0;
+    align-self: center;
   }
+  #page-binary .bo-shell { margin-top: 0; }
   #boSoundToggle {
     border: 1px solid rgba(200,212,232,0.14);
     background: rgba(200,212,232,0.06);
@@ -3829,13 +3834,6 @@
     main { padding: 12px !important; }
     .page-title { font-size: 22px !important; }
     .page-subtitle { font-size: 13px; }
-    /* Binary: subtitle in toolbar — ~½ размера мобильного подзаголовка (13px → 7px) */
-    #page-binary .bo-page-toolbar .page-subtitle {
-      font-size: 11px;
-      line-height: 1.4;
-      letter-spacing: 0.01em;
-    }
-
     /* Binary mobile polish (order set at 1180px) */
     #page-binary .bo-panel-v2 {
       max-height: none;
@@ -3864,23 +3862,22 @@
     #page-binary .breadcrumb { display: none; }
     #page-spot .page-subtitle,
     #page-futures .page-subtitle,
-    #page-binary .bo-page-toolbar .page-subtitle { display: none; }
     #page-spot .page-title,
     #page-futures .page-title,
-    #page-binary .page-title {
+    #page-binary .bo-title-row .page-title {
       font-size: 17px !important;
-      margin: 0 0 10px !important;
       letter-spacing: 0.01em;
     }
-    #page-binary .bo-page-toolbar {
-      margin-bottom: 10px !important;
+    #page-binary .bo-title-row {
+      margin: 0 0 6px !important;
       align-items: center;
     }
     #page-binary #boSoundToggle {
       flex-shrink: 0;
-      font-size: 11px;
-      padding: 6px 10px;
+      font-size: 10.5px;
+      padding: 5px 9px;
     }
+    #page-binary .bo-shell { margin-top: 0 !important; }
 
     /* Unified mobile trading cards */
     #page-spot .spot-layout > .card,
@@ -5075,9 +5072,8 @@
     <!-- BINARY -->
     <section class="page" id="page-binary">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Binary Options</span></div>
-      <h1 class="page-title"><span class="spot-pair-wrap"><button type="button" class="spot-pair-btn" id="boPairBtn"><span id="boPairTitle">BTC/USDT</span> ▾</button><div class="spot-pair-pop" id="boPairPop" hidden><input class="spot-pair-search" id="boPairSearch" placeholder="Search asset…" autocomplete="off" /><div class="spot-pair-list" id="boPairList"></div></div></span> <span class="tag">5s–1h</span></h1>
-      <div class="bo-page-toolbar">
-        <p class="page-subtitle" data-i18n="pg_binary_sub">Predict UP or DOWN at round close. Fixed payouts up to 94%, hard-capped risk, zero leverage — settled on-chain-verifiable feeds.</p>
+      <div class="bo-title-row">
+        <h1 class="page-title"><span class="spot-pair-wrap"><button type="button" class="spot-pair-btn" id="boPairBtn"><span id="boPairTitle">BTC/USDT</span> ▾</button><div class="spot-pair-pop" id="boPairPop" hidden><input class="spot-pair-search" id="boPairSearch" placeholder="Search asset…" autocomplete="off" /><div class="spot-pair-list" id="boPairList"></div></div></span> <span class="tag">5s–1h</span></h1>
         <button type="button" id="boSoundToggle" class="on" aria-pressed="true">Sound: On</button>
       </div>
 

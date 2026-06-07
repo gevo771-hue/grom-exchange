@@ -17,12 +17,23 @@ const WC_PROJECT_ID = '28302d1699a8833692b54f0454164625';
 
 import { EthereumProvider } from 'https://esm.sh/@walletconnect/ethereum-provider@2.18.0';
 
-/* ----- metadata для диалога подключения ----- */
+/* ----- metadata для WalletConnect / Trust Wallet Verify API -----
+ * url ДОЛЖЕН совпадать с реальным доменом (иначе «Недійсний домен»).
+ * Нормализуем www → apex и фиксируем production origin. */
+function walletAppOrigin() {
+  const host = (location.hostname || '').replace(/^www\./i, '');
+  if (host === 'grom.exchange') return 'https://grom.exchange';
+  if (location.protocol === 'http:' || location.protocol === 'https:') {
+    return location.protocol + '//' + host + (location.port ? ':' + location.port : '');
+  }
+  return 'https://grom.exchange';
+}
+const WALLET_APP_ORIGIN = walletAppOrigin();
 const METADATA = {
-  name: 'GROM Exchange',
+  name: 'GROM',
   description: 'Trade spot, binary options, and futures on GROM.',
-  url: location.origin,
-  icons: [location.origin + '/assets/grom-brand-mark-clear.png']
+  url: WALLET_APP_ORIGIN,
+  icons: [WALLET_APP_ORIGIN + '/assets/grom-brand-mark-clear.png']
 };
 
 /* ----- chains (Arbitrum по умолчанию, остальные как optional) ----- */
@@ -70,6 +81,7 @@ function syncEmailSession(email, token, user) {
   if (typeof window.updateAuthUi === 'function') window.updateAuthUi();
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
   if (window.gromWS?.connect) window.gromWS.connect();
+  if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
 }
 
 async function connectEmail(email) {
@@ -185,47 +197,123 @@ Issued At: ${issuedAt}`;
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
   if (typeof window.toast === 'function') window.toast('Connected · ' + short, 'success');
   if (window.gromWS?.connect) try { window.gromWS.connect(); } catch (_) {}
+  if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
 
   return verifyJson;
 }
 
-/* ----- 1. MetaMask / injected (инъекция EIP-1193) ----- */
-async function connectInjected() {
+/* ----- EIP-6963 + multi-wallet provider pickers -----
+ * Trust/Binance often share window.ethereum with MetaMask — never call ethereum blindly. */
+const EIP6963 = new Map();
+
+function initEip6963() {
+  if (typeof window === 'undefined') return;
+  window.addEventListener('eip6963:announceProvider', (event) => {
+    const { info, provider } = event.detail || {};
+    if (info?.uuid) EIP6963.set(info.uuid, { info, provider });
+    if (info?.rdns) EIP6963.set(info.rdns, { info, provider });
+  });
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+}
+initEip6963();
+
+function rdnsProvider(...rdnsIds) {
+  for (const id of rdnsIds) {
+    const entry = EIP6963.get(id);
+    if (entry?.provider) return entry.provider;
+  }
+  return null;
+}
+
+function legacyProviders() {
+  const list = [];
   const eth = window.ethereum;
-  if (!eth) {
+  if (Array.isArray(eth?.providers)) list.push(...eth.providers);
+  else if (eth) list.push(eth);
+  if (window.trustwallet) list.push(window.trustwallet);
+  if (window.okxwallet) list.push(window.okxwallet);
+  if (window.BinanceChain) list.push(window.BinanceChain);
+  const binanceW3 = window.binancew3w?.ethereum || window.binance?.ethereum;
+  if (binanceW3) list.push(binanceW3);
+  if (window.coinbaseWalletExtension) list.push(window.coinbaseWalletExtension);
+  return list.filter(Boolean);
+}
+
+function findLegacy(matchFn) {
+  return legacyProviders().find(matchFn) || null;
+}
+
+function isMetaMaskProvider(p) {
+  return !!p?.isMetaMask && !p?.isTrust && !p?.isTrustWallet && !p?.isBinance && !p?.isBinanceWallet && !p?.isCoinbaseWallet;
+}
+function isTrustProvider(p) {
+  return !!(p?.isTrust || p?.isTrustWallet || p?.isTrustWalletProvider);
+}
+function isBinanceProvider(p) {
+  return !!(p?.isBinance || p?.isBinanceWallet || p?.bbcSignTx);
+}
+function isCoinbaseProvider(p) {
+  return !!p?.isCoinbaseWallet;
+}
+
+async function connectWithProvider(provider, label) {
+  if (!provider?.request) throw new Error(label + ' provider unavailable');
+  const accounts = await provider.request({ method: 'eth_requestAccounts' });
+  if (!accounts?.length) throw new Error('User rejected');
+  provider.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
+  provider.on?.('chainChanged', (hex) => { currentChainId = parseInt(hex, 16); });
+  await authenticateWithSIWE(accounts[0], provider);
+  return accounts[0];
+}
+
+/* ----- 1. MetaMask ----- */
+async function connectMetaMask() {
+  let provider = rdnsProvider('io.metamask', 'io.metamask.mobile');
+  if (!provider) provider = findLegacy(isMetaMaskProvider);
+  if (!provider) {
     window.open('https://metamask.io/download/', '_blank');
     throw new Error('MetaMask not installed — opened download page');
   }
-  const accounts = await eth.request({ method: 'eth_requestAccounts' });
-  if (!accounts?.length) throw new Error('User rejected');
-  eth.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-  eth.on?.('chainChanged', (hex) => { currentChainId = parseInt(hex, 16); });
-  // Sign in with backend — without this no JWT, no balance, no API access.
-  await authenticateWithSIWE(accounts[0], eth);
-  return accounts[0];
+  return connectWithProvider(provider, 'MetaMask');
 }
 
-/* ----- 2. OKX Wallet (отдельный injection window.okxwallet) ----- */
+/* ----- 2. Trust Wallet ----- */
+async function connectTrust() {
+  let provider = rdnsProvider('com.trustwallet.app');
+  if (!provider) provider = findLegacy(isTrustProvider);
+  if (!provider && window.trustwallet?.request) provider = window.trustwallet;
+  if (provider) return connectWithProvider(provider, 'Trust Wallet');
+  if (typeof window.toast === 'function') window.toast('Scan QR with Trust Wallet app', 'info');
+  return connectWC();
+}
+
+/* ----- 3. Binance Web3 Wallet ----- */
+async function connectBinanceWeb3() {
+  let provider = rdnsProvider('com.binance.wallet');
+  if (!provider) provider = findLegacy(isBinanceProvider);
+  if (!provider && window.BinanceChain?.request) provider = window.BinanceChain;
+  if (provider) return connectWithProvider(provider, 'Binance Web3 Wallet');
+  if (typeof window.toast === 'function') window.toast('Install Binance Web3 Wallet or scan QR', 'info');
+  return connectWC();
+}
+
+/* ----- 4. OKX Wallet ----- */
 async function connectOkx() {
-  const okx = window.okxwallet;
-  if (!okx) {
+  let provider = rdnsProvider('com.okex.wallet', 'com.okx.wallet');
+  if (!provider) provider = window.okxwallet;
+  if (!provider) {
     window.open('https://www.okx.com/web3', '_blank');
     throw new Error('OKX Wallet not installed');
   }
-  const accounts = await okx.request({ method: 'eth_requestAccounts' });
-  okx.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-  await authenticateWithSIWE(accounts[0], okx);
-  return accounts[0];
+  return connectWithProvider(provider, 'OKX Wallet');
 }
 
-/* ----- 3. Coinbase Wallet (инъекция или SDK fallback) ----- */
+/* ----- 5. Coinbase Wallet (инъекция или SDK fallback) ----- */
 async function connectCoinbase() {
-  const cb = window.coinbaseWalletExtension || (window.ethereum?.isCoinbaseWallet ? window.ethereum : null);
+  let cb = rdnsProvider('com.coinbase.wallet');
+  if (!cb) cb = window.coinbaseWalletExtension || findLegacy(isCoinbaseProvider);
   if (cb) {
-    const accounts = await cb.request({ method: 'eth_requestAccounts' });
-    cb.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-    await authenticateWithSIWE(accounts[0], cb);
-    return accounts[0];
+    return connectWithProvider(cb, 'Coinbase Wallet');
   }
   // Fallback — Coinbase Wallet SDK (QR / universal link)
   const { CoinbaseWalletSDK } = await import('https://esm.sh/@coinbase/wallet-sdk@4.0.0');
@@ -310,8 +398,93 @@ Issued At: ${issuedAt}`;
   return { message: msg, signature, nonce };
 }
 
-/* ----- Роутер: перехватываем клики по cn-row кнопкам ----- */
+/* ----- On-chain balances (ETH + ERC-20 USDT/USDC) ----- */
+const ONCHAIN_RPC = {
+  1: 'https://ethereum.publicnode.com',
+  42161: 'https://arb1.arbitrum.io/rpc',
+  137: 'https://polygon-bor-rpc.publicnode.com',
+  8453: 'https://mainnet.base.org',
+  56: 'https://bsc-dataseed.binance.org',
+};
+const ONCHAIN_TOKENS = {
+  1: {
+    USDT: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+    USDC: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+  },
+  42161: {
+    USDT: '0xfd086bc7cd5c481dcc9c85eb478a1c0b6c685e32',
+    USDC: '0xaf88d065e77c8cC2239327C0EDb1A48022fCcC7',
+  },
+  137: {
+    USDT: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+    USDC: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
+  },
+  8453: {
+    USDC: '0x833589fCD6eDb6E08f4c7C32D6f7b9bD686120e',
+  },
+  56: {
+    USDT: '0x55d398326f99059fF775485246999027B3197955',
+    USDC: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+  },
+};
+const TOKEN_DECIMALS = { USDT: 6, USDC: 6 };
+
+async function rpcCall(url, method, params) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (json.error) throw new Error(json.error.message || 'rpc error');
+  return json.result;
+}
+
+function padAddressData(address) {
+  return '0x70a08231' + address.slice(2).toLowerCase().padStart(64, '0');
+}
+
+window.gromFetchOnchainBalances = async function gromFetchOnchainBalances(address, chainId) {
+  if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) return null;
+  chainId = Number(chainId || currentChainId || 42161);
+  const rpc = ONCHAIN_RPC[chainId];
+  if (!rpc) return { chainId, nativeEth: null, tokens: {} };
+
+  const nativeWei = await rpcCall(rpc, 'eth_getBalance', [address, 'latest']);
+  const nativeEth = Number(BigInt(nativeWei || '0x0')) / 1e18;
+  const tokens = {};
+  const tokenMap = ONCHAIN_TOKENS[chainId] || {};
+  for (const [sym, contract] of Object.entries(tokenMap)) {
+    try {
+      const raw = await rpcCall(rpc, 'eth_call', [{ to: contract, data: padAddressData(address) }, 'latest']);
+      const dec = TOKEN_DECIMALS[sym] || 6;
+      tokens[sym] = Number(BigInt(raw || '0x0')) / (10 ** dec);
+    } catch (_) {
+      tokens[sym] = 0;
+    }
+  }
+  return { chainId, nativeEth, tokens };
+};
+
+/* ----- Wallet connect router (used by index.html cnConnect) ----- */
+async function gromWalletConnect(kind, name) {
+  try {
+    if (kind === 'mm') await connectMetaMask();
+    else if (kind === 'trust') await connectTrust();
+    else if (kind === 'bnw3') await connectBinanceWeb3();
+    else if (kind === 'okx') await connectOkx();
+    else if (kind === 'cb') await connectCoinbase();
+    else if (kind === 'wc' || kind === 'ghost') await connectWC();
+    else await connectWC();
+  } catch (e) {
+    failToast(e);
+  }
+}
+
+/* ----- Hook email submit + chip disconnect ----- */
 function hook() {
+  window.gromWalletConnect = gromWalletConnect;
+
   window.cnSubmitEmail = async function () {
     const input = document.getElementById('cnEmail');
     const button = input?.closest('.cn-email-box')?.querySelector('button');
@@ -332,22 +505,6 @@ function hook() {
     }
   };
 
-  // Подменяем cnConnect (был мок)
-  window.cnConnect = async function (name, kind) {
-    try {
-      if (kind === 'mm') await connectInjected();
-      else if (kind === 'okx') await connectOkx();
-      else if (kind === 'cb') await connectCoinbase();
-      else if (kind === 'wc' || kind === 'ghost') await connectWC();
-      else if (kind === 'gg') {
-        openEmailFallback('Google');
-        window.toast?.('Google OAuth is not connected yet. Continue with your Google email for now.', 'info');
-      } else {
-        await connectWC();
-      }
-    } catch (e) { failToast(e); }
-  };
-
   // Disconnect при повторном клике на чип
   window.disconnectWallet = disconnect;
 
@@ -364,9 +521,11 @@ function hook() {
 
 /* ----- экспорт для отладки ----- */
 window.gromWallet = {
-  connectInjected, connectOkx, connectCoinbase, connectWC,
-  connectEmail,
+  connectMetaMask, connectTrust, connectBinanceWeb3,
+  connectOkx, connectCoinbase, connectWC,
+  connectEmail, gromWalletConnect,
   disconnect, signSiwe,
+  fetchOnchainBalances: window.gromFetchOnchainBalances,
   state: () => ({ account: currentAccount, chainId: currentChainId })
 };
 

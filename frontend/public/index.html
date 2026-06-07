@@ -2678,27 +2678,15 @@
   .fut-kpi .s.down { color: var(--danger); font-weight: 700; }
   @media (max-width: 980px) { .fut-kpis { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 560px) { .fut-kpis { grid-template-columns: 1fr; } }
-  .fut-shell {
-    display: grid;
-    grid-template-columns: 260px minmax(0,1fr) 340px;
-    grid-template-areas:
-      "contracts chart panel"
-      "contracts ai panel"
-      "contracts positions panel";
-    gap: 14px;
-    align-items: start;
-  }
-  #page-futures aside.wl { grid-area: contracts; }
-  #page-futures .fut-shell > .bo-chart-card { grid-area: chart; }
-  #page-futures .fut-ai-card { grid-area: ai; }
-  #page-futures .fut-positions-card { grid-area: positions; }
-  #page-futures .fut-order-panel { grid-area: panel; }
+  .fut-shell { display: grid; grid-template-columns: 260px minmax(0,1fr) 340px; gap: 14px; align-items: start; }
   .fut-shell > * { min-width: 0; }
+  .fut-main-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   #page-futures .bo-chart-card { min-height: 420px; }
   @media (max-width: 1400px) { .fut-shell { grid-template-columns: 230px minmax(0,1fr) 320px; } }
   @media (max-width: 1180px) {
     /* Futures mobile/tablet: chart → order panel → contracts → AI → positions */
-    .fut-shell {
+    #page-futures .fut-shell {
+      display: grid !important;
       grid-template-columns: 1fr;
       grid-template-areas:
         "chart"
@@ -2708,7 +2696,12 @@
         "positions";
       gap: 10px;
     }
-    #page-futures aside.wl { max-height: none; overflow: visible; }
+    #page-futures .fut-main-col { display: contents; }
+    #page-futures aside.wl { grid-area: contracts; max-height: none; overflow: visible; }
+    #page-futures .fut-main-col > .bo-chart-card { grid-area: chart; }
+    #page-futures .fut-order-panel { grid-area: panel; }
+    #page-futures .fut-ai-card { grid-area: ai; }
+    #page-futures .fut-positions-card { grid-area: positions; }
     #page-futures .bo-panel-v2 { max-height: none; overflow: visible; }
   }
   #page-futures aside.wl { max-height: min(78vh, 720px); overflow: hidden; padding-right: 4px; }
@@ -3071,23 +3064,14 @@
     border-color: rgba(77,158,255,0.35);
     background: rgba(77,158,255,0.1);
   }
-  .spot-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 380px;
-    grid-template-areas:
-      "chart trade"
-      "ai trade"
-      "ai book";
-    gap: 18px;
-    align-items: start;
-  }
-  .spot-chart-card { grid-area: chart; }
-  .spot-trade-card { grid-area: trade; }
-  .spot-ai-card { grid-area: ai; }
-  .spot-orderbook-card { grid-area: book; }
+  .spot-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; align-items: start; }
+  .spot-layout > * { min-width: 0; }
+  .spot-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .spot-side { display: flex; flex-direction: column; gap: 14px; }
   @media (max-width: 1100px) {
     /* Spot mobile/tablet: chart → order form → AI → order book */
-    .spot-layout {
+    #page-spot .spot-layout {
+      display: grid !important;
       grid-template-columns: 1fr;
       grid-template-areas:
         "chart"
@@ -3096,8 +3080,13 @@
         "book";
       gap: 10px;
     }
+    #page-spot .spot-main,
+    #page-spot .spot-side { display: contents; }
+    #page-spot .spot-chart-card { grid-area: chart; }
+    #page-spot .spot-trade-card { grid-area: trade; }
+    #page-spot .spot-ai-card { grid-area: ai; }
+    #page-spot .spot-orderbook-card { grid-area: book; }
   }
-  .spot-layout > * { min-width: 0; }
   @media (max-width: 980px) { .spot-overview { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 560px) { .spot-overview { grid-template-columns: 1fr; } }
   .spot-pair-wrap { position: relative; display: inline-flex; align-items: center; }
@@ -5059,6 +5048,7 @@
       <p class="page-subtitle">Professional spot desk with live market structure, liquidity context and cleaner execution for active crypto traders.</p>
 
       <div class="spot-layout">
+        <div class="spot-main">
         <div class="card spot-chart-card">
           <div class="chart-top">
             <div class="asset-price">
@@ -5096,7 +5086,36 @@
           </div>
         </div>
 
-        <div class="card spot-trade-card">
+        <div class="card spot-ai-card">
+          <div class="card-head">
+            <h3>AI market analysis</h3>
+            <span class="sub" id="spotAiStamp">model v2.4 · live context</span>
+          </div>
+          <div class="card-body">
+            <div class="spot-ai-grid">
+              <div class="ai-thesis">
+                <div class="ai-k">Primary thesis</div>
+                <div class="ai-v" id="spotAiBias">Neutral bullish</div>
+                <div class="ai-p" id="spotAiText">Buyers are defending VWAP while liquidity above remains reachable. Prefer pullback entries over chasing the current candle.</div>
+              </div>
+              <div class="spot-ai-list">
+                <div class="spot-ai-row"><span>Entry quality</span><strong id="spotAiEntry">B+</strong></div>
+                <div class="spot-ai-row"><span>Momentum score</span><strong class="up" id="spotAiMomentum">64 / 100</strong></div>
+                <div class="spot-ai-row"><span>Liquidity skew</span><strong id="spotAiLiquidity">Bid support</strong></div>
+              </div>
+              <div class="spot-ai-list">
+                <div class="spot-ai-row"><span>Invalidation</span><strong class="down mono" id="spotAiInvalid">$61,940</strong></div>
+                <div class="spot-ai-row"><span>Upside magnet</span><strong class="up mono" id="spotAiTarget">$64,120</strong></div>
+                <div class="spot-ai-row"><span>Risk mode</span><strong id="spotAiRisk">Normal size</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        </div>
+
+        <div class="spot-side">
+          <div class="card spot-trade-card">
             <div class="card-head"><h3>Place order</h3><span class="sub" id="spotExecHint">Maker-friendly limit flow</span></div>
             <div class="card-body">
               <div class="spot-order-tabs" id="spotOrderTabs">
@@ -5130,33 +5149,6 @@
               <button class="btn-primary" id="spotOrderSubmit" style="width:100%;justify-content:center" onclick="submitSpotOrder()">Buy BTC</button>
             </div>
           </div>
-
-        <div class="card spot-ai-card">
-          <div class="card-head">
-            <h3>AI market analysis</h3>
-            <span class="sub" id="spotAiStamp">model v2.4 · live context</span>
-          </div>
-          <div class="card-body">
-            <div class="spot-ai-grid">
-              <div class="ai-thesis">
-                <div class="ai-k">Primary thesis</div>
-                <div class="ai-v" id="spotAiBias">Neutral bullish</div>
-                <div class="ai-p" id="spotAiText">Buyers are defending VWAP while liquidity above remains reachable. Prefer pullback entries over chasing the current candle.</div>
-              </div>
-              <div class="spot-ai-list">
-                <div class="spot-ai-row"><span>Entry quality</span><strong id="spotAiEntry">B+</strong></div>
-                <div class="spot-ai-row"><span>Momentum score</span><strong class="up" id="spotAiMomentum">64 / 100</strong></div>
-                <div class="spot-ai-row"><span>Liquidity skew</span><strong id="spotAiLiquidity">Bid support</strong></div>
-              </div>
-              <div class="spot-ai-list">
-                <div class="spot-ai-row"><span>Invalidation</span><strong class="down mono" id="spotAiInvalid">$61,940</strong></div>
-                <div class="spot-ai-row"><span>Upside magnet</span><strong class="up mono" id="spotAiTarget">$64,120</strong></div>
-                <div class="spot-ai-row"><span>Risk mode</span><strong id="spotAiRisk">Normal size</strong></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
           <div class="card spot-orderbook-card" style="padding:0">
             <div class="card-head"><h3>Order book</h3><span class="sub">Binance · agg</span></div>
             <div class="ob-row hdr"><div>Price</div><div style="text-align:right">Size</div><div style="text-align:right">Total</div></div>
@@ -5164,6 +5156,7 @@
             <div class="ob-spread" id="obSpread">Spread: $2.40 · 0.002%</div>
             <div id="bidList"></div>
           </div>
+        </div>
       </div>
     </section>
 
@@ -5429,33 +5422,109 @@
       <p class="page-subtitle">USDT-margined perpetuals · up to 100× leverage · cross &amp; isolated margin.</p>
 
       <div class="fut-shell">
-        <!-- Chart -->
-        <div class="bo-chart-card">
-          <div class="bo-hud-top">
-            <div class="grp">
-              <div class="bo-asset" id="futAssetTag">
-                <span class="bo-asset-ico" id="futAssetIco"><span class="coin-ico btc" style="width:22px;height:22px;font-size:10px">₿</span></span>
-                <span class="fut-asset-label" id="futAssetLabel">BTCUSDT</span>
-                <span class="pay" style="background:rgba(77,158,255,0.18);color:var(--steel1);padding:1px 6px;border-radius:4px">PERP</span>
+        <!-- Left: pair picker + market stats -->
+        <aside class="wl">
+          <div class="wl-head"><span>Contracts</span><span>Funding</span></div>
+          <div class="wl-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input placeholder="Search BTCUSDT…"/>
+          </div>
+          <div class="wl-cats" id="futCats" style="display:flex;gap:4px;margin:6px 0;background:rgba(7,11,22,0.5);padding:3px;border-radius:9px">
+            <button type="button" class="active" data-cat="all" title="All" style="flex:1;background:rgba(77,158,255,0.18);border:0;color:var(--silver1);padding:7px 4px;border-radius:7px;font:inherit;font-size:11px;font-weight:700;cursor:pointer">All</button>
+            <button type="button" data-cat="crypto" title="Crypto" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Crypto">₿</button>
+            <button type="button" data-cat="fx" title="Forex" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Forex">$</button>
+            <button type="button" data-cat="commodity" title="Commodities" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Commodities">🛢</button>
+            <button type="button" data-cat="index" title="Indices" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Indices">📊</button>
+          </div>
+          <div class="wl-tabs" id="futTabs">
+            <button class="active" data-filter="all">All</button>
+            <button data-filter="top">Top vol</button>
+            <button data-filter="new">New</button>
+            <button data-filter="ai">AI picks</button>
+          </div>
+          <div class="wl-tools" id="futListMode">
+            <button class="active" data-mode="comfortable">Comfort</button>
+            <button data-mode="compact">Compact</button>
+          </div>
+          <div id="futList"></div>
+        </aside>
+
+        <!-- Center: chart + positions -->
+        <div class="fut-main-col">
+          <div class="bo-chart-card">
+            <div class="bo-hud-top">
+              <div class="grp">
+                <div class="bo-asset" id="futAssetTag">
+                  <span class="bo-asset-ico" id="futAssetIco"><span class="coin-ico btc" style="width:22px;height:22px;font-size:10px">₿</span></span>
+                  <span class="fut-asset-label" id="futAssetLabel">BTCUSDT</span>
+                  <span class="pay" style="background:rgba(77,158,255,0.18);color:var(--steel1);padding:1px 6px;border-radius:4px">PERP</span>
+                </div>
+                <div class="bo-price">
+                  <span class="big mono" id="futPrice">$63,903.09</span>
+                  <span class="pip up" id="futPip">+1.82%</span>
+                </div>
               </div>
-              <div class="bo-price">
-                <span class="big mono" id="futPrice">$63,903.09</span>
-                <span class="pip up" id="futPip">+1.82%</span>
+              <div class="sep"></div>
+              <div class="grp">
+                <div class="bo-chip-row">
+                  <button>1m</button><button>5m</button>
+                  <button class="active">15m</button>
+                  <button>1h</button><button>4h</button><button>1d</button>
+                </div>
               </div>
             </div>
-            <div class="sep"></div>
-            <div class="grp">
-              <div class="bo-chip-row">
-                <button>1m</button><button>5m</button>
-                <button class="active">15m</button>
-                <button>1h</button><button>4h</button><button>1d</button>
+            <div class="bo-chart-body"><canvas id="futChart" class="chart"></canvas></div>
+          </div>
+
+          <div class="card spot-ai-card fut-ai-card">
+            <div class="card-head">
+              <h3>AI futures analysis</h3>
+              <span class="sub" id="futAiStamp">model v2.4 · perp context</span>
+            </div>
+            <div class="card-body">
+              <div class="spot-ai-grid">
+                <div class="ai-thesis">
+                  <div class="ai-k">Primary thesis</div>
+                  <div class="ai-v" id="futAiBias">Neutral bullish</div>
+                  <div class="ai-p" id="futAiText">Funding is warming but basis remains compressed. Best risk sits on pullback into mark convergence, not late long chase.</div>
+                </div>
+                <div class="spot-ai-list">
+                  <div class="spot-ai-row"><span>Entry quality</span><strong id="futAiEntry">B+</strong></div>
+                  <div class="spot-ai-row"><span>Funding drag</span><strong id="futAiFunding">Manageable</strong></div>
+                  <div class="spot-ai-row"><span>Liq. distance</span><strong id="futAiLiqDist">4.6%</strong></div>
+                </div>
+                <div class="spot-ai-list">
+                  <div class="spot-ai-row"><span>Invalidation</span><strong class="down mono" id="futAiInvalid">$61,940</strong></div>
+                  <div class="spot-ai-row"><span>Upside magnet</span><strong class="up mono" id="futAiTarget">$64,120</strong></div>
+                  <div class="spot-ai-row"><span>Risk mode</span><strong id="futAiRisk">Normal size</strong></div>
+                </div>
               </div>
             </div>
           </div>
-          <div class="bo-chart-body"><canvas id="futChart" class="chart"></canvas></div>
+
+          <div class="card fut-positions-card" style="padding:0">
+            <div class="card-head">
+              <h3>Positions &amp; orders</h3>
+              <div class="tf-pills" id="futTabPills">
+                <button class="active" data-fut-tab="positions">Positions <span id="futTabPosCount">(0)</span></button>
+                <button data-fut-tab="orders">Open orders <span id="futTabOrdCount">(0)</span></button>
+                <button data-fut-tab="history">History</button>
+              </div>
+            </div>
+            <div class="pos-table-head" id="futPosTableHead">
+              <div>Contract</div>
+              <div>Size</div>
+              <div>Entry / Mark</div>
+              <div>Liq. price</div>
+              <div>Margin</div>
+              <div style="text-align:right">uPnL (ROE)</div>
+              <div></div>
+            </div>
+            <div id="futPositionsBody"></div>
+          </div>
         </div>
 
-        <!-- Order form -->
+        <!-- Right: order form -->
         <div class="bo-panel-v2 fut-order-panel">
           <div class="acct-switch">
             <button class="active">Cross<span class="bal mono" style="color:var(--silver5);font-size:10.5px">$50,000</span></button>
@@ -5529,81 +5598,6 @@
               <div class="row"><span>Slippage est.</span><strong>0.8 bps</strong></div>
             </div>
           </div>
-
-        <!-- Contracts watchlist -->
-        <aside class="wl">
-          <div class="wl-head"><span>Contracts</span><span>Funding</span></div>
-          <div class="wl-search">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-            <input placeholder="Search BTCUSDT…"/>
-          </div>
-          <div class="wl-cats" id="futCats" style="display:flex;gap:4px;margin:6px 0;background:rgba(7,11,22,0.5);padding:3px;border-radius:9px">
-            <button type="button" class="active" data-cat="all" title="All" style="flex:1;background:rgba(77,158,255,0.18);border:0;color:var(--silver1);padding:7px 4px;border-radius:7px;font:inherit;font-size:11px;font-weight:700;cursor:pointer">All</button>
-            <button type="button" data-cat="crypto" title="Crypto" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Crypto">₿</button>
-            <button type="button" data-cat="fx" title="Forex" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Forex">$</button>
-            <button type="button" data-cat="commodity" title="Commodities" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Commodities">🛢</button>
-            <button type="button" data-cat="index" title="Indices" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Indices">📊</button>
-          </div>
-          <div class="wl-tabs" id="futTabs">
-            <button class="active" data-filter="all">All</button>
-            <button data-filter="top">Top vol</button>
-            <button data-filter="new">New</button>
-            <button data-filter="ai">AI picks</button>
-          </div>
-          <div class="wl-tools" id="futListMode">
-            <button class="active" data-mode="comfortable">Comfort</button>
-            <button data-mode="compact">Compact</button>
-          </div>
-          <div id="futList"></div>
-        </aside>
-
-        <div class="card spot-ai-card fut-ai-card">
-            <div class="card-head">
-              <h3>AI futures analysis</h3>
-              <span class="sub" id="futAiStamp">model v2.4 · perp context</span>
-            </div>
-            <div class="card-body">
-              <div class="spot-ai-grid">
-                <div class="ai-thesis">
-                  <div class="ai-k">Primary thesis</div>
-                  <div class="ai-v" id="futAiBias">Neutral bullish</div>
-                  <div class="ai-p" id="futAiText">Funding is warming but basis remains compressed. Best risk sits on pullback into mark convergence, not late long chase.</div>
-                </div>
-                <div class="spot-ai-list">
-                  <div class="spot-ai-row"><span>Entry quality</span><strong id="futAiEntry">B+</strong></div>
-                  <div class="spot-ai-row"><span>Funding drag</span><strong id="futAiFunding">Manageable</strong></div>
-                  <div class="spot-ai-row"><span>Liq. distance</span><strong id="futAiLiqDist">4.6%</strong></div>
-                </div>
-                <div class="spot-ai-list">
-                  <div class="spot-ai-row"><span>Invalidation</span><strong class="down mono" id="futAiInvalid">$61,940</strong></div>
-                  <div class="spot-ai-row"><span>Upside magnet</span><strong class="up mono" id="futAiTarget">$64,120</strong></div>
-                  <div class="spot-ai-row"><span>Risk mode</span><strong id="futAiRisk">Normal size</strong></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card fut-positions-card" style="padding:0">
-            <div class="card-head">
-              <h3>Positions &amp; orders</h3>
-              <div class="tf-pills" id="futTabPills">
-                <button class="active" data-fut-tab="positions">Positions <span id="futTabPosCount">(0)</span></button>
-                <button data-fut-tab="orders">Open orders <span id="futTabOrdCount">(0)</span></button>
-                <button data-fut-tab="history">History</button>
-              </div>
-            </div>
-            <div class="pos-table-head" id="futPosTableHead">
-              <div>Contract</div>
-              <div>Size</div>
-              <div>Entry / Mark</div>
-              <div>Liq. price</div>
-              <div>Margin</div>
-              <div style="text-align:right">uPnL (ROE)</div>
-              <div></div>
-            </div>
-            <div id="futPositionsBody"></div>
-          </div>
-
         </div>
       </div>
     </section>

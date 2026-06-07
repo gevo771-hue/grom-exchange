@@ -25,10 +25,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Oxanium:wght@600;700;800&family=Rajdhani:wght@600;700&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600&display=swap" rel="stylesheet" />
 <link rel="manifest" href="/manifest.webmanifest" />
-<link rel="icon" type="image/png" href="/assets/grom-brand-mark-clear.png" sizes="any" />
-<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+<link rel="icon" type="image/png" href="/icon-192.png" sizes="192x192" />
+<link rel="apple-touch-icon" href="https://grom.exchange/apple-touch-icon.png" sizes="180x180" />
+<link rel="apple-touch-icon-precomposed" href="https://grom.exchange/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-title" content="GROM" />
 <meta name="application-name" content="GROM" />
+<meta name="mobile-web-app-capable" content="yes" />
 <style>
   /* =========================================================
      GROM — UI palette (sRGB / IEC 61966-2.1; CSS hex & rgb() are sRGB in browsers)
@@ -4671,7 +4673,7 @@
       <div class="stats-grid">
         <div class="stat-card has-tip" data-tip="Total value of all assets in your connected wallet">
           <div class="label">Portfolio value</div>
-          <div class="value mono" id="dashPortfolioVal">$12,847.32</div>
+          <div class="value mono" id="dashPortfolioVal">—</div>
           <div class="delta up" id="dashPortfolioDelta">▲ 2.41% · $302.11 today</div>
         </div>
         <div class="stat-card">
@@ -4868,7 +4870,7 @@
         <div class="bo-panel-v2">
           <div class="acct-switch" id="acctSwitch">
             <button type="button" class="active" data-acct="demo">Demo<span class="bal mono">$50,000.00</span></button>
-            <button type="button" data-acct="live">Live<span class="bal mono">$12,847.32</span></button>
+            <button type="button" data-acct="live">Live<span class="bal mono">—</span></button>
           </div>
           <div class="bo-panel-scroll">
           <div class="countdown-v2" id="countdown" style="--pct: 22%;">
@@ -5187,8 +5189,8 @@
       <div class="wallet-hero">
         <div>
           <div class="total">Total balance</div>
-          <div class="val mono" id="walletTotalBalance">$12,847.32</div>
-          <div class="delta" id="walletTotalDelta">▲ 2.41% today · +$302.11</div>
+          <div class="val mono" id="walletTotalBalance">—</div>
+          <div class="delta" id="walletTotalDelta" style="color:var(--silver5)">Sign in to view balance</div>
         </div>
         <div class="actions">
           <button type="button" class="btn-ghost" onclick="openWalletModal('deposit')"><svg width="14" height="14"><use href="#i-deposit"/></svg> Deposit</button>
@@ -5200,13 +5202,13 @@
       <div class="ops-grid">
         <div class="ops-mini">
           <div class="k">Available to trade</div>
-          <div class="v mono" id="walletAvailableValue">$11,924.80</div>
-          <div class="s" id="walletAvailableMeta">94% of portfolio is immediately routable</div>
+          <div class="v mono" id="walletAvailableValue">—</div>
+          <div class="s" id="walletAvailableMeta">Available after sign-in</div>
         </div>
         <div class="ops-mini">
           <div class="k">Pending transfers</div>
-          <div class="v mono" id="walletPendingCount">2</div>
-          <div class="s" id="walletPendingMeta">1 deposit confirming · 1 withdrawal batching</div>
+          <div class="v mono" id="walletPendingCount">0</div>
+          <div class="s" id="walletPendingMeta">No pending transfers</div>
         </div>
         <div class="ops-mini">
           <div class="k">Bridge routes</div>
@@ -6984,12 +6986,17 @@ var _logout = document.getElementById('topLogoutBtn');
 if (_logout) _logout.addEventListener('click', disconnectWallet);
 (function restoreAuthUi() {
   try {
-    if (localStorage.getItem('grom_jwt')) {
-      var label = localStorage.getItem('grom_wallet_label') || 'Wallet';
-      GROM_CONN = { connected: true, label: label, method: 'restored' };
-      setWalletLabel(label);
-      updateAuthUi();
+    var token = localStorage.getItem('grom_jwt') || '';
+    if (token === 'demo-session' || token === 'privy-session') {
+      localStorage.removeItem('grom_jwt');
+      return;
     }
+    if (!token || String(token).split('.').length !== 3) return;
+    var label = localStorage.getItem('grom_wallet_label') || 'Wallet';
+    GROM_CONN = { connected: true, label: label, method: 'restored' };
+    setWalletLabel(label);
+    updateAuthUi();
+    if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
   } catch (_) {}
 })();
 
@@ -10800,6 +10807,53 @@ function exportHistoryCsv() {
     return a.slice(0, 1);
   }
 
+  function syncBinaryLiveBalance(data) {
+    var total = data && data.summary ? Number(data.summary.totalUsd || 0) : 0;
+    if (typeof boState !== 'undefined') boState.balance.live = total;
+    var liveBtn = document.querySelector('#acctSwitch button[data-acct="live"] .bal');
+    if (liveBtn) {
+      liveBtn.textContent = total > 0
+        ? ('$' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+        : '—';
+    }
+  }
+
+  function resetWalletUi() {
+    window.__gromWalletOverview = null;
+    walletState.loaded = false;
+    walletState.backendReady = false;
+    var dash = '—';
+    var ids = {
+      walletTotalBalance: dash,
+      walletAvailableValue: dash,
+      walletTradingBal: dash,
+      walletLockedBal: dash,
+      dashPortfolioVal: dash,
+    };
+    Object.keys(ids).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = ids[id];
+    });
+    var deltaEl = document.getElementById('walletTotalDelta');
+    if (deltaEl) {
+      deltaEl.textContent = 'Sign in to view balance';
+      deltaEl.style.color = 'var(--silver5)';
+    }
+    var availMeta = document.getElementById('walletAvailableMeta');
+    if (availMeta) availMeta.textContent = 'Available after sign-in';
+    var pendingEl = document.getElementById('walletPendingCount');
+    if (pendingEl) pendingEl.textContent = '0';
+    var pendingMeta = document.getElementById('walletPendingMeta');
+    if (pendingMeta) pendingMeta.textContent = 'No pending transfers';
+    var assetsHost = document.getElementById('walletAssetsList');
+    if (assetsHost) assetsHost.innerHTML = '<div style="padding:20px;color:var(--silver5)">Sign in to load balances.</div>';
+    var transfersHost = document.getElementById('walletTransfersList');
+    if (transfersHost) transfersHost.innerHTML = '<div style="padding:20px;color:var(--silver5)">No transfers yet.</div>';
+    syncBinaryLiveBalance(null);
+    if (typeof renderConnectedWalletsList === 'function') renderConnectedWalletsList();
+  }
+  window.gromResetWalletUi = resetWalletUi;
+
   function renderWalletOverview(data) {
     if (!data || !data.summary) return;
     window.__gromWalletOverview = data;
@@ -10846,6 +10900,7 @@ function exportHistoryCsv() {
     var assetCountEl = document.getElementById('walletAssetCount');
     if (assetCountEl) assetCountEl.textContent = String(summary.assetCount || 0) + ' tokens';
 
+    syncBinaryLiveBalance(data);
     if (typeof updateDashboardFromWallet === 'function') updateDashboardFromWallet(data);
     if (typeof updateOnboardingChecklist === 'function') updateOnboardingChecklist();
 
@@ -11023,6 +11078,12 @@ function exportHistoryCsv() {
   async function hydrateWalletSlice(force) {
     if (walletState.loading) return;
     if (walletState.loaded && !force) return;
+    var token = '';
+    try { token = localStorage.getItem('grom_jwt') || ''; } catch (_) {}
+    if (!isGromJwt(token)) {
+      resetWalletUi();
+      return;
+    }
     walletState.loading = true;
     try {
       var results = await Promise.all([
@@ -11035,6 +11096,7 @@ function exportHistoryCsv() {
       renderHistoryItems(results[1].items || []);
     } catch (_) {
       walletState.backendReady = false;
+      resetWalletUi();
     } finally {
       walletState.loading = false;
     }
@@ -12238,12 +12300,18 @@ updateAuthUi = function updateAuthUiPatched() {
   if (sbLogout) sbLogout.style.display = connected ? '' : 'none';
   var topLogout = document.getElementById('topLogoutBtn');
   if (topLogout) topLogout.style.display = 'none';
-  if (!connected) setWalletLabel(gromSignInLabel());
+  if (!connected) {
+    setWalletLabel(gromSignInLabel());
+    if (typeof window.gromResetWalletUi === 'function') window.gromResetWalletUi();
+  } else if (typeof window.hydrateWalletSlice === 'function') {
+    window.hydrateWalletSlice(true);
+  }
 };
 var __baseDisconnect = disconnectWallet;
 disconnectWallet = function disconnectWalletPatched() {
   if (typeof __baseDisconnect === 'function') __baseDisconnect();
   setWalletLabel(gromSignInLabel());
+  if (typeof window.gromResetWalletUi === 'function') window.gromResetWalletUi();
   updateAuthUi();
 };
 var __logoHomeLive = document.getElementById('logoHome');

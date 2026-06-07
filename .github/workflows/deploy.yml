@@ -50,10 +50,41 @@ jobs:
             "$DEPLOY_USER@$DEPLOY_HOST" "
               set -euo pipefail
               cd '$DEPLOY_PATH'
+
+              # Prevent overlapping deploys (manual SSH + Actions racing on docker compose).
+              exec 9>/tmp/grom-deploy.lock
+              flock -w 300 9
+
               git fetch origin main
               git reset --hard origin/main
-              docker compose up -d --build
+              docker compose up -d --build --wait --wait-timeout 300
               docker compose exec -T backend npm run migrate
-              curl -fsS http://127.0.0.1:4000/health
-              curl -fsS http://127.0.0.1:5273 >/dev/null
+
+              for attempt in 1 2 3 4 5 6 7 8 9 10; do
+                if curl -fsS http://127.0.0.1:4000/health >/dev/null; then
+                  break
+                fi
+                if [ \"\$attempt\" -eq 10 ]; then
+                  echo 'Backend health check failed after retries'
+                  docker compose ps
+                  docker compose logs --tail 80 backend
+                  exit 1
+                fi
+                sleep 3
+              done
+
+              for attempt in 1 2 3 4 5; do
+                if curl -fsS http://127.0.0.1:5273 >/dev/null; then
+                  break
+                fi
+                if [ \"\$attempt\" -eq 5 ]; then
+                  echo 'Frontend health check failed after retries'
+                  docker compose ps
+                  docker compose logs --tail 80 frontend
+                  exit 1
+                fi
+                sleep 2
+              done
+
+              echo 'Deploy OK'
             "

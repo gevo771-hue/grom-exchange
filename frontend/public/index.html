@@ -2009,6 +2009,17 @@
     color: var(--silver5); letter-spacing: 0.04em;
   }
   .wl-tabs button.active { background: rgba(77,158,255,0.18); color: var(--silver1); }
+  #boCats .cat-pill,
+  #futCats .cat-pill {
+    pointer-events: auto;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  #page-binary #wlList .wl-item,
+  #page-futures #futList .wl-item {
+    pointer-events: auto;
+    cursor: pointer;
+  }
   .wl-cats.wl-cat-pills {
     display: flex;
     flex-wrap: wrap;
@@ -2719,7 +2730,9 @@
     #page-futures .fut-positions-card { grid-area: positions; }
     #page-futures .bo-panel-v2 { max-height: none; overflow: visible; }
   }
-  #page-futures aside.wl { max-height: min(78vh, 720px); overflow: hidden; padding-right: 4px; }
+  #page-futures aside.wl { max-height: min(78vh, 720px); overflow: visible; padding-right: 4px; }
+  #page-futures #futList,
+  #page-binary #wlList { overflow-y: auto; overflow-x: hidden; }
   #page-futures #futList {
     flex: 1 1 auto;
     min-height: 120px;
@@ -3104,12 +3117,15 @@
   }
   @media (max-width: 980px) { .spot-overview { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 560px) { .spot-overview { grid-template-columns: 1fr; } }
-  .spot-pair-wrap { position: relative; display: inline-flex; align-items: center; }
+  .spot-pair-wrap { position: relative; display: inline-flex; align-items: center; z-index: 50; }
   .spot-pair-btn {
     display: inline-flex; align-items: center; gap: 8px;
     font: inherit; font-weight: 700; color: var(--silver1);
     padding: 4px 10px; border-radius: 8px;
     background: rgba(8, 12, 22, 0.65); border: 1px solid rgba(200,212,232,0.12);
+    pointer-events: auto;
+    cursor: pointer;
+    touch-action: manipulation;
   }
   .spot-pair-btn:hover { border-color: rgba(77,158,255,0.45); }
   .spot-pair-pop {
@@ -3845,7 +3861,7 @@
       padding: 12px !important;
       min-height: 0;
       max-height: none;
-      overflow: hidden;
+      overflow: visible !important;
       background: linear-gradient(180deg, rgba(15,24,44,0.72), rgba(11,18,32,0.62)) !important;
     }
     #page-binary .wl-head,
@@ -6945,6 +6961,7 @@ function show(page) {
       if (typeof drawChart === 'function') drawChart('boChart');
     }
     if (page === 'futures') {
+      if (typeof refreshTradingWatchlists === 'function') refreshTradingWatchlists();
       if (typeof updateFuturesBoard === 'function') updateFuturesBoard();
       if (typeof drawChart === 'function') drawChart('futChart');
       if (typeof loadFuturesOverview === 'function') loadFuturesOverview();
@@ -7673,9 +7690,12 @@ setInterval(() => {
 // Initial
 document.addEventListener('DOMContentLoaded', () => {
   try { boState.sound = localStorage.getItem('grom_bo_sound') !== '0'; } catch (_) { boState.sound = true; }
-  renderBinaryWatchlist('');
-  rebuildFuturesPairs();
-  renderFuturesList('');
+  if (typeof refreshTradingWatchlists === 'function') refreshTradingWatchlists();
+  else {
+    renderBinaryWatchlist('');
+    rebuildFuturesPairs();
+    renderFuturesList('');
+  }
   wireListSearches();
   updateBinaryAssetTag(boState.pair);
   updateFuturesAssetTag(futDeskState.pair);
@@ -7687,7 +7707,6 @@ document.addEventListener('DOMContentLoaded', () => {
   syncAcctBalances();
   renderPositions();
   initBinaryWatchlistMeta();
-  applyWlTabFilter();
   initSpotPairPicker();
   initBinaryPairPicker();
   initFuturesPairPicker();
@@ -8031,6 +8050,8 @@ var listUiState = {
   futuresFilter: 'all',
   futuresCat: 'all'
 };
+window.__gromIcoHtmlCache = window.__gromIcoHtmlCache || Object.create(null);
+var marketsFav = (function () { try { return JSON.parse(localStorage.getItem('grom:fav') || '[]'); } catch (_) { return []; } })();
 
 let bnbPrice = 608.18, xrpPrice = 2.16, adaPrice = 0.58, dogePrice = 0.18, avaxPrice = 22.40, linkPrice = 13.80, eurPrice = 1.0842, gbpPrice = 193.482, xauPrice = 2487.30, aaplPrice = 206.8, tslaPrice = 173.4;
 let msftPrice = 417.2, nvdaPrice = 922.4;
@@ -10552,7 +10573,10 @@ function initDeskPairPicker(cfg) {
       return '<button type="button" class="spot-pair-item" data-sym="' + s + '"><span>' + label + extra + '</span><span class="mono">' + (Number.isFinite(px) ? ('$' + marketFmt(px)) : '-') + '</span></button>';
     }).join('');
   }
+  if (btn.dataset.pickerWired) return;
+  btn.dataset.pickerWired = '1';
   btn.addEventListener('click', function (e) {
+    e.preventDefault();
     e.stopPropagation();
     setOpen(pop.hidden);
   });
@@ -10701,6 +10725,17 @@ function updateFuturesAssetTag(sym) {
   if (icoHost) icoHost.innerHTML = futuresRowIcoHtml(sym);
 }
 
+function refreshTradingWatchlists() {
+  if (typeof rebuildBinaryPairs === 'function') rebuildBinaryPairs();
+  if (typeof rebuildFuturesPairs === 'function') rebuildFuturesPairs();
+  if (typeof renderBinaryWatchlist === 'function') {
+    renderBinaryWatchlist(document.querySelector('#page-binary .wl-search input')?.value || '');
+  }
+  if (typeof renderFuturesList === 'function') {
+    renderFuturesList(document.querySelector('#page-futures .wl-search input')?.value || '');
+  }
+}
+
 function renderFuturesList(filter) {
   var host = document.getElementById('futList');
   if (!host) return;
@@ -10737,7 +10772,7 @@ function wireListSearches() {
   var bin = document.querySelector('#page-binary .wl-search input');
   if (bin && !bin.dataset.wired) {
     bin.dataset.wired = '1';
-    bin.addEventListener('input', function () { renderBinaryWatchlist(bin.value); applyWlTabFilter(); });
+    bin.addEventListener('input', function () { renderBinaryWatchlist(bin.value); });
   }
   var fut = document.querySelector('#page-futures .wl-search input');
   if (fut && !fut.dataset.wired) {
@@ -10766,6 +10801,18 @@ function wireListSearches() {
       b.classList.add('active');
       listUiState.futuresCat = b.dataset.cat || 'all';
       renderFuturesList(document.querySelector('#page-futures .wl-search input')?.value || '');
+    });
+  }
+  var boCats = document.getElementById('boCats');
+  if (boCats && !boCats.dataset.wired) {
+    boCats.dataset.wired = '1';
+    boCats.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-cat]');
+      if (!b) return;
+      boCats.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      boState.wlTab = b.dataset.cat || 'all';
+      renderBinaryWatchlist(document.querySelector('#page-binary .wl-search input')?.value || '');
     });
   }
   document.querySelectorAll('#page-futures .bo-hud-top .bo-chip-row button').forEach(function (btn) {
@@ -12685,15 +12732,17 @@ function lpSymToPair(sym) {
         '<div class="lp-tk-chg ' + (chg >= 0 ? 'up' : 'down') + '">' + (chg >= 0 ? '▲ +' : '▼ ') + Math.abs(chg).toFixed(2) + '%</div></div>';
     }).join('');
   }
-  paint();
-  setInterval(paint, 1500);
+  try { paint(); } catch (_) {}
+  setInterval(function () { try { paint(); } catch (_) {} }, 1500);
 })();
 var MARKETS_PER_PAGE = 25;
 var marketsCat = 'crypto';
 var marketsPage = 1;
 var marketsSearchQ = '';
-var marketsFav = (function () { try { return JSON.parse(localStorage.getItem('grom:fav') || '[]'); } catch (_) { return []; } })();
-function isFav(sym) { return marketsFav.indexOf(sym) >= 0; }
+if (!Array.isArray(marketsFav)) {
+  marketsFav = (function () { try { return JSON.parse(localStorage.getItem('grom:fav') || '[]'); } catch (_) { return []; } })();
+}
+function isFav(sym) { return Array.isArray(marketsFav) && marketsFav.indexOf(sym) >= 0; }
 window.toggleFav = function toggleFav(sym) {
   var i = marketsFav.indexOf(sym);
   if (i >= 0) marketsFav.splice(i, 1); else marketsFav.push(sym);
@@ -12799,8 +12848,9 @@ function gromLogoCascade(sym) {
     "else if(n===2){this.src='https://cryptologos.cc/logos/thumbs/" + s + ".png?v=030';}" +
     "else{this.parentElement.textContent='" + fb + "';this.parentElement.classList.remove('no-bg');}";
 }
-window.__gromIcoHtmlCache = window.__gromIcoHtmlCache || {};
 function instrumentIcoHtmlLive(p) {
+  if (!p) return '<span class="coin-ico">?</span>';
+  if (!window.__gromIcoHtmlCache) window.__gromIcoHtmlCache = Object.create(null);
   var cacheKey = (p.sym || p.symbol || '') + '|' + (p.type || '') + '|' + (p.logo || '') + '|' + (p.glyph || '');
   if (window.__gromIcoHtmlCache[cacheKey]) return window.__gromIcoHtmlCache[cacheKey];
   var html;

@@ -3850,9 +3850,7 @@
       border: 1px solid rgba(255,255,255,0.06);
     }
     #page-binary .wl .sig-card,
-    #page-binary .wl-cats,
-    #page-binary .wl-tools,
-    #page-binary #boListMode { display: none !important; }
+    #page-binary .wl-cats { display: none !important; }
     #page-binary .sig-card .body { grid-template-columns: 48px 1fr; gap: 10px; }
     #page-binary .sig-card .sig-dial { width: 48px; height: 48px; }
     #page-binary .sig-card .sig-dial .pct { font-size: 11px; }
@@ -3917,9 +3915,7 @@
     #page-futures .fut-positions-card,
     #page-futures .fut-ai-card { overflow: visible !important; }
     #page-futures .wl-cats,
-    #page-futures .wl-tabs,
-    #page-futures #futListMode,
-    #page-futures .wl-tools { display: none !important; }
+    #page-futures .wl-tabs { display: none !important; }
     #page-futures .page-subtitle { margin-bottom: 14px; }
     #page-futures .fut-shell {
       min-height: 0 !important;
@@ -5024,11 +5020,6 @@
             <button type="button" data-cat="commodity" title="Commodities" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer">🛢</button>
             <button type="button" data-cat="fav" title="Favorites" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer">★</button>
           </div>
-          <div class="wl-tools" id="boListMode">
-            <button class="active" data-mode="comfortable">Comfort</button>
-            <button data-mode="compact">Compact</button>
-          </div>
-
           <div class="sig-card">
             <div class="head">
               <span class="title">AI signal</span>
@@ -5672,10 +5663,6 @@
             <button data-filter="top">Top vol</button>
             <button data-filter="new">New</button>
             <button data-filter="ai">AI picks</button>
-          </div>
-          <div class="wl-tools" id="futListMode">
-            <button class="active" data-mode="comfortable">Comfort</button>
-            <button data-mode="compact">Compact</button>
           </div>
           <div id="futList"></div>
         </aside>
@@ -8058,8 +8045,6 @@ var __boTfSec = 5;
 var spotState = { pair: 'BTC/USDT', side: 'buy', orderType: 'limit' };
 var futDeskState = { pair: 'BTC/USDT', leverage: 25, mode: 'cross', side: 'long' };
 var listUiState = {
-  binaryMode: 'comfortable',
-  futuresMode: 'comfortable',
   futuresFilter: 'all',
   futuresCat: 'all'
 };
@@ -10704,8 +10689,6 @@ function renderBinaryWatchlist(filter) {
   var host = document.getElementById('wlList');
   if (!host) return;
   if (!binaryPairs.length && typeof rebuildBinaryPairs === 'function') rebuildBinaryPairs();
-  var shell = host.closest('.wl');
-  if (shell) shell.classList.toggle('compact', listUiState.binaryMode === 'compact');
   var q = String(filter || '').trim().toUpperCase();
   var tab = boState.wlTab || 'all';
   var rows = binaryPairs.filter(function (row) {
@@ -10763,8 +10746,6 @@ function renderFuturesList(filter) {
   var host = document.getElementById('futList');
   if (!host) return;
   if (!futuresPairs.length && typeof rebuildFuturesPairs === 'function') rebuildFuturesPairs();
-  var shell = host.closest('.wl');
-  if (shell) shell.classList.toggle('compact', listUiState.futuresMode === 'compact');
   var q = String(filter || '').trim().toUpperCase();
   var cat = listUiState.futuresCat || 'all';
   var rows = futuresPairs.filter(function (row) {
@@ -10804,19 +10785,6 @@ function wireListSearches() {
     fut.dataset.wired = '1';
     fut.addEventListener('input', function () { renderFuturesList(fut.value); });
   }
-  var boMode = document.getElementById('boListMode');
-  if (boMode && !boMode.dataset.wired) {
-    boMode.dataset.wired = '1';
-    boMode.addEventListener('click', function (e) {
-      var b = e.target.closest('button[data-mode]');
-      if (!b) return;
-      listUiState.binaryMode = b.dataset.mode;
-      boMode.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
-      b.classList.add('active');
-      renderBinaryWatchlist(document.querySelector('#page-binary .wl-search input')?.value || '');
-      applyWlTabFilter();
-    });
-  }
   var futTabs = document.getElementById('futTabs');
   if (futTabs && !futTabs.dataset.wired) {
     futTabs.dataset.wired = '1';
@@ -10825,18 +10793,6 @@ function wireListSearches() {
       if (!b) return;
       listUiState.futuresFilter = b.dataset.filter;
       futTabs.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
-      b.classList.add('active');
-      renderFuturesList(document.querySelector('#page-futures .wl-search input')?.value || '');
-    });
-  }
-  var futMode = document.getElementById('futListMode');
-  if (futMode && !futMode.dataset.wired) {
-    futMode.dataset.wired = '1';
-    futMode.addEventListener('click', function (e) {
-      var b = e.target.closest('button[data-mode]');
-      if (!b) return;
-      listUiState.futuresMode = b.dataset.mode;
-      futMode.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
       b.classList.add('active');
       renderFuturesList(document.querySelector('#page-futures .wl-search input')?.value || '');
     });

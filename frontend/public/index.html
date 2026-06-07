@@ -344,8 +344,10 @@
   }
   .fx-pair-ico .fx-base { left: 0; top: 0; z-index: 2; }
   .fx-pair-ico .fx-quote { right: 0; bottom: 0; z-index: 1; }
-  .coin-ico { overflow: hidden; }
+  .coin-ico { overflow: hidden; flex-shrink: 0; }
   .coin-ico img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+  .mkt-row .coin-ico,
+  .mkt-row .fx-pair-ico { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
   .coin-ico.no-bg { background: rgba(11,18,32,0.4); border-color: rgba(122,162,199,.18); }
   .dash-banner {
     position: relative;
@@ -2007,6 +2009,14 @@
     color: var(--silver5); letter-spacing: 0.04em;
   }
   .wl-tabs button.active { background: rgba(77,158,255,0.18); color: var(--silver1); }
+  .wl-cats.wl-cat-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0 8px;
+    align-items: center;
+  }
+  .wl-cats.wl-cat-pills .cat-pill { flex: 0 0 auto; }
   .wl-tools {
     display: flex;
     gap: 6px;
@@ -3838,7 +3848,6 @@
     }
     #page-binary .wl-head,
     #page-binary .wl-search { display: none; }
-    #page-binary .wl-cats,
     #page-binary .wl-tools { margin: 0 12px 8px !important; }
     #page-binary .wl-tabs { margin: 0 12px 8px !important; }
     #page-binary .wl .sig-card {
@@ -3849,8 +3858,20 @@
       background: rgba(14,20,34,0.9);
       border: 1px solid rgba(255,255,255,0.06);
     }
-    #page-binary .wl .sig-card,
-    #page-binary .wl-cats { display: none !important; }
+    #page-binary .wl .sig-card { display: none !important; }
+    #page-binary .wl-cats.wl-cat-pills,
+    #page-futures .wl-cats.wl-cat-pills {
+      display: flex !important;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      margin: 0 12px 8px !important;
+      padding: 2px 0 4px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      gap: 6px;
+    }
+    #page-binary .wl-cats.wl-cat-pills::-webkit-scrollbar,
+    #page-futures .wl-cats.wl-cat-pills::-webkit-scrollbar { display: none; }
     #page-binary .sig-card .body { grid-template-columns: 48px 1fr; gap: 10px; }
     #page-binary .sig-card .sig-dial { width: 48px; height: 48px; }
     #page-binary .sig-card .sig-dial .pct { font-size: 11px; }
@@ -3914,7 +3935,6 @@
     #page-futures .fut-shell aside.wl,
     #page-futures .fut-positions-card,
     #page-futures .fut-ai-card { overflow: visible !important; }
-    #page-futures .wl-cats,
     #page-futures .wl-tabs { display: none !important; }
     #page-futures .page-subtitle { margin-bottom: 14px; }
     #page-futures .fut-shell {
@@ -5013,12 +5033,15 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
             <input placeholder="Search BTC, EUR/USD…"/>
           </div>
-          <div class="wl-cats" id="boCats" style="display:flex;gap:4px;margin:6px 0;background:rgba(7,11,22,0.5);padding:3px;border-radius:9px">
-            <button type="button" class="active" data-cat="all" style="flex:1;background:rgba(77,158,255,0.18);border:0;color:var(--silver1);padding:7px 4px;border-radius:7px;font:inherit;font-size:11px;font-weight:700;cursor:pointer">All</button>
-            <button type="button" data-cat="crypto" title="Crypto" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer">₿</button>
-            <button type="button" data-cat="fx" title="Forex" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer">$</button>
-            <button type="button" data-cat="commodity" title="Commodities" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer">🛢</button>
-            <button type="button" data-cat="fav" title="Favorites" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer">★</button>
+          <div class="wl-cats wl-cat-pills" id="boCats">
+            <button type="button" class="cat-pill active" data-cat="all">All</button>
+            <button type="button" class="cat-pill" data-cat="crypto">Crypto</button>
+            <button type="button" class="cat-pill" data-cat="fx">Forex</button>
+            <button type="button" class="cat-pill" data-cat="stock">Stocks</button>
+            <button type="button" class="cat-pill" data-cat="commodity">Commodities</button>
+            <button type="button" class="cat-pill" data-cat="index">Indices</button>
+            <button type="button" class="cat-pill" data-cat="etf">ETF</button>
+            <button type="button" class="cat-pill" data-cat="fav" title="Favorites">★</button>
           </div>
           <div class="sig-card">
             <div class="head">
@@ -5651,12 +5674,14 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
             <input placeholder="Search BTCUSDT…"/>
           </div>
-          <div class="wl-cats" id="futCats" style="display:flex;gap:4px;margin:6px 0;background:rgba(7,11,22,0.5);padding:3px;border-radius:9px">
-            <button type="button" class="active" data-cat="all" title="All" style="flex:1;background:rgba(77,158,255,0.18);border:0;color:var(--silver1);padding:7px 4px;border-radius:7px;font:inherit;font-size:11px;font-weight:700;cursor:pointer">All</button>
-            <button type="button" data-cat="crypto" title="Crypto" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Crypto">₿</button>
-            <button type="button" data-cat="fx" title="Forex" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Forex">$</button>
-            <button type="button" data-cat="commodity" title="Commodities" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Commodities">🛢</button>
-            <button type="button" data-cat="index" title="Indices" style="flex:1;background:transparent;border:0;color:var(--silver4);padding:7px 4px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer" aria-label="Indices">📊</button>
+          <div class="wl-cats wl-cat-pills" id="futCats">
+            <button type="button" class="cat-pill active" data-cat="all">All</button>
+            <button type="button" class="cat-pill" data-cat="crypto">Crypto</button>
+            <button type="button" class="cat-pill" data-cat="fx">Forex</button>
+            <button type="button" class="cat-pill" data-cat="stock">Stocks</button>
+            <button type="button" class="cat-pill" data-cat="commodity">Commodities</button>
+            <button type="button" class="cat-pill" data-cat="index">Indices</button>
+            <button type="button" class="cat-pill" data-cat="etf">ETF</button>
           </div>
           <div class="wl-tabs" id="futTabs">
             <button class="active" data-filter="all">All</button>
@@ -6946,8 +6971,8 @@ function show(page) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (typeof applyI18n === 'function') applyI18n();
   requestAnimationFrame(function () {
-    if (page === 'markets' && typeof renderMarkets === 'function') {
-      renderMarkets();
+    if (page === 'markets' && typeof renderMarketsEnhanced === 'function') {
+      renderMarketsEnhanced();
     }
     if (page === 'spot') {
       if (typeof updateSpotBoard === 'function' && typeof spotState !== 'undefined') updateSpotBoard(spotState.pair);
@@ -6979,7 +7004,7 @@ function show(page) {
     if (page === 'history' && typeof applyHistoryFilter === 'function') applyHistoryFilter();
   });
   setTimeout(function () {
-    if (page === 'markets' && typeof renderMarkets === 'function') renderMarkets();
+    if (page === 'markets' && typeof renderMarketsEnhanced === 'function') renderMarketsEnhanced();
     if ((page === 'spot' || page === 'binary' || page === 'futures') && typeof hydratePreviewSurfaces === 'function') {
       hydratePreviewSurfaces();
     }
@@ -8201,9 +8226,7 @@ function futuresInstrumentType(sym) {
 
 function futuresMatchesCat(sym, cat) {
   if (!cat || cat === 'all') return true;
-  var t = futuresInstrumentType(sym);
-  if (cat === 'index') return t === 'index' || t === 'etf' || t === 'stock';
-  return t === cat;
+  return futuresInstrumentType(sym) === cat;
 }
 
 function binaryInstrumentType(sym) {
@@ -8212,16 +8235,18 @@ function binaryInstrumentType(sym) {
 
 function binaryMatchesCat(sym, cat) {
   if (!cat || cat === 'all') return true;
-  if (cat === 'fav') return false;
-  var row = binaryPairs.find(function (r) { return r.sym === sym; });
-  if (row && row.cat) {
-    if (cat === 'commodity') return row.cat === 'commodity' || row.cat === 'otc' && /XAU|XAG|WTI|BRENT|OIL|GAS/i.test(sym);
-    if (row.cat === cat) return true;
+  if (cat === 'fav') {
+    var favRow = binaryPairs.find(function (r) { return r.sym === sym; });
+    return !!(favRow && (favRow.fav || /BTC|ETH|SOL|BNB|XRP|DOGE|LINK|AVAX/i.test(sym)));
   }
-  var t = binaryInstrumentType(sym);
-  if (cat === 'commodity') return t === 'commodity';
+  var row = binaryPairs.find(function (r) { return r.sym === sym; });
+  var t = row ? (row.type || row.cat) : binaryInstrumentType(sym);
+  if (cat === 'commodity') return t === 'commodity' || (row && row.cat === 'otc' && /XAU|XAG|WTI|BRENT|OIL|GAS/i.test(sym));
   if (cat === 'fx') return t === 'fx';
   if (cat === 'crypto') return t === 'crypto';
+  if (cat === 'stock') return t === 'stock';
+  if (cat === 'index') return t === 'index';
+  if (cat === 'etf') return t === 'etf';
   return t === cat;
 }
 
@@ -9693,32 +9718,8 @@ function spark(up) {
   return `<svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" width="100" height="24"><path d="${path}" fill="none" stroke="${up?'#22c17c':'#e8576b'}" stroke-width="1.5"/></svg>`;
 }
 function renderMarkets() {
-  const el = document.getElementById('marketList');
-  if (!el) return;
-  const rows = getFilteredPairs();
-  if (!rows.length) {
-    el.innerHTML = '<div class="mkt-row" style="grid-template-columns:1fr;padding:18px;color:var(--silver4)">No pairs match this filter yet.</div>';
-    return;
-  }
-  el.innerHTML = rows.map(p => `
-    <div class="mkt-row" role="button" tabindex="0" onclick="openSpotPair('${p.sym}')">
-      <div class="star ${p.fav?'on':''}">★</div>
-      <div class="name">
-        <span class="coin-ico ${p.coin}">${p.gliph}</span>
-        <span class="pair-copy">
-          <span class="pair-symbol">${p.sym}</span>
-          <span class="pair-meta">${p.name} · ${p.vol} 24h volume</span>
-        </span>
-      </div>
-      <div class="mono" style="text-align:right;color:var(--silver1);font-weight:600">$${marketFmt(p.price)}</div>
-      <div style="text-align:right" class="${p.chg>=0?'chg up':'chg down'}">${p.chg>=0?'+':''}${p.chg.toFixed(2)}%</div>
-      <div class="mono" style="text-align:right;color:var(--silver4)">$${p.vol}</div>
-      <div>${spark(p.chg>=0)}</div>
-      <button class="trade-btn" onclick="event.stopPropagation(); openSpotPair('${p.sym}')">Trade</button>
-    </div>
-  `).join('');
+  if (typeof renderMarketsEnhanced === 'function') renderMarketsEnhanced();
 }
-renderMarkets();
 
 function renderSpotRecentTrades(sym) {
   var host = document.getElementById('spotRecentTrades');
@@ -10803,14 +10804,8 @@ function wireListSearches() {
     futCats.addEventListener('click', function (e) {
       var b = e.target.closest('button[data-cat]');
       if (!b) return;
-      futCats.querySelectorAll('button').forEach(function (x) {
-        x.classList.remove('active');
-        x.style.background = 'transparent';
-        x.style.color = 'var(--silver4)';
-      });
+      futCats.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
       b.classList.add('active');
-      b.style.background = 'rgba(77,158,255,0.18)';
-      b.style.color = 'var(--silver1)';
       listUiState.futuresCat = b.dataset.cat || 'all';
       renderFuturesList(document.querySelector('#page-futures .wl-search input')?.value || '');
     });
@@ -12846,19 +12841,24 @@ function gromLogoCascade(sym) {
     "else if(n===2){this.src='https://cryptologos.cc/logos/thumbs/" + s + ".png?v=030';}" +
     "else{this.parentElement.textContent='" + fb + "';this.parentElement.classList.remove('no-bg');}";
 }
+window.__gromIcoHtmlCache = window.__gromIcoHtmlCache || {};
 function instrumentIcoHtmlLive(p) {
+  var cacheKey = (p.sym || p.symbol || '') + '|' + (p.type || '') + '|' + (p.logo || '') + '|' + (p.glyph || '');
+  if (window.__gromIcoHtmlCache[cacheKey]) return window.__gromIcoHtmlCache[cacheKey];
+  var html;
   if (p.type === 'fx' && p.logo && p.logoQuote) {
-    return '<span class="fx-pair-ico"><img class="fx-base" src="' + p.logo + '" alt=""/><img class="fx-quote" src="' + p.logoQuote + '" alt=""/></span>';
-  }
-  if (p.type === 'commodity' && p.glyph) {
-    return '<span class="coin-ico no-bg" style="font-size:18px">' + p.glyph + '</span>';
-  }
-  if (p.logo) {
+    html = '<span class="fx-pair-ico"><img class="fx-base" src="' + p.logo + '" alt="" decoding="async" loading="lazy"/><img class="fx-quote" src="' + p.logoQuote + '" alt="" decoding="async" loading="lazy"/></span>';
+  } else if (p.type === 'commodity' && p.glyph) {
+    html = '<span class="coin-ico no-bg" style="font-size:18px">' + p.glyph + '</span>';
+  } else if (p.logo) {
     var sym = p.base || p.symbol || p.sym || '?';
-    return '<span class="coin-ico no-bg"><img src="' + p.logo + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="' + gromLogoCascade(sym) + '"/></span>';
+    html = '<span class="coin-ico no-bg"><img src="' + p.logo + '" alt="" decoding="async" loading="eager" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="' + gromLogoCascade(sym) + '"/></span>';
+  } else {
+    var letters = (p.base || p.symbol || p.sym || '?').slice(0, 3);
+    html = '<span class="coin-ico ' + ((p.base || '').toLowerCase()) + '">' + letters + '</span>';
   }
-  var letters = (p.base || p.symbol || p.sym || '?').slice(0, 3);
-  return '<span class="coin-ico ' + ((p.base || '').toLowerCase()) + '">' + letters + '</span>';
+  window.__gromIcoHtmlCache[cacheKey] = html;
+  return html;
 }
 window.openSpotPair = function openSpotPairLive(sym) {
   var it = (typeof window.gromGetInstrument === 'function') ? window.gromGetInstrument(sym) : null;
@@ -12908,6 +12908,30 @@ function getFilteredPairsLive() {
   }
   return list;
 }
+function updateMarketsLiveRows() {
+  var el = document.getElementById('marketList');
+  if (!el || !document.getElementById('page-markets')?.classList.contains('active')) return;
+  if (!el.querySelector('.mkt-row[data-sym]')) {
+    renderMarketsEnhanced();
+    return;
+  }
+  el.querySelectorAll('.mkt-row[data-sym]').forEach(function (row) {
+    var sym = row.dataset.sym;
+    if (!sym) return;
+    var px = (typeof window.gromLivePrice === 'function') ? window.gromLivePrice(sym) : null;
+    var chg = (typeof window.gromLiveChange === 'function') ? Number(window.gromLiveChange(sym)) : 0;
+    if (px == null || !isFinite(px)) px = 0;
+    var pxEl = row.querySelector('[data-mkt-price]');
+    if (pxEl) pxEl.textContent = '$' + marketFmt(px);
+    var chgEl = row.querySelector('[data-mkt-chg]');
+    if (chgEl) {
+      chgEl.textContent = (chg >= 0 ? '+' : '') + (chg || 0).toFixed(2) + '%';
+      chgEl.className = (chg >= 0 ? 'chg up' : 'chg down');
+    }
+    var volEl = row.querySelector('[data-mkt-vol]');
+    if (volEl) volEl.textContent = '$' + marketFmt(px * 1000 * (1 + Math.abs(chg) * 0.05)) + 'M';
+  });
+}
 function renderMarketsEnhanced() {
   var el = document.getElementById('marketList');
   if (!el || !Array.isArray(window.GROM_INSTRUMENTS)) return;
@@ -12924,7 +12948,7 @@ function renderMarketsEnhanced() {
   var start = (marketsPage - 1) * MARKETS_PER_PAGE;
   var visible = rows.slice(start, start + MARKETS_PER_PAGE);
   el.innerHTML = visible.map(function (p) {
-    return '<div class="mkt-row" role="button" tabindex="0" onclick="openSpotPair(\'' + p.sym + '\')"><div class="star ' + (p.fav ? 'on' : '') + '" onclick="event.stopPropagation();toggleFav(\'' + p.sym + '\')">★</div><div class="name">' + instrumentIcoHtmlLive(p) + '<span class="pair-copy"><span class="pair-symbol">' + p.sym + '</span><span class="pair-meta">' + (p.name || '') + ' · ' + (p.type ? p.type.toUpperCase() : '') + '</span></span></div><div class="mono" style="text-align:right;color:var(--silver1);font-weight:600">$' + marketFmt(p.price) + '</div><div style="text-align:right" class="' + (p.chg >= 0 ? 'chg up' : 'chg down') + '">' + (p.chg >= 0 ? '+' : '') + (p.chg || 0).toFixed(2) + '%</div><div class="mono" style="text-align:right;color:var(--silver4)">$' + p.vol + '</div><div>' + spark(p.chg >= 0) + '</div><button class="trade-btn" onclick="event.stopPropagation(); openSpotPair(\'' + p.sym + '\')">Trade</button></div>';
+    return '<div class="mkt-row" data-sym="' + p.sym + '" role="button" tabindex="0" onclick="openSpotPair(\'' + p.sym + '\')"><div class="star ' + (p.fav ? 'on' : '') + '" onclick="event.stopPropagation();toggleFav(\'' + p.sym + '\')">★</div><div class="name">' + instrumentIcoHtmlLive(p) + '<span class="pair-copy"><span class="pair-symbol">' + p.sym + '</span><span class="pair-meta">' + (p.name || '') + ' · ' + (p.type ? p.type.toUpperCase() : '') + '</span></span></div><div class="mono" data-mkt-price style="text-align:right;color:var(--silver1);font-weight:600">$' + marketFmt(p.price) + '</div><div data-mkt-chg style="text-align:right" class="' + (p.chg >= 0 ? 'chg up' : 'chg down') + '">' + (p.chg >= 0 ? '+' : '') + (p.chg || 0).toFixed(2) + '%</div><div class="mono" data-mkt-vol style="text-align:right;color:var(--silver4)">$' + p.vol + '</div><div data-mkt-spark>' + spark(p.chg >= 0) + '</div><button class="trade-btn" onclick="event.stopPropagation(); openSpotPair(\'' + p.sym + '\')">Trade</button></div>';
   }).join('');
   if (counter) {
     var maxBtns = 7;
@@ -12955,14 +12979,8 @@ renderMarkets = renderMarketsEnhanced;
 document.addEventListener('click', function (e) {
   var boCatBtn = e.target.closest('#boCats button[data-cat]');
   if (boCatBtn) {
-    document.querySelectorAll('#boCats button').forEach(function (x) {
-      x.classList.remove('active');
-      x.style.background = 'transparent';
-      x.style.color = 'var(--silver4)';
-    });
+    document.querySelectorAll('#boCats button').forEach(function (x) { x.classList.remove('active'); });
     boCatBtn.classList.add('active');
-    boCatBtn.style.background = 'rgba(77,158,255,0.18)';
-    boCatBtn.style.color = 'var(--silver1)';
     boState.wlTab = boCatBtn.dataset.cat || 'all';
     if (typeof renderBinaryWatchlist === 'function') {
       renderBinaryWatchlist(document.querySelector('#page-binary .wl-search input')?.value || '');
@@ -12972,14 +12990,8 @@ document.addEventListener('click', function (e) {
   }
   var futCatBtn = e.target.closest('#futCats button[data-cat]');
   if (futCatBtn) {
-    document.querySelectorAll('#futCats button').forEach(function (x) {
-      x.classList.remove('active');
-      x.style.background = 'transparent';
-      x.style.color = 'var(--silver4)';
-    });
+    document.querySelectorAll('#futCats button').forEach(function (x) { x.classList.remove('active'); });
     futCatBtn.classList.add('active');
-    futCatBtn.style.background = 'rgba(77,158,255,0.18)';
-    futCatBtn.style.color = 'var(--silver1)';
     listUiState.futuresCat = futCatBtn.dataset.cat || 'all';
     if (typeof renderFuturesList === 'function') {
       renderFuturesList(document.querySelector('#page-futures .wl-search input')?.value || '');
@@ -13062,7 +13074,7 @@ window.refDownloadBrandKit = refDownloadBrandKit;
 window.refSetPayoutWallet = refSetPayoutWallet;
 window.refEditRules = refEditRules;
 setInterval(function () {
-  if (document.getElementById('page-markets')?.classList.contains('active')) renderMarketsEnhanced();
+  if (document.getElementById('page-markets')?.classList.contains('active')) updateMarketsLiveRows();
 }, 1500);
 setTimeout(function () { updateAuthUi(); }, 0);
 /* Tour */

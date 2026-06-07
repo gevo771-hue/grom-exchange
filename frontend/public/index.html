@@ -1692,28 +1692,21 @@
   }
   .cn-row.primary:hover { background: linear-gradient(180deg, rgba(0,194,255,0.32), rgba(0,194,255,0.18)); }
   .cn-row .ico {
-    width: 32px; height: 32px; border-radius: 8px;
+    width: 40px; height: 40px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 14px; flex: 0 0 32px;
+    font-size: 14px; flex: 0 0 40px;
     overflow: hidden;
-    background: #fff;
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+    background: transparent;
+    box-shadow: none;
   }
+  .cn-row .ico svg,
   .cn-row .ico img {
     width: 100%;
     height: 100%;
-    object-fit: contain;
     display: block;
-    border-radius: inherit;
-    padding: 1px;
+    border-radius: 10px;
+    flex-shrink: 0;
   }
-  .cn-row .ico.okx { background: #fff; }
-  .cn-row .ico.wc { background: #3B99FC; }
-  .cn-row .ico.mm { background: #fff; }
-  .cn-row .ico.cb { background: #0052FF; }
-  .cn-row .ico.gg { background: #fff; }
-  .cn-row .ico.tw { background: #fff; }
-  .cn-row .ico.bn { background: #F3BA2F; }
   .cn-row .ico.email { background: rgba(200,212,232,0.12); color: var(--silver1); }
   .cn-row .ico.ghost { background: rgba(200,212,232,0.08); color: var(--silver3); border: 1px dashed rgba(200,212,232,0.25); }
   .cn-row .lbl { flex: 1; }
@@ -6333,7 +6326,7 @@
         <div class="wm-note" style="margin:8px 0 0">We'll create an embedded wallet for you — no seed phrase needed. Powered by Privy.</div>
       </div>
       <button type="button" class="cn-row" onclick="cnConnect('Google','gg', event)" style="margin-top:8px">
-        <span class="ico gg"><img src="/assets/wallets/google.svg" width="32" height="32" alt="" decoding="async"/></span>
+        <span class="ico gg"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 48 48" role="img" aria-hidden="true"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.083 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.64 6.053 28.991 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.64 6.053 28.991 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.048 0-9.607-3.317-11.276-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C42.022 35.026 44 30.038 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg></span>
         <span class="lbl">Continue with Google</span>
         <span class="chev">›</span>
       </button>
@@ -6342,32 +6335,32 @@
 
       <div class="cn-list">
         <button type="button" class="cn-row" onclick="cnConnect('MetaMask','mm')">
-          <span class="ico mm"><img src="/assets/wallets/metamask.svg" width="32" height="32" alt="" decoding="async"/></span>
+          <span class="ico mm"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#metamask__a)"><path fill="#fff" d="M24 0H0v24h24z"/><path fill="#FF5C16" d="m18.9 18.925-3.434-.993-2.59 1.504h-1.807l-2.592-1.504-3.433.993L4 15.5l1.044-3.802L4 8.484 5.044 4.5l5.365 3.114h3.127L18.9 4.5l1.045 3.984-1.045 3.214 1.045 3.802z"/><path fill="#FF5C16" d="m5.045 4.5 5.364 3.116-.213 2.14zm3.433 11.001 2.36 1.747-2.36.684zm2.172-2.888-.454-2.856-2.904 1.942h-.001l.009 2 1.177-1.086zM18.9 4.5l-5.364 3.116.213 2.14zm-3.433 11.001-2.36 1.747 2.36.684zm1.187-3.801v-.002h-.001l-2.904-1.941-.453 2.856h2.171l1.178 1.086z"/><path fill="#E34807" d="m8.477 17.932-3.433.993L4 15.501h4.477zm2.172-5.32.656 4.13-.91-2.297-3.097-.746 1.178-1.087zm4.818 5.32 3.433.993 1.045-3.424h-4.478zm-2.171-5.32-.656 4.13.909-2.297 3.097-.746-1.179-1.087z"/><path fill="#FF8D5D" d="m4 15.5 1.044-3.802H7.29l.008 2 3.098.747.909 2.296-.468.505-2.36-1.747zm15.945 0L18.9 11.698h-2.245l-.009 2-3.097.747-.909 2.296.467.505 2.36-1.747zm-6.409-7.886h-3.127l-.213 2.139 1.109 6.985h1.335l1.11-6.985z"/><path fill="#661800" d="M5.044 4.5 4 8.484l1.044 3.214H7.29l2.905-1.943zM10 13.441H8.982l-.553.528 1.967.474zM18.9 4.5l1.045 3.984-1.045 3.214h-2.245l-2.906-1.943zm-4.954 8.941h1.02l.553.529-1.97.475zm-1.071 4.632.232-.825-.467-.506h-1.336l-.467.506.232.825"/><path fill="#C0C4CD" d="M12.875 18.073v1.364h-1.806v-1.364z"/><path fill="#E7EBF6" d="m8.478 17.93 2.592 1.506v-1.363l-.232-.826zm6.99 0-2.593 1.506v-1.363l.232-.826z"/></g><defs><clipPath id="metamask__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
           <span class="lbl">MetaMask</span>
           <span class="chev">›</span>
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('WalletConnect','wc')">
-          <span class="ico wc"><img src="/assets/wallets/walletconnect.svg" width="32" height="32" alt="" decoding="async"/></span>
+          <span class="ico wc"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#wallet-connect__a)"><path fill="#3B99FC" d="M24 0H0v24h24z"/><path fill="#fff" d="M7.276 9.076c2.609-2.501 6.84-2.501 9.449 0l.313.3a.31.31 0 0 1 0 .453l-1.074 1.03a.17.17 0 0 1-.236 0l-.432-.414c-1.82-1.745-4.772-1.745-6.592 0l-.463.444a.17.17 0 0 1-.236 0l-1.074-1.03a.31.31 0 0 1 0-.453zm11.67 2.129.956.916a.31.31 0 0 1 0 .453l-4.31 4.132a.344.344 0 0 1-.473 0l-3.06-2.932a.086.086 0 0 0-.118 0l-3.06 2.932a.344.344 0 0 1-.472 0l-4.311-4.132a.31.31 0 0 1 0-.453l.956-.916a.344.344 0 0 1 .472 0l3.06 2.933a.086.086 0 0 0 .118 0l3.06-2.933a.344.344 0 0 1 .472 0l3.06 2.933a.086.086 0 0 0 .118 0l3.06-2.933a.345.345 0 0 1 .472 0"/></g><defs><clipPath id="wallet-connect__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
           <span class="lbl">WalletConnect</span>
           <span class="chev">›</span>
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('Binance Web3 Wallet','bnw3')">
-          <span class="ico bn"><img src="/assets/wallets/binance.svg" width="32" height="32" alt="" decoding="async"/></span>
+          <span class="ico bn"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#binance__a)"><path fill="#000" d="M24 0H0v24h24z"/><path fill="#F0B90B" d="M7.616 12 5.81 13.805 4.002 12l1.805-1.805zm4.386-4.386 3.096 3.095 1.804-1.804L12.002 4 7.098 8.905l1.804 1.804zm6.191 2.581L16.39 12l1.804 1.805L19.998 12zm-6.19 6.191-3.096-3.095-1.805 1.804 4.9 4.905 4.9-4.905-1.804-1.804zm0-2.581L13.806 12l-1.805-1.805L10.193 12z"/></g><defs><clipPath id="binance__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
           <span class="lbl">Binance Web3 Wallet</span>
           <span class="chev">›</span>
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('Trust Wallet','trust')">
-          <span class="ico tw"><img src="/assets/wallets/trust.svg" width="32" height="32" alt="" decoding="async"/></span>
+          <span class="ico tw"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#trust__a)"><path fill="#0500FF" d="M24 0H0v24h24z"/><path fill="#fff" d="M4.8 6.311 12 4v16c-5.143-2.134-7.2-6.222-7.2-8.533zm14.4 0L12 4v16c5.143-2.134 7.2-6.222 7.2-8.533z"/></g><defs><clipPath id="trust__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
           <span class="lbl">Trust Wallet</span>
           <span class="chev">›</span>
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('OKX Wallet','okx')">
-          <span class="ico okx"><img src="/assets/wallets/okx.svg" width="32" height="32" alt="" decoding="async"/></span>
+          <span class="ico okx"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#okx__a)"><path fill="#000" d="M24 0H0v24h24z"/><path fill="#fff" d="M4 4h5.333v5.333H4zm10.667 5.333H9.333v5.334H4V20h5.333v-5.333h5.334V20H20v-5.333h-5.333zm0 0V4H20v5.333z"/></g><defs><clipPath id="okx__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
           <span class="lbl">OKX Wallet</span>
           <span class="chev">›</span>
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('Coinbase Wallet','cb')">
-          <span class="ico cb"><img src="/assets/wallets/coinbase.svg" width="32" height="32" alt="" decoding="async"/></span>
+          <span class="ico cb"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#coinbase__a)"><path fill="#0E5BFF" d="M24 0H0v24h24z"/><path fill="#fff" d="M4 12a8 8 0 1 1 16 0 8 8 0 0 1-16 0"/><path fill="#0E5BFF" fill-rule="evenodd" d="M12 17.667a5.667 5.667 0 1 0 0-11.334 5.667 5.667 0 0 0 0 11.334m-.667-7.334a1 1 0 0 0-1 1v1.334a1 1 0 0 0 1 1h1.334a1 1 0 0 0 1-1v-1.334a1 1 0 0 0-1-1z" clip-rule="evenodd"/></g><defs><clipPath id="coinbase__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
           <span class="lbl">Coinbase Wallet</span>
           <span class="chev">›</span>
         </button>

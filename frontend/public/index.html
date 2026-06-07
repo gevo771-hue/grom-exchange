@@ -4,28 +4,31 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="theme-color" content="#080a0f" />
-<title>GROM — Finance Hub & Binary Options</title>
+<title>GROM</title>
 <meta name="description" content="GROM Exchange — hybrid CEX/DEX. Spot, Futures, Binary Options + on-chain swaps. One account, sub-millisecond fills, bank-grade security." />
 
 <!-- Open Graph / dApp metadata. WalletConnect-compatible wallets (Trust, MetaMask
      Mobile, Binance Web3) read these to display app name + logo + URL during the
      pairing handshake. Without them wallets show "Invalid domain" warning. -->
 <meta property="og:type" content="website" />
-<meta property="og:site_name" content="GROM Exchange" />
-<meta property="og:title" content="GROM Exchange — Hybrid CEX/DEX" />
+<meta property="og:site_name" content="GROM" />
+<meta property="og:title" content="GROM" />
 <meta property="og:description" content="Trade Spot, Futures, and Binary Options. On-chain swaps. Non-custodial wallet. Bank-grade security." />
 <meta property="og:url" content="https://grom.exchange/" />
-<meta property="og:image" content="https://grom.exchange/assets/grom-brand-mark.png" />
+<meta property="og:image" content="https://grom.exchange/assets/grom-brand-mark-clear.png" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="GROM Exchange — Hybrid CEX/DEX" />
+<meta name="twitter:title" content="GROM" />
 <meta name="twitter:description" content="Trade Spot, Futures, and Binary Options. On-chain swaps. Non-custodial wallet." />
-<meta name="twitter:image" content="https://grom.exchange/assets/grom-brand-mark.png" />
+<meta name="twitter:image" content="https://grom.exchange/assets/grom-brand-mark-clear.png" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Oxanium:wght@600;700;800&family=Rajdhani:wght@600;700&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600&display=swap" rel="stylesheet" />
-<link rel="icon" type="image/png" href="assets/grom-brand-mark.png" sizes="any" />
-<link rel="apple-touch-icon" href="/assets/grom-brand-mark.png" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" type="image/png" href="/assets/grom-brand-mark-clear.png" sizes="any" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+<meta name="apple-mobile-web-app-title" content="GROM" />
+<meta name="application-name" content="GROM" />
 <style>
   /* =========================================================
      GROM — UI palette (sRGB / IEC 61966-2.1; CSS hex & rgb() are sRGB in browsers)
@@ -1922,7 +1925,21 @@
   }
   .bo-shell > * { min-width: 0; min-height: 0; }
   @media (max-width: 1400px) { .bo-shell { grid-template-columns: 230px minmax(0,1fr) minmax(328px, 360px); } }
-  @media (max-width: 1180px) { .bo-shell { grid-template-columns: 1fr; } }
+  @media (max-width: 1180px) {
+    .bo-shell { grid-template-columns: 1fr; }
+    /* Binary mobile/tablet: chart → watchlist → trade panel */
+    #page-binary .bo-shell {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 10px;
+    }
+    #page-binary .bo-chart-card { order: 1 !important; }
+    #page-binary .wl { order: 2 !important; }
+    #page-binary .bo-panel-v2 { order: 3 !important; }
+    #page-binary .bo-panel-v2 > .bo-panel-scroll { order: 1; }
+    #page-binary .bo-panel-v2 > .acct-switch { order: 2; margin-bottom: 0; margin-top: 10px; }
+    #page-binary .bo-panel-v2 > .bo-panel-foot { order: 3; display: none; }
+  }
 
   /* Left watchlist */
   .wl {
@@ -2659,6 +2676,18 @@
     .fut-shell { grid-template-columns: 1fr; }
     #page-futures aside.wl { max-height: none; overflow: visible; }
     #page-futures .bo-panel-v2 { max-height: none; overflow: visible; }
+    /* Futures mobile/tablet: chart → order panel → contracts list → AI → positions */
+    #page-futures .fut-shell {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 10px !important;
+    }
+    #page-futures .fut-main-col { display: contents; }
+    #page-futures .fut-main-col > .bo-chart-card { order: 1 !important; }
+    #page-futures .fut-shell > .fut-order-panel { order: 2 !important; }
+    #page-futures .fut-shell > aside.wl { order: 3 !important; }
+    #page-futures .fut-main-col > .fut-ai-card { order: 4 !important; }
+    #page-futures .fut-main-col > .fut-positions-card { order: 5 !important; }
   }
   #page-futures aside.wl { max-height: min(78vh, 720px); overflow: hidden; padding-right: 4px; }
   #page-futures #futList {
@@ -3021,7 +3050,21 @@
     background: rgba(77,158,255,0.1);
   }
   .spot-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; align-items: start; }
-  @media (max-width: 1100px) { .spot-layout { grid-template-columns: 1fr; } }
+  @media (max-width: 1100px) {
+    .spot-layout { grid-template-columns: 1fr; }
+    /* Spot mobile/tablet: chart → order form → AI → order book */
+    #page-spot .spot-layout {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 10px;
+    }
+    #page-spot .spot-main,
+    #page-spot .spot-side { display: contents; }
+    #page-spot .spot-chart-card { order: 1 !important; }
+    #page-spot .spot-trade-card { order: 2 !important; }
+    #page-spot .spot-ai-card { order: 3 !important; }
+    #page-spot .spot-orderbook-card { order: 4 !important; }
+  }
   .spot-layout > * { min-width: 0; }
   .spot-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .spot-side { display: flex; flex-direction: column; gap: 14px; }
@@ -3631,23 +3674,14 @@
       letter-spacing: 0.01em;
     }
 
-    /* Binary mobile: chart → trade panel → watchlist */
-    .bo-shell {
-      display: flex !important;
-      flex-direction: column !important;
-      grid-template-columns: 1fr !important;
-      gap: 10px;
-    }
-    #page-binary .bo-chart-card { order: 1 !important; }
+    /* Binary mobile polish (order set at 1180px) */
     #page-binary .bo-panel-v2 {
-      order: 2 !important;
       max-height: none;
       padding: 12px !important;
       border-radius: 14px;
       background: linear-gradient(180deg, rgba(15,24,44,0.72), rgba(11,18,32,0.62));
       border: 1px solid rgba(200,212,232,0.1);
     }
-    #page-binary .wl { order: 3 !important; }
     body:has(#page-binary.active) .mobile-trade-bar { display: none !important; }
     body:has(#page-binary.active) { padding-bottom: 16px !important; }
     #page-binary .bo-buttons-v2 {
@@ -3689,15 +3723,9 @@
     }
     #page-futures .page-subtitle { margin-bottom: 14px; }
     #page-futures .fut-shell {
-      display: flex !important;
-      flex-direction: column !important;
-      gap: 10px !important;
       min-height: 0 !important;
       width: 100%;
     }
-    #page-futures .fut-shell > .fut-main-col { order: 1; }
-    #page-futures .fut-shell > .bo-panel-v2 { order: 2; }
-    #page-futures .fut-shell > aside.wl { order: 3; }
     #page-futures .fut-shell > * {
       width: 100% !important;
       max-width: 100% !important;
@@ -3807,19 +3835,8 @@
     .ref-table-head > *:nth-child(n+4), .ref-row > *:nth-child(n+4) { display: none; }
     .ref-table-head > *:last-child, .ref-row > *:last-child { display: block; }
 
-    /* Spot mobile: chart → order form → AI → order book */
-    #page-spot .spot-layout {
-      display: flex !important;
-      flex-direction: column !important;
-      grid-template-columns: 1fr !important;
-      gap: 10px;
-    }
-    #page-spot .spot-main,
-    #page-spot .spot-side { display: contents; }
-    #page-spot .spot-main > .card:first-of-type { order: 1; }
-    #page-spot .spot-side .spot-trade-card { order: 2; position: static; }
-    #page-spot .spot-main .spot-ai-card { order: 3; }
-    #page-spot .spot-side > .card:not(.spot-trade-card) { order: 4; }
+    /* Spot mobile polish (order set at 1100px) */
+    #page-spot .spot-trade-card { position: static; }
     .spot-layout .card { overflow: hidden; }
     .spot-overview { display: none; }
     #page-spot .spot-market-panel { display: grid; grid-template-columns: 1fr; }
@@ -5013,7 +5030,7 @@
 
       <div class="spot-layout">
         <div class="spot-main">
-        <div class="card">
+        <div class="card spot-chart-card">
           <div class="chart-top">
             <div class="asset-price">
               <span class="big mono" id="spotPrice">$63,903.09</span>
@@ -5113,7 +5130,7 @@
               <button class="btn-primary" id="spotOrderSubmit" style="width:100%;justify-content:center" onclick="submitSpotOrder()">Buy BTC</button>
             </div>
           </div>
-          <div class="card" style="padding:0">
+          <div class="card spot-orderbook-card" style="padding:0">
             <div class="card-head"><h3>Order book</h3><span class="sub">Binance · agg</span></div>
             <div class="ob-row hdr"><div>Price</div><div style="text-align:right">Size</div><div style="text-align:right">Total</div></div>
             <div id="askList"></div>
@@ -5466,7 +5483,7 @@
             </div>
           </div>
 
-          <div class="card" style="padding:0">
+          <div class="card fut-positions-card" style="padding:0">
             <div class="card-head">
               <h3>Positions &amp; orders</h3>
               <div class="tf-pills" id="futTabPills">
@@ -6488,12 +6505,12 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = 'grom-wallet.js?v=20260607a';
+  walletModule.src = 'grom-wallet.js?v=20260607c';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = 'grom-privy.js?v=20260606b';
+  privyModule.src = 'grom-privy.js?v=20260607b';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -10709,10 +10726,13 @@ function exportHistoryCsv() {
   }
 
   var __devLoginDisabled = false;
+  function isGromJwt(token) {
+    return !!(token && token !== 'demo-session' && token !== 'privy-session' && String(token).split('.').length === 3);
+  }
   async function ensureApiToken() {
     var token = '';
     try { token = localStorage.getItem('grom_jwt') || ''; } catch (_) {}
-    if (token && token !== 'demo-session') return token;
+    if (isGromJwt(token)) return token;
     if (__devLoginDisabled) return '';
     try {
       var res = await fetch(apiBase() + '/auth/dev-login', {
@@ -10724,7 +10744,7 @@ function exportHistoryCsv() {
         if (res.status === 404 || res.status === 403 || res.status === 401) {
           __devLoginDisabled = true;
         }
-        return token && token !== 'demo-session' ? token : '';
+        return isGromJwt(token) ? token : '';
       }
       var data = await res.json();
       if (data && data.token) {
@@ -10738,7 +10758,7 @@ function exportHistoryCsv() {
     } catch (_) {
       __devLoginDisabled = true;
     }
-    return token && token !== 'demo-session' ? token : '';
+    return isGromJwt(token) ? token : '';
   }
 
   async function apiFetch(path, options) {
@@ -10901,7 +10921,7 @@ function exportHistoryCsv() {
   }
   window.detectConnectedWallet = detectConnectedWallet;
 
-  function renderConnectedWalletsList() {
+  async function renderConnectedWalletsList() {
     var host = document.getElementById('walletConnectedList');
     if (!host) return;
     var w = detectConnectedWallet();
@@ -10910,11 +10930,39 @@ function exportHistoryCsv() {
       return;
     }
     var short = w.address.length > 18 ? w.address.slice(0, 8) + '…' + w.address.slice(-6) : w.address;
+    var balLine = '<div class="mono" style="font-size:11px;color:var(--silver5);margin-top:4px">Loading on-chain balances…</div>';
     host.innerHTML =
       '<div class="set-row" style="padding:8px 10px;background:rgba(0,194,255,0.06);border-radius:8px;border:1px solid rgba(0,194,255,0.2)">' +
-        '<div><div class="set-lbl" style="font-weight:700">' + w.provider + '</div><div class="mono" style="font-size:11px;color:var(--silver4)" title="' + w.address + '">' + short + '</div></div>' +
+        '<div><div class="set-lbl" style="font-weight:700">' + w.provider + '</div><div class="mono" style="font-size:11px;color:var(--silver4)" title="' + w.address + '">' + short + '</div>' + balLine + '</div>' +
         '<button class="mini-btn" onclick="copyToClipboard(\'' + w.address + '\')">Copy</button>' +
       '</div>';
+    if (/^0x[a-fA-F0-9]{40}$/.test(w.address) && typeof window.gromFetchOnchainBalances === 'function') {
+      try {
+        var chainId = (window.gromWallet && window.gromWallet.state) ? (window.gromWallet.state().chainId || 42161) : 42161;
+        var bals = await window.gromFetchOnchainBalances(w.address, chainId);
+        var parts = [];
+        if (bals && bals.nativeEth != null) parts.push('ETH ' + Number(bals.nativeEth).toFixed(4));
+        if (bals && bals.tokens) {
+          Object.keys(bals.tokens).forEach(function (sym) {
+            parts.push(sym + ' ' + Number(bals.tokens[sym]).toFixed(2));
+          });
+        }
+        var row = host.querySelector('.set-row');
+        var balEl = row && row.querySelector('.mono[style*="silver5"]');
+        if (balEl) {
+          balEl.textContent = parts.length ? ('On-chain · ' + parts.join(' · ')) : 'On-chain balances unavailable on this network';
+          balEl.style.color = 'var(--silver4)';
+        }
+      } catch (_) {
+        var row2 = host.querySelector('.set-row');
+        var balEl2 = row2 && row2.querySelector('.mono[style*="silver5"]');
+        if (balEl2) balEl2.textContent = 'Could not load on-chain balances';
+      }
+    } else {
+      var row3 = host.querySelector('.set-row');
+      var balEl3 = row3 && row3.querySelector('.mono[style*="silver5"]');
+      if (balEl3) balEl3.remove();
+    }
   }
   window.renderConnectedWalletsList = renderConnectedWalletsList;
 
@@ -11182,19 +11230,28 @@ function exportHistoryCsv() {
   };
   window.submitSpotOrder = async function submitSpotOrder() {
     var pair = (typeof spotState !== 'undefined' && spotState.pair) ? spotState.pair : 'BTC/USDT';
+    var orderType = spotState.orderType || 'limit';
+    if (orderType === 'twap') { toast('TWAP routing is coming soon — use Limit or Market for now', 'info'); return; }
+    var mappedType = orderType === 'stop-limit' ? 'stop' : orderType;
     var price = parseFloat(document.getElementById('spotOrderPrice')?.value || '0') || 0;
+    var triggerPrice = parseFloat(document.getElementById('spotTriggerPrice')?.value || '0') || 0;
     var amount = parseFloat(document.getElementById('spotOrderAmount')?.value || '0') || 0;
     if (!amount || amount <= 0) { toast('Order amount is empty', 'error'); return; }
+    if (mappedType === 'stop' && (!triggerPrice || triggerPrice <= 0)) {
+      toast('Set a trigger price for stop orders', 'error'); return;
+    }
     try {
+      var payload = {
+        pair: pair,
+        side: spotState.side || 'buy',
+        type: mappedType,
+        price: price,
+        amount: amount,
+      };
+      if (mappedType === 'stop') payload.triggerPrice = triggerPrice;
       var result = await apiFetch('/api/spot/orders', {
         method: 'POST',
-        body: JSON.stringify({
-          pair: pair,
-          side: spotState.side || 'buy',
-          type: spotState.orderType || 'limit',
-          price: price,
-          amount: amount,
-        }),
+        body: JSON.stringify(payload),
       });
       var status = result && result.order ? result.order.status : '';
       if (status === 'filled') toast((spotState.side === 'buy' ? 'Buy' : 'Sell') + ' order filled · ' + pair, 'success');
@@ -11919,15 +11976,103 @@ function copyDepAddr() {
     );
   } else { toast('Clipboard not available', 'error'); }
 }
-function submitSwap() {
+var GROM_SWAP_CHAIN = 42161;
+var GROM_SWAP_ADDR = {
+  ETH:  '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+  USDT: '0xfd086bc7cd5c481dcc9c85eb478a1c0b6c685e32',
+  USDC: '0xaf88d065e77c8cC2239327C0EDb1A48022fCcC7',
+  BTC:  '0x2f2a2543B76A4166549F7aaBb2cF6eB5C76A4166549F7aa'
+};
+var GROM_SWAP_DECIMALS = { ETH: 18, USDT: 6, USDC: 6, BTC: 8, SOL: 9 };
+
+function swapAmountToAtomic(asset, amount) {
+  var dec = GROM_SWAP_DECIMALS[asset] || 18;
+  return String(Math.floor(amount * Math.pow(10, dec)));
+}
+
+async function refreshSwapEstimate() {
+  var from = document.getElementById('wmSwapFrom')?.value;
+  var to   = document.getElementById('wmSwapTo')?.value;
+  var amt  = parseFloat(document.getElementById('wmSwapAmt')?.value || '0');
+  var est  = document.getElementById('wmSwapEst');
+  if (!est || !from || !to || from === to || !amt || amt <= 0) return;
+  if (from === 'SOL' || to === 'SOL') {
+    est.textContent = 'SOL swaps require Solana wallet — use ETH/USDT/USDC/BTC on Arbitrum';
+    return;
+  }
+  var src = GROM_SWAP_ADDR[from];
+  var dst = GROM_SWAP_ADDR[to];
+  if (!src || !dst) return;
+  try {
+    var w = typeof detectConnectedWallet === 'function' ? detectConnectedWallet() : null;
+    var quote = await window.gromApiFetch('/api/swap/quote', {
+      method: 'POST',
+      body: JSON.stringify({
+        chainId: GROM_SWAP_CHAIN,
+        src: src,
+        dst: dst,
+        amount: swapAmountToAtomic(from, amt),
+        userAddress: (w && /^0x/.test(w.address)) ? w.address : undefined,
+      }),
+    });
+    var best = quote && quote.best;
+    if (!best || !best.toAmount) {
+      est.textContent = 'No DEX route found right now — try another pair or amount';
+      return;
+    }
+    var outDec = GROM_SWAP_DECIMALS[to] || 18;
+    var outAmt = Number(best.toAmount) / Math.pow(10, outDec);
+    est.textContent = 'Rate: ' + amt + ' ' + from + ' ≈ ' + outAmt.toFixed(outDec >= 8 ? 8 : 4) + ' ' + to + ' · via ' + (best.source || 'DEX') + ' · Slippage 0.50%';
+  } catch (_) {
+    est.textContent = 'Quote unavailable — connect wallet and try again';
+  }
+}
+
+async function submitSwap() {
   var from = document.getElementById('wmSwapFrom')?.value;
   var to   = document.getElementById('wmSwapTo')?.value;
   var amt  = parseFloat(document.getElementById('wmSwapAmt')?.value || '0');
   if (!amt || amt <= 0) { toast('Enter an amount greater than zero', 'error'); return; }
   if (from === to) { toast('Choose two different assets', 'error'); return; }
-  closeWalletModal();
-  toast('Swap ' + amt + ' ' + from + ' → ' + to + ' submitted', 'success');
+  if (from === 'SOL' || to === 'SOL') { toast('SOL on-chain swap is not supported on Arbitrum yet', 'error'); return; }
+  var w = typeof detectConnectedWallet === 'function' ? detectConnectedWallet() : null;
+  if (!w || !/^0x[a-fA-F0-9]{40}$/.test(w.address)) {
+    toast('Connect an EVM wallet (Trust, MetaMask, OKX…) for on-chain swap', 'error');
+    return;
+  }
+  var src = GROM_SWAP_ADDR[from];
+  var dst = GROM_SWAP_ADDR[to];
+  if (!src || !dst) { toast('Unsupported swap pair on Arbitrum', 'error'); return; }
+  try {
+    var quote = await window.gromApiFetch('/api/swap/quote', {
+      method: 'POST',
+      body: JSON.stringify({
+        chainId: GROM_SWAP_CHAIN,
+        src: src,
+        dst: dst,
+        amount: swapAmountToAtomic(from, amt),
+        userAddress: w.address,
+      }),
+    });
+    var best = quote && quote.best;
+    if (!best || !best.toAmount) { toast('No DEX route found', 'error'); return; }
+    var outDec = GROM_SWAP_DECIMALS[to] || 18;
+    var outAmt = Number(best.toAmount) / Math.pow(10, outDec);
+    closeWalletModal();
+    toast('Swap quote · ' + amt + ' ' + from + ' → ~' + outAmt.toFixed(outDec >= 8 ? 8 : 4) + ' ' + to + ' via ' + (best.source || 'DEX'), 'success');
+  } catch (_) {
+    toast('Swap quote failed — check wallet connection and try again', 'error');
+  }
 }
+
+(function wireSwapEstimate() {
+  ['wmSwapFrom', 'wmSwapTo', 'wmSwapAmt'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', refreshSwapEstimate);
+    el.addEventListener('input', function () { clearTimeout(el.__swapT); el.__swapT = setTimeout(refreshSwapEstimate, 450); });
+  });
+})();
 
 /* ========== Settings ========== */
 function saveSettings() {

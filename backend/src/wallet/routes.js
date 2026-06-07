@@ -7,6 +7,7 @@ import { query, withTx } from '../db/pool.js';
 import idempotencyMiddleware from '../middleware/idempotency.js';
 import { verifyTotp } from '../utils/totp.js';
 import { ensureDepositAddress as ensureBinanceDepositAddress } from './binance-onboarding.js';
+import { ensureWelcomeWalletSeed } from './welcome-seed.js';
 
 const STABLE_ASSETS = new Set(['USD', 'USDT', 'USDC']);
 const DEMO_BALANCES = [
@@ -279,58 +280,19 @@ export function buildHistoryItems({ transfers, binaryPositions, spotOrders }) {
 }
 
 async function ensureDevWalletSeed(userId) {
+  await ensureWelcomeWalletSeed(userId);
   if (config.env === 'production') return;
-  const existing = await query('SELECT 1 FROM balances WHERE user_id=$1 LIMIT 1', [userId]);
-  if (existing.rowCount > 0) return;
 
-  await withTx(async (tx) => {
-    for (const row of DEMO_BALANCES) {
-      await tx.query(
-        `INSERT INTO balances (user_id, asset, mode, amount, locked, updated_at)
-         VALUES ($1, $2, 'live', $3, $4, NOW())
-         ON CONFLICT (user_id, asset, mode) DO NOTHING`,
-        [userId, row.asset, row.amount, row.locked]
-      );
-    }
-
-    const transfers = await tx.query('SELECT 1 FROM wallet_transfers WHERE user_id=$1 LIMIT 1', [userId]);
-    if (transfers.rowCount === 0) {
-      for (const row of DEMO_TRANSFERS) {
-        await tx.query(
-          `INSERT INTO wallet_transfers
-             (id, user_id, direction, asset, network, address, tx_hash, amount, fee, status, confirmations, required_confirmations, note, created_at, updated_at)
-           VALUES
-             ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, ${row.created_at}, NOW())`,
-          [
-            crypto.randomUUID(),
-            userId,
-            row.direction,
-            row.asset,
-            row.network,
-            row.address,
-            row.tx_hash,
-            row.amount,
-            row.fee,
-            row.status,
-            row.confirmations,
-            row.required_confirmations,
-            row.note,
-          ]
-        );
-      }
-    }
-
-    const seededOrders = await tx.query('SELECT 1 FROM spot_orders WHERE user_id=$1 LIMIT 1', [userId]);
-    if (seededOrders.rowCount === 0) {
-      await tx.query(
-        `INSERT INTO spot_orders (user_id, pair, side, type, price, amount, filled, status, created_at)
-         VALUES
-           ($1, 'BTC/USDT', 'buy', 'limit', 104218.40, 0.005, 0.005, 'filled', NOW() - INTERVAL '15 hours'),
-           ($1, 'ETH/USDT', 'sell', 'market', 3684.15, 0.012, 0.012, 'filled', NOW() - INTERVAL '20 hours')`,
-        [userId]
-      );
-    }
-  });
+  const seededOrders = await query('SELECT 1 FROM spot_orders WHERE user_id=$1 LIMIT 1', [userId]);
+  if (seededOrders.rowCount === 0) {
+    await query(
+      `INSERT INTO spot_orders (user_id, pair, side, type, price, amount, filled, status, created_at)
+       VALUES
+         ($1, 'BTC/USDT', 'buy', 'limit', 104218.40, 0.005, 0.005, 'filled', NOW() - INTERVAL '15 hours'),
+         ($1, 'ETH/USDT', 'sell', 'market', 3684.15, 0.012, 0.012, 'filled', NOW() - INTERVAL '20 hours')`,
+      [userId]
+    );
+  }
 }
 
 const withdrawSchema = z.object({

@@ -18,6 +18,7 @@ import { query } from '../db/pool.js';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import { buildOtpAuthUrl, randomBase32, verifyTotp } from '../utils/totp.js';
+import { ensureWelcomeWalletSeed } from './welcome-seed.js';
 
 const NONCE_TTL_MS = 5 * 60 * 1000;
 
@@ -80,6 +81,7 @@ export function createAuthRouter() {
       if (user.risk_level === 'blocked') return res.status(403).json({ error: 'account_blocked' });
 
       await ensureUserSettingsRow(user.id);
+      await ensureWelcomeWalletSeed(user.id);
       await query(
         `UPDATE user_settings
             SET email=$2,
@@ -162,6 +164,8 @@ export function createAuthRouter() {
       );
       const user = rows[0];
       if (user.risk_level === 'blocked') return res.status(403).json({ error: 'account blocked' });
+
+      await ensureWelcomeWalletSeed(user.id);
 
       const token = jwt.sign(
         { sub: user.id, addr: user.wallet_address, chain: user.chain_id, role: user.role || 'user' },

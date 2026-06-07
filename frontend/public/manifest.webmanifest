@@ -1,7 +1,7 @@
 {
-  "name": "GROM Finance Hub",
+  "name": "GROM",
   "short_name": "GROM",
-  "description": "Spot, futures, binary options, and wallet — GROM Finance Hub.",
+  "description": "Spot, futures, binary options, and wallet on GROM.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -10,8 +10,14 @@
   "theme_color": "#080a0f",
   "icons": [
     {
-      "src": "assets/grom-brand-mark.png",
-      "sizes": "512x512",
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/grom-brand-mark-clear.png",
+      "sizes": "618x656",
       "type": "image/png",
       "purpose": "any maskable"
     }

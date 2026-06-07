@@ -71,7 +71,24 @@ async function makePkce() {
 
 /* ---------- apply login ---------- */
 
-function applyLogin(user, authJson) {
+async function exchangeGromSession(user) {
+  const linked = user?.linked_accounts || [];
+  const emailAccount  = linked.find(a => a.type === 'email');
+  const googleAccount = linked.find(a => a.type === 'google_oauth');
+  const email = String(emailAccount?.address || user?.email || googleAccount?.email || '').trim().toLowerCase();
+  if (!email) return null;
+
+  const res = await fetch('/auth/email-login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.token) throw new Error(data.error || 'GROM session failed');
+  return data;
+}
+
+async function applyLogin(user, authJson) {
   const linked = user?.linked_accounts || [];
   const walletAccount = linked.find(a => a.type === 'wallet');
   const emailAccount  = linked.find(a => a.type === 'email');
@@ -86,22 +103,34 @@ function applyLogin(user, authJson) {
     ? addr.slice(0, 6) + '…' + addr.slice(-4)
     : (label.length > 18 ? label.slice(0, 15) + '…' : label);
 
+  try {
+    localStorage.removeItem('grom:logged_out');
+    localStorage.setItem('grom_wallet_label', label);
+  } catch (_) {}
+
+  try {
+    const grom = await exchangeGromSession(user);
+    if (grom?.token) {
+      localStorage.setItem('grom_jwt', grom.token);
+      if (grom.user) localStorage.setItem('grom_user', JSON.stringify(grom.user));
+    }
+  } catch (e) {
+    console.warn('[grom-privy] GROM JWT exchange failed', e);
+    window.toast?.('Signed in with Privy but trading session failed — try again', 'error');
+    return;
+  }
+
   window.setWalletLabel?.(short);
   if (window.GROM_CONN) {
     window.GROM_CONN.connected = true;
     window.GROM_CONN.label = label;
     window.GROM_CONN.method = addr ? 'wallet' : (email ? 'email' : 'social');
   }
-  // Сохраняем для старого restoreAuthUi() — обратная совместимость чипа.
-  // Любой явный логин снимает флаг "logged_out" (иначе следующий refresh не воскресит сессию)
-  try {
-    localStorage.removeItem('grom:logged_out');
-    localStorage.setItem('grom_jwt', authJson.token || 'privy-session');
-    localStorage.setItem('grom_wallet_label', label);
-  } catch {}
   window.updateAuthUi?.();
   window.closeConnectModal?.();
   window.toast?.('Connected · ' + short, 'success');
+  if (window.gromWS?.connect) try { window.gromWS.connect(); } catch (_) {}
+  if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
 
   saveSession({ user, token: authJson.token, identity: authJson.identity_token });
 }
@@ -185,7 +214,7 @@ function ensureInlineForm() {
     try {
       box.querySelector('#pvVerify').textContent = '...';
       const auth = await verifyEmailCode(pendingEmail, code);
-      applyLogin(auth.user, auth);
+      await applyLogin(auth.user, auth);
       resetInlineForm();
       showMainRows();
     } catch (e) {
@@ -297,7 +326,7 @@ async function finishOauth(state_code, authorization_code) {
     code_verifier: saved.verifier
   });
   localStorage.removeItem(PKCE_KEY);
-  applyLogin(auth.user, auth);
+  await applyLogin(auth.user, auth);
   return { auth, returnTo: saved.returnTo };
 }
 
@@ -554,7 +583,7 @@ function boot() {
   } else {
     const s = loadSession();
     if (s?.user) {
-      try { applyLogin(s.user, s); } catch {}
+      applyLogin(s.user, s).catch(() => {});
     }
   }
 

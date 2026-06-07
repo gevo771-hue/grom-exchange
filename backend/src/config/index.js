@@ -133,6 +133,7 @@ export const config = {
       BTC: env('GROM_COLD_ADDRESS_BTC', 'cold-vault-btc'),
     },
     sweepPollMs: envInt('GROM_SWEEP_POLL_MS', 600000),
+    welcomeSeed: envBool('GROM_WELCOME_SEED', true),
   },
   webhooks: {
     secret: env('GROM_WEBHOOK_SECRET', ''),

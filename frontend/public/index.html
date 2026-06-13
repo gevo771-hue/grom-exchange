@@ -2220,22 +2220,29 @@
   .grom-tv-bet-marker.up .grom-tv-bet-arrow { border-bottom: 7px solid #24d084; }
   .grom-tv-bet-marker.down .grom-tv-bet-arrow { border-top: 7px solid #ff6175; }
   .bo-hud-overlay {
-    position: absolute; top: 12px; left: 12px; right: 72px;
-    display: flex; justify-content: flex-end; pointer-events: none; gap: 10px;
+    position: absolute; top: 10px; left: 12px; right: 64px;
+    display: flex; justify-content: flex-end; pointer-events: none; gap: 8px;
   }
   .hud-card {
-    background: rgba(7,11,22,0.72);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(77,158,255,0.25);
-    border-radius: 10px;
-    padding: 8px 12px;
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(7,11,22,0.55);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(122,162,199,0.16);
+    border-radius: 999px;
+    padding: 4px 11px;
     pointer-events: auto;
-    min-width: 160px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.28);
   }
-  .hud-card .lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--silver5); }
-  .hud-card .v { font-size: 16px; font-weight: 800; color: var(--silver1); font-variant-numeric: tabular-nums; margin-top: 2px; }
-  .hud-card.critical { border-color: rgba(245,185,77,0.4); }
+  .hud-card .lbl { font-size: 8.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--silver5); }
+  .hud-card .v { font-size: 12.5px; font-weight: 800; color: var(--silver1); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+  .hud-card.critical { border-color: rgba(245,185,77,0.30); background: rgba(26,19,8,0.52); }
   .hud-card.critical .v { color: var(--warn); }
+  .hud-card.critical::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%; flex: none;
+    background: var(--warn); box-shadow: 0 0 8px rgba(245,185,77,0.85);
+    animation: hudDotPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes hudDotPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.65); } }
   .hud-bar {
     display: flex; justify-content: space-between; padding: 8px 14px;
     background: rgba(7,11,22,0.6); border-top: 1px solid rgba(200,212,232,0.05);
@@ -5389,7 +5396,7 @@
           <div class="chart-top">
             <div class="asset-price">
               <span class="big mono" id="spotPrice">$63,903.09</span>
-              <span class="chg up-pill">+1.82% · +$1,867.14</span>
+              <span class="chg up-pill" id="spotChg">+1.82%</span>
             </div>
             <div class="tf-pills" id="spotTfPills">
               <button>1m</button><button>5m</button><button class="active">15m</button><button>1h</button><button>4h</button><button>1d</button>
@@ -10125,6 +10132,13 @@ function updateSpotBoard(sym) {
   if (vwap) vwap.textContent = ((Math.sin(px / 7000) * 0.42) >= 0 ? '+' : '') + (Math.sin(px / 7000) * 0.42).toFixed(2) + '%';
   var trend = document.getElementById('spotTrendRegime');
   if (trend) trend.textContent = px > (spotSeries[0] || px) ? 'Trend continuation' : 'Range rotation';
+  var chgEl = document.getElementById('spotChg');
+  if (chgEl) {
+    var chg = gromLiveChangeForPair(sym);
+    if (!Number.isFinite(chg)) chg = 0;
+    chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+    chgEl.className = 'chg ' + (chg >= 0 ? 'up-pill' : 'down-pill');
+  }
   renderSpotRecentTrades(sym);
   renderSpotLiquidity(sym);
   updateSpotAiAnalysis(sym);

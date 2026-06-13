@@ -13065,18 +13065,40 @@ function updateDashboardWatchlistPrices() {
   });
 }
 
-function gromLogoCascade(sym) {
+function gromLogoCascade(sym, type, logoUrl) {
   var s = String(sym || '').toLowerCase().replace(/usdt$|usdc$/, '').replace(/[^a-z0-9]/g, '');
   var fb = String(sym || '?').slice(0, 3).toUpperCase();
-  return "var n=parseInt(this.dataset.fb||'0',10)+1;this.dataset.fb=n;" +
-    "if(n===1){this.src='https://assets.coincap.io/assets/icons/" + s + "@2x.png';}" +
-    "else if(n===2){this.src='https://cryptologos.cc/logos/thumbs/" + s + ".png?v=030';}" +
-    "else{this.parentElement.textContent='" + fb + "';this.parentElement.classList.remove('no-bg');}";
+  var key = String(logoUrl || sym || '').replace(/['"\\]/g, '');
+  // Once a logo fails, remember it so re-renders skip the network entirely
+  // (this is what stops the icons from flickering on every list refresh).
+  var done = "this.onerror=null;if(window.__gromLogoBad){window.__gromLogoBad['" + key + "']=1;}" +
+    "this.parentElement.textContent='" + fb + "';this.parentElement.classList.remove('no-bg');";
+  if (type === 'crypto') {
+    return "var n=parseInt(this.dataset.fb||'0',10)+1;this.dataset.fb=n;" +
+      "if(n===1){this.src='https://assets.coincap.io/assets/icons/" + s + "@2x.png';}" +
+      "else if(n===2){this.src='https://cryptologos.cc/logos/thumbs/" + s + ".png?v=030';}" +
+      "else{" + done + "}";
+  }
+  if (type === 'stock' || type === 'etf') {
+    return "var n=parseInt(this.dataset.fb||'0',10)+1;this.dataset.fb=n;" +
+      "if(n===1){this.src='https://financialmodelingprep.com/image-stock/" + String(sym || '').toUpperCase() + ".png';}" +
+      "else{" + done + "}";
+  }
+  return done;
 }
 function instrumentIcoHtmlLive(p) {
   if (!p) return '<span class="coin-ico">?</span>';
   if (!window.__gromIcoHtmlCache) window.__gromIcoHtmlCache = Object.create(null);
+  if (!window.__gromLogoBad) window.__gromLogoBad = Object.create(null);
   var cacheKey = (p.sym || p.symbol || '') + '|' + (p.type || '') + '|' + (p.logo || '') + '|' + (p.glyph || '');
+  // A logo that already failed once renders as a clean monogram on every
+  // subsequent pass — no re-fetch, no flicker.
+  if (p.logo && window.__gromLogoBad[String(p.logo).replace(/['"\\]/g, '')]) {
+    var monoLetters = (p.base || p.symbol || p.sym || '?').slice(0, 3);
+    var monoHtml = '<span class="coin-ico ' + ((p.base || '').toLowerCase()) + '">' + monoLetters + '</span>';
+    window.__gromIcoHtmlCache[cacheKey] = monoHtml;
+    return monoHtml;
+  }
   if (window.__gromIcoHtmlCache[cacheKey]) return window.__gromIcoHtmlCache[cacheKey];
   var html;
   if (p.type === 'fx' && p.logo && p.logoQuote) {
@@ -13085,7 +13107,7 @@ function instrumentIcoHtmlLive(p) {
     html = '<span class="coin-ico no-bg" style="font-size:18px">' + p.glyph + '</span>';
   } else if (p.logo) {
     var sym = p.base || p.symbol || p.sym || '?';
-    html = '<span class="coin-ico no-bg"><img src="' + p.logo + '" alt="" decoding="async" loading="eager" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="' + gromLogoCascade(sym) + '"/></span>';
+    html = '<span class="coin-ico no-bg"><img src="' + p.logo + '" alt="" decoding="async" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="' + gromLogoCascade(sym, p.type, p.logo) + '"/></span>';
   } else {
     var letters = (p.base || p.symbol || p.sym || '?').slice(0, 3);
     html = '<span class="coin-ico ' + ((p.base || '').toLowerCase()) + '">' + letters + '</span>';

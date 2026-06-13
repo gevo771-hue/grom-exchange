@@ -2386,7 +2386,9 @@
     border-radius: 0 0 10px 10px;
   }
   #page-markets > .page-title,
-  #page-markets > .page-subtitle { display: none !important; }
+  #page-markets > .page-subtitle,
+  #page-spot > .page-subtitle,
+  #page-futures > .page-subtitle { display: none !important; }
   #page-binary .bo-title-row {
     display: flex;
     align-items: center;
@@ -3924,6 +3926,16 @@
     }
     .bo-chip-row::-webkit-scrollbar { display: none; }
     .bo-chip-row button { padding: 6px 10px; font-size: 11px; flex-shrink: 0; }
+    #page-binary #boChart-tf,
+    #page-binary #boChart-type {
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      flex-wrap: nowrap;
+      scrollbar-width: none;
+    }
+    #page-binary #boChart-tf::-webkit-scrollbar,
+    #page-binary #boChart-type::-webkit-scrollbar { display: none; }
     .bo-price .big { font-size: 19px !important; }
 
     #page-binary {
@@ -4154,13 +4166,33 @@
     .ob-row.hdr { font-size: 10px; position: sticky; top: 0; background: rgba(8,12,20,0.95); z-index: 1; }
     #page-spot .chart-top {
       padding: 10px 12px;
-      flex-wrap: nowrap;
+      flex-wrap: wrap !important;
+      align-items: flex-start;
       gap: 8px;
       background: rgba(8,12,20,0.55);
     }
-    #page-spot .asset-price { flex: 1; min-width: 0; justify-content: flex-start; gap: 8px; }
+    #page-spot .asset-price {
+      flex: 1 1 100%;
+      min-width: 0;
+      max-width: 100%;
+      justify-content: flex-start;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     #page-spot .asset-price .big { font-size: 18px !important; }
-    #page-spot .tf-pills { flex-shrink: 0; max-width: 52%; }
+    #page-spot .asset-price .chg {
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #page-spot .tf-pills {
+      flex: 1 1 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      flex-wrap: nowrap;
+    }
     #page-spot .spot-ai-card .spot-ai-grid {
       grid-template-columns: 1fr !important;
       gap: 8px !important;
@@ -8284,6 +8316,44 @@ function instrumentSymSlash(it) {
   return s;
 }
 
+function gromResolveInstrument(sym) {
+  if (typeof window.gromGetInstrument !== 'function') return null;
+  var raw = String(sym || '').trim();
+  if (!raw) return null;
+  return window.gromGetInstrument(raw)
+    || window.gromGetInstrument(raw.toUpperCase())
+    || window.gromGetInstrument(raw.toUpperCase().replace(/\//g, ''));
+}
+
+function gromLiveChangeForPair(sym) {
+  if (typeof window.gromLiveChange !== 'function') return NaN;
+  var it = gromResolveInstrument(sym);
+  if (it) return Number(window.gromLiveChange(it.symbol));
+  return Number(window.gromLiveChange(String(sym || '').toUpperCase().replace(/\//g, '')));
+}
+
+function resetBinaryTVChart() {
+  var st = window.__gromTVCharts && window.__gromTVCharts.boChart;
+  if (st && st.chart) { try { st.chart.remove(); } catch (_) {} }
+  if (window.__gromTVCharts) delete window.__gromTVCharts.boChart;
+  if (window.__chartBounds) {
+    Object.keys(window.__chartBounds).forEach(function (k) {
+      if (k.indexOf('boChart::') === 0) delete window.__chartBounds[k];
+    });
+  }
+}
+
+function resetFuturesTVChart() {
+  var st = window.__gromTVCharts && window.__gromTVCharts.futChart;
+  if (st && st.chart) { try { st.chart.remove(); } catch (_) {} }
+  if (window.__gromTVCharts) delete window.__gromTVCharts.futChart;
+  if (window.__chartBounds) {
+    Object.keys(window.__chartBounds).forEach(function (k) {
+      if (k.indexOf('futChart::') === 0) delete window.__chartBounds[k];
+    });
+  }
+}
+
 function futuresInstrumentType(sym) {
   var it = (typeof window.gromGetInstrument === 'function') ? window.gromGetInstrument(sym) : null;
   if (it && it.type) return it.type;
@@ -8440,30 +8510,44 @@ function parseNumberInput(val) {
 }
 
     function priceForPair(sym) {
-      var s = String(sym || '').toUpperCase();
-      var base = s.split('/')[0].replace(/[^A-Z]/g, '');
-      if (typeof window.gromLivePrice === 'function') {
-        var liveSym = base + (s.indexOf('USDT') >= 0 ? 'USDT' : (s.indexOf('USD') >= 0 ? 'USD' : 'USDT'));
-        var livePx = Number(window.gromLivePrice(liveSym));
-        if (Number.isFinite(livePx) && livePx > 0) return livePx;
+      var s = String(sym || '').trim();
+      if (!s) return btcPrice;
+      if (typeof window.gromGetInstrument === 'function' && typeof window.gromLivePrice === 'function') {
+        var it = gromResolveInstrument(s);
+        if (it) {
+          var regPx = Number(window.gromLivePrice(it.symbol));
+          if (Number.isFinite(regPx) && regPx > 0) return regPx;
+        }
+        var keys = [s, s.toUpperCase(), s.toUpperCase().replace(/\//g, ''), s.toUpperCase().replace(/[^A-Z0-9]/g, '')];
+        var seen = {};
+        for (var ki = 0; ki < keys.length; ki++) {
+          var key = keys[ki];
+          if (!key || seen[key]) continue;
+          seen[key] = 1;
+          var livePx = Number(window.gromLivePrice(key));
+          if (Number.isFinite(livePx) && livePx > 0) return livePx;
+        }
       }
+      var base = s.toUpperCase().split('/')[0].replace(/[^A-Z0-9]/g, '');
       if (base === 'BTC') return btcPrice;
-  if (base === 'ETH') return ethPrice;
-  if (base === 'SOL') return solPrice;
-  if (base === 'BNB') return bnbPrice;
-  if (base === 'XRP') return xrpPrice;
-  if (base === 'ADA') return adaPrice;
-  if (base === 'DOGE') return dogePrice;
-  if (base === 'AVAX') return avaxPrice;
-  if (base === 'LINK') return linkPrice;
-  if (extraCryptoPrices[base] != null) return extraCryptoPrices[base];
-  if (base === 'EUR') return eurPrice;
-  if (base === 'GBP') return gbpPrice;
-  if (base === 'XAU') return xauPrice;
-  if (base === 'AAPL') return aaplPrice;
-  if (base === 'TSLA') return tslaPrice;
-  if (base === 'MSFT') return msftPrice;
+      if (base === 'ETH') return ethPrice;
+      if (base === 'SOL') return solPrice;
+      if (base === 'BNB') return bnbPrice;
+      if (base === 'XRP') return xrpPrice;
+      if (base === 'ADA') return adaPrice;
+      if (base === 'DOGE') return dogePrice;
+      if (base === 'AVAX') return avaxPrice;
+      if (base === 'LINK') return linkPrice;
+      if (extraCryptoPrices[base] != null) return extraCryptoPrices[base];
+      if (base === 'EUR') return eurPrice;
+      if (base === 'GBP') return gbpPrice;
+      if (base === 'XAU') return xauPrice;
+      if (base === 'AAPL') return aaplPrice;
+      if (base === 'TSLA') return tslaPrice;
+      if (base === 'MSFT') return msftPrice;
       if (base === 'NVDA') return nvdaPrice;
+      var meta = pairMeta(s);
+      if (meta && Number.isFinite(meta.price) && meta.price > 0) return meta.price;
       return btcPrice;
     }
 
@@ -10123,6 +10207,7 @@ function setBinaryPair(sym, opts) {
   boState.pair = sym || (row && row.sym) || boState.pair || 'BTC/USDT';
   if (row) boState.payout = (+row.pay) / 100;
   else if (opts.pay != null) boState.payout = (+opts.pay) / 100;
+  resetBinaryTVChart();
   var ppx = priceForPair(boState.pair);
   var listedPx = Number(opts.price);
   boState.strike = (Number.isFinite(listedPx) && listedPx > 0 && Number.isFinite(ppx) && ppx > 0 && Math.abs(listedPx - ppx) / Math.max(listedPx, ppx, 1) <= 0.08) ? listedPx : ppx;
@@ -10146,6 +10231,7 @@ function setBinaryPair(sym, opts) {
   document.body.classList.remove('desk-pair-open', 'spot-pair-open');
   refreshPayout();
   renderBinaryProPanels();
+  if (typeof syncBinaryStrike === 'function') syncBinaryStrike(true);
   if (typeof drawChart === 'function') drawChart('boChart');
 }
 
@@ -10773,7 +10859,7 @@ function renderBinaryWatchlist(filter) {
   }
   host.innerHTML = rows.map(function (row) {
     var px = priceForPair(row.sym);
-    var chg = (typeof window.gromLiveChange === 'function') ? Number(window.gromLiveChange(row.sym.replace('/', ''))) : NaN;
+    var chg = gromLiveChangeForPair(row.sym);
     if (!Number.isFinite(chg)) {
       var meta = pairMeta(row.sym);
       chg = meta && Number.isFinite(meta.chg) ? meta.chg : (Math.sin(px / 5000) * 0.65);
@@ -10863,7 +10949,7 @@ function renderFuturesList(filter) {
   }
   host.innerHTML = rows.map(function (row) {
     var px = priceForPair(row.sym);
-    var chg = (typeof window.gromLiveChange === 'function') ? Number(window.gromLiveChange(row.sym.replace('/', ''))) : NaN;
+    var chg = gromLiveChangeForPair(row.sym);
     if (!Number.isFinite(chg)) {
       var meta = pairMeta(row.sym);
       chg = meta && Number.isFinite(meta.chg) ? meta.chg : (Math.sin(px / 5000) * 0.65);

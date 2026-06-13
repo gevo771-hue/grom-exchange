@@ -3918,9 +3918,12 @@
     #page-binary .bo-pro-grid { display: none !important; }
     #page-binary .bo-chart-body { min-height: 52vw !important; height: auto !important; max-height: 340px; }
     #page-binary #boChart { min-height: 52vw !important; max-height: 340px; }
-    .hud-card { min-width: auto; padding: 6px 8px; }
-    .hud-card .v { font-size: 13px; }
-    .hud-card .lbl { font-size: 9px; }
+    .bo-hud-overlay { top: 6px; right: 56px; left: auto; gap: 6px; }
+    .hud-card { min-width: auto; padding: 3px 8px; gap: 6px; background: rgba(7,11,22,0.42); }
+    .hud-card.critical { background: rgba(26,19,8,0.42); }
+    .hud-card .v { font-size: 11px; }
+    .hud-card .lbl { font-size: 7.5px; letter-spacing: 0.1em; }
+    .hud-card.critical::before { width: 5px; height: 5px; }
     .bo-hud-top {
       padding: 10px 12px !important;
       gap: 8px;

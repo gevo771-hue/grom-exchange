@@ -13076,37 +13076,86 @@ function updateDashboardWatchlistPrices() {
   });
 }
 
-function gromLogoCascade(sym, type, logoUrl) {
-  var s = String(sym || '').toLowerCase().replace(/usdt$|usdc$/, '').replace(/[^a-z0-9]/g, '');
-  var key = String(logoUrl || sym || '').replace(/['"\\]/g, '');
-  // Once a logo fails, remember it so re-renders skip the network entirely,
-  // and drop the broken <img> so the monogram underneath stays visible.
-  var done = "this.onerror=null;if(window.__gromLogoBad){window.__gromLogoBad['" + key + "']=1;}this.remove();";
-  if (type === 'crypto') {
-    return "var n=parseInt(this.dataset.fb||'0',10)+1;this.dataset.fb=n;" +
-      "if(n===1){this.src='https://assets.coincap.io/assets/icons/" + s + "@2x.png';}" +
-      "else if(n===2){this.src='https://cryptologos.cc/logos/thumbs/" + s + ".png?v=030';}" +
-      "else{" + done + "}";
-  }
-  if (type === 'stock' || type === 'etf') {
-    return "var n=parseInt(this.dataset.fb||'0',10)+1;this.dataset.fb=n;" +
-      "if(n===1){this.src='https://financialmodelingprep.com/image-stock/" + String(sym || '').toUpperCase() + ".png';}" +
-      "else{" + done + "}";
-  }
-  return done;
+function gromLogoKey(logoUrl, sym) {
+  return String(logoUrl || sym || '').replace(/['"\\]/g, '');
 }
+// Ordered list of logo URLs to try for an instrument (primary + fallbacks).
+function gromLogoSources(sym, type, logoUrl) {
+  var s = String(sym || '').toLowerCase().replace(/usdt$|usdc$/, '').replace(/[^a-z0-9]/g, '');
+  var arr = [];
+  if (logoUrl) arr.push(logoUrl);
+  if (type === 'crypto') {
+    arr.push('https://assets.coincap.io/assets/icons/' + s + '@2x.png');
+    arr.push('https://cryptologos.cc/logos/thumbs/' + s + '.png?v=030');
+  } else if (type === 'stock' || type === 'etf') {
+    arr.push('https://financialmodelingprep.com/image-stock/' + String(sym || '').toUpperCase() + '.png');
+  }
+  return arr;
+}
+// Verify logos off-DOM with Image() and only inject an <img> once one has
+// actually loaded — so a broken/loading logo never flashes over the monogram.
+function gromHydrateLogos(root) {
+  if (!window.__gromLogoOk) window.__gromLogoOk = Object.create(null);
+  if (!window.__gromLogoBad) window.__gromLogoBad = Object.create(null);
+  var scope = root || document;
+  var nodes = scope.querySelectorAll('.coin-ico.has-logo[data-logo]');
+  for (var k = 0; k < nodes.length; k++) {
+    (function (span) {
+      if (span.__gromHydrating) return;
+      span.__gromHydrating = true;
+      var url = span.getAttribute('data-logo');
+      var type = span.getAttribute('data-ltype') || '';
+      var sym = span.getAttribute('data-lsym') || '';
+      var key = gromLogoKey(url, sym);
+      var sources = gromLogoSources(sym, type, url);
+      var i = 0;
+      (function tryNext() {
+        if (i >= sources.length) {
+          window.__gromLogoBad[key] = 1;
+          span.removeAttribute('data-logo');
+          return;
+        }
+        var src = sources[i++];
+        var probe = new Image();
+        probe.onload = function () {
+          if (!probe.naturalWidth) { tryNext(); return; }
+          window.__gromLogoOk[key] = src;
+          if (!span.querySelector('img')) {
+            var im = document.createElement('img');
+            im.alt = ''; im.decoding = 'async'; im.src = src;
+            span.appendChild(im);
+          }
+          span.removeAttribute('data-logo');
+        };
+        probe.onerror = tryNext;
+        probe.src = src;
+      })();
+    })(nodes[k]);
+  }
+}
+window.gromHydrateLogos = gromHydrateLogos;
 function instrumentIcoHtmlLive(p) {
   if (!p) return '<span class="coin-ico">?</span>';
   if (!window.__gromIcoHtmlCache) window.__gromIcoHtmlCache = Object.create(null);
   if (!window.__gromLogoBad) window.__gromLogoBad = Object.create(null);
+  if (!window.__gromLogoOk) window.__gromLogoOk = Object.create(null);
   var cacheKey = (p.sym || p.symbol || '') + '|' + (p.type || '') + '|' + (p.logo || '') + '|' + (p.glyph || '');
-  // A logo that already failed once renders as a clean monogram on every
-  // subsequent pass — no re-fetch, no flicker.
-  if (p.logo && window.__gromLogoBad[String(p.logo).replace(/['"\\]/g, '')]) {
-    var monoLetters = (p.base || p.symbol || p.sym || '?').slice(0, 3);
-    var monoHtml = '<span class="coin-ico ' + ((p.base || '').toLowerCase()) + '">' + monoLetters + '</span>';
-    window.__gromIcoHtmlCache[cacheKey] = monoHtml;
-    return monoHtml;
+  if (p.logo && (p.type === 'crypto' || p.type === 'stock' || p.type === 'etf' || (p.type !== 'fx' && p.type !== 'commodity'))) {
+    var lsym = p.base || p.symbol || p.sym || '?';
+    var lt2 = lsym.slice(0, 3);
+    var baseCls = (p.base || '').toLowerCase();
+    var key2 = gromLogoKey(p.logo, lsym);
+    // Failed before -> clean monogram, no network.
+    if (window.__gromLogoBad[key2]) {
+      return '<span class="coin-ico ' + baseCls + '">' + lt2 + '</span>';
+    }
+    // Known-good -> inject the verified (cached) image directly over the monogram.
+    if (window.__gromLogoOk[key2]) {
+      return '<span class="coin-ico has-logo ' + baseCls + '"><span class="cl">' + lt2 + '</span>'
+        + '<img src="' + window.__gromLogoOk[key2] + '" alt="" decoding="async"/></span>';
+    }
+    // Unknown -> monogram now; gromHydrateLogos() verifies + injects the logo.
+    return '<span class="coin-ico has-logo ' + baseCls + '" data-logo="' + p.logo + '" data-ltype="' + (p.type || '') + '" data-lsym="' + lsym + '"><span class="cl">' + lt2 + '</span></span>';
   }
   if (window.__gromIcoHtmlCache[cacheKey]) return window.__gromIcoHtmlCache[cacheKey];
   var html;
@@ -13114,11 +13163,6 @@ function instrumentIcoHtmlLive(p) {
     html = '<span class="fx-pair-ico"><img class="fx-base" src="' + p.logo + '" alt="" decoding="async" loading="lazy"/><img class="fx-quote" src="' + p.logoQuote + '" alt="" decoding="async" loading="lazy"/></span>';
   } else if (p.type === 'commodity' && p.glyph) {
     html = '<span class="coin-ico no-bg" style="font-size:18px">' + p.glyph + '</span>';
-  } else if (p.logo) {
-    var sym = p.base || p.symbol || p.sym || '?';
-    var lt = sym.slice(0, 3);
-    html = '<span class="coin-ico has-logo ' + ((p.base || '').toLowerCase()) + '"><span class="cl">' + lt + '</span>'
-      + '<img src="' + p.logo + '" alt="" decoding="async" loading="lazy" onerror="' + gromLogoCascade(sym, p.type, p.logo) + '"/></span>';
   } else {
     var letters = (p.base || p.symbol || p.sym || '?').slice(0, 3);
     html = '<span class="coin-ico ' + ((p.base || '').toLowerCase()) + '">' + letters + '</span>';
@@ -13234,6 +13278,7 @@ function renderMarketsEnhanced() {
   el.innerHTML = visible.map(function (p) {
     return '<div class="mkt-row" data-sym="' + p.sym + '" role="button" tabindex="0" onclick="openSpotPair(\'' + p.sym + '\')"><div class="star ' + (p.fav ? 'on' : '') + '" onclick="event.stopPropagation();toggleFav(\'' + p.sym + '\')">★</div><div class="name">' + instrumentIcoHtmlLive(p) + '<span class="pair-copy"><span class="pair-symbol">' + p.sym + '</span><span class="pair-meta">' + (p.name || '') + ' · ' + (p.type ? p.type.toUpperCase() : '') + '</span></span></div><div class="mono" data-mkt-price style="text-align:right;color:var(--silver1);font-weight:600">$' + marketFmt(p.price) + '</div><div data-mkt-chg style="text-align:right" class="' + (p.chg >= 0 ? 'chg up' : 'chg down') + '">' + (p.chg >= 0 ? '+' : '') + (p.chg || 0).toFixed(2) + '%</div><div class="mono" data-mkt-vol style="text-align:right;color:var(--silver4)">$' + p.vol + '</div><div data-mkt-spark>' + spark(p.chg >= 0) + '</div><button class="trade-btn" onclick="event.stopPropagation(); openSpotPair(\'' + p.sym + '\')">Trade</button></div>';
   }).join('');
+  gromHydrateLogos(el);
   if (counter) {
     var maxBtns = 7;
     var startP = Math.max(1, marketsPage - 3);

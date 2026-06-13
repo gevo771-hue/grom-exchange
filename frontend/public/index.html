@@ -8439,9 +8439,14 @@ function rebuildBinaryPairs() {
       seen[sym] = 1;
       var t = it.type || 'crypto';
       var cat = (t === 'stock' || t === 'index' || t === 'etf') ? 'otc' : t;
+      // Per-symbol payout with deterministic spread so the list isn't a flat 92%.
+      var payBase = (t === 'fx') ? 94 : (t === 'commodity') ? 91 : (cat === 'otc') ? 86 : 92;
+      var payHash = 0;
+      for (var ph = 0; ph < sym.length; ph++) payHash = (payHash * 31 + sym.charCodeAt(ph)) >>> 0;
+      var pay = payBase - (payHash % 8); // payBase-7 .. payBase
       rows.push({
         sym: sym,
-        pay: Math.max(83, 92 - Math.floor(i / 10)),
+        pay: Math.max(80, pay),
         cat: cat,
         type: t,
         tier: i < 8 ? 'bluechip' : (i < 20 ? 'momentum' : 'alts'),
@@ -8969,8 +8974,8 @@ var GROM_TV_DATA_VERSION = '20260605-stable-v3';
     '.grom-tv-strike-entry::after { content:"ENTRY"; position:absolute; top:10px; left:8px; color:#0a1224; background:#f5b94d; border-radius:5px; padding:3px 6px; font-size:9px; font-weight:900; letter-spacing:.08em; white-space:nowrap; }',
     '.grom-tv-strike-pill { position:absolute; left:8px; z-index:6; pointer-events:none; color:#0a1224; background:rgba(245,185,77,.94); border-radius:6px; padding:4px 8px; font-size:9.5px; font-weight:900; letter-spacing:.06em; font-family:ui-monospace, SFMono-Regular, monospace; white-space:nowrap; box-shadow:0 6px 18px rgba(0,0,0,.28); }',
     '.grom-tv-expiry { position:absolute; top:0; bottom:0; z-index:5; width:1px; pointer-events:none; background:linear-gradient(180deg, transparent, rgba(245,185,77,.86), transparent); box-shadow:0 0 22px rgba(245,185,77,.45); transform:translateX(-50%); }',
-    '.grom-tv-expiry::before { content:""; position:absolute; top:0; bottom:0; right:0; width:min(240px, 38vw); background:linear-gradient(90deg, rgba(245,185,77,.12), transparent); pointer-events:none; }',
-    '.grom-tv-expiry-pill { position:absolute; bottom:10px; left:8px; color:#0a1224; background:#f5b94d; border-radius:5px; padding:3px 7px; font-size:9px; font-weight:900; letter-spacing:.08em; white-space:nowrap; }',
+    '.grom-tv-expiry::before { content:""; position:absolute; top:0; bottom:0; right:0; width:min(150px, 24vw); background:linear-gradient(90deg, rgba(245,185,77,.10), transparent); pointer-events:none; }',
+    '.grom-tv-expiry-pill { position:absolute; bottom:8px; left:6px; color:#0a1224; background:#f5b94d; border-radius:4px; padding:2px 5px; font-size:8px; font-weight:900; letter-spacing:.06em; white-space:nowrap; }',
     /* price-scale font / size tweak — tighter labels */
     '#boChart .tv-lightweight-charts, #spotChart .tv-lightweight-charts, #futChart .tv-lightweight-charts { font-feature-settings: "tnum" 1; }',
     '@media (max-width: 900px) { #futChart { min-height: 260px !important; height: 260px !important; } }',
@@ -9296,7 +9301,7 @@ function gromDrawTVChart(id, opts) {
       state.chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.14, bottom: 0.22 } });
     }
     if (id === 'boChart') {
-      state.chart.timeScale().applyOptions({ rightOffset: 20, barSpacing: 7, minBarSpacing: 4 });
+      state.chart.timeScale().applyOptions({ rightOffset: 10, barSpacing: 7, minBarSpacing: 4 });
       state.chart.priceScale('right').applyOptions({ scaleMargins: { top: 0.14, bottom: 0.3 }, minimumWidth: 62 });
       if (mode === 'candles' || mode === 'heikin' || mode === 'bars') {
         state.volSeries = state.chart.addHistogramSeries({
@@ -11038,9 +11043,10 @@ function updateQuoteRows() {
   pairs.forEach(function (p) {
     var px = priceForPair(p.sym);
     if (!Number.isFinite(px)) return;
-    var prev = p.price || px;
     p.price = px;
-    p.chg = ((px - prev) / Math.max(1e-9, prev)) * 100;
+    // 24h change from the live registry (tick-to-tick delta would be ~0).
+    var liveChg = gromLiveChangeForPair(p.sym);
+    if (Number.isFinite(liveChg)) p.chg = liveChg;
   });
   document.querySelectorAll('#wlList .wl-item').forEach(function (row) {
     var sym = row.dataset.pair;
@@ -11054,11 +11060,11 @@ function updateQuoteRows() {
     }
     var chgEl = row.querySelector('.chg');
     if (chgEl) {
-      var prev = Number(chgEl.dataset.prev || px);
-      var chg = ((px - prev) / Math.max(1e-9, prev)) * 100;
+      // 24h change from the live registry — not a tick-to-tick delta (which is ~0).
+      var chg = gromLiveChangeForPair(sym);
+      if (!Number.isFinite(chg)) chg = 0;
       chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
       chgEl.className = 'chg ' + (chg >= 0 ? 'up' : 'down');
-      chgEl.dataset.prev = String(px);
     }
   });
   document.querySelectorAll('#page-futures aside.wl .wl-item').forEach(function (row) {
@@ -11073,11 +11079,10 @@ function updateQuoteRows() {
     if (pxEl) pxEl.textContent = '$' + marketFmt(px);
     var chgEl = row.querySelector('.chg');
     if (chgEl) {
-      var prev = Number(row.dataset.prev || px);
-      var chg = ((px - prev) / Math.max(1e-9, prev)) * 100;
+      var chg = gromLiveChangeForPair(sym);
+      if (!Number.isFinite(chg)) chg = 0;
       chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
       chgEl.className = 'chg ' + (chg >= 0 ? 'up' : 'down');
-      row.dataset.prev = String(px);
     }
     var payEl = row.querySelector('.pay');
     if (payEl) {

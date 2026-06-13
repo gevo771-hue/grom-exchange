@@ -356,6 +356,12 @@
   .mkt-row .coin-ico,
   .mkt-row .fx-pair-ico { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
   .coin-ico.no-bg { background: rgba(11,18,32,0.4); border-color: rgba(122,162,199,.18); }
+  /* Logo-over-monogram: ticker letters show instantly, the real logo fades
+     in only once it has actually loaded — prevents any flicker/blank state. */
+  .coin-ico.has-logo { position: relative; }
+  .coin-ico.has-logo > .cl { position: relative; z-index: 0; }
+  .coin-ico.has-logo > img { position: absolute; inset: 0; z-index: 1; opacity: 0; transition: opacity .25s ease; }
+  .coin-ico.has-logo > img.ok { opacity: 1; }
   .dash-banner {
     position: relative;
     display: block;
@@ -13071,12 +13077,10 @@ function updateDashboardWatchlistPrices() {
 
 function gromLogoCascade(sym, type, logoUrl) {
   var s = String(sym || '').toLowerCase().replace(/usdt$|usdc$/, '').replace(/[^a-z0-9]/g, '');
-  var fb = String(sym || '?').slice(0, 3).toUpperCase();
   var key = String(logoUrl || sym || '').replace(/['"\\]/g, '');
-  // Once a logo fails, remember it so re-renders skip the network entirely
-  // (this is what stops the icons from flickering on every list refresh).
-  var done = "this.onerror=null;if(window.__gromLogoBad){window.__gromLogoBad['" + key + "']=1;}" +
-    "this.parentElement.textContent='" + fb + "';this.parentElement.classList.remove('no-bg');";
+  // Once a logo fails, remember it so re-renders skip the network entirely,
+  // and drop the broken <img> so the monogram underneath stays visible.
+  var done = "this.onerror=null;if(window.__gromLogoBad){window.__gromLogoBad['" + key + "']=1;}this.remove();";
   if (type === 'crypto') {
     return "var n=parseInt(this.dataset.fb||'0',10)+1;this.dataset.fb=n;" +
       "if(n===1){this.src='https://assets.coincap.io/assets/icons/" + s + "@2x.png';}" +
@@ -13111,7 +13115,9 @@ function instrumentIcoHtmlLive(p) {
     html = '<span class="coin-ico no-bg" style="font-size:18px">' + p.glyph + '</span>';
   } else if (p.logo) {
     var sym = p.base || p.symbol || p.sym || '?';
-    html = '<span class="coin-ico no-bg"><img src="' + p.logo + '" alt="" decoding="async" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="' + gromLogoCascade(sym, p.type, p.logo) + '"/></span>';
+    var lt = sym.slice(0, 3);
+    html = '<span class="coin-ico has-logo ' + ((p.base || '').toLowerCase()) + '"><span class="cl">' + lt + '</span>'
+      + '<img src="' + p.logo + '" alt="" decoding="async" loading="lazy" onload="this.classList.add(\'ok\')" onerror="' + gromLogoCascade(sym, p.type, p.logo) + '"/></span>';
   } else {
     var letters = (p.base || p.symbol || p.sym || '?').slice(0, 3);
     html = '<span class="coin-ico ' + ((p.base || '').toLowerCase()) + '">' + letters + '</span>';

@@ -7381,6 +7381,10 @@ const boState = {
   wlTab: 'all',
   sound: true
 };
+// `const` does not attach to window; the TV chart renderer reads window.boState
+// to resolve the active pair, so expose it explicitly (futDeskState/spotState are
+// declared with `var` and already reachable on window).
+window.boState = boState;
 var boAudioCtx = null;
 var boAudioUnlocked = false;
 

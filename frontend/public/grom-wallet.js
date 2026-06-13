@@ -82,6 +82,7 @@ function syncEmailSession(email, token, user) {
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
   if (window.gromWS?.connect) window.gromWS.connect();
   if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
+  if (typeof window.hydrateReferralSlice === 'function') window.hydrateReferralSlice(true);
 }
 
 async function connectEmail(email) {
@@ -198,6 +199,7 @@ Issued At: ${issuedAt}`;
   if (typeof window.toast === 'function') window.toast('Connected · ' + short, 'success');
   if (window.gromWS?.connect) try { window.gromWS.connect(); } catch (_) {}
   if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
+  if (typeof window.hydrateReferralSlice === 'function') window.hydrateReferralSlice(true);
 
   return verifyJson;
 }
@@ -517,6 +519,44 @@ function hook() {
   ensureWC().catch(() => {});
 
   console.log('[grom-wallet] ready · project:', WC_PROJECT_ID.slice(0, 8) + '…');
+}
+
+/* -------------------------------------------------------------------------
+ * Referral slice hydration.
+ * Backend (/api/referral/summary) returns a deterministic invite code
+ * (e.g. GROM-K8R2QX) and full invite link unique to the authenticated user.
+ * We patch the two DOM nodes Cursor already gave IDs to:
+ *   #refCode  — the code chip
+ *   #refLink  — the full invite URL
+ * The rest of the page (KPI cards, funnel) keeps its current markup until
+ * Cursor adds IDs in a future pass.
+ * -----------------------------------------------------------------------*/
+async function hydrateReferralSlice(force) {
+  try {
+    const codeEl = document.getElementById('refCode');
+    const linkEl = document.getElementById('refLink');
+    if (!codeEl && !linkEl) return; // not on referral page
+    const jwt = localStorage.getItem('grom_jwt');
+    if (!jwt) return; // require auth — backend won't answer otherwise
+    const r = await fetch('/api/referral/summary', {
+      headers: { Authorization: `Bearer ${jwt}` },
+      cache: force ? 'no-store' : 'default',
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (codeEl && data.code) codeEl.textContent = data.code;
+    if (linkEl && data.link) linkEl.textContent = data.link;
+  } catch (e) {
+    console.warn('[grom-referral] hydrate failed:', e);
+  }
+}
+window.hydrateReferralSlice = hydrateReferralSlice;
+
+// Fire on page load + every time wallet slice hydrates (login/logout/connect)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => hydrateReferralSlice(false));
+} else {
+  hydrateReferralSlice(false);
 }
 
 /* ----- экспорт для отладки ----- */

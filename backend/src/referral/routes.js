@@ -6,8 +6,25 @@
  *   POST /api/referral/claim       — mark pending commissions as queued for payout
  */
 import express from 'express';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
+
+// Deterministic short invite code from user id — same input always yields same
+// 6-char base32-style code, e.g. GROM-K8R2QX. No DB schema change required.
+function inviteCode(userId) {
+  const hash = createHash('sha256').update(`grom-invite:${userId}`).digest();
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // base32 minus look-alikes (0,O,1,I)
+  let code = '';
+  for (let i = 0; i < 6; i++) code += alphabet[hash[i] % alphabet.length];
+  return `GROM-${code}`;
+}
+
+function inviteLink(req, code) {
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'grom.exchange';
+  return `${proto}://${host}/r/${code.replace(/^GROM-/, '')}`;
+}
 
 const payoutSchema = z.object({
   payout_wallet: z.string().min(8).max(120).optional(),
@@ -77,7 +94,11 @@ export function createReferralRouter({ requireAuth }) {
         ),
       ]);
       // Funnel stats are deterministic dev numbers; in prod they come from analytics ETL
+      const code = inviteCode(req.user.sub);
+      const link = inviteLink(req, code);
       res.json({
+        code,
+        link,
         totals: totals.rows[0] || { total_settled: 0, total_pending: 0, total_accrued: 0 },
         recent: recent.rows,
         payout: payout.rows[0] || null,

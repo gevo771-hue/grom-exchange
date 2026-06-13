@@ -10237,6 +10237,7 @@ function setBinaryPair(sym, opts) {
 
 function setFuturesPair(sym) {
   futDeskState.pair = sym || 'BTC/USDT';
+  resetFuturesTVChart();
   var px = priceForPair(futDeskState.pair);
   var base = futDeskState.pair.split('/')[0];
   var futTitle = document.getElementById('futPairTitle');

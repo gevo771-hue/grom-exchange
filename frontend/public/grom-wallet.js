@@ -627,6 +627,466 @@ if (document.readyState === 'loading') {
   hydrateReferralSlice(false);
 }
 
+/* =====================================================================
+ * WALLET MODAL OPERATIONS (Web3-native deposit / send / swap / fiat).
+ *
+ * Hooks the existing modal markup in index.html (DOM IDs from Cursor):
+ *   #walletModal · #wmDepAsset · #wmDepNetGrid · #wmDepAddr · #wmDepMin
+ *   #wmDepConf · #wmDepMemoRow · #wmDepMemo · #wmSendAsset · #wmSendTo
+ *   #wmSendAmt · #wmSwapFrom · #wmSwapTo · #wmSwapAmt · #wmSwapEst
+ *   #fiatProviders · #fiatAmt · #fiatCur · #fiatRecv · #fiatCoin · #fiatNote
+ *
+ * Overrides these globals declared inline in index.html:
+ *   submitSend · submitSwap · openFiatProvider · copyDepAddr
+ *   confirmDepositIntent
+ *
+ * No HTML edits — Cursor's territory is untouched.
+ * ==================================================================== */
+
+/* Networks registry — pruned subset of Binance Spot supported chains.
+ * Each entry: {key, label, evmChainId?, kind, minDep, conf, memo?, hex?}
+ *   kind: 'evm' | 'solana' | 'tron' | 'bitcoin' | 'ton' | 'cosmos' | 'other'
+ *   memo: true if this chain requires destination tag/memo (Ton/XRP/EOS/etc) */
+const GROM_NETWORKS = {
+  ETH:      { label: 'Ethereum (ERC-20)',    evmChainId: 1,     hex: '0x1',     kind: 'evm',     minDep: 0.001, conf: 12 },
+  ARBITRUM: { label: 'Arbitrum One',         evmChainId: 42161, hex: '0xa4b1',  kind: 'evm',     minDep: 0.001, conf: 12 },
+  OPTIMISM: { label: 'Optimism',             evmChainId: 10,    hex: '0xa',     kind: 'evm',     minDep: 0.001, conf: 12 },
+  POLYGON:  { label: 'Polygon (PoS)',        evmChainId: 137,   hex: '0x89',    kind: 'evm',     minDep: 1,     conf: 128 },
+  BASE:     { label: 'Base',                 evmChainId: 8453,  hex: '0x2105',  kind: 'evm',     minDep: 0.001, conf: 12 },
+  BSC:      { label: 'BNB Chain (BEP-20)',   evmChainId: 56,    hex: '0x38',    kind: 'evm',     minDep: 0.1,   conf: 15 },
+  AVAXC:    { label: 'Avalanche C-Chain',    evmChainId: 43114, hex: '0xa86a',  kind: 'evm',     minDep: 0.1,   conf: 12 },
+  LINEA:    { label: 'Linea',                evmChainId: 59144, hex: '0xe708',  kind: 'evm',     minDep: 0.001, conf: 12 },
+  SCROLL:   { label: 'Scroll',               evmChainId: 534352,hex: '0x82750', kind: 'evm',     minDep: 0.001, conf: 12 },
+  ZKSYNC:   { label: 'zkSync Era',           evmChainId: 324,   hex: '0x144',   kind: 'evm',     minDep: 0.001, conf: 12 },
+  MANTLE:   { label: 'Mantle',               evmChainId: 5000,  hex: '0x1388',  kind: 'evm',     minDep: 0.001, conf: 12 },
+  FANTOM:   { label: 'Fantom',               evmChainId: 250,   hex: '0xfa',    kind: 'evm',     minDep: 1,     conf: 12 },
+  CELO:     { label: 'Celo',                 evmChainId: 42220, hex: '0xa4ec',  kind: 'evm',     minDep: 0.1,   conf: 12 },
+  KAVA:     { label: 'Kava',                 evmChainId: 2222,  hex: '0x8ae',   kind: 'evm',     minDep: 0.1,   conf: 12 },
+  SOL:      { label: 'Solana',               kind: 'solana',                                     minDep: 0.01,  conf: 1 },
+  TRX:      { label: 'Tron (TRC-20)',        kind: 'tron',                                       minDep: 1,     conf: 20 },
+  BTC:      { label: 'Bitcoin',              kind: 'bitcoin',                                    minDep: 0.0001,conf: 1 },
+  LTC:      { label: 'Litecoin',             kind: 'other',                                      minDep: 0.001, conf: 6 },
+  BCH:      { label: 'Bitcoin Cash',         kind: 'other',                                      minDep: 0.001, conf: 6 },
+  DOGE:     { label: 'Dogecoin',             kind: 'other',                                      minDep: 5,     conf: 20 },
+  TON:      { label: 'The Open Network',     kind: 'ton',                                        minDep: 0.1,   conf: 1,  memo: true },
+  XRP:      { label: 'XRP Ledger',           kind: 'other',                                      minDep: 10,    conf: 1,  memo: true },
+  XLM:      { label: 'Stellar',              kind: 'other',                                      minDep: 1,     conf: 1,  memo: true },
+  EOS:      { label: 'EOS',                  kind: 'other',                                      minDep: 0.1,   conf: 1,  memo: true },
+  ATOM:     { label: 'Cosmos Hub',           kind: 'cosmos',                                     minDep: 0.1,   conf: 1,  memo: true },
+  ALGO:     { label: 'Algorand',             kind: 'other',                                      minDep: 1,     conf: 1 },
+  NEAR:     { label: 'NEAR Protocol',        kind: 'other',                                      minDep: 0.1,   conf: 1 },
+  APT:      { label: 'Aptos',                kind: 'other',                                      minDep: 0.1,   conf: 1 },
+  SUI:      { label: 'Sui',                  kind: 'other',                                      minDep: 0.1,   conf: 1 },
+  DOT:      { label: 'Polkadot',             kind: 'other',                                      minDep: 1,     conf: 1 },
+  ADA:      { label: 'Cardano',              kind: 'other',                                      minDep: 1,     conf: 1 },
+};
+
+/* Asset → list of supported network keys. Pruned to what makes sense per-asset. */
+const GROM_ASSET_NETS = {
+  USDT: ['ETH','ARBITRUM','OPTIMISM','POLYGON','BASE','BSC','AVAXC','LINEA','SOL','TRX','TON'],
+  USDC: ['ETH','ARBITRUM','OPTIMISM','POLYGON','BASE','BSC','AVAXC','SOL','NEAR','ALGO','XLM'],
+  BTC:  ['BTC','ETH','BSC','ARBITRUM'],
+  ETH:  ['ETH','ARBITRUM','OPTIMISM','BASE','LINEA','SCROLL','ZKSYNC','BSC'],
+  SOL:  ['SOL','BSC','ETH'],
+  BNB:  ['BSC','ETH'],
+  TRX:  ['TRX'],
+  MATIC:['POLYGON','ETH','BSC'],
+  ARB:  ['ARBITRUM','ETH'],
+  AVAX: ['AVAXC','BSC'],
+  TON:  ['TON','BSC'],
+  XRP:  ['XRP','BSC'],
+  ATOM: ['ATOM','BSC'],
+  DOT:  ['DOT','BSC'],
+  ADA:  ['ADA','BSC'],
+  DOGE: ['DOGE','BSC','ETH'],
+  LTC:  ['LTC','BSC','ETH'],
+};
+
+/* Native token addresses on each EVM chain (for native send vs ERC-20).
+ * ERC-20 contract addresses for USDT/USDC by chain.
+ * For Send: ETH/BNB/MATIC/AVAX etc are native; USDT/USDC are ERC-20 calls. */
+const GROM_ERC20 = {
+  ETH:      { USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7', USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' },
+  ARBITRUM: { USDT: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', USDC: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' },
+  OPTIMISM: { USDT: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58', USDC: '0x0b2c639c533813f4aa9d7837caf62653d097ff85' },
+  POLYGON:  { USDT: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', USDC: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359' },
+  BASE:     { USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
+  BSC:      { USDT: '0x55d398326f99059fF775485246999027B3197955', USDC: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d' },
+  AVAXC:    { USDT: '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', USDC: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E' },
+};
+
+/* Fiat on-ramp deeplinks. Public widget URLs — no B2B contract required.
+ * Each builder takes {amount, fiat, asset, address} and returns a URL. */
+const GROM_FIAT_PROVIDERS = {
+  moonpay: {
+    label: 'MoonPay',
+    url: (q) => `https://buy.moonpay.com/?defaultCurrencyCode=${encodeURIComponent(q.asset.toLowerCase())}&baseCurrencyCode=${encodeURIComponent(q.fiat.toLowerCase())}&baseCurrencyAmount=${q.amount}&walletAddress=${encodeURIComponent(q.address)}`,
+  },
+  transak: {
+    label: 'Transak',
+    url: (q) => `https://global.transak.com/?cryptoCurrencyCode=${encodeURIComponent(q.asset)}&fiatCurrency=${encodeURIComponent(q.fiat)}&fiatAmount=${q.amount}&walletAddress=${encodeURIComponent(q.address)}`,
+  },
+  ramp: {
+    label: 'Ramp',
+    url: (q) => `https://app.ramp.network/?swapAsset=${encodeURIComponent(q.asset)}&fiatCurrency=${encodeURIComponent(q.fiat)}&fiatValue=${q.amount}&userAddress=${encodeURIComponent(q.address)}`,
+  },
+  binanceP2P: {
+    label: 'Binance P2P',
+    url: (q) => `https://p2p.binance.com/${q.fiat === 'RUB' ? 'ru/' : 'en/'}trade/all-payments/${encodeURIComponent(q.asset)}?fiat=${encodeURIComponent(q.fiat)}`,
+  },
+  bybitP2P: {
+    label: 'Bybit P2P',
+    url: (q) => `https://www.bybit.com/fiat/trade/otc/?actionType=1&token=${encodeURIComponent(q.asset)}&fiat=${encodeURIComponent(q.fiat)}`,
+  },
+};
+
+/* Helpers ----------------------------------------------------------------- */
+function gwToast(msg, type) {
+  if (typeof window.toast === 'function') return window.toast(msg, type || 'info');
+  console.log('[grom-toast]', type || 'info', msg);
+}
+function gwUserAddress() {
+  try { return (currentAccount || localStorage.getItem('grom_wallet_label') || '').toString(); }
+  catch (_) { return ''; }
+}
+function gwFmtAmount(n, dp) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '0';
+  return v.toFixed(dp ?? 6).replace(/\.?0+$/, '');
+}
+
+/* === DEPOSIT pane: replace demo address + render real networks ============ */
+function gwRenderNetGrid(asset) {
+  const grid = document.getElementById('wmDepNetGrid');
+  if (!grid) return null;
+  const allowed = GROM_ASSET_NETS[asset] || GROM_ASSET_NETS.USDT;
+  grid.innerHTML = '';
+  let firstKey = null;
+  for (const key of allowed) {
+    const net = GROM_NETWORKS[key];
+    if (!net) continue;
+    if (!firstKey) firstKey = key;
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'net-chip';
+    chip.dataset.net = key;
+    chip.textContent = net.label;
+    chip.style.cssText = 'padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--silver2);font-size:12px;cursor:pointer;margin:3px';
+    chip.onclick = () => gwSelectNetwork(asset, key);
+    grid.appendChild(chip);
+  }
+  return firstKey;
+}
+async function gwSelectNetwork(asset, netKey) {
+  const net = GROM_NETWORKS[netKey];
+  if (!net) return;
+  document.querySelectorAll('#wmDepNetGrid .net-chip').forEach(el => {
+    const sel = el.dataset.net === netKey;
+    el.style.borderColor = sel ? 'var(--cyan)' : 'rgba(255,255,255,0.1)';
+    el.style.background = sel ? 'rgba(58,194,255,0.12)' : 'rgba(255,255,255,0.04)';
+    el.style.color = sel ? 'var(--cyan)' : 'var(--silver2)';
+  });
+  // Update min + confirmations + memo row
+  const minEl = document.getElementById('wmDepMin');
+  if (minEl) minEl.textContent = `${net.minDep} ${asset}`;
+  const confEl = document.getElementById('wmDepConf');
+  if (confEl) confEl.textContent = net.conf;
+  const memoRow = document.getElementById('wmDepMemoRow');
+  if (memoRow) memoRow.hidden = !net.memo;
+  const addrEl = document.getElementById('wmDepAddr');
+  const noteEl = document.getElementById('wmDepNote');
+  const mode = window.gwCustodyMode || 'wallet';
+  // ----- Custodial via Binance -----
+  if (mode === 'grom') {
+    if (addrEl) addrEl.textContent = 'Provisioning Binance deposit address…';
+    const remote = await gwFetchCustodialAddress(asset, netKey);
+    if (addrEl) addrEl.textContent = remote || '— Custodial deposits unavailable —';
+    if (noteEl) {
+      if (remote) {
+        noteEl.textContent = `Send only on ${net.label}. Funds credit to your GROM custodial balance after ${net.conf} confirmations.`;
+        noteEl.style.color = '';
+      } else {
+        noteEl.textContent = '⚠ GROM custodial deposits require Binance hot-wallet integration (in private beta). Switch to "Receive in my wallet".';
+        noteEl.style.color = 'var(--warn, #f5b94d)';
+      }
+    }
+    return;
+  }
+  // ----- Non-custodial: connected wallet address -----
+  if (addrEl) addrEl.textContent = gwDepositAddress(netKey);
+  if (noteEl) {
+    const addr = gwUserAddress();
+    if (!addr) {
+      noteEl.textContent = '⚠ Connect a wallet first — without it you have no address to receive funds.';
+      noteEl.style.color = 'var(--warn, #f5b94d)';
+    } else if (net.kind === 'evm') {
+      noteEl.textContent = `Send only on ${net.label}. Funds land in your connected wallet — GROM auto-detects the balance.`;
+      noteEl.style.color = '';
+    } else if (net.kind === 'solana') {
+      noteEl.textContent = 'Connect a Solana wallet (Phantom) to receive SOL.';
+      noteEl.style.color = 'var(--warn, #f5b94d)';
+    } else {
+      noteEl.textContent = `${net.label} requires a native wallet on this chain.`;
+      noteEl.style.color = 'var(--warn, #f5b94d)';
+    }
+  }
+}
+function gwDepositAddress(netKey) {
+  const net = GROM_NETWORKS[netKey];
+  const addr = gwUserAddress();
+  if (!net || !addr) return '— Connect a wallet first —';
+  if (net.kind === 'evm') return addr; // EVM address is the same on every EVM chain
+  if (net.kind === 'solana') {
+    // We don't yet integrate Phantom — fallback to EVM with note
+    return '— Solana wallet not connected —';
+  }
+  return `— ${net.label} not supported via connected wallet —`;
+}
+/* Mount custody toggle once. The toggle picks between:
+ *  - 'wallet' (Web3-native): receive on connected wallet (default, no backend)
+ *  - 'grom'   (custodial):    receive via Binance deposit address (per-user)
+ */
+function gwEnsureCustodyToggle() {
+  if (document.getElementById('gwCustodyToggle')) return;
+  const addrEl = document.getElementById('wmDepAddr');
+  if (!addrEl) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'gwCustodyToggle';
+  wrap.style.cssText = 'display:flex;gap:6px;margin:8px 0;padding:4px;background:rgba(255,255,255,0.04);border-radius:10px';
+  for (const opt of [
+    { v: 'wallet', label: 'Receive in my wallet', hint: 'Non-custodial · you control the keys' },
+    { v: 'grom',   label: 'Receive on GROM',     hint: 'Custodial · held on GROM Binance account' },
+  ]) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.cust = opt.v;
+    b.title = opt.hint;
+    b.textContent = opt.label;
+    b.style.cssText = 'flex:1;padding:8px 10px;border-radius:8px;border:0;background:transparent;color:var(--silver2);font-size:12px;cursor:pointer;font-weight:600';
+    b.onclick = () => gwSetCustody(opt.v);
+    wrap.appendChild(b);
+  }
+  addrEl.parentNode.insertBefore(wrap, addrEl);
+  gwSetCustody('wallet');
+}
+function gwSetCustody(mode) {
+  const wrap = document.getElementById('gwCustodyToggle');
+  if (wrap) {
+    wrap.querySelectorAll('button').forEach(b => {
+      const on = b.dataset.cust === mode;
+      b.style.background = on ? 'rgba(58,194,255,0.18)' : 'transparent';
+      b.style.color = on ? 'var(--cyan)' : 'var(--silver2)';
+    });
+  }
+  window.gwCustodyMode = mode;
+  // Re-render the address for the currently selected net
+  const sel = document.getElementById('wmDepAsset');
+  const asset = sel?.value || 'USDT';
+  const selChip = document.querySelector('#wmDepNetGrid .net-chip[style*="cyan"]');
+  const netKey = selChip?.dataset.net || (GROM_ASSET_NETS[asset] || ['ETH'])[0];
+  if (netKey) gwSelectNetwork(asset, netKey);
+}
+/* When custody === 'grom', fetch the per-user Binance deposit address from
+ * backend. Non-custodial path resolves synchronously (it's just the connected
+ * wallet). Custodial path may show "Provisioning…" while the backend signs the
+ * request to Binance. */
+async function gwFetchCustodialAddress(asset, network) {
+  const jwt = localStorage.getItem('grom_jwt');
+  if (!jwt) return null;
+  // Backend network code uses ERC20/BEP20/TRC20/POLYGON/etc; map our keys.
+  const map = { ETH:'ERC20', BSC:'BEP20', TRX:'TRC20', POLYGON:'MATIC', ARBITRUM:'ARBITRUM', OPTIMISM:'OPTIMISM', BASE:'BASE', AVAXC:'AVAXC', SOL:'SOL', BTC:'BTC', TON:'TON' };
+  const net = map[network] || network;
+  try {
+    const r = await fetch(`/api/wallet/deposit-address?asset=${encodeURIComponent(asset)}&network=${encodeURIComponent(net)}`, {
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j.depositAddress?.address || j.depositAddress || j.address || null;
+  } catch (_) { return null; }
+}
+async function gwHydrateDepositPane() {
+  const sel = document.getElementById('wmDepAsset');
+  if (!sel) return;
+  gwEnsureCustodyToggle();
+  // Ensure the dropdown carries every asset we know about
+  const wanted = Object.keys(GROM_ASSET_NETS);
+  const present = Array.from(sel.options).map(o => o.value);
+  for (const a of wanted) {
+    if (!present.includes(a)) {
+      const opt = document.createElement('option');
+      opt.value = a; opt.textContent = a;
+      sel.appendChild(opt);
+    }
+  }
+  // On asset change → re-render networks
+  if (!sel.dataset.gwBound) {
+    sel.dataset.gwBound = '1';
+    sel.addEventListener('change', () => {
+      const first = gwRenderNetGrid(sel.value);
+      if (first) gwSelectNetwork(sel.value, first);
+    });
+  }
+  const first = gwRenderNetGrid(sel.value);
+  if (first) gwSelectNetwork(sel.value, first);
+}
+
+/* === SEND pane: on-chain transfer via window.ethereum ==================== */
+async function gwSubmitSend() {
+  const asset = (document.getElementById('wmSendAsset')?.value || 'USDT').toUpperCase();
+  const to    = (document.getElementById('wmSendTo')?.value || '').trim();
+  const amt   = Number(document.getElementById('wmSendAmt')?.value || 0);
+  if (!to || amt <= 0) { gwToast('Recipient and amount required', 'warn'); return; }
+  if (!window.ethereum) { gwToast('No EVM wallet detected. Connect MetaMask/Trust first.', 'warn'); return; }
+  const from = gwUserAddress();
+  if (!from) { gwToast('Connect a wallet first', 'warn'); return; }
+  try {
+    const chainHex = await window.ethereum.request({ method: 'eth_chainId' });
+    const chainKey = Object.entries(GROM_NETWORKS).find(([k, v]) => v.hex === chainHex)?.[0];
+    if (!chainKey) { gwToast(`Unsupported chain ${chainHex}. Switch network in your wallet.`, 'warn'); return; }
+    let txParams;
+    if (asset === 'ETH' || asset === 'BNB' || asset === 'MATIC' || asset === 'AVAX') {
+      // Native transfer — value is amount in wei (18 dp)
+      const wei = BigInt(Math.round(amt * 1e9)) * BigInt(1e9); // safe for typical amounts
+      txParams = { from, to, value: '0x' + wei.toString(16) };
+    } else {
+      // ERC-20 transfer(address,uint256)
+      const erc20 = (GROM_ERC20[chainKey] || {})[asset];
+      if (!erc20) { gwToast(`${asset} not deployed on ${chainKey}`, 'warn'); return; }
+      const decimals = (asset === 'USDT' || asset === 'USDC') ? 6 : 18;
+      const units = BigInt(Math.round(amt * Math.pow(10, decimals)));
+      const sel4 = 'a9059cbb'; // transfer(address,uint256)
+      const addr32 = to.toLowerCase().replace(/^0x/, '').padStart(64, '0');
+      const amt32 = units.toString(16).padStart(64, '0');
+      txParams = { from, to: erc20, data: '0x' + sel4 + addr32 + amt32 };
+    }
+    gwToast(`Awaiting wallet signature…`, 'info');
+    const hash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [txParams] });
+    gwToast(`Sent. Hash: ${hash.slice(0, 12)}…`, 'success');
+    if (typeof window.closeWalletModal === 'function') window.closeWalletModal();
+    // Re-hydrate balance after a beat
+    setTimeout(() => { try { window.gromFetchOnchainBalances?.(from, parseInt(chainHex, 16)); } catch (_) {} }, 3000);
+  } catch (e) {
+    console.warn('[grom-send] failed:', e);
+    gwToast(e?.message || 'Send failed', 'error');
+  }
+}
+
+/* === SWAP pane: Binance Convert via backend =============================== */
+async function gwSubmitSwap() {
+  const from = (document.getElementById('wmSwapFrom')?.value || 'USDT').toUpperCase();
+  const to   = (document.getElementById('wmSwapTo')?.value || 'BTC').toUpperCase();
+  const amt  = Number(document.getElementById('wmSwapAmt')?.value || 0);
+  if (amt <= 0) { gwToast('Enter amount', 'warn'); return; }
+  if (from === to) { gwToast('Choose different assets', 'warn'); return; }
+  const jwt = localStorage.getItem('grom_jwt');
+  if (!jwt) { gwToast('Sign in first', 'warn'); return; }
+  try {
+    gwToast('Fetching quote…', 'info');
+    const q = await fetch('/api/swap/convert/quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+      body: JSON.stringify({ from, to, fromAmount: amt }),
+    }).then(r => r.json());
+    if (q.error) { gwToast(`Quote failed: ${q.error}`, 'error'); return; }
+    // Confirm + accept
+    const confirmed = confirm(`Swap ${amt} ${from} → ${q.toAmount} ${to} (rate ${q.ratio})? Quote valid ${q.validSec || 8}s.`);
+    if (!confirmed) return;
+    const a = await fetch('/api/swap/convert/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+      body: JSON.stringify({ quoteId: q.quoteId }),
+    }).then(r => r.json());
+    if (a.error) { gwToast(`Accept failed: ${a.error}`, 'error'); return; }
+    gwToast(`Swap done: ${a.orderId || 'ok'}`, 'success');
+    if (typeof window.closeWalletModal === 'function') window.closeWalletModal();
+    if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
+  } catch (e) {
+    console.warn('[grom-swap] failed:', e);
+    gwToast(e?.message || 'Swap failed', 'error');
+  }
+}
+
+/* === CASH pane: deeplink to fiat on-ramp partners ========================= */
+function gwOpenFiatProvider() {
+  const provBtn = document.querySelector('#fiatProviders .prov.active');
+  const provKey = provBtn?.dataset.prov || 'moonpay';
+  const prov = GROM_FIAT_PROVIDERS[provKey];
+  if (!prov) { gwToast(`Unknown provider ${provKey}`, 'warn'); return; }
+  const amount = Number(document.getElementById('fiatAmt')?.value || 100);
+  const fiat   = (document.getElementById('fiatCur')?.value || 'USD').toUpperCase();
+  const asset  = (document.getElementById('fiatCoin')?.value || 'USDT').toUpperCase();
+  const address = gwUserAddress();
+  if (!address) { gwToast('Connect a wallet first — crypto needs an address to land in', 'warn'); return; }
+  const url = prov.url({ amount, fiat, asset, address });
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/* === Override existing modal globals + hook open events =================== */
+function gwCopyDepAddr() {
+  const addr = document.getElementById('wmDepAddr')?.textContent?.trim() || '';
+  if (!addr || addr.startsWith('—')) { gwToast('No address to copy', 'warn'); return; }
+  navigator.clipboard?.writeText(addr).then(
+    () => gwToast('Address copied', 'success'),
+    () => gwToast('Copy failed', 'error')
+  );
+}
+function gwConfirmDepositIntent() {
+  if (typeof window.closeWalletModal === 'function') window.closeWalletModal();
+}
+/* Expand Cash with more providers if not yet present. */
+function gwHydrateFiatProviders() {
+  const wrap = document.getElementById('fiatProviders');
+  if (!wrap || wrap.dataset.gwExpanded) return;
+  wrap.dataset.gwExpanded = '1';
+  const present = new Set(Array.from(wrap.querySelectorAll('.prov')).map(b => b.dataset.prov));
+  const extra = [
+    { key: 'binanceP2P', label: 'Binance P2P' },
+    { key: 'bybitP2P', label: 'Bybit P2P' },
+  ];
+  for (const x of extra) {
+    if (present.has(x.key)) continue;
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'prov'; b.dataset.prov = x.key; b.textContent = x.label;
+    b.onclick = () => {
+      wrap.querySelectorAll('.prov').forEach(el => el.classList.remove('active'));
+      b.classList.add('active');
+    };
+    wrap.appendChild(b);
+  }
+}
+function gwInitWalletModalOps() {
+  // Override globals (the inline implementations in index.html become no-ops)
+  window.submitSend = gwSubmitSend;
+  window.submitSwap = gwSubmitSwap;
+  window.openFiatProvider = gwOpenFiatProvider;
+  window.copyDepAddr = gwCopyDepAddr;
+  window.confirmDepositIntent = gwConfirmDepositIntent;
+
+  // Hook modal open — re-hydrate every time it becomes visible
+  const modal = document.getElementById('walletModal');
+  if (!modal) {
+    // index.html not loaded yet (rare); retry once
+    return setTimeout(gwInitWalletModalOps, 500);
+  }
+  const reHydrate = () => {
+    const visible = modal.classList.contains('open') ||
+                    getComputedStyle(modal).display !== 'none';
+    if (!visible) return;
+    try { gwHydrateDepositPane(); } catch (e) { console.warn('[grom-deposit] hydrate:', e); }
+    try { gwHydrateFiatProviders(); } catch (e) { console.warn('[grom-fiat] hydrate:', e); }
+  };
+  const obs = new MutationObserver(reHydrate);
+  obs.observe(modal, { attributes: true, attributeFilter: ['style', 'class'] });
+  reHydrate();
+  console.log('[grom-walletops] modal hooks installed');
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', gwInitWalletModalOps);
+} else {
+  gwInitWalletModalOps();
+}
+
 /* ----- экспорт для отладки ----- */
 window.gromWallet = {
   connectMetaMask, connectTrust, connectBinanceWeb3,
@@ -634,7 +1094,9 @@ window.gromWallet = {
   connectEmail, gromWalletConnect,
   disconnect, signSiwe,
   fetchOnchainBalances: window.gromFetchOnchainBalances,
-  state: () => ({ account: currentAccount, chainId: currentChainId })
+  state: () => ({ account: currentAccount, chainId: currentChainId }),
+  networks: GROM_NETWORKS,
+  assetNets: GROM_ASSET_NETS,
 };
 
 if (document.readyState === 'loading') {

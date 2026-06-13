@@ -35,13 +35,28 @@ const payoutSchema = z.object({
 }).strict();
 
 async function ensureSeed(userId) {
-  await query(
-    `INSERT INTO referral_payout_settings (user_id) VALUES ($1)
-     ON CONFLICT (user_id) DO NOTHING`,
-    [userId]
-  );
+  // Both inserts depend on a FK to users(id). If the caller authenticated via
+  // an external IdP (Privy / SIWE wallet) and there's no row in users yet,
+  // these INSERTs will violate FK and throw. We swallow errors here so the
+  // summary endpoint still answers with code/link/totals — seed is optional.
+  try {
+    await query(
+      `INSERT INTO referral_payout_settings (user_id) VALUES ($1)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [userId]
+    );
+  } catch (e) {
+    console.warn('[referral] ensureSeed payout_settings insert skipped:', e.code || e.message);
+    return;
+  }
   // Dev-friendly seed of recent commissions if none exist
-  const c = await query('SELECT 1 FROM referral_commissions WHERE affiliate_id=$1 LIMIT 1', [userId]);
+  let c;
+  try {
+    c = await query('SELECT 1 FROM referral_commissions WHERE affiliate_id=$1 LIMIT 1', [userId]);
+  } catch (e) {
+    console.warn('[referral] ensureSeed commissions check skipped:', e.code || e.message);
+    return;
+  }
   if (c.rowCount === 0) {
     const samples = [
       { type: 'commission', ref: 'spot-fee-share',   amount: 182.44, status: 'pending', days: 0 },
@@ -51,14 +66,19 @@ async function ensureSeed(userId) {
       { type: 'commission', ref: 'binary-payout',    amount: 93.20,  status: 'settled', days: 4 },
     ];
     for (const s of samples) {
-      await query(
-        `INSERT INTO referral_commissions
-           (affiliate_id, source_type, source_ref, amount_usdt, status, created_at, settled_at)
-         VALUES
-           ($1, $2, $3, $4, $5, NOW() - ($6 || ' days')::interval,
-            CASE WHEN $5='settled' THEN NOW() - ($6 || ' days')::interval ELSE NULL END)`,
-        [userId, s.type, s.ref, s.amount, s.status, s.days]
-      );
+      try {
+        await query(
+          `INSERT INTO referral_commissions
+             (affiliate_id, source_type, source_ref, amount_usdt, status, created_at, settled_at)
+           VALUES
+             ($1, $2, $3, $4, $5, NOW() - ($6 || ' days')::interval,
+              CASE WHEN $5='settled' THEN NOW() - ($6 || ' days')::interval ELSE NULL END)`,
+          [userId, s.type, s.ref, s.amount, s.status, s.days]
+        );
+      } catch (e) {
+        console.warn('[referral] sample commission insert failed, stopping seed:', e.code || e.message);
+        return;
+      }
     }
   }
 }
@@ -94,8 +114,14 @@ export function createReferralRouter({ requireAuth }) {
         ),
       ]);
       // Funnel stats are deterministic dev numbers; in prod they come from analytics ETL
-      const code = inviteCode(req.user.sub);
-      const link = inviteLink(req, code);
+      let code = null, link = null;
+      try {
+        code = inviteCode(req.user.sub);
+        link = inviteLink(req, code);
+      } catch (e) {
+        // Never let invite-code generation crash the whole endpoint
+        req.log?.warn({ err: e }, 'referral: invite code generation failed');
+      }
       res.json({
         code,
         link,

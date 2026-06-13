@@ -13079,16 +13079,21 @@ function updateDashboardWatchlistPrices() {
 function gromLogoKey(logoUrl, sym) {
   return String(logoUrl || sym || '').replace(/['"\\]/g, '');
 }
-// Ordered list of logo URLs to try for an instrument (primary + fallbacks).
+// Ordered list of logo URLs to try for an instrument (most reliable first).
 function gromLogoSources(sym, type, logoUrl) {
   var s = String(sym || '').toLowerCase().replace(/usdt$|usdc$/, '').replace(/[^a-z0-9]/g, '');
   var arr = [];
-  if (logoUrl) arr.push(logoUrl);
   if (type === 'crypto') {
+    if (logoUrl) arr.push(logoUrl); // jsdelivr icon set (great for majors)
     arr.push('https://assets.coincap.io/assets/icons/' + s + '@2x.png');
-    arr.push('https://cryptologos.cc/logos/thumbs/' + s + '.png?v=030');
   } else if (type === 'stock' || type === 'etf') {
-    arr.push('https://financialmodelingprep.com/image-stock/' + String(sym || '').toUpperCase() + '.png');
+    // Clearbit's free logo API was sunset, so try Financial Modeling Prep
+    // (ticker-based, broad coverage incl. ADRs) first, Clearbit domain second.
+    var t = String(sym || '').toUpperCase().replace(/\./g, '-');
+    arr.push('https://financialmodelingprep.com/image-stock/' + t + '.png');
+    if (logoUrl) arr.push(logoUrl);
+  } else {
+    if (logoUrl) arr.push(logoUrl); // fx / index flags etc.
   }
   return arr;
 }

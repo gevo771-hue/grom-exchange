@@ -5969,10 +5969,10 @@
       </div>
 
       <div class="ref-kpis">
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_referred">Total referred</div><div class="kpi-val mono">1,284</div><div class="kpi-sub up" data-i18n="ref_week_delta">+42 this week</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_active_30d">Active (30d)</div><div class="kpi-val mono">487</div><div class="kpi-sub up" data-i18n="ref_activation_rate">38% activation</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_earned">Total earned</div><div class="kpi-val mono">$18,473.20</div><div class="kpi-sub up" data-i18n="ref_earned_delta">+$1,240 this week</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_pending_payout">Pending payout</div><div class="kpi-val mono">$342.10</div><div class="kpi-sub" data-i18n="ref_paid_daily">paid daily 00:00 UTC</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_referred">Total referred</div><div class="kpi-val mono" id="refKpiTotalReferred">1,284</div><div class="kpi-sub up" id="refKpiTotalReferredDelta" data-i18n="ref_week_delta">+42 this week</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_active_30d">Active (30d)</div><div class="kpi-val mono" id="refKpiActive30d">487</div><div class="kpi-sub up" id="refKpiActivationRate" data-i18n="ref_activation_rate">38% activation</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_earned">Total earned</div><div class="kpi-val mono" id="refKpiTotalEarned">$18,473.20</div><div class="kpi-sub up" id="refKpiTotalEarnedDelta" data-i18n="ref_earned_delta">+$1,240 this week</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_pending_payout">Pending payout</div><div class="kpi-val mono" id="refKpiPendingPayout">$342.10</div><div class="kpi-sub" data-i18n="ref_paid_daily">paid daily 00:00 UTC</div></div>
       </div>
 
       <div class="ref-workbench">
@@ -5980,9 +5980,9 @@
           <div class="card">
             <div class="card-head"><h3 data-i18n="ref_payout_settings">Payout settings</h3><span class="sub ref-pill" data-i18n="ref_auto_daily">Auto daily</span></div>
             <div class="card-body">
-              <div class="set-row"><div class="set-lbl" data-i18n="ref_payout_asset">Payout asset</div><div class="set-val mono">USDT</div></div>
-              <div class="set-row"><div class="set-lbl" data-i18n="ref_destination_wallet">Destination wallet</div><div class="set-val mono">0x7a3f...c9e1</div></div>
-              <div class="set-row"><div class="set-lbl" data-i18n="ref_payout_schedule">Schedule</div><div class="set-val" data-i18n="ref_schedule_value">Daily at 00:00 UTC</div></div>
+              <div class="set-row"><div class="set-lbl" data-i18n="ref_payout_asset">Payout asset</div><div class="set-val mono" id="refPayoutAsset">USDT</div></div>
+              <div class="set-row"><div class="set-lbl" data-i18n="ref_destination_wallet">Destination wallet</div><div class="set-val mono" id="refDestWallet">0x7a3f...c9e1</div></div>
+              <div class="set-row"><div class="set-lbl" data-i18n="ref_payout_schedule">Schedule</div><div class="set-val" id="refPayoutSchedule" data-i18n="ref_schedule_value">Daily at 00:00 UTC</div></div>
               <div class="ref-action-row">
                 <button class="btn-primary" onclick="refSetPayoutWallet()" data-i18n="ref_set_wallet">Set payout wallet</button>
                 <button class="btn-ghost" onclick="refEditRules()" data-i18n="ref_edit_rules">Edit rules</button>
@@ -6009,10 +6009,10 @@
           <div class="card">
             <div class="card-head"><h3 data-i18n="ref_funnel">Referral funnel</h3><span class="sub" data-i18n="ref_last_30d">Last 30 days</span></div>
             <div class="card-body ref-grid-2">
-              <div class="ref-mini-card"><div class="k" data-i18n="ref_clicks">Link clicks</div><div class="v mono">18,420</div><div class="s up">+12.4%</div></div>
-              <div class="ref-mini-card"><div class="k" data-i18n="ref_signups">Sign-ups</div><div class="v mono">1,284</div><div class="s up">6.97% CVR</div></div>
-              <div class="ref-mini-card"><div class="k" data-i18n="ref_kyc_passed">KYC passed</div><div class="v mono">742</div><div class="s">57.8%</div></div>
-              <div class="ref-mini-card"><div class="k" data-i18n="ref_first_trade">First trade</div><div class="v mono">487</div><div class="s">37.9%</div></div>
+              <div class="ref-mini-card"><div class="k" data-i18n="ref_clicks">Link clicks</div><div class="v mono" id="refFunnelClicks">18,420</div><div class="s up" id="refFunnelClicksDelta">+12.4%</div></div>
+              <div class="ref-mini-card"><div class="k" data-i18n="ref_signups">Sign-ups</div><div class="v mono" id="refFunnelSignups">1,284</div><div class="s up" id="refFunnelSignupsCvr">6.97% CVR</div></div>
+              <div class="ref-mini-card"><div class="k" data-i18n="ref_kyc_passed">KYC passed</div><div class="v mono" id="refFunnelKyc">742</div><div class="s" id="refFunnelKycRate">57.8%</div></div>
+              <div class="ref-mini-card"><div class="k" data-i18n="ref_first_trade">First trade</div><div class="v mono" id="refFunnelFirstTrade">487</div><div class="s" id="refFunnelFirstTradeRate">37.9%</div></div>
             </div>
           </div>
           <div class="card">

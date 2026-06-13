@@ -523,14 +523,52 @@ function hook() {
 
 /* -------------------------------------------------------------------------
  * Referral slice hydration.
- * Backend (/api/referral/summary) returns a deterministic invite code
- * (e.g. GROM-K8R2QX) and full invite link unique to the authenticated user.
- * We patch the two DOM nodes Cursor already gave IDs to:
- *   #refCode  — the code chip
- *   #refLink  — the full invite URL
- * The rest of the page (KPI cards, funnel) keeps its current markup until
- * Cursor adds IDs in a future pass.
+ * Backend (/api/referral/summary) returns:
+ *   { code, link, totals: {total_settled, total_pending, total_accrued},
+ *     payout: {payout_wallet, payout_chain, schedule, min_payout, asset},
+ *     funnel: {clicks_30d, signups_30d, kyc_30d, first_trade_30d} }
+ * We patch DOM IDs Cursor added on index.html:
+ *   #refCode, #refLink — invite identity (always patched)
+ *   #refKpiTotalReferred / #refKpiActive30d / #refKpiTotalEarned / #refKpiPendingPayout
+ *   #refKpiActivationRate (derived = first_trade/signups)
+ *   #refFunnelClicks / #refFunnelSignups / #refFunnelKyc / #refFunnelFirstTrade
+ *   #refFunnelSignupsCvr / #refFunnelKycRate / #refFunnelFirstTradeRate (derived)
+ *   #refPayoutAsset / #refDestWallet / #refPayoutSchedule
+ *   *Delta fields (refKpiTotalEarnedDelta etc.) — backend doesn't track yet,
+ *   left untouched until /summary returns week-over-week deltas.
+ * Numbers are formatted with thousand separators; balances use 2 decimals
+ * and a leading "$"; rates use one decimal and "%".
  * -----------------------------------------------------------------------*/
+function fmtInt(n) {
+  const v = Number(n);
+  return Number.isFinite(v) ? v.toLocaleString('en-US') : '—';
+}
+function fmtUsd(n) {
+  const v = Number(n);
+  return Number.isFinite(v)
+    ? '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '—';
+}
+function fmtPct(num, den, suffix) {
+  const n = Number(num), d = Number(den);
+  if (!Number.isFinite(n) || !Number.isFinite(d) || d === 0) return '—';
+  return (n / d * 100).toFixed(1) + '% ' + (suffix || '').trim();
+}
+function fmtWallet(w) {
+  if (!w) return '—';
+  return w.length > 12 ? w.slice(0, 6) + '…' + w.slice(-4) : w;
+}
+function fmtSchedule(s) {
+  if (s === 'daily')  return 'Daily at 00:00 UTC';
+  if (s === 'weekly') return 'Weekly · Mon 00:00 UTC';
+  if (s === 'manual') return 'Manual claim only';
+  return s || '—';
+}
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el && text != null) el.textContent = text;
+}
+
 async function hydrateReferralSlice(force) {
   try {
     const codeEl = document.getElementById('refCode');
@@ -544,8 +582,38 @@ async function hydrateReferralSlice(force) {
     });
     if (!r.ok) return;
     const data = await r.json();
+
+    // Identity
     if (codeEl && data.code) codeEl.textContent = data.code;
     if (linkEl && data.link) linkEl.textContent = data.link;
+
+    const t = data.totals || {};
+    const f = data.funnel || {};
+    const p = data.payout || {};
+
+    // KPI cards — totals + funnel-derived counts
+    setText('refKpiTotalReferred', fmtInt(f.signups_30d));
+    setText('refKpiActive30d',     fmtInt(f.first_trade_30d));
+    setText('refKpiActivationRate', fmtPct(f.first_trade_30d, f.signups_30d, 'activation'));
+    setText('refKpiTotalEarned',   fmtUsd(t.total_accrued));
+    setText('refKpiPendingPayout', fmtUsd(t.total_pending));
+
+    // Funnel
+    setText('refFunnelClicks',          fmtInt(f.clicks_30d));
+    setText('refFunnelSignups',         fmtInt(f.signups_30d));
+    setText('refFunnelSignupsCvr',      fmtPct(f.signups_30d, f.clicks_30d, 'CVR'));
+    setText('refFunnelKyc',             fmtInt(f.kyc_30d));
+    setText('refFunnelKycRate',         fmtPct(f.kyc_30d, f.signups_30d, ''));
+    setText('refFunnelFirstTrade',      fmtInt(f.first_trade_30d));
+    setText('refFunnelFirstTradeRate',  fmtPct(f.first_trade_30d, f.signups_30d, ''));
+
+    // Payout settings
+    setText('refPayoutAsset',    p.asset || 'USDT');
+    setText('refDestWallet',     fmtWallet(p.payout_wallet));
+    setText('refPayoutSchedule', fmtSchedule(p.schedule));
+
+    // *Delta fields (week-over-week) — backend doesn't return them yet.
+    // Leave the existing static "this week" / "+12.4%" text in place.
   } catch (e) {
     console.warn('[grom-referral] hydrate failed:', e);
   }

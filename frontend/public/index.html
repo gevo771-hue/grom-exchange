@@ -356,12 +356,13 @@
   .mkt-row .coin-ico,
   .mkt-row .fx-pair-ico { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
   .coin-ico.no-bg { background: rgba(11,18,32,0.4); border-color: rgba(122,162,199,.18); }
-  /* Logo-over-monogram: ticker letters show instantly, the real logo fades
-     in only once it has actually loaded — prevents any flicker/blank state. */
+  /* Logo-over-monogram: ticker letters render instantly underneath; the real
+     logo sits on top at full opacity (no fade) so a cached image appears
+     immediately and never re-animates/flickers on list re-renders. A logo
+     that is still loading is simply transparent, showing the monogram. */
   .coin-ico.has-logo { position: relative; }
   .coin-ico.has-logo > .cl { position: relative; z-index: 0; }
-  .coin-ico.has-logo > img { position: absolute; inset: 0; z-index: 1; opacity: 0; transition: opacity .25s ease; }
-  .coin-ico.has-logo > img.ok { opacity: 1; }
+  .coin-ico.has-logo > img { position: absolute; inset: 0; z-index: 1; }
   .dash-banner {
     position: relative;
     display: block;
@@ -7149,7 +7150,7 @@ if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefau
   }
 })();
 function hydratePreviewSurfaces() {
-  if (typeof renderMarkets === 'function') renderMarkets();
+  if (typeof renderMarkets === 'function' && document.getElementById('page-markets')?.classList.contains('active')) renderMarkets();
   if (typeof drawChart === 'function') {
     drawChart('boChart');
     drawChart('spotChart');
@@ -13117,7 +13118,7 @@ function instrumentIcoHtmlLive(p) {
     var sym = p.base || p.symbol || p.sym || '?';
     var lt = sym.slice(0, 3);
     html = '<span class="coin-ico has-logo ' + ((p.base || '').toLowerCase()) + '"><span class="cl">' + lt + '</span>'
-      + '<img src="' + p.logo + '" alt="" decoding="async" loading="lazy" onload="this.classList.add(\'ok\')" onerror="' + gromLogoCascade(sym, p.type, p.logo) + '"/></span>';
+      + '<img src="' + p.logo + '" alt="" decoding="async" loading="lazy" onerror="' + gromLogoCascade(sym, p.type, p.logo) + '"/></span>';
   } else {
     var letters = (p.base || p.symbol || p.sym || '?').slice(0, 3);
     html = '<span class="coin-ico ' + ((p.base || '').toLowerCase()) + '">' + letters + '</span>';

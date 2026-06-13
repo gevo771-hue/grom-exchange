@@ -10871,6 +10871,7 @@ function initMarketsFilter() {
     if (!b) return;
     host.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
     b.classList.add('active');
+    marketsPage = 1;
     renderMarkets();
   });
 }
@@ -13163,6 +13164,16 @@ function getFilteredPairsLive() {
     list = list.filter(function (p) {
       return (p.sym || '').toLowerCase().indexOf(q) >= 0 || (p.name || '').toLowerCase().indexOf(q) >= 0;
     });
+  }
+  var fHost = document.getElementById('marketsFilter');
+  var fActive = fHost ? fHost.querySelector('button.active[data-filter]') : null;
+  var fil = fActive ? fActive.dataset.filter : 'all';
+  if (fil === 'favorites') {
+    list = list.filter(function (p) { return !!p.fav; });
+  } else if (fil === 'gainers') {
+    list = list.filter(function (p) { return Number(p.chg) > 0; }).sort(function (a, b) { return b.chg - a.chg; });
+  } else if (fil === 'losers') {
+    list = list.filter(function (p) { return Number(p.chg) < 0; }).sort(function (a, b) { return a.chg - b.chg; });
   }
   return list;
 }

@@ -13158,16 +13158,20 @@ function getMarketRowsFromRegistryLive() {
 function getFilteredPairsLive() {
   var fromReg = getMarketRowsFromRegistryLive();
   var list = fromReg || [];
-  list = list.filter(function (p) { return p.type === marketsCat; });
+  var fHost = document.getElementById('marketsFilter');
+  var fActive = fHost ? fHost.querySelector('button.active[data-filter]') : null;
+  var fil = fActive ? fActive.dataset.filter : 'all';
+  // Favorites are a cross-category view: show starred markets from every tab.
+  // All other states stay scoped to the active category pill.
+  if (fil !== 'favorites') {
+    list = list.filter(function (p) { return p.type === marketsCat; });
+  }
   if (marketsSearchQ) {
     var q = marketsSearchQ.toLowerCase();
     list = list.filter(function (p) {
       return (p.sym || '').toLowerCase().indexOf(q) >= 0 || (p.name || '').toLowerCase().indexOf(q) >= 0;
     });
   }
-  var fHost = document.getElementById('marketsFilter');
-  var fActive = fHost ? fHost.querySelector('button.active[data-filter]') : null;
-  var fil = fActive ? fActive.dataset.filter : 'all';
   if (fil === 'favorites') {
     list = list.filter(function (p) { return !!p.fav; });
   } else if (fil === 'gainers') {
@@ -13207,7 +13211,11 @@ function renderMarketsEnhanced() {
   var rows = getFilteredPairsLive();
   var counter = document.getElementById('marketsCount');
   if (!rows.length) {
-    el.innerHTML = '<div class="mkt-row" style="grid-template-columns:1fr;padding:18px;color:var(--silver4)">No instruments match this filter.</div>';
+    var fActiveEmpty = document.querySelector('#marketsFilter button.active[data-filter]');
+    var emptyMsg = (fActiveEmpty && fActiveEmpty.dataset.filter === 'favorites')
+      ? 'No favorites yet — tap the ★ on any market row to pin it here.'
+      : 'No instruments match this filter.';
+    el.innerHTML = '<div class="mkt-row" style="grid-template-columns:1fr;padding:18px;color:var(--silver4)">' + emptyMsg + '</div>';
     if (counter) counter.innerHTML = '';
     return;
   }

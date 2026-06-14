@@ -1056,17 +1056,35 @@ function gwHydrateFiatProviders() {
   }
 }
 function gwInitWalletModalOps() {
-  // Override globals (the inline implementations in index.html become no-ops)
+  // Override Cursor's inline modal functions (in index.html). These globals
+  // were rendering a hardcoded network list with FAKE demo addresses
+  // (`0x7a3f9c2b...`) and falling back to a seed-derived address from the
+  // backend (`/api/wallet/deposit-address` in seed-fallback mode) that GROM
+  // does NOT hold the private key for. Users who deposit to either lose funds.
+  // We replace these with our connected-wallet (Web3-native) implementation.
   window.submitSend = gwSubmitSend;
   window.submitSwap = gwSubmitSwap;
   window.openFiatProvider = gwOpenFiatProvider;
   window.copyDepAddr = gwCopyDepAddr;
   window.confirmDepositIntent = gwConfirmDepositIntent;
+  // Stub Cursor's renderers so they never overwrite our addresses.
+  window.renderDepositNetworks = () => { try { gwHydrateDepositPane(); } catch (e) { console.warn('[grom-deposit]', e); } };
+  window.applyDepositNetwork = (asset, n) => {
+    const sel = document.getElementById('wmDepAsset');
+    const a = asset || sel?.value || 'USDT';
+    // Map Cursor's chip ids ('erc20', 'arb', 'poly', etc.) to our registry keys
+    const idMap = { erc20:'ETH', arb:'ARBITRUM', poly:'POLYGON', bep20:'BSC', base:'BASE', trc20:'TRX', sol:'SOL', btc:'BTC', ln:'BTC', bep2:'BSC' };
+    const key = (n && (idMap[n.id] || n.id)) || (GROM_ASSET_NETS[a] || ['ETH'])[0];
+    gwSelectNetwork(a, key);
+  };
+  // Expose for debugging
+  window.gwHydrateDepositPane = gwHydrateDepositPane;
+  window.gwSelectNetwork = gwSelectNetwork;
 
-  // Hook modal open — re-hydrate every time it becomes visible
+  // Hook modal open — re-hydrate every time it becomes visible. We also
+  // re-hydrate ~200ms later to win against any async Cursor render.
   const modal = document.getElementById('walletModal');
   if (!modal) {
-    // index.html not loaded yet (rare); retry once
     return setTimeout(gwInitWalletModalOps, 500);
   }
   const reHydrate = () => {
@@ -1075,11 +1093,13 @@ function gwInitWalletModalOps() {
     if (!visible) return;
     try { gwHydrateDepositPane(); } catch (e) { console.warn('[grom-deposit] hydrate:', e); }
     try { gwHydrateFiatProviders(); } catch (e) { console.warn('[grom-fiat] hydrate:', e); }
+    // second pass to defeat any async render from Cursor's inline code
+    setTimeout(() => { try { gwHydrateDepositPane(); } catch (_) {} }, 250);
   };
   const obs = new MutationObserver(reHydrate);
   obs.observe(modal, { attributes: true, attributeFilter: ['style', 'class'] });
   reHydrate();
-  console.log('[grom-walletops] modal hooks installed');
+  console.log('[grom-walletops] modal hooks installed (with Cursor overrides)');
 }
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', gwInitWalletModalOps);

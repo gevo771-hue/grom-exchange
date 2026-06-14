@@ -6978,7 +6978,7 @@
         <div class="wm-note" id="fiatNote">Fee ~2.6% · Rate locked for 15 min · Card, Apple Pay, Google Pay · Delivered in ~3 min</div>
         <div class="wm-actions">
           <button type="button" class="btn-ghost" onclick="closeWalletModal()">Cancel</button>
-          <button type="button" class="btn-primary" onclick="openFiatProvider()">Continue</button>
+          <button type="button" class="btn-primary" onclick="gromFiatContinue()">Continue</button>
         </div>
       </div>
 
@@ -6986,7 +6986,13 @@
       <div class="wm-pane" data-pane="send" style="display:none">
         <div class="wm-field">
           <label>Asset</label>
-          <select id="wmSendAsset"><option>USDT</option><option>BTC</option><option>ETH</option><option>SOL</option></select>
+          <select id="wmSendAsset">
+            <option>USDT</option><option>USDC</option><option>BTC</option><option>ETH</option>
+            <option>BNB</option><option>SOL</option><option>XRP</option><option>ADA</option>
+            <option>DOGE</option><option>TRX</option><option>TON</option><option>MATIC</option>
+            <option>AVAX</option><option>DOT</option><option>LINK</option><option>LTC</option>
+            <option>ATOM</option><option>NEAR</option><option>ARB</option><option>OP</option>
+          </select>
         </div>
         <div class="wm-field">
           <label>Destination address</label>
@@ -7008,15 +7014,27 @@
         <div class="wm-field">
           <label>From</label>
           <div style="display:flex;gap:8px">
-            <select id="wmSwapFrom" style="flex:0 0 130px"><option>USDT</option><option>BTC</option><option>ETH</option><option>SOL</option></select>
+            <select id="wmSwapFrom" style="flex:0 0 130px">
+              <option>USDT</option><option>USDC</option><option>BTC</option><option>ETH</option>
+              <option>BNB</option><option>SOL</option><option>XRP</option><option>ADA</option>
+              <option>DOGE</option><option>TRX</option><option>TON</option><option>MATIC</option>
+              <option>AVAX</option><option>DOT</option><option>LINK</option><option>LTC</option>
+              <option>ATOM</option><option>NEAR</option><option>ARB</option><option>OP</option>
+            </select>
             <input type="number" id="wmSwapAmt" placeholder="0.00" min="0" step="any"/>
           </div>
         </div>
         <div class="wm-field">
           <label>To</label>
-          <select id="wmSwapTo" style="width:130px"><option>BTC</option><option>ETH</option><option>SOL</option><option>USDT</option></select>
+          <select id="wmSwapTo" style="width:130px">
+            <option>BTC</option><option>ETH</option><option>USDT</option><option>USDC</option>
+            <option>BNB</option><option>SOL</option><option>XRP</option><option>ADA</option>
+            <option>DOGE</option><option>TRX</option><option>TON</option><option>MATIC</option>
+            <option>AVAX</option><option>DOT</option><option>LINK</option><option>LTC</option>
+            <option>ATOM</option><option>NEAR</option><option>ARB</option><option>OP</option>
+          </select>
         </div>
-        <div class="wm-note" id="wmSwapEst">Rate: 1 USDT ≈ 0.0000096 BTC · Slippage 0.10% · Route via DEX aggregator.</div>
+        <div class="wm-note" id="wmSwapEst">Enter an amount to see the live rate.</div>
         <div class="wm-actions">
           <button type="button" class="btn-ghost" onclick="closeWalletModal()">Cancel</button>
           <button type="button" class="btn-primary" onclick="submitSwap()">Swap</button>
@@ -12496,6 +12514,7 @@ function switchWalletPane(mode) {
     }
   }
   if (mode === 'buy') updateFiatQuote();
+  if (mode === 'swap') { try { gromSwapDedupe('wmSwapFrom'); refreshSwapEstimate(); } catch (_) {} }
 }
 (function wireWalletModal() {
   var tabs = document.getElementById('wmTabs');
@@ -12710,6 +12729,34 @@ function openFiatProvider() {
   if (!amt || amt < 20) { toast('Minimum is 20 ' + cur, 'error'); return; }
   closeWalletModal();
   toast('Opening ' + p.name + ' widget · ' + amt + ' ' + cur + ' → ' + coin, 'info');
+}
+// On-ramp providers (MoonPay etc.) render their widget low on their own hosted
+// page when opened as a full tab. We open them in a focused, centered popup
+// window so the widget sits in the middle of the screen. We briefly wrap
+// window.open so the real opener (grom-wallet.js gwOpenFiatProvider, which
+// builds the signed provider URL) lands in our centered popup — without
+// touching grom-wallet.js.
+function gromFiatContinue() {
+  var realOpen = window.open;
+  var w = 460, h = 760;
+  var sw = window.screen && window.screen.availWidth ? window.screen.availWidth : (window.innerWidth || 1024);
+  var sh = window.screen && window.screen.availHeight ? window.screen.availHeight : (window.innerHeight || 768);
+  var left = Math.max(0, Math.round((sw - w) / 2));
+  var top = Math.max(0, Math.round((sh - h) / 2));
+  var feats = 'popup=yes,width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',noopener,noreferrer';
+  window.open = function (url) {
+    try { return realOpen.call(window, url, 'gromFiat', feats); }
+    catch (_) { return realOpen.call(window, url, '_blank'); }
+  };
+  try {
+    if (typeof window.openFiatProvider === 'function' && window.openFiatProvider !== openFiatProvider) {
+      window.openFiatProvider();
+    } else {
+      openFiatProvider();
+    }
+  } finally {
+    setTimeout(function () { window.open = realOpen; }, 0);
+  }
 }
 function copyDepAddr() {
   var a = document.getElementById('wmDepAddr') || document.getElementById('depAddrText');
@@ -13088,42 +13135,30 @@ function swapAmountToAtomic(asset, amount) {
   return String(Math.floor(amount * Math.pow(10, dec)));
 }
 
-async function refreshSwapEstimate() {
+// Mid-market USD price for any supported coin (stablecoins pinned to 1).
+function gromUsdPx(coin) {
+  coin = String(coin || '').toUpperCase();
+  if (coin === 'USDT' || coin === 'USDC' || coin === 'DAI' || coin === 'FDUSD' || coin === 'TUSD') return 1;
+  var px = (typeof window.gromLivePrice === 'function') ? window.gromLivePrice(coin + 'USDT') : null;
+  return (px != null && isFinite(px) && px > 0) ? px : null;
+}
+// Universal live estimate — works for every pair in the dropdown (not just the
+// 4 Arbitrum tokens). The actual execution is handled by grom-wallet.js.
+function refreshSwapEstimate() {
   var from = document.getElementById('wmSwapFrom')?.value;
   var to   = document.getElementById('wmSwapTo')?.value;
   var amt  = parseFloat(document.getElementById('wmSwapAmt')?.value || '0');
   var est  = document.getElementById('wmSwapEst');
-  if (!est || !from || !to || from === to || !amt || amt <= 0) return;
-  if (from === 'SOL' || to === 'SOL') {
-    est.textContent = 'SOL swaps require Solana wallet — use ETH/USDT/USDC/BTC on Arbitrum';
-    return;
-  }
-  var src = GROM_SWAP_ADDR[from];
-  var dst = GROM_SWAP_ADDR[to];
-  if (!src || !dst) return;
-  try {
-    var w = typeof detectConnectedWallet === 'function' ? detectConnectedWallet() : null;
-    var quote = await window.gromApiFetch('/api/swap/quote', {
-      method: 'POST',
-      body: JSON.stringify({
-        chainId: GROM_SWAP_CHAIN,
-        src: src,
-        dst: dst,
-        amount: swapAmountToAtomic(from, amt),
-        userAddress: (w && /^0x/.test(w.address)) ? w.address : undefined,
-      }),
-    });
-    var best = quote && quote.best;
-    if (!best || !best.toAmount) {
-      est.textContent = 'No DEX route found right now — try another pair or amount';
-      return;
-    }
-    var outDec = GROM_SWAP_DECIMALS[to] || 18;
-    var outAmt = Number(best.toAmount) / Math.pow(10, outDec);
-    est.textContent = 'Rate: ' + amt + ' ' + from + ' ≈ ' + outAmt.toFixed(outDec >= 8 ? 8 : 4) + ' ' + to + ' · via ' + (best.source || 'DEX') + ' · Slippage 0.50%';
-  } catch (_) {
-    est.textContent = 'Quote unavailable — connect wallet and try again';
-  }
+  if (!est) return;
+  if (!from || !to) return;
+  if (from === to) { est.textContent = 'Choose two different assets.'; return; }
+  if (!amt || amt <= 0) { est.textContent = 'Enter an amount to see the live rate.'; return; }
+  var pf = gromUsdPx(from), pt = gromUsdPx(to);
+  if (!pf || !pt) { est.textContent = 'Live rate for ' + from + '→' + to + ' is unavailable right now.'; return; }
+  var rate = pf / pt;
+  var out = amt * rate;
+  var fmt = function (n) { return n >= 1 ? n.toFixed(4) : n.toPrecision(4); };
+  est.textContent = '≈ ' + fmt(out) + ' ' + to + '  ·  1 ' + from + ' ≈ ' + fmt(rate) + ' ' + to + '  ·  mid-market rate';
 }
 
 async function submitSwap() {
@@ -13163,14 +13198,30 @@ async function submitSwap() {
   }
 }
 
+// Keep From and To distinct: if they collide, bump the *other* select to the
+// first non-conflicting option so the user is never stuck on an invalid pair.
+function gromSwapDedupe(changed) {
+  var fromEl = document.getElementById('wmSwapFrom');
+  var toEl   = document.getElementById('wmSwapTo');
+  if (!fromEl || !toEl || fromEl.value !== toEl.value) return;
+  var fix = (changed === 'wmSwapFrom') ? toEl : fromEl;
+  var other = fix.value;
+  for (var i = 0; i < fix.options.length; i++) {
+    if (fix.options[i].value !== other) { fix.value = fix.options[i].value; break; }
+  }
+}
 (function wireSwapEstimate() {
   ['wmSwapFrom', 'wmSwapTo', 'wmSwapAmt'].forEach(function (id) {
     var el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener('change', refreshSwapEstimate);
-    el.addEventListener('input', function () { clearTimeout(el.__swapT); el.__swapT = setTimeout(refreshSwapEstimate, 450); });
+    el.addEventListener('change', function () {
+      if (id === 'wmSwapFrom' || id === 'wmSwapTo') gromSwapDedupe(id);
+      refreshSwapEstimate();
+    });
+    el.addEventListener('input', function () { clearTimeout(el.__swapT); el.__swapT = setTimeout(refreshSwapEstimate, 350); });
   });
 })();
+window.refreshSwapEstimate = refreshSwapEstimate;
 
 /* ========== Settings ========== */
 function saveSettings() {

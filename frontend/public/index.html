@@ -13231,27 +13231,109 @@ window.refreshSwapEstimate = refreshSwapEstimate;
  * Functional on demo balance (shared window.boState): live stock prices,
  * working Buy/Sell + YES/NO bets, positions w/ PnL, trade modal.
  * ============================================================ */
+// Prediction categories (key, emoji, label) — mirrors Binance's tabs.
+var GROM_PCATS = [
+  ['all', '🌐', 'Все'], ['sport', '⚽', 'Спорт'], ['crypto', '🪙', 'Криптовалюта'],
+  ['esports', '🎮', 'Киберспорт'], ['politics', '🏛️', 'Политика'],
+  ['culture', '🎬', 'Культура'], ['finance', '💹', 'Финансы'], ['economy', '📊', 'Экономика'],
+];
+// Multi-outcome prediction markets. rows = [{ n: outcome, p: probability% }].
 var GROM_PREDICT_MARKETS = [
-  { id: 'mlb_atl_cws', cat: 'Спорт · MLB', q: 'Atlanta Braves vs Chicago White Sox — кто победит?', a: 'Atlanta Braves', b: 'Chicago White Sox', pa: 0.49, pb: 0.51, vol: 184230, ends: '15 июн, 21:40 UTC' },
-  { id: 'nl_jp_wc',    cat: 'Спорт · ЧМ-2026', q: 'Нидерланды vs Япония — Нидерланды выйдут в плей-офф?', a: 'Да', b: 'Нет', pa: 0.62, pb: 0.38, vol: 412980, ends: '22 июн, 18:00 UTC' },
-  { id: 'btc_120k',    cat: 'Крипто', q: 'BTC закроет июнь выше $120K?', a: 'Да', b: 'Нет', pa: 0.34, pb: 0.66, vol: 2840110, ends: '30 июн, 23:59 UTC' },
-  { id: 'eth_etf_q3',  cat: 'Крипто · Регуляция', q: 'SEC одобрит ETH staking ETF до конца Q3?', a: 'Да', b: 'Нет', pa: 0.41, pb: 0.59, vol: 1180550, ends: '30 сен, 23:59 UTC' },
-  { id: 'fomc_25bps',  cat: 'Экономика · FOMC', q: 'ФРС снизит ставку на 25 bps на июльском заседании?', a: 'Да', b: 'Нет', pa: 0.71, pb: 0.29, vol: 3104000, ends: '31 июл, 18:00 UTC' },
-  { id: 'sol_5b_tvl',  cat: 'Крипто · TVL', q: 'TVL Solana DeFi превысит $15B в этом квартале?', a: 'Да', b: 'Нет', pa: 0.28, pb: 0.72, vol: 624000, ends: '30 сен, 23:59 UTC' },
+  // ── Спорт ──
+  { id: 'mlb_atl', cat: 'sport', ico: '⚾', q: 'MLB: кто победит — Atlanta Braves или Chicago White Sox?', vol: 184230, part: 23, ends: '15 июн, 21:40', rows: [{ n: 'Atlanta Braves', p: 49 }, { n: 'Chicago White Sox', p: 51 }] },
+  { id: 'wc_ned', cat: 'sport', ico: '🏆', q: 'ЧМ-2026: Нидерланды выйдут из группы?', vol: 412980, part: 41, ends: '22 июн, 18:00', rows: [{ n: 'Да', p: 62 }, { n: 'Нет', p: 38 }] },
+  { id: 'nba_fin', cat: 'sport', ico: '🏀', q: 'NBA Finals 2026: победит Boston Celtics?', vol: 928400, part: 88, ends: '20 июн, 02:00', rows: [{ n: 'Да', p: 44 }, { n: 'Нет', p: 56 }] },
+  { id: 'f1_ver', cat: 'sport', ico: '🏎️', q: 'F1 2026: Max Verstappen возьмёт титул?', vol: 1204000, part: 132, ends: '30 ноя', rows: [{ n: 'Да', p: 58 }, { n: 'Нет', p: 42 }] },
+  { id: 'ucl_rm', cat: 'sport', ico: '⚽', q: 'Лига Чемпионов: Real Madrid дойдёт до финала?', vol: 760300, part: 64, ends: '28 мая', rows: [{ n: 'Да', p: 35 }, { n: 'Нет', p: 65 }] },
+  { id: 'wim_alc', cat: 'sport', ico: '🎾', q: 'Wimbledon: Карлос Алькарас выиграет?', vol: 318900, part: 37, ends: '14 июл', rows: [{ n: 'Да', p: 41 }, { n: 'Нет', p: 59 }] },
+  // ── Криптовалюта ──
+  { id: 'btc_tgt', cat: 'crypto', ico: '₿', q: 'Какую цену BTC достигнет в июне 2026?', vol: 2840110, part: 412, ends: '30 июн', rows: [{ n: '$110K', p: 71 }, { n: '$120K', p: 34 }, { n: '$130K', p: 12 }] },
+  { id: 'eth_etf', cat: 'crypto', ico: 'Ξ', q: 'SEC одобрит ETH staking ETF до конца Q3?', vol: 1180550, part: 196, ends: '30 сен', rows: [{ n: 'Да', p: 41 }, { n: 'Нет', p: 59 }] },
+  { id: 'sol_tvl', cat: 'crypto', ico: '◎', q: 'TVL Solana DeFi превысит $15B в этом квартале?', vol: 624000, part: 88, ends: '30 сен', rows: [{ n: 'Да', p: 28 }, { n: 'Нет', p: 72 }] },
+  { id: 'btc_ath', cat: 'crypto', ico: '🚀', q: 'BTC обновит исторический максимум в 2026?', vol: 3920000, part: 540, ends: '31 дек', rows: [{ n: 'Да', p: 67 }, { n: 'Нет', p: 33 }] },
+  { id: 'doge_50', cat: 'crypto', ico: '🐕', q: 'DOGE вырастет на 50%+ в этом месяце?', vol: 421000, part: 73, ends: '30 июн', rows: [{ n: 'Да', p: 22 }, { n: 'Нет', p: 78 }] },
+  // ── Киберспорт ──
+  { id: 'lol_t1', cat: 'esports', ico: '🎮', q: 'LoL Worlds 2026: T1 выйдут в финал?', vol: 286000, part: 54, ends: '02 ноя', rows: [{ n: 'Да', p: 46 }, { n: 'Нет', p: 54 }] },
+  { id: 'dota_ti', cat: 'esports', ico: '🛡️', q: 'The International: Team Spirit возьмут Аегис?', vol: 198400, part: 39, ends: '12 окт', rows: [{ n: 'Да', p: 31 }, { n: 'Нет', p: 69 }] },
+  { id: 'cs_navi', cat: 'esports', ico: '🔫', q: 'CS2 Major: NAVI выиграют чемпионат?', vol: 244500, part: 47, ends: '24 авг', rows: [{ n: 'Да', p: 38 }, { n: 'Нет', p: 62 }] },
+  // ── Политика ──
+  { id: 'us_senate', cat: 'politics', ico: '🏛️', q: 'Республиканцы сохранят большинство в Сенате?', vol: 1840000, part: 221, ends: '03 ноя', rows: [{ n: 'Да', p: 55 }, { n: 'Нет', p: 45 }] },
+  { id: 'trump_eo', cat: 'politics', ico: '🇺🇸', q: 'Трамп подпишет крипто-указ в Q3 2026?', vol: 980000, part: 142, ends: '30 сен', rows: [{ n: 'Да', p: 48 }, { n: 'Нет', p: 52 }] },
+  { id: 'eu_mica', cat: 'politics', ico: '🇪🇺', q: 'ЕС примет MiCA 2.0 в 2026 году?', vol: 312000, part: 58, ends: '31 дек', rows: [{ n: 'Да', p: 33 }, { n: 'Нет', p: 67 }] },
+  // ── Культура ──
+  { id: 'dune3', cat: 'culture', ico: '🎬', q: '«Dune: Part Three» соберёт $1B в прокате?', vol: 274000, part: 49, ends: '31 дек', rows: [{ n: 'Да', p: 44 }, { n: 'Нет', p: 56 }] },
+  { id: 'gta6', cat: 'culture', ico: '🎮', q: 'GTA VI выйдет до конца 2026?', vol: 1120000, part: 188, ends: '31 дек', rows: [{ n: 'Да', p: 39 }, { n: 'Нет', p: 61 }] },
+  { id: 'swift_alb', cat: 'culture', ico: '🎤', q: 'Новый альбом Taylor Swift в этом году?', vol: 168000, part: 31, ends: '31 дек', rows: [{ n: 'Да', p: 57 }, { n: 'Нет', p: 43 }] },
+  // ── Финансы (акции) ──
+  { id: 'meta_tgt', cat: 'finance', ico: '🟦', q: 'Какую цену META достигнет в июне 2026?', vol: 542000, part: 33, ends: '30 июн', rows: [{ n: '$520', p: 99 }, { n: '$720', p: 99 }, { n: '$740', p: 99 }] },
+  { id: 'pltr_tgt', cat: 'finance', ico: '⬛', q: 'Какую цену PLTR достигнет в июне 2026?', vol: 318000, part: 20, ends: '30 июн', rows: [{ n: '$126', p: 83 }, { n: '$168', p: 50 }, { n: '$174', p: 50 }] },
+  { id: 'aapl_tgt', cat: 'finance', ico: '🍎', q: 'Какую цену AAPL достигнет в июне 2026?', vol: 612000, part: 44, ends: '30 июн', rows: [{ n: '$240', p: 78 }, { n: '$250', p: 43 }, { n: '$260', p: 21 }] },
+  { id: 'nvda_tgt', cat: 'finance', ico: '🟩', q: 'Какую цену NVDA достигнет в июне 2026?', vol: 904000, part: 71, ends: '30 июн', rows: [{ n: '$150', p: 82 }, { n: '$160', p: 50 }, { n: '$180', p: 24 }] },
+  { id: 'tsla_400', cat: 'finance', ico: '🚗', q: 'TSLA достигнет $400 в июне 2026?', vol: 488000, part: 52, ends: '30 июн', rows: [{ n: 'Да', p: 29 }, { n: 'Нет', p: 71 }] },
+  { id: 'sp500_6k', cat: 'finance', ico: '📈', q: 'S&P 500 закроет июнь выше 6000?', vol: 1340000, part: 164, ends: '30 июн', rows: [{ n: 'Да', p: 61 }, { n: 'Нет', p: 39 }] },
+  // ── Экономика ──
+  { id: 'fomc_cut', cat: 'economy', ico: '🏦', q: 'ФРС снизит ставку на 25 bps в июле?', vol: 3104000, part: 388, ends: '31 июл', rows: [{ n: 'Да', p: 71 }, { n: 'Нет', p: 29 }] },
+  { id: 'cpi_3', cat: 'economy', ico: '📊', q: 'Инфляция США (CPI) опустится ниже 3% в этом квартале?', vol: 920000, part: 118, ends: '30 сен', rows: [{ n: 'Да', p: 52 }, { n: 'Нет', p: 48 }] },
+  { id: 'gold_2800', cat: 'economy', ico: '🥇', q: 'Золото выше $2800/oz к концу квартала?', vol: 540000, part: 67, ends: '30 сен', rows: [{ n: 'Да', p: 64 }, { n: 'Нет', p: 36 }] },
+  { id: 'oil_90', cat: 'economy', ico: '🛢️', q: 'Нефть Brent выше $90 в этом месяце?', vol: 388000, part: 44, ends: '30 июн', rows: [{ n: 'Да', p: 27 }, { n: 'Нет', p: 73 }] },
+];
+// Stock categories (key, label).
+var GROM_SCATS = [
+  ['all', 'Все'], ['tech', 'Технологии'], ['finance', 'Финансы'], ['etf', 'ETF'],
+  ['auto', 'Авто'], ['consumer', 'Потребительские'], ['crypto', 'Крипто-сектор'],
+  ['energy', 'Энергетика'], ['health', 'Здоровье'],
 ];
 var GROM_XSTOCKS = [
-  { sym: 'AAPL',  name: 'Apple Inc.',          price: 234.18, chg:  0.84, vol24: '$48.2M', mc: '$3.56T' },
-  { sym: 'MSFT',  name: 'Microsoft Corp.',     price: 469.55, chg:  1.20, vol24: '$31.7M', mc: '$3.49T' },
-  { sym: 'NVDA',  name: 'NVIDIA Corp.',        price: 144.62, chg: -2.31, vol24: '$92.4M', mc: '$3.55T' },
-  { sym: 'TSLA',  name: 'Tesla Inc.',          price: 351.04, chg:  3.42, vol24: '$58.6M', mc: '$1.12T' },
-  { sym: 'GOOGL', name: 'Alphabet Inc. (C)',   price: 191.78, chg:  0.46, vol24: '$22.1M', mc: '$2.37T' },
-  { sym: 'META',  name: 'Meta Platforms',      price: 612.40, chg: -0.92, vol24: '$19.8M', mc: '$1.55T' },
-  { sym: 'AMZN',  name: 'Amazon.com Inc.',     price: 232.45, chg:  1.18, vol24: '$28.3M', mc: '$2.44T' },
-  { sym: 'AMD',   name: 'Advanced Micro Dev.', price: 134.92, chg: -1.07, vol24: '$14.6M', mc: '$218B'  },
-  { sym: 'COIN',  name: 'Coinbase Global',     price: 308.50, chg:  4.62, vol24: '$11.2M', mc: '$77B'   },
-  { sym: 'MSTR',  name: 'MicroStrategy',       price: 412.30, chg:  6.18, vol24: '$24.8M', mc: '$96B'   },
-  { sym: 'SPY',   name: 'S&P 500 ETF',         price: 596.78, chg:  0.34, vol24: '$210M',  mc: '$598B'  },
-  { sym: 'QQQ',   name: 'Nasdaq-100 ETF',      price: 524.13, chg:  0.61, vol24: '$182M',  mc: '$305B'  },
+  { sym: 'AAPL',  name: 'Apple Inc.',            price: 234.18, chg:  0.84, vol24: '$48.2M', mc: '$3.56T', cat: 'tech' },
+  { sym: 'MSFT',  name: 'Microsoft Corp.',       price: 469.55, chg:  1.20, vol24: '$31.7M', mc: '$3.49T', cat: 'tech' },
+  { sym: 'NVDA',  name: 'NVIDIA Corp.',          price: 144.62, chg: -2.31, vol24: '$92.4M', mc: '$3.55T', cat: 'tech' },
+  { sym: 'GOOGL', name: 'Alphabet Inc. (C)',     price: 191.78, chg:  0.46, vol24: '$22.1M', mc: '$2.37T', cat: 'tech' },
+  { sym: 'META',  name: 'Meta Platforms',        price: 612.40, chg: -0.92, vol24: '$19.8M', mc: '$1.55T', cat: 'tech' },
+  { sym: 'AMZN',  name: 'Amazon.com Inc.',       price: 232.45, chg:  1.18, vol24: '$28.3M', mc: '$2.44T', cat: 'consumer' },
+  { sym: 'AMD',   name: 'Advanced Micro Dev.',   price: 134.92, chg: -1.07, vol24: '$14.6M', mc: '$218B',  cat: 'tech' },
+  { sym: 'NFLX',  name: 'Netflix Inc.',          price: 912.30, chg:  1.84, vol24: '$9.4M',  mc: '$392B',  cat: 'tech' },
+  { sym: 'ADBE',  name: 'Adobe Inc.',            price: 528.70, chg: -0.61, vol24: '$5.2M',  mc: '$236B',  cat: 'tech' },
+  { sym: 'CRM',   name: 'Salesforce Inc.',       price: 332.15, chg:  0.92, vol24: '$4.8M',  mc: '$318B',  cat: 'tech' },
+  { sym: 'ORCL',  name: 'Oracle Corp.',          price: 198.44, chg:  2.13, vol24: '$6.1M',  mc: '$552B',  cat: 'tech' },
+  { sym: 'AVGO',  name: 'Broadcom Inc.',         price: 248.90, chg:  3.07, vol24: '$12.7M', mc: '$1.16T', cat: 'tech' },
+  { sym: 'QCOM',  name: 'Qualcomm Inc.',         price: 172.36, chg: -0.48, vol24: '$3.9M',  mc: '$192B',  cat: 'tech' },
+  { sym: 'CSCO',  name: 'Cisco Systems',         price: 64.18,  chg:  0.31, vol24: '$5.5M',  mc: '$258B',  cat: 'tech' },
+  { sym: 'INTC',  name: 'Intel Corp.',           price: 24.86,  chg: -1.92, vol24: '$8.3M',  mc: '$107B',  cat: 'tech' },
+  { sym: 'IBM',   name: 'IBM',                    price: 268.40, chg:  0.74, vol24: '$2.6M',  mc: '$248B',  cat: 'tech' },
+  { sym: 'PLTR',  name: 'Palantir Tech.',        price: 142.55, chg:  5.21, vol24: '$18.9M', mc: '$330B',  cat: 'tech' },
+  { sym: 'TSLA',  name: 'Tesla Inc.',            price: 351.04, chg:  3.42, vol24: '$58.6M', mc: '$1.12T', cat: 'auto' },
+  { sym: 'F',     name: 'Ford Motor Co.',        price: 11.92,  chg: -0.83, vol24: '$3.1M',  mc: '$47B',   cat: 'auto' },
+  { sym: 'GM',    name: 'General Motors',         price: 54.27,  chg:  0.62, vol24: '$2.4M',  mc: '$58B',   cat: 'auto' },
+  { sym: 'RIVN',  name: 'Rivian Automotive',      price: 14.38,  chg: -2.74, vol24: '$1.9M',  mc: '$15B',   cat: 'auto' },
+  { sym: 'JPM',   name: 'JPMorgan Chase',         price: 268.90, chg:  0.54, vol24: '$7.2M',  mc: '$748B',  cat: 'finance' },
+  { sym: 'BAC',   name: 'Bank of America',        price: 46.18,  chg:  0.27, vol24: '$4.1M',  mc: '$352B',  cat: 'finance' },
+  { sym: 'V',     name: 'Visa Inc.',              price: 348.70, chg:  0.88, vol24: '$3.8M',  mc: '$682B',  cat: 'finance' },
+  { sym: 'MA',    name: 'Mastercard Inc.',        price: 552.30, chg:  1.04, vol24: '$2.9M',  mc: '$508B',  cat: 'finance' },
+  { sym: 'GS',    name: 'Goldman Sachs',          price: 612.40, chg: -0.36, vol24: '$2.2M',  mc: '$196B',  cat: 'finance' },
+  { sym: 'MS',    name: 'Morgan Stanley',         price: 138.55, chg:  0.41, vol24: '$1.8M',  mc: '$222B',  cat: 'finance' },
+  { sym: 'BRK.B', name: 'Berkshire Hathaway B',   price: 478.20, chg:  0.19, vol24: '$1.6M',  mc: '$1.03T', cat: 'finance' },
+  { sym: 'KO',    name: 'Coca-Cola Co.',          price: 71.85,  chg:  0.23, vol24: '$2.7M',  mc: '$309B',  cat: 'consumer' },
+  { sym: 'PEP',   name: 'PepsiCo Inc.',           price: 158.40, chg: -0.44, vol24: '$1.9M',  mc: '$217B',  cat: 'consumer' },
+  { sym: 'MCD',   name: "McDonald's Corp.",        price: 312.70, chg:  0.58, vol24: '$1.7M',  mc: '$224B',  cat: 'consumer' },
+  { sym: 'NKE',   name: 'Nike Inc.',              price: 78.92,  chg: -1.21, vol24: '$2.3M',  mc: '$118B',  cat: 'consumer' },
+  { sym: 'DIS',   name: 'Walt Disney Co.',        price: 114.36, chg:  1.46, vol24: '$3.4M',  mc: '$207B',  cat: 'consumer' },
+  { sym: 'WMT',   name: 'Walmart Inc.',           price: 96.18,  chg:  0.67, vol24: '$4.6M',  mc: '$772B',  cat: 'consumer' },
+  { sym: 'COST',  name: 'Costco Wholesale',       price: 1018.40, chg: 0.92, vol24: '$2.1M',  mc: '$452B',  cat: 'consumer' },
+  { sym: 'COIN',  name: 'Coinbase Global',        price: 308.50, chg:  4.62, vol24: '$11.2M', mc: '$77B',   cat: 'crypto' },
+  { sym: 'MSTR',  name: 'MicroStrategy',          price: 412.30, chg:  6.18, vol24: '$24.8M', mc: '$96B',   cat: 'crypto' },
+  { sym: 'MARA',  name: 'MARA Holdings',          price: 22.74,  chg:  7.31, vol24: '$5.6M',  mc: '$8B',    cat: 'crypto' },
+  { sym: 'HOOD',  name: 'Robinhood Markets',      price: 58.92,  chg:  3.84, vol24: '$6.8M',  mc: '$52B',   cat: 'crypto' },
+  { sym: 'XOM',   name: 'Exxon Mobil',            price: 118.40, chg: -0.74, vol24: '$3.2M',  mc: '$520B',  cat: 'energy' },
+  { sym: 'CVX',   name: 'Chevron Corp.',          price: 162.30, chg: -0.51, vol24: '$2.4M',  mc: '$296B',  cat: 'energy' },
+  { sym: 'LLY',   name: 'Eli Lilly & Co.',        price: 924.60, chg:  1.92, vol24: '$4.9M',  mc: '$878B',  cat: 'health' },
+  { sym: 'UNH',   name: 'UnitedHealth Group',     price: 528.40, chg: -0.62, vol24: '$2.8M',  mc: '$486B',  cat: 'health' },
+  { sym: 'JNJ',   name: 'Johnson & Johnson',      price: 156.70, chg:  0.34, vol24: '$2.5M',  mc: '$377B',  cat: 'health' },
+  { sym: 'PFE',   name: 'Pfizer Inc.',            price: 26.18,  chg: -0.91, vol24: '$3.1M',  mc: '$148B',  cat: 'health' },
+  { sym: 'SPY',   name: 'S&P 500 ETF',            price: 596.78, chg:  0.34, vol24: '$210M',  mc: '$598B',  cat: 'etf' },
+  { sym: 'QQQ',   name: 'Nasdaq-100 ETF',         price: 524.13, chg:  0.61, vol24: '$182M',  mc: '$305B',  cat: 'etf' },
+  { sym: 'DIA',   name: 'Dow Jones ETF',          price: 438.20, chg:  0.18, vol24: '$24M',   mc: '$38B',   cat: 'etf' },
+  { sym: 'IWM',   name: 'Russell 2000 ETF',       price: 232.60, chg:  0.92, vol24: '$48M',   mc: '$72B',   cat: 'etf' },
+  { sym: 'ARKK',  name: 'ARK Innovation ETF',     price: 68.44,  chg:  2.18, vol24: '$12M',   mc: '$6B',    cat: 'etf' },
 ];
 (function gromExtraEnhance() {
   function bal() {
@@ -13311,41 +13393,66 @@ var GROM_XSTOCKS = [
       + '.gtm-cancel{background:rgba(255,255,255,.06);color:var(--silver2,#c8d4e8)}'
       + '.gtm-confirm{background:linear-gradient(135deg,#3ac2ff,#0091c4);color:#04121b}'
       // ---- page shells (predict / xstocks) ----
-      + '.gwx-wrap{max-width:1180px}'
-      + '.gwx-hero{margin-bottom:22px}'
-      + '.gwx-hero-row{display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;margin-bottom:8px}'
-      + '.gwx-h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center;gap:12px;color:var(--silver1,#e7eef8)}'
+      + '.gwx-wrap{max-width:1240px}'
+      + '.gwx-hero{margin-bottom:18px}'
+      + '.gwx-hero-row{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap;margin-bottom:6px}'
+      + '.gwx-h1{margin:0;font-size:26px;font-weight:800;letter-spacing:-.4px;display:flex;align-items:center;gap:12px;color:var(--silver1,#e7eef8)}'
       + '.gwx-badge{font-size:10px;font-weight:800;letter-spacing:.8px;padding:3px 8px;border-radius:6px}'
       + '.gwx-badge.beta{background:rgba(58,194,255,.18);color:#3ac2ff}.gwx-badge.new{background:rgba(34,197,94,.18);color:#22c55e}'
-      + '.gwx-stats{display:flex;gap:22px;align-items:center}.gwx-stats>div{display:flex;flex-direction:column}'
+      + '.gwx-stats{display:flex;gap:20px;align-items:center}.gwx-stats>div{display:flex;flex-direction:column}'
       + '.gwx-stats b{font-size:15px;font-weight:800;color:var(--silver1,#e7eef8)}.gwx-stats small{font-size:11px;color:var(--silver5,#6b7a92)}'
-      + '.gwx-sub{color:var(--silver4,#8c9bb2);font-size:13.5px;line-height:1.55;max-width:720px;margin:6px 0 16px}'
-      + '.gwx-cats{display:flex;gap:8px;flex-wrap:wrap}'
-      + '.gwx-pill{background:rgba(255,255,255,.04);color:var(--silver3,#9ba9bf);border:1px solid rgba(255,255,255,.06);border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer}'
-      + '.gwx-pill:hover{background:rgba(255,255,255,.07);color:var(--silver1,#e7eef8)}.gwx-pill.on{background:rgba(58,194,255,.18);color:#3ac2ff;border-color:rgba(58,194,255,.3)}'
-      + '.gwx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}'
-      + '.gwx-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:18px;transition:.15s}'
-      + '.gwx-card:hover{background:rgba(255,255,255,.05);border-color:rgba(58,194,255,.2)}'
-      + '.gwx-cat{color:var(--silver5,#6b7a92);font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}'
-      + '.gwx-q{color:var(--silver1,#e7eef8);font-size:15px;font-weight:700;line-height:1.4;margin-bottom:12px;min-height:44px}'
-      + '.gwx-meta{display:flex;justify-content:space-between;gap:8px;color:var(--silver5,#6b7a92);font-size:11px;margin-bottom:12px}'
-      + '.gwx-bets{display:grid;grid-template-columns:1fr 1fr;gap:8px}'
-      + '.gwx-bet{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px;border-radius:10px;border:1px solid transparent;font-weight:700;cursor:pointer;transition:.12s}'
-      + '.gwx-yes{background:rgba(34,197,94,.10);color:#22c55e;border-color:rgba(34,197,94,.2)}.gwx-yes:hover{background:rgba(34,197,94,.18)}'
-      + '.gwx-no{background:rgba(239,68,68,.10);color:#f87171;border-color:rgba(239,68,68,.2)}.gwx-no:hover{background:rgba(239,68,68,.18)}'
-      + '.gwx-bet-label{font-size:12px;font-weight:700}.gwx-bet-price{font-size:18px;font-weight:800}'
+      + '.gwx-sub{color:var(--silver4,#8c9bb2);font-size:13.5px;line-height:1.55;max-width:760px;margin:6px 0 14px}'
+      + '.gwx-toolbar{display:flex;gap:12px;align-items:center;margin:14px 0 18px;flex-wrap:wrap}'
+      + '.gwx-cats{display:flex;gap:8px;flex-wrap:wrap;flex:1;min-width:0}'
+      + '.gwx-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);color:var(--silver3,#9ba9bf);border:1px solid rgba(255,255,255,.07);border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}'
+      + '.gwx-pill:hover{background:rgba(255,255,255,.08);color:var(--silver1,#e7eef8)}'
+      + '.gwx-pill.on{background:linear-gradient(135deg,rgba(58,194,255,.24),rgba(58,194,255,.08));color:#7cd4ff;border-color:rgba(58,194,255,.42);box-shadow:0 4px 16px rgba(58,194,255,.14)}'
+      + '.gwx-search{position:relative;min-width:210px}'
+      + '.gwx-search input{width:100%;background:rgba(11,18,32,.6);border:1px solid rgba(122,162,199,.18);border-radius:12px;padding:9px 14px 9px 34px;color:var(--silver1,#e7eef8);font-size:13px;outline:none;transition:.15s}'
+      + '.gwx-search input:focus{border-color:rgba(58,194,255,.45);box-shadow:0 0 0 3px rgba(58,194,255,.1)}'
+      + '.gwx-search:before{content:"⌕";position:absolute;left:12px;top:50%;transform:translateY(-52%);font-size:16px;color:var(--silver5,#6b7a92)}'
+      + '.gwx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}'
+      + '.gwx-card{position:relative;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.07);border-radius:18px;padding:18px;transition:transform .18s,box-shadow .18s,border-color .18s}'
+      + '.gwx-card:hover{transform:translateY(-3px);border-color:rgba(58,194,255,.3);box-shadow:0 16px 42px rgba(0,0,0,.42),0 0 0 1px rgba(58,194,255,.12)}'
+      + '.gwx-card-top{display:flex;align-items:center;gap:8px;margin-bottom:13px}'
+      + '.gwx-cat{display:inline-flex;align-items:center;gap:5px;background:rgba(58,194,255,.10);color:#7cd4ff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:7px}'
+      + '.gwx-live{display:inline-flex;align-items:center;gap:5px;margin-left:auto;color:#22c55e;font-size:10px;font-weight:800;letter-spacing:.6px}'
+      + '.gwx-live i{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:gwxPulse 1.6s infinite}'
+      + '@keyframes gwxPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}'
+      + '.gwx-q{display:flex;gap:11px;align-items:flex-start;color:var(--silver1,#e7eef8);font-size:15px;font-weight:700;line-height:1.38;margin-bottom:14px;min-height:42px}'
+      + '.gwx-q-ico{flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:19px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}'
+      + '.gwx-outcomes{display:flex;flex-direction:column;gap:9px}'
+      + '.gwx-oc{display:flex;flex-direction:column;gap:9px;padding:11px;border-radius:13px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.045)}'
+      + '.gwx-oc-head{display:flex;align-items:center;gap:12px}'
+      + '.gwx-oc-l{flex:1;min-width:0}'
+      + '.gwx-oc-name{font-size:13px;font-weight:700;color:var(--silver2,#c8d4e8);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+      + '.gwx-bar{height:6px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}'
+      + '.gwx-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#3ac2ff,#22c55e);transition:width .5s ease}'
+      + '.gwx-oc-prob{font-size:16px;font-weight:800;color:var(--silver1,#e7eef8);font-variant-numeric:tabular-nums;min-width:44px;text-align:right}'
+      + '.gwx-oc-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}'
+      + '.gwx-bet{display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;border-radius:10px;border:1px solid transparent;font-weight:800;font-size:12.5px;cursor:pointer;transition:.13s}'
+      + '.gwx-bet b{font-weight:800;opacity:.85}'
+      + '.gwx-yes{background:rgba(34,197,94,.12);color:#34d27f;border-color:rgba(34,197,94,.22)}.gwx-yes:hover{background:rgba(34,197,94,.22);transform:translateY(-1px)}'
+      + '.gwx-no{background:rgba(239,68,68,.12);color:#f87171;border-color:rgba(239,68,68,.22)}.gwx-no:hover{background:rgba(239,68,68,.22);transform:translateY(-1px)}'
+      + '.gwx-card-foot{display:flex;gap:14px;flex-wrap:wrap;color:var(--silver5,#6b7a92);font-size:11px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.05)}'
+      + '.gwx-card-foot span{display:inline-flex;align-items:center;gap:4px}'
+      + '.gwx-none{grid-column:1/-1;text-align:center;color:var(--silver5,#6b7a92);font-size:14px;padding:48px 16px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.08);border-radius:16px}'
       + '.gwx-table{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:16px;overflow:hidden}'
-      + '.gwx-thead,.gwx-row{display:grid;grid-template-columns:minmax(170px,2fr) 1fr 1fr 1fr 1fr auto;gap:16px;align-items:center;padding:14px 18px}'
+      + '.gwx-thead,.gwx-row{display:grid;grid-template-columns:minmax(190px,2.2fr) 1fr 1fr 1fr 1fr auto;gap:16px;align-items:center;padding:14px 18px}'
       + '.gwx-thead{background:rgba(255,255,255,.03);color:var(--silver5,#6b7a92);font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.06)}'
-      + '.gwx-row{border-bottom:1px solid rgba(255,255,255,.04)}.gwx-row:last-child{border-bottom:0}.gwx-row:hover{background:rgba(255,255,255,.025)}'
-      + '.gwx-row-sym{display:flex;flex-direction:column}.gwx-tick{font-weight:800;font-size:14px;color:var(--silver1,#e7eef8)}.gwx-name{color:var(--silver5,#6b7a92);font-size:11px}'
-      + '.gwx-price{font-weight:700;font-size:14px;color:var(--silver1,#e7eef8)}.gwx-chg{font-weight:700;font-size:13px}.gwx-up{color:#22c55e}.gwx-dn{color:#f87171}'
+      + '.gwx-row{border-bottom:1px solid rgba(255,255,255,.04)}.gwx-row:last-child{border-bottom:0}.gwx-row:hover{background:rgba(255,255,255,.03)}'
+      + '.gwx-row-sym{display:flex;align-items:center;gap:11px;min-width:0}'
+      + '.gwx-logo{flex:none;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:11px;color:#04121b;letter-spacing:-.3px}'
+      + '.gwx-row-sym .nm{display:flex;flex-direction:column;min-width:0}'
+      + '.gwx-tick{font-weight:800;font-size:14px;color:var(--silver1,#e7eef8)}.gwx-name{color:var(--silver5,#6b7a92);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+      + '.gwx-price{font-weight:700;font-size:14px;color:var(--silver1,#e7eef8);font-variant-numeric:tabular-nums}.gwx-chg{font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}.gwx-up{color:#22c55e}.gwx-dn{color:#f87171}'
       + '.gwx-col-vol,.gwx-col-mc{color:var(--silver3,#9ba9bf);font-size:13px}'
       + '.gwx-row-actions{display:flex;gap:6px;justify-self:end}'
-      + '.gwx-trade{padding:6px 12px;border-radius:8px;border:0;font-weight:700;font-size:12px;cursor:pointer}'
-      + '.gwx-buy{background:rgba(34,197,94,.20);color:#22c55e}.gwx-buy:hover{background:rgba(34,197,94,.32)}'
-      + '.gwx-sell{background:rgba(239,68,68,.20);color:#f87171}.gwx-sell:hover{background:rgba(239,68,68,.32)}'
-      + '@media(max-width:1100px){.gwx-thead .gwx-col-vol,.gwx-thead .gwx-col-mc,.gwx-row .gwx-col-vol,.gwx-row .gwx-col-mc{display:none}.gwx-thead,.gwx-row{grid-template-columns:1.5fr 1fr 1fr auto}}'
+      + '.gwx-trade{padding:7px 13px;border-radius:9px;border:0;font-weight:700;font-size:12px;cursor:pointer;transition:.13s}'
+      + '.gwx-buy{background:rgba(34,197,94,.18);color:#34d27f}.gwx-buy:hover{background:rgba(34,197,94,.3);transform:translateY(-1px)}'
+      + '.gwx-sell{background:rgba(239,68,68,.18);color:#f87171}.gwx-sell:hover{background:rgba(239,68,68,.3);transform:translateY(-1px)}'
+      + '@media(max-width:1100px){.gwx-thead .gwx-col-vol,.gwx-thead .gwx-col-mc,.gwx-row .gwx-col-vol,.gwx-row .gwx-col-mc{display:none}.gwx-thead,.gwx-row{grid-template-columns:1.6fr 1fr 1fr auto}}'
+      + '@media(max-width:560px){.gwx-row-actions .gwx-sell{display:none}.gwx-h1{font-size:22px}}'
       + '.gwx-foot{color:var(--silver5,#6b7a92);font-size:12px;line-height:1.6;margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.05)}'
       + '.gwx-link{color:#3ac2ff;text-decoration:none}'
       + '@media(max-width:900px){.gwx-bal{border-right:none;padding-right:0}}';
@@ -13389,48 +13496,103 @@ var GROM_XSTOCKS = [
   /* ---- balance chip ---- */
   function updateBalChips() { document.querySelectorAll('.gwx-bal-v').forEach(function (el) { el.textContent = money(bal()); }); }
 
-  /* ---- page builders ---- */
-  function fmtVol(n) { return '$' + (n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : n.toFixed(0)); }
-  function buildPredict() {
-    var cards = GROM_PREDICT_MARKETS.map(function (m) {
-      return '<div class="gwx-card" data-mid="' + m.id + '">'
-        + '<div class="gwx-cat">' + m.cat + '</div>'
-        + '<div class="gwx-q">' + m.q + '</div>'
-        + '<div class="gwx-meta"><span>Объём 24ч · ' + fmtVol(m.vol) + '</span><span>Закрытие · ' + m.ends + '</span></div>'
-        + '<div class="gwx-bets">'
-        + '<button type="button" class="gwx-bet gwx-yes" data-side="a"><span class="gwx-bet-label">' + m.a + '</span><span class="gwx-bet-price">' + Math.round(m.pa * 100) + '¢</span></button>'
-        + '<button type="button" class="gwx-bet gwx-no" data-side="b"><span class="gwx-bet-label">' + m.b + '</span><span class="gwx-bet-price">' + Math.round(m.pb * 100) + '¢</span></button>'
+  /* ---- helpers ---- */
+  var gwxState = { pCat: 'all', pQ: '', sCat: 'all', sQ: '' };
+  var STOCK_MAP = {}; GROM_XSTOCKS.forEach(function (s) { STOCK_MAP[s.sym] = s; });
+  var gwxPx = {}, gwxB0 = {}, gwxPxInit = false;
+  function initPx() { if (gwxPxInit) return; GROM_XSTOCKS.forEach(function (s) { gwxPx[s.sym] = s.price; gwxB0[s.sym] = s.price / (1 + s.chg / 100); }); gwxPxInit = true; }
+  function curPx(sym) { initPx(); if (gwxPx[sym] != null) return gwxPx[sym]; var s = STOCK_MAP[sym]; return s ? s.price : 0; }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function escA(s) { return esc(s).replace(/"/g, '&quot;'); }
+  function fmtVol(n) { return '$' + (n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : n.toFixed(0)); }
+  function pcat(key) { for (var i = 0; i < GROM_PCATS.length; i++) if (GROM_PCATS[i][0] === key) return GROM_PCATS[i]; return ['all', '🌐', 'Все']; }
+  function logoBg(sym) {
+    var h = 0; for (var i = 0; i < sym.length; i++) h = (h * 31 + sym.charCodeAt(i)) % 360;
+    return 'linear-gradient(135deg,hsl(' + h + ',70%,58%),hsl(' + ((h + 40) % 360) + ',70%,46%))';
+  }
+
+  /* ---- card / row markup ---- */
+  function predictCardHtml(m) {
+    var c = pcat(m.cat);
+    var ocs = m.rows.map(function (r) {
+      var no = 100 - r.p;
+      return '<div class="gwx-oc"><div class="gwx-oc-head"><div class="gwx-oc-l">'
+        + '<div class="gwx-oc-name">' + esc(r.n) + '</div><div class="gwx-bar"><i style="width:' + r.p + '%"></i></div></div>'
+        + '<div class="gwx-oc-prob">' + r.p + '%</div></div>'
+        + '<div class="gwx-oc-btns">'
+        + '<button type="button" class="gwx-bet gwx-yes" data-side="yes" data-name="' + escA(r.n) + '" data-prob="' + r.p + '">Yes <b>' + r.p + '¢</b></button>'
+        + '<button type="button" class="gwx-bet gwx-no" data-side="no" data-name="' + escA(r.n) + '" data-prob="' + r.p + '">No <b>' + no + '¢</b></button>'
         + '</div></div>';
     }).join('');
+    return '<div class="gwx-card" data-q="' + escA(m.q) + '">'
+      + '<div class="gwx-card-top"><span class="gwx-cat">' + c[1] + ' ' + c[2] + '</span><span class="gwx-live"><i></i> LIVE</span></div>'
+      + '<div class="gwx-q"><span class="gwx-q-ico">' + m.ico + '</span><span>' + esc(m.q) + '</span></div>'
+      + '<div class="gwx-outcomes">' + ocs + '</div>'
+      + '<div class="gwx-card-foot"><span>📊 ' + fmtVol(m.vol) + '</span><span>👥 ' + m.part + '</span><span>⏱ ' + esc(m.ends) + '</span></div></div>';
+  }
+  function stockRowHtml(s) {
+    var px = curPx(s.sym), b0 = gwxB0[s.sym] || s.price, chg = (px / b0 - 1) * 100;
+    var cls = chg >= 0 ? 'gwx-up' : 'gwx-dn';
+    var ini = s.sym.replace(/[^A-Z]/g, '').slice(0, 2) || s.sym.slice(0, 2);
+    return '<div class="gwx-row" data-sym="' + s.sym + '" data-b0="' + b0 + '">'
+      + '<div class="gwx-row-sym"><div class="gwx-logo" style="background:' + logoBg(s.sym) + '">' + ini + '</div>'
+      + '<div class="nm"><div class="gwx-tick">' + s.sym + '</div><div class="gwx-name">' + esc(s.name) + '</div></div></div>'
+      + '<div class="gwx-price">$' + px.toFixed(2) + '</div>'
+      + '<div class="gwx-chg ' + cls + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</div>'
+      + '<div class="gwx-col-vol">' + s.vol24 + '</div>'
+      + '<div class="gwx-col-mc">' + s.mc + '</div>'
+      + '<div class="gwx-row-actions"><button type="button" class="gwx-trade gwx-buy" data-sym="' + s.sym + '" data-side="buy">Купить</button><button type="button" class="gwx-trade gwx-sell" data-sym="' + s.sym + '" data-side="sell">Продать</button></div>'
+      + '</div>';
+  }
+  function catTabsHtml(list, active) {
+    return list.map(function (c) {
+      var on = (c[0] === active) ? ' on' : '';
+      var label = (c.length === 3) ? (c[1] + ' ' + c[2]) : c[1];
+      return '<button type="button" class="gwx-pill' + on + '" data-cat="' + c[0] + '">' + label + '</button>';
+    }).join('');
+  }
+
+  /* ---- page builders ---- */
+  function buildPredict() {
+    initPx();
+    var totalVol = GROM_PREDICT_MARKETS.reduce(function (a, m) { return a + m.vol; }, 0);
     return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
       + '<h1 class="gwx-h1">🎯 Prediction Markets <span class="gwx-badge beta">BETA</span></h1>'
-      + '<div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + money(bal()) + '</b><small>Demo-баланс</small></div><div><b>$8.4M</b><small>Объём 24ч</small></div><div><b>' + GROM_PREDICT_MARKETS.length + '</b><small>Рынков</small></div></div></div>'
-      + '<p class="gwx-sub">Торгуй исходами реальных событий — спорт, крипто, экономика. Цена контракта = вероятность исхода. Ставки идут на demo-баланс.</p>'
-      + '<div class="gwx-cats"><button type="button" class="gwx-pill on">Все</button><button type="button" class="gwx-pill">Спорт</button><button type="button" class="gwx-pill">Крипто</button><button type="button" class="gwx-pill">Экономика</button></div></div>'
-      + '<div class="gwx-grid">' + cards + '</div>'
+      + '<div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + money(bal()) + '</b><small>Demo-баланс</small></div><div><b>' + fmtVol(totalVol) + '</b><small>Объём 24ч</small></div><div><b>' + GROM_PREDICT_MARKETS.length + '</b><small>Рынков</small></div></div></div>'
+      + '<p class="gwx-sub">Торгуй исходами реальных событий — спорт, крипто, киберспорт, политика, культура, финансы и экономика. Цена контракта = вероятность исхода. Ставки идут на demo-баланс.</p></div>'
+      + '<div class="gwx-toolbar"><div class="gwx-cats">' + catTabsHtml(GROM_PCATS, gwxState.pCat) + '</div>'
+      + '<div class="gwx-search"><input type="text" placeholder="Поиск рынков…" /></div></div>'
+      + '<div class="gwx-grid"></div>'
       + '<div class="gxp" id="gromPredictPos"><div class="gxp-h">Мои ставки</div><div class="gxp-list"></div></div>'
-      + '<div class="gwx-foot">Demo-режим: ставки на виртуальный баланс. Реальные контракты будут рассчитываться через oracle (Chainlink / UMA) после фиксации исхода. Комиссия GROM — 0.5%.</div></div>';
+      + '<div class="gwx-foot">Demo-режим: ставки на виртуальный баланс. Реальные контракты рассчитываются через oracle (Chainlink / UMA) после фиксации исхода. Комиссия GROM — 0.5%.</div></div>';
   }
   function buildXstocks() {
-    var rows = GROM_XSTOCKS.map(function (s) {
-      var cls = s.chg >= 0 ? 'gwx-up' : 'gwx-dn';
-      return '<div class="gwx-row" data-sym="' + s.sym + '">'
-        + '<div class="gwx-row-sym"><div class="gwx-tick">' + s.sym + '</div><div class="gwx-name">' + s.name + '</div></div>'
-        + '<div class="gwx-price">$' + s.price.toFixed(2) + '</div>'
-        + '<div class="gwx-chg ' + cls + '">' + (s.chg >= 0 ? '+' : '') + s.chg.toFixed(2) + '%</div>'
-        + '<div class="gwx-col-vol">' + s.vol24 + '</div>'
-        + '<div class="gwx-col-mc">' + s.mc + '</div>'
-        + '<div class="gwx-row-actions"><button type="button" class="gwx-trade gwx-buy" data-sym="' + s.sym + '" data-side="buy">Купить</button><button type="button" class="gwx-trade gwx-sell" data-sym="' + s.sym + '" data-side="sell">Продать</button></div>'
-        + '</div>';
-    }).join('');
+    initPx();
     return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
       + '<h1 class="gwx-h1">📈 Tokenized Stocks <span class="gwx-badge new">NEW</span></h1>'
-      + '<div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + money(bal()) + '</b><small>Demo-баланс</small></div><div><b>' + GROM_XSTOCKS.length + '+</b><small>Тикеров</small></div><div><b>24/7</b><small>Торговля</small></div></div></div>'
-      + '<p class="gwx-sub">Реальные акции S&amp;P 500 / NASDAQ обёрнутые в токены на BSC. Цена 1:1 с биржей, обновляется в реальном времени. Сделки — на demo-баланс.</p>'
-      + '<div class="gwx-cats"><button type="button" class="gwx-pill on">Топ</button><button type="button" class="gwx-pill">Технологии</button><button type="button" class="gwx-pill">Финансы</button><button type="button" class="gwx-pill">ETF</button></div></div>'
-      + '<div class="gwx-table"><div class="gwx-thead"><div>Тикер</div><div>Цена</div><div>24ч %</div><div class="gwx-col-vol">Объём 24ч</div><div class="gwx-col-mc">Market Cap</div><div></div></div>' + rows + '</div>'
+      + '<div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + money(bal()) + '</b><small>Demo-баланс</small></div><div><b>' + GROM_XSTOCKS.length + '</b><small>Тикеров</small></div><div><b>24/7</b><small>Торговля</small></div></div></div>'
+      + '<p class="gwx-sub">Реальные акции S&amp;P 500 / NASDAQ обёрнутые в токены на BSC. Цена 1:1 с биржей, обновляется в реальном времени. Сделки — на demo-баланс.</p></div>'
+      + '<div class="gwx-toolbar"><div class="gwx-cats">' + catTabsHtml(GROM_SCATS, gwxState.sCat) + '</div>'
+      + '<div class="gwx-search"><input type="text" placeholder="Поиск тикера…" /></div></div>'
+      + '<div class="gwx-table"><div class="gwx-thead"><div>Тикер</div><div>Цена</div><div>24ч %</div><div class="gwx-col-vol">Объём 24ч</div><div class="gwx-col-mc">Market Cap</div><div></div></div><div class="gwx-rows"></div></div>'
       + '<div class="gxp" id="gromStockPos"><div class="gxp-h">Мои позиции</div><div class="gxp-list"></div></div>'
       + '<div class="gwx-foot">Demo-режим: сделки на виртуальный баланс. Реальный расчёт — через смарт-контракты BSC / Solana (Backed Finance / Dinari). Маржа до 5x в следующем апдейте.</div></div>';
+  }
+  function renderPredictGrid() {
+    var grid = document.querySelector('#page-predict .gwx-grid'); if (!grid) return;
+    var q = gwxState.pQ.trim().toLowerCase();
+    var list = GROM_PREDICT_MARKETS.filter(function (m) {
+      return (gwxState.pCat === 'all' || m.cat === gwxState.pCat) && (!q || m.q.toLowerCase().indexOf(q) >= 0);
+    });
+    grid.innerHTML = list.length ? list.map(predictCardHtml).join('') : '<div class="gwx-none">Ничего не найдено по этому фильтру 🔍</div>';
+  }
+  function renderXstocksRows() {
+    var host = document.querySelector('#page-xstocks .gwx-rows'); if (!host) return;
+    var q = gwxState.sQ.trim().toLowerCase();
+    var list = GROM_XSTOCKS.filter(function (s) {
+      return (gwxState.sCat === 'all' || s.cat === gwxState.sCat) && (!q || s.sym.toLowerCase().indexOf(q) >= 0 || s.name.toLowerCase().indexOf(q) >= 0);
+    });
+    host.innerHTML = list.length ? list.map(stockRowHtml).join('') : '<div class="gwx-none" style="border:0">Ничего не найдено 🔍</div>';
   }
 
   // Create real <section class="page"> shells so the app's own show() router
@@ -13444,6 +13606,7 @@ var GROM_XSTOCKS = [
       sec.innerHTML = '<div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">' + p[2] + '</span></div>' + p[1]();
       anchor.parentNode.appendChild(sec);
     });
+    renderPredictGrid(); renderXstocksRows();
   }
 
   /* ---- positions ---- */
@@ -13453,7 +13616,7 @@ var GROM_XSTOCKS = [
     var arr = loadPos('grom_xstock_pos');
     if (!arr.length) { list.innerHTML = '<div class="gxp-empty">Пока нет позиций. Купи токенизированную акцию выше — сделка на demo-баланс.</div>'; return; }
     list.innerHTML = arr.map(function (p, i) {
-      var cur = livePx(p.sym) || p.px; var val = p.qty * cur;
+      var cur = curPx(p.sym) || p.px; var val = p.qty * cur;
       var pnl = (p.side === 'buy') ? (val - p.usd) : (p.usd - val);
       return '<div class="gxp-row"><div><b>' + p.sym + '<span class="gxp-side ' + (p.side === 'buy' ? 'b' : 's') + '">' + (p.side === 'buy' ? 'LONG' : 'SHORT') + '</span></b>'
         + '<small>' + p.qty.toFixed(4) + ' @ $' + p.px.toFixed(2) + ' · сейчас $' + cur.toFixed(2) + '</small></div>'
@@ -13476,7 +13639,7 @@ var GROM_XSTOCKS = [
   function closePos(kind, i) {
     if (kind === 'stock') {
       var arr = loadPos('grom_xstock_pos'); var p = arr[i]; if (!p) return;
-      var cur = livePx(p.sym) || p.px; var val = p.qty * cur;
+      var cur = curPx(p.sym) || p.px; var val = p.qty * cur;
       setBal(bal() + (p.side === 'buy' ? val : (2 * p.usd - val)));
       arr.splice(i, 1); savePos('grom_xstock_pos', arr); notify('Позиция ' + p.sym + ' закрыта', 'success'); renderStockPos();
     } else if (kind === 'predict') {
@@ -13490,8 +13653,7 @@ var GROM_XSTOCKS = [
   function onStock(row, side) {
     if (!row) return;
     var sym = row.dataset.sym; if (!sym) return;
-    var pxEl = row.querySelector('.gwx-price');
-    var px = livePx(sym) || parseFloat((pxEl ? pxEl.textContent : '').replace(/[^0-9.]/g, '')) || 0;
+    var px = curPx(sym) || 0;
     if (!px) { notify('Цена недоступна', 'error'); return; }
     openModal({
       title: (side === 'buy' ? 'Купить ' : 'Продать ') + sym,
@@ -13506,15 +13668,17 @@ var GROM_XSTOCKS = [
     });
   }
   function onBet(btn) {
-    var card = btn.closest('.gwx-card'); if (!card) return;
-    var labelEl = btn.querySelector('.gwx-bet-label'); var priceEl = btn.querySelector('.gwx-bet-price');
-    var label = labelEl ? labelEl.textContent.trim() : 'Исход';
-    var cents = parseFloat((priceEl ? priceEl.textContent : '').replace(/[^0-9.]/g, '')) || 50;
-    var p = Math.min(0.99, Math.max(0.01, cents / 100));
-    var qEl = card.querySelector('.gwx-q'); var q = qEl ? qEl.textContent.trim() : '';
+    var card = btn.closest('.gwx-card');
+    var q = card ? (card.getAttribute('data-q') || '') : '';
+    var name = btn.dataset.name || 'Исход';
+    var side = btn.dataset.side === 'no' ? 'no' : 'yes';
+    var prob = parseFloat(btn.dataset.prob) || 50;
+    var p = side === 'yes' ? prob / 100 : (100 - prob) / 100;
+    p = Math.min(0.99, Math.max(0.01, p));
+    var label = name + ' · ' + (side === 'yes' ? 'Yes' : 'No');
     openModal({
       title: 'Ставка: ' + label, sub: q, confirmLabel: 'Купить шансы',
-      info: function (v) { if (!v) return 'Цена ' + Math.round(p * 100) + '¢ = вероятность ' + Math.round(p * 100) + '%.'; var sh = v / p; return 'Получишь ' + sh.toFixed(2) + ' шансов · макс. выплата ' + money(sh) + ' если «' + label + '» сыграет.'; },
+      info: function (v) { if (!v) return 'Цена ' + Math.round(p * 100) + '¢ = вероятность ' + Math.round(p * 100) + '%.'; var sh = v / p; return 'Получишь ' + sh.toFixed(2) + ' контрактов · макс. выплата ' + money(sh) + ', если исход сыграет.'; },
       onConfirm: function (v) {
         var sh = v / p; setBal(bal() - v);
         var arr = loadPos('grom_predict_pos'); arr.unshift({ label: label, q: q, stake: v, price: p, shares: sh, t: Date.now() }); savePos('grom_predict_pos', arr);
@@ -13531,27 +13695,47 @@ var GROM_XSTOCKS = [
     var cl = e.target.closest('.gxp-close');
     if (cl) { e.preventDefault(); e.stopPropagation(); closePos(cl.dataset.k, parseInt(cl.dataset.i, 10)); return; }
     var pill = e.target.closest('.gwx-cats .gwx-pill');
-    if (pill) { var bar = pill.parentNode; bar.querySelectorAll('.gwx-pill').forEach(function (x) { x.classList.remove('on'); }); pill.classList.add('on'); return; }
+    if (pill) {
+      e.preventDefault(); e.stopPropagation();
+      pill.parentNode.querySelectorAll('.gwx-pill').forEach(function (x) { x.classList.remove('on'); }); pill.classList.add('on');
+      if (pill.closest('#page-predict')) { gwxState.pCat = pill.dataset.cat; renderPredictGrid(); }
+      else if (pill.closest('#page-xstocks')) { gwxState.sCat = pill.dataset.cat; renderXstocksRows(); }
+      return;
+    }
+  });
+  document.addEventListener('input', function (e) {
+    var inp = e.target.closest('.gwx-search input'); if (!inp) return;
+    var v = inp.value || '';
+    if (inp.closest('#page-predict')) { gwxState.pQ = v; renderPredictGrid(); }
+    else if (inp.closest('#page-xstocks')) { gwxState.sQ = v; renderXstocksRows(); }
   });
 
-  /* ---- live stock prices + gentle predict drift (only when page is active) ---- */
+  /* ---- synthetic live drift (only when page is active) ---- */
   function refreshStockPrices() {
     var page = document.getElementById('page-xstocks'); if (!page || !page.classList.contains('active')) return;
+    initPx();
     page.querySelectorAll('.gwx-row[data-sym]').forEach(function (row) {
-      var px = livePx(row.dataset.sym); if (px == null) return;
-      var pe = row.querySelector('.gwx-price'); if (pe) pe.textContent = '$' + px.toFixed(2);
-      var chg = (typeof window.gromLiveChange === 'function') ? Number(window.gromLiveChange(row.dataset.sym)) : NaN;
-      if (isFinite(chg)) { var ce = row.querySelector('.gwx-chg'); if (ce) { ce.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%'; ce.classList.toggle('gwx-up', chg >= 0); ce.classList.toggle('gwx-dn', chg < 0); } }
+      var sym = row.dataset.sym; var b0 = parseFloat(row.dataset.b0) || gwxB0[sym] || curPx(sym);
+      var p = gwxPx[sym] != null ? gwxPx[sym] : curPx(sym);
+      p = p * (1 + (Math.random() * 0.0036 - 0.0018)); gwxPx[sym] = p;
+      var chg = (p / b0 - 1) * 100;
+      var pe = row.querySelector('.gwx-price'); if (pe) pe.textContent = '$' + p.toFixed(2);
+      var ce = row.querySelector('.gwx-chg'); if (ce) { ce.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%'; ce.classList.toggle('gwx-up', chg >= 0); ce.classList.toggle('gwx-dn', chg < 0); }
     });
   }
   function driftPredict() {
     var page = document.getElementById('page-predict'); if (!page || !page.classList.contains('active')) return;
-    page.querySelectorAll('.gwx-card').forEach(function (card) {
-      var bets = card.querySelectorAll('.gwx-bet-price'); if (bets.length !== 2) return;
-      var a = parseFloat(bets[0].textContent) || 50;
-      a = Math.min(96, Math.max(4, a + (Math.random() * 2 - 1)));
-      bets[0].textContent = Math.round(a) + '¢';
-      bets[1].textContent = Math.round(100 - a) + '¢';
+    page.querySelectorAll('.gwx-oc').forEach(function (oc) {
+      var probEl = oc.querySelector('.gwx-oc-prob'); var bar = oc.querySelector('.gwx-bar i');
+      var yes = oc.querySelector('.gwx-bet.gwx-yes'); var no = oc.querySelector('.gwx-bet.gwx-no');
+      if (!probEl || !yes) return;
+      var a = parseFloat(probEl.textContent) || 50;
+      a = Math.round(Math.min(99, Math.max(1, a + (Math.random() * 2 - 1))));
+      probEl.textContent = a + '%';
+      if (bar) bar.style.width = a + '%';
+      yes.dataset.prob = a; no.dataset.prob = a;
+      var yb = yes.querySelector('b'); if (yb) yb.textContent = a + '¢';
+      var nb = no.querySelector('b'); if (nb) nb.textContent = (100 - a) + '¢';
     });
   }
   function refreshActive() {

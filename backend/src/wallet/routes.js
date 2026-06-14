@@ -438,6 +438,19 @@ export function createWalletRouter({ requireAuth, priceAggregator, wsBroadcaster
         const address = await ensureBinanceDepositAddress(req.user.sub, input.asset, input.network);
         return res.json({ depositAddress: address });
       }
+      // SECURITY: when Binance hot-wallet is OFF, the fallback code below derives
+      // a deterministic seed-based "mock" address (e.g. 0xbb67ec2a…) that GROM
+      // has NO private key for. Sending real funds to it loses them. The legacy
+      // wallet UI relied on this for screenshots, but the new web3-native UI
+      // surfaces it to live users — so refuse to serve it in production unless
+      // the operator explicitly opts in via GROM_ALLOW_MOCK_DEPOSIT_ADDRESS=true.
+      const allowMock = ['1', 'true', 'TRUE'].includes(process.env.GROM_ALLOW_MOCK_DEPOSIT_ADDRESS || '');
+      if (config.env === 'production' && !allowMock) {
+        return res.status(503).json({
+          error: 'custodial_deposit_unavailable',
+          detail: 'GROM custodial deposits require BINANCE_HOT_WALLET=true (currently disabled). Use the non-custodial deposit flow instead.',
+        });
+      }
       const existing = await query(
         `SELECT asset, network, address, derivation_index, created_at
            FROM deposit_addresses

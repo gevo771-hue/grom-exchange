@@ -1055,6 +1055,35 @@ function gwHydrateFiatProviders() {
     wrap.appendChild(b);
   }
 }
+/* Inject a CSS rule that makes the wallet modal scrollable when its body
+ * outgrows the viewport. The walletops module added a custody toggle + 11+
+ * network chips (vs Cursor's 7), and on shorter screens the head/foot get
+ * clipped. We tighten chip sizing, cap modal height to 90vh, and let the body
+ * scroll. All overrides are scoped to the modal so the rest of the UI is
+ * untouched. */
+function gwInjectModalCss() {
+  if (document.getElementById('gw-modal-fixups')) return;
+  const css = `
+    .wm-overlay .wm { max-height: 90vh; display: flex; flex-direction: column; }
+    .wm-overlay .wm-head { flex: 0 0 auto; position: sticky; top: 0; background: inherit; z-index: 2; }
+    .wm-overlay .wm-tabs { flex: 0 0 auto; position: sticky; top: 44px; background: inherit; z-index: 1; }
+    .wm-overlay .wm-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+    .wm-overlay .wm-actions { flex: 0 0 auto; position: sticky; bottom: 0; background: inherit; z-index: 1; padding-top: 8px; }
+    .wm-overlay .net-grid { gap: 6px; }
+    .wm-overlay .net-grid .net-chip { padding: 6px 10px; font-size: 12px; min-height: 32px; line-height: 1.2; }
+    .wm-overlay .wm-qr { width: 110px; height: 110px; margin: 8px auto; }
+    .wm-overlay .wm-addr { font-size: 11px; word-break: break-all; }
+    @media (max-height: 720px) {
+      .wm-overlay .wm { max-height: 96vh; }
+      .wm-overlay .wm-qr { width: 88px; height: 88px; }
+    }
+  `;
+  const style = document.createElement('style');
+  style.id = 'gw-modal-fixups';
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+
 function gwInitWalletModalOps() {
   // Override Cursor's inline modal functions (in index.html). These globals
   // were rendering a hardcoded network list with FAKE demo addresses
@@ -1062,6 +1091,7 @@ function gwInitWalletModalOps() {
   // backend (`/api/wallet/deposit-address` in seed-fallback mode) that GROM
   // does NOT hold the private key for. Users who deposit to either lose funds.
   // We replace these with our connected-wallet (Web3-native) implementation.
+  gwInjectModalCss();
   window.submitSend = gwSubmitSend;
   window.submitSwap = gwSubmitSwap;
   window.openFiatProvider = gwOpenFiatProvider;

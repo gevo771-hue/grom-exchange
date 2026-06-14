@@ -722,10 +722,8 @@ const GROM_FIAT_PROVIDERS = {
     label: 'MoonPay',
     url: (q) => `https://buy.moonpay.com/?defaultCurrencyCode=${encodeURIComponent(q.asset.toLowerCase())}&baseCurrencyCode=${encodeURIComponent(q.fiat.toLowerCase())}&baseCurrencyAmount=${q.amount}&walletAddress=${encodeURIComponent(q.address)}`,
   },
-  transak: {
-    label: 'Transak',
-    url: (q) => `https://global.transak.com/?cryptoCurrencyCode=${encodeURIComponent(q.asset)}&fiatCurrency=${encodeURIComponent(q.fiat)}&fiatAmount=${q.amount}&walletAddress=${encodeURIComponent(q.address)}`,
-  },
+  // Transak blocks RU/CIS IPs via Cloudflare ("Sorry, you have been blocked").
+  // Disabled until we either obtain a partner key or proxy through our own backend.
   // Ramp Network public widget rejects requests without an API key — disabling
   // until we either obtain a B2B partner key or build a proxy. Was showing
   // "Integration issue detected" to users.
@@ -945,9 +943,12 @@ async function gwSubmitSend() {
   const to    = (document.getElementById('wmSendTo')?.value || '').trim();
   const amt   = Number(document.getElementById('wmSendAmt')?.value || 0);
   if (!to || amt <= 0) { gwToast('Recipient and amount required', 'warn'); return; }
-  if (!window.ethereum) { gwToast('No EVM wallet detected. Connect MetaMask/Trust first.', 'warn'); return; }
+  if (!window.ethereum) {
+    gwPromptSignIn('No EVM wallet detected. Connect MetaMask / Trust / Coinbase to send.');
+    return;
+  }
   const from = gwUserAddress();
-  if (!from) { gwToast('Connect a wallet first', 'warn'); return; }
+  if (!from) { gwPromptSignIn('Connect a wallet first to sign the transaction.'); return; }
   try {
     const chainHex = await window.ethereum.request({ method: 'eth_chainId' });
     const chainKey = Object.entries(GROM_NETWORKS).find(([k, v]) => v.hex === chainHex)?.[0];
@@ -981,6 +982,19 @@ async function gwSubmitSend() {
 }
 
 /* === SWAP pane: Binance Convert via backend =============================== */
+/* When a sign-in is required, open the wallet/connect modal instead of just
+ * toasting. Cursor's flow shows the actions side-by-side, so the user gets
+ * a clear "click here to fix it" affordance. */
+function gwPromptSignIn(message) {
+  gwToast(message || 'Sign in first to continue', 'warn');
+  try {
+    if (typeof window.closeWalletModal === 'function') window.closeWalletModal();
+    if (typeof window.openConnectModal === 'function') {
+      setTimeout(() => window.openConnectModal(), 200);
+    }
+  } catch (_) {}
+}
+
 async function gwSubmitSwap() {
   const from = (document.getElementById('wmSwapFrom')?.value || 'USDT').toUpperCase();
   const to   = (document.getElementById('wmSwapTo')?.value || 'BTC').toUpperCase();
@@ -988,7 +1002,7 @@ async function gwSubmitSwap() {
   if (amt <= 0) { gwToast('Enter amount', 'warn'); return; }
   if (from === to) { gwToast('Choose different assets', 'warn'); return; }
   const jwt = localStorage.getItem('grom_jwt');
-  if (!jwt) { gwToast('Sign in first', 'warn'); return; }
+  if (!jwt) { gwPromptSignIn('Swap requires sign-in. Choose how to log in:'); return; }
   try {
     gwToast('Fetching quote…', 'info');
     const q = await fetch('/api/swap/convert/quote', {
@@ -1047,10 +1061,12 @@ function gwHydrateFiatProviders() {
   const wrap = document.getElementById('fiatProviders');
   if (!wrap || wrap.dataset.gwExpanded) return;
   wrap.dataset.gwExpanded = '1';
-  // Hide Cursor's "Ramp" button — Ramp public widget rejects requests without
-  // an API key (shows "Integration issue detected"). Re-enable after partner
-  // signup.
-  wrap.querySelectorAll('.prov[data-prov="ramp"]').forEach(el => el.remove());
+  // Hide Cursor's "Ramp" + "Transak" buttons:
+  //   - Ramp public widget rejects requests without an API key (shows
+  //     "Integration issue detected")
+  //   - Transak blocks RU/CIS IPs via Cloudflare ("Sorry, you have been blocked")
+  // Re-enable when we either get partner keys or proxy through our backend.
+  wrap.querySelectorAll('.prov[data-prov="ramp"], .prov[data-prov="transak"]').forEach(el => el.remove());
   const present = new Set(Array.from(wrap.querySelectorAll('.prov')).map(b => b.dataset.prov));
   const extra = [
     { key: 'binanceP2P', label: 'Binance P2P' },
@@ -1124,7 +1140,14 @@ function gwPatchCursorDepositFlow() {
         const memoCard = document.getElementById('depMemoCard');
         if (memoCard) memoCard.hidden = true;
         if (!addr) {
-          if (addrEl) addrEl.textContent = 'Connect a wallet first — without it there\'s nowhere to receive funds.';
+          if (addrEl) {
+            addrEl.innerHTML = '<button type="button" style="all:unset;cursor:pointer;color:var(--cyan);text-decoration:underline">Connect a wallet</button> to receive funds.';
+            const btn = addrEl.querySelector('button');
+            if (btn) btn.onclick = () => {
+              if (typeof window.closeWalletModal === 'function') window.closeWalletModal();
+              setTimeout(() => { try { window.openConnectModal?.(); } catch (_) {} }, 200);
+            };
+          }
           if (qrEl) { qrEl.classList.add('pending'); qrEl.innerHTML = 'Wallet not connected'; }
           window.gromDepState.address = '';
           return;
@@ -1147,6 +1170,28 @@ function gwPatchCursorDepositFlow() {
   window.gromDepLoadAddress.__gwPatched = true;
   console.log('[grom-walletops] patched gromDepLoadAddress for self-custody');
   return true;
+}
+
+/* Expand Send + Swap asset dropdowns from Cursor's hardcoded 4
+ * (USDT/BTC/ETH/SOL) to the 11 supported assets. Idempotent — only adds
+ * options that aren't already present. Called on init + on every modal
+ * open via re-hydrate. */
+const GW_SUPPORTED_ASSETS = ['USDT','USDC','BTC','ETH','SOL','BNB','TRX','MATIC','AVAX','TON','XRP'];
+function gwExpandAssetSelect(id) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const present = new Set(Array.from(sel.options).map(o => o.value));
+  for (const a of GW_SUPPORTED_ASSETS) {
+    if (present.has(a)) continue;
+    const o = document.createElement('option');
+    o.value = a; o.textContent = a;
+    sel.appendChild(o);
+  }
+}
+function gwExpandSendSwapDropdowns() {
+  gwExpandAssetSelect('wmSendAsset');
+  gwExpandAssetSelect('wmSwapFrom');
+  gwExpandAssetSelect('wmSwapTo');
 }
 
 function gwInitWalletModalOps() {
@@ -1203,6 +1248,7 @@ function gwInitWalletModalOps() {
       setTimeout(() => { try { gwHydrateDepositPane(); } catch (_) {} }, 250);
     }
     try { gwHydrateFiatProviders(); } catch (e) { console.warn('[grom-fiat] hydrate:', e); }
+    try { gwExpandSendSwapDropdowns(); } catch (e) { console.warn('[grom-assets] expand:', e); }
   };
   const obs = new MutationObserver(reHydrate);
   obs.observe(modal, { attributes: true, attributeFilter: ['style', 'class'] });

@@ -1388,38 +1388,98 @@ function gwRenderExtraPage() {
 }
 
 function gwInjectExtraNavItems() {
-  // Find Cursor's sidebar via the existing nav anchor that targets Рынки/markets
-  const allLinks = Array.from(document.querySelectorAll('a, button')).filter(el =>
-    /Рынки|Markets/i.test(el.textContent || '') && /(#markets|markets)/.test(el.getAttribute('href') || el.dataset.target || '')
-  );
-  const after = allLinks[0];
-  if (!after) return setTimeout(gwInjectExtraNavItems, 600);
+  // Try multiple strategies to find Cursor's sidebar nav item for Рынки/Markets.
+  // Cursor uses inline onclick="show('markets')" buttons, not <a href>, so we
+  // must scan all clickable elements and match by text or onclick handler.
+  const candidates = Array.from(document.querySelectorAll('button, a, [role="link"], div[onclick]'));
+  let after = null;
+  for (const el of candidates) {
+    const txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    const onclick = (el.getAttribute('onclick') || '').toLowerCase();
+    const href = (el.getAttribute('href') || '').toLowerCase();
+    if (
+      (txt === 'Рынки' || txt === 'Markets' || /^Рынки/.test(txt) || /^Markets/.test(txt)) &&
+      // Make sure it's inside what looks like a sidebar — left rail, not main content
+      el.getBoundingClientRect().left < 280
+    ) {
+      after = el;
+      break;
+    }
+    if ((onclick.includes("show('markets')") || onclick.includes('show("markets")') || href === '#markets') && el.getBoundingClientRect().left < 280) {
+      after = el;
+      break;
+    }
+  }
+  if (!after) return false;
   const parent = after.parentElement;
-  if (!parent || parent.dataset.gwExtras) return;
+  if (!parent || parent.dataset.gwExtras === '1') return true;
   parent.dataset.gwExtras = '1';
   for (const p of GW_EXTRA_PAGES) {
     if (document.getElementById('gwNav_' + p.hash)) continue;
-    const link = document.createElement('a');
+    // Clone the Рынки item for pixel-perfect look, then mutate
+    const link = after.cloneNode(true);
     link.id = 'gwNav_' + p.hash;
-    link.href = '#' + p.hash;
-    link.className = after.className;
-    // Match Cursor's icon+label structure
-    const iconSpan = `<span style="display:inline-flex;width:18px;justify-content:center">${p.icon}</span>`;
-    const badgeHtml = p.badge ? `<span style="margin-left:auto;background:rgba(58,194,255,0.18);color:var(--cyan,#3ac2ff);padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px">${p.badge}</span>` : '';
-    link.innerHTML = `${iconSpan}<span>${p.label}</span>${badgeHtml}`;
-    link.style.cssText = (after.getAttribute('style') || '') + ';display:flex;align-items:center;gap:10px';
+    link.removeAttribute('onclick');
+    link.removeAttribute('data-page');
+    if (link.tagName === 'A') link.href = '#' + p.hash;
+    else {
+      link.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        location.hash = '#' + p.hash;
+      });
+    }
+    // Try to find the label text node and replace it
+    const replaceText = (node, text) => {
+      for (const ch of Array.from(node.childNodes)) {
+        if (ch.nodeType === 3 && ch.nodeValue.trim()) { ch.nodeValue = text; return true; }
+        if (ch.nodeType === 1 && !ch.querySelector('img,svg,use') && ch.children.length === 0 && ch.textContent.trim()) { ch.textContent = text; return true; }
+      }
+      return false;
+    };
+    if (!replaceText(link, p.label)) {
+      // Fallback: just set the entire text
+      link.textContent = `${p.icon} ${p.label}`;
+    }
+    // Remove "active" class — only Рынки is active now
+    link.classList.remove('active', 'is-active', 'current');
+    // Inject a small badge if there isn't one
+    if (p.badge) {
+      const badge = document.createElement('span');
+      badge.textContent = p.badge;
+      badge.style.cssText = 'margin-left:auto;background:rgba(58,194,255,0.18);color:var(--cyan,#3ac2ff);padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px;align-self:center';
+      link.appendChild(badge);
+    }
     after.parentNode.insertBefore(link, after.nextSibling);
   }
+  return true;
 }
+
+// Run the injection on init + every time DOM mutates (Cursor's router may
+// re-render the sidebar when switching pages). Cap at 30 seconds to avoid
+// runaway observers.
+function gwSetupExtraNavObserver() {
+  if (gwInjectExtraNavItems()) return;
+  let tries = 0;
+  const interval = setInterval(() => {
+    tries++;
+    if (gwInjectExtraNavItems() || tries >= 30) clearInterval(interval);
+  }, 1000);
+}
+
+// Export for debugging
+window.gwInjectExtraNavItems = gwInjectExtraNavItems;
+window.gwRenderExtraPage = gwRenderExtraPage;
+window.gwHandleSymbolFromHash = gwHandleSymbolFromHash;
+window.GW_EXTRA_PAGES = GW_EXTRA_PAGES;
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    gwInjectExtraNavItems();
+    gwSetupExtraNavObserver();
     gwRenderExtraPage();
     gwHandleSymbolFromHash();
   });
 } else {
-  gwInjectExtraNavItems();
+  gwSetupExtraNavObserver();
   gwRenderExtraPage();
   gwHandleSymbolFromHash();
 }

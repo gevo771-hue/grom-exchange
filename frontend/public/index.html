@@ -6731,6 +6731,116 @@
   </div>
 </div>
 
+<style id="dep-flow-css">
+/* ===== Deposit flow (Binance/Bybit-style multi-screen) ===== */
+.dep-flow { display: flex; flex-direction: column; min-height: 0; }
+.dep-steps { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; flex-wrap: wrap; }
+.dep-step { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--silver5); text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+.dep-step::after { content: "›"; color: var(--silver5); opacity: .5; margin-left: 6px; }
+.dep-step:last-child::after { content: ""; margin: 0; }
+.dep-step.active { color: var(--cyan); }
+.dep-step.done { color: var(--silver2); }
+.dep-screen { display: none; animation: depFade .22s ease; }
+.dep-screen.active { display: block; }
+@keyframes depFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.dep-back { background: none; border: none; color: var(--silver3); font-size: 13px; font-weight: 700; cursor: pointer; padding: 2px 0 10px; display: inline-flex; align-items: center; gap: 4px; }
+.dep-back:hover { color: var(--cyan); }
+.dep-h { margin: 0 0 12px; font-size: 15px; font-weight: 800; color: var(--silver1); }
+.dep-h .dep-h-sub { display: block; font-size: 12px; font-weight: 500; color: var(--silver5); margin-top: 2px; }
+
+/* search */
+.dep-search-wrap { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; gap: 8px; background: rgba(11,18,32,.7); backdrop-filter: blur(8px); border: 1px solid rgba(122,162,199,.18); border-radius: 12px; padding: 0 12px; margin-bottom: 12px; }
+.dep-search-wrap svg { flex: none; color: var(--silver5); }
+#depCoinSearch { flex: 1; background: none; border: none; outline: none; color: var(--silver1); font: inherit; font-size: 14px; padding: 11px 0; }
+#depCoinSearch::placeholder { color: var(--silver5); }
+
+/* popular */
+.dep-popular { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.dep-pop { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px 6px 6px; border-radius: 999px; border: 1px solid rgba(122,162,199,.2); background: rgba(11,18,32,.5); color: var(--silver2); font-weight: 700; font-size: 12px; cursor: pointer; }
+.dep-pop:hover { border-color: var(--cyan); color: var(--silver1); }
+.dep-pop .coin-ico { width: 20px; height: 20px; min-width: 20px; min-height: 20px; font-size: 8px; }
+.dep-pop-label { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--silver5); text-transform: uppercase; width: 100%; margin-bottom: -4px; }
+
+/* coin list */
+.dep-coin-list { display: flex; flex-direction: column; gap: 2px; max-height: 46vh; overflow-y: auto; margin: 0 -4px 10px; padding: 0 4px; }
+.dep-coin { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
+.dep-coin:hover { background: rgba(28,46,71,.4); }
+.dep-coin.sel { background: rgba(0,194,255,.1); border-color: rgba(0,194,255,.4); }
+.dep-coin .coin-ico { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
+.dep-coin-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.dep-coin-tk { font-weight: 700; color: var(--silver1); font-size: 14px; }
+.dep-coin-nm { font-size: 11.5px; color: var(--silver5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dep-coin-bal { font-size: 12px; color: var(--silver3); font-variant-numeric: tabular-nums; text-align: right; }
+.dep-coin-empty { padding: 24px 10px; text-align: center; color: var(--silver5); font-size: 13px; }
+
+/* network cards */
+.dep-network-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.dep-net { width: 100%; text-align: left; display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; border: 1px solid rgba(122,162,199,.18); background: rgba(11,18,32,.5); cursor: pointer; transition: border-color .15s, box-shadow .15s, background .15s; }
+.dep-net:hover { border-color: rgba(0,194,255,.45); }
+.dep-net.sel { border-color: var(--cyan); background: rgba(0,194,255,.08); box-shadow: 0 0 0 1px var(--cyan), 0 8px 22px rgba(0,194,255,.12); }
+.dep-net-badge { flex: none; width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 11px; color: #00131c; background: linear-gradient(135deg, var(--cyan), #0091c4); letter-spacing: -.02em; }
+.dep-net-body { flex: 1; min-width: 0; }
+.dep-net-name { font-weight: 700; color: var(--silver1); font-size: 13.5px; }
+.dep-net-sub { font-size: 11.5px; color: var(--silver5); margin-top: 2px; }
+.dep-net-tick { flex: none; color: var(--cyan); opacity: 0; font-weight: 900; }
+.dep-net.sel .dep-net-tick { opacity: 1; }
+
+/* custody cards */
+.dep-custody { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.dep-cust-card { width: 100%; text-align: left; padding: 14px; border-radius: 12px; border: 1px solid rgba(122,162,199,.18); background: rgba(11,18,32,.5); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.dep-cust-card:hover { border-color: rgba(0,194,255,.4); }
+.dep-cust-card.sel { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan), 0 8px 22px rgba(0,194,255,.12); background: rgba(0,194,255,.06); }
+.dep-cust-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.dep-cust-ico { font-size: 18px; }
+.dep-cust-name { font-weight: 800; color: var(--silver1); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.dep-cust-card p { margin: 0; font-size: 12px; color: var(--silver4); line-height: 1.45; }
+.dep-badge { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--warn); border: 1px solid rgba(245,185,77,.4); border-radius: 999px; padding: 1px 7px; }
+
+/* address screen */
+.dep-addr-head { display: flex; align-items: center; gap: 8px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap; }
+.dep-coin-chip, .dep-net-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.dep-coin-chip { background: rgba(0,194,255,.12); color: var(--cyan); }
+.dep-net-chip { background: rgba(122,162,199,.14); color: var(--silver2); }
+.dep-qr-wrap { display: flex; justify-content: center; margin: 4px 0 14px; }
+.dep-qr { width: 200px; height: 200px; border-radius: 14px; background: #fff; padding: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.dep-qr img, .dep-qr canvas, .dep-qr svg { width: 100%; height: 100%; display: block; }
+.dep-qr.pending { background: rgba(11,18,32,.6); border: 1px dashed rgba(122,162,199,.3); color: var(--silver5); font-size: 12px; text-align: center; padding: 18px; }
+.dep-addr-row { display: flex; align-items: center; gap: 8px; background: rgba(11,18,32,.6); border: 1px solid rgba(122,162,199,.18); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.dep-addr-text { flex: 1; font-size: 12.5px; color: var(--silver1); word-break: break-all; line-height: 1.4; }
+.dep-copy { flex: none; background: rgba(0,194,255,.14); border: 1px solid rgba(0,194,255,.3); color: var(--cyan); font-weight: 700; font-size: 12px; padding: 7px 12px; border-radius: 9px; cursor: pointer; transition: background .15s; }
+.dep-copy:hover { background: rgba(0,194,255,.24); }
+.dep-copy.copied { background: rgba(34,193,124,.18); border-color: rgba(34,193,124,.4); color: var(--success); }
+.dep-memo-card { background: rgba(245,185,77,.08); border: 1px solid rgba(245,185,77,.3); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.dep-memo-label { font-size: 11px; font-weight: 800; color: var(--warn); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+.dep-memo-row { display: flex; align-items: center; gap: 8px; }
+.dep-memo-row .mono { flex: 1; color: var(--silver1); font-size: 12.5px; word-break: break-all; }
+.dep-facts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.dep-fact { background: rgba(11,18,32,.5); border: 1px solid rgba(122,162,199,.12); border-radius: 10px; padding: 8px 10px; }
+.dep-fact .fk { font-size: 10px; color: var(--silver5); text-transform: uppercase; letter-spacing: .04em; }
+.dep-fact .fv { font-size: 13px; font-weight: 700; color: var(--silver1); margin-top: 2px; }
+.dep-warn { background: rgba(245,185,77,.08); border: 1px solid rgba(245,185,77,.28); border-radius: 10px; padding: 9px 12px; font-size: 12px; color: var(--silver3); line-height: 1.45; margin-bottom: 12px; }
+.dep-warn b { color: var(--warn); }
+
+/* recent deposits */
+.dep-recent-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; margin-bottom: 12px; }
+.dep-recent { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; background: rgba(11,18,32,.5); border: 1px solid rgba(122,162,199,.12); }
+.dep-recent .coin-ico { width: 28px; height: 28px; min-width: 28px; min-height: 28px; }
+.dep-recent-mid { flex: 1; min-width: 0; }
+.dep-recent-amt { font-weight: 700; color: var(--silver1); font-size: 13px; }
+.dep-recent-sub { font-size: 11px; color: var(--silver5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dep-recent-st { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+.dep-recent-st.credited { color: var(--success); background: rgba(34,193,124,.14); }
+.dep-recent-st.pending { color: var(--warn); background: rgba(245,185,77,.14); }
+.dep-recent-empty { padding: 28px 10px; text-align: center; color: var(--silver5); font-size: 13px; }
+
+@media (max-width: 480px) {
+  .dep-coin-list { max-height: 40vh; }
+  .dep-facts { grid-template-columns: 1fr; }
+  .dep-qr { width: 180px; height: 180px; }
+  .dep-steps { font-size: 10px; }
+}
+</style>
+
 <!-- Wallet modal (deposit / send / swap) -->
 <div class="wm-overlay" id="walletModal" role="dialog" aria-modal="true" aria-labelledby="wmTitle" onclick="if(event.target===this) closeWalletModal()">
   <div class="wm">
@@ -6746,52 +6856,91 @@
         <button type="button" data-mode="swap" data-i18n="wallet_swap">Swap</button>
       </div>
 
-      <!-- DEPOSIT -->
-      <div class="wm-pane" data-pane="deposit">
-        <div class="wm-field">
-          <label>Asset</label>
-          <select id="wmDepAsset">
-            <option value="USDT">USDT · Tether</option>
-            <option value="USDC">USDC · USD Coin</option>
-            <option value="BTC">BTC · Bitcoin</option>
-            <option value="ETH">ETH · Ethereum</option>
-            <option value="SOL">SOL · Solana</option>
-            <option value="BNB">BNB · BNB Chain</option>
-            <option value="TRX">TRX · Tron</option>
-            <option value="MATIC">MATIC · Polygon</option>
-            <option value="ARB">ARB · Arbitrum</option>
-          </select>
+      <!-- DEPOSIT (multi-step flow) -->
+      <div class="wm-pane dep-flow" data-pane="deposit">
+        <div class="dep-steps" id="depSteps">
+          <span class="dep-step active" data-step="coin">Coin</span>
+          <span class="dep-step" data-step="network">Network</span>
+          <span class="dep-step" data-step="custody">Mode</span>
+          <span class="dep-step" data-step="address">Address</span>
         </div>
-        <div class="wm-field">
-          <label>Network</label>
-          <div class="net-grid" id="wmDepNetGrid"></div>
-        </div>
-        <div class="wm-qr" aria-hidden="true">
-          <svg viewBox="0 0 100 100" width="120" height="120">
-            <g fill="#0a1224">
-              <rect x="0" y="0" width="28" height="28"/><rect x="4" y="4" width="20" height="20" fill="#fff"/><rect x="8" y="8" width="12" height="12"/>
-              <rect x="72" y="0" width="28" height="28"/><rect x="76" y="4" width="20" height="20" fill="#fff"/><rect x="80" y="8" width="12" height="12"/>
-              <rect x="0" y="72" width="28" height="28"/><rect x="4" y="76" width="20" height="20" fill="#fff"/><rect x="8" y="80" width="12" height="12"/>
-              <rect x="34" y="6" width="4" height="4"/><rect x="42" y="2" width="4" height="4"/><rect x="50" y="10" width="4" height="4"/><rect x="58" y="4" width="4" height="4"/><rect x="64" y="10" width="4" height="4"/>
-              <rect x="32" y="34" width="4" height="4"/><rect x="40" y="38" width="4" height="4"/><rect x="50" y="34" width="4" height="4"/><rect x="60" y="40" width="4" height="4"/><rect x="68" y="36" width="4" height="4"/>
-              <rect x="34" y="48" width="4" height="4"/><rect x="44" y="50" width="4" height="4"/><rect x="54" y="48" width="4" height="4"/><rect x="64" y="52" width="4" height="4"/><rect x="74" y="48" width="4" height="4"/>
-              <rect x="36" y="60" width="4" height="4"/><rect x="46" y="66" width="4" height="4"/><rect x="56" y="62" width="4" height="4"/><rect x="68" y="66" width="4" height="4"/><rect x="78" y="60" width="4" height="4"/>
-              <rect x="34" y="78" width="4" height="4"/><rect x="46" y="82" width="4" height="4"/><rect x="54" y="86" width="4" height="4"/><rect x="66" y="82" width="4" height="4"/><rect x="76" y="80" width="4" height="4"/>
-              <rect x="82" y="34" width="4" height="4"/><rect x="88" y="42" width="4" height="4"/><rect x="84" y="52" width="4" height="4"/><rect x="94" y="60" width="4" height="4"/><rect x="86" y="68" width="4" height="4"/>
-            </g>
-          </svg>
-        </div>
-        <div class="wm-addr" id="wmDepAddr">0x7a3f9c2b5e1a4d6c8f0b2d9a1e7c5f3b8d6a4c2e</div>
-        <div id="wmDepMemoRow" hidden style="margin-top:6px;padding:8px 12px;background:rgba(245,185,77,0.1);border-radius:8px;font-size:12px"><span style="color:var(--warn);font-weight:700">Memo / Tag (required):</span> <span class="mono" id="wmDepMemo"></span></div>
-        <div class="dep-meta">
-          <div><span class="mk">Min deposit:</span> <span class="vv" id="wmDepMin">10 USDT</span></div>
-          <div><span class="mk">Confirmations:</span> <span class="vv" id="wmDepConf">12</span></div>
-        </div>
-        <div class="wm-note" id="wmDepNote">Send only on the selected network. Wrong-network transfers cannot be recovered.</div>
-        <div class="wm-actions">
-          <button type="button" class="btn-ghost" onclick="copyDepAddr()">Copy address</button>
-          <button type="button" class="btn-primary" onclick="confirmDepositIntent()">Done</button>
-        </div>
+
+        <!-- Screen 1 · coin -->
+        <section class="dep-screen active" data-screen="coin">
+          <div class="dep-search-wrap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input type="search" id="depCoinSearch" placeholder="Search coin (BTC, ETH, USDT, …)" autocomplete="off" spellcheck="false"/>
+          </div>
+          <div class="dep-popular" id="depPopular"></div>
+          <div class="dep-coin-list" id="depCoinList"></div>
+          <div class="wm-actions">
+            <button type="button" class="btn-primary" id="depCoinContinue" disabled onclick="gromDepGoNetwork()">Continue</button>
+          </div>
+        </section>
+
+        <!-- Screen 2 · network -->
+        <section class="dep-screen" data-screen="network">
+          <button type="button" class="dep-back" onclick="gromDepBack('coin')">‹ Back</button>
+          <h4 class="dep-h" id="depNetTitle">Choose deposit network</h4>
+          <div class="dep-network-list" id="depNetworkList"></div>
+          <div class="dep-warn">⚠ Sending <b id="depWarnCoin">your asset</b> on a wrong network will result in loss of funds. Always double-check.</div>
+          <div class="wm-actions">
+            <button type="button" class="btn-primary" id="depNetContinue" disabled onclick="gromDepGoCustody()">Continue</button>
+          </div>
+        </section>
+
+        <!-- Screen 3 · custody mode -->
+        <section class="dep-screen" data-screen="custody">
+          <button type="button" class="dep-back" onclick="gromDepBack('network')">‹ Back</button>
+          <h4 class="dep-h">Where should the funds land?</h4>
+          <div class="dep-custody" id="depCustody">
+            <button type="button" class="dep-cust-card sel" data-custody="self">
+              <div class="dep-cust-top"><span class="dep-cust-ico">🔑</span><span class="dep-cust-name">Receive in my wallet</span></div>
+              <p>Non-custodial · You keep full control of your private keys via your connected wallet.</p>
+            </button>
+            <button type="button" class="dep-cust-card" data-custody="grom">
+              <div class="dep-cust-top"><span class="dep-cust-ico">⚡</span><span class="dep-cust-name">Receive on GROM <span class="dep-badge">Private beta</span></span></div>
+              <p>Custodial · Held on your GROM trading balance, ready for instant Spot &amp; Futures trades.</p>
+            </button>
+          </div>
+          <div class="wm-actions">
+            <button type="button" class="btn-primary" onclick="gromDepGoAddress()">Continue</button>
+          </div>
+        </section>
+
+        <!-- Screen 4 · address -->
+        <section class="dep-screen" data-screen="address">
+          <button type="button" class="dep-back" onclick="gromDepBack('custody')">‹ Back</button>
+          <div class="dep-addr-head">
+            <span class="dep-coin-chip" id="depAddrCoinChip">—</span>
+            <span class="dep-net-chip" id="depAddrNetChip">—</span>
+          </div>
+          <div class="dep-qr-wrap"><div id="depAddrQr" class="dep-qr pending">Generating secure address…</div></div>
+          <div class="dep-addr-row">
+            <span class="dep-addr-text mono" id="depAddrText">Provisioning your deposit address…</span>
+            <button type="button" class="dep-copy" id="depCopyBtn" onclick="gromDepCopy()">Copy</button>
+          </div>
+          <div class="dep-memo-card" id="depMemoCard" hidden>
+            <div class="dep-memo-label">Memo / Tag · required</div>
+            <div class="dep-memo-row"><span class="mono" id="depMemoText"></span><button type="button" class="dep-copy" onclick="gromDepCopyMemo()">Copy</button></div>
+          </div>
+          <div class="dep-facts" id="depFacts"></div>
+          <div class="dep-warn">⚠ Send only <b id="depWarnCoin2">your asset</b> over <b id="depWarnNet">the selected network</b>. Wrong-network transfers cannot be recovered.</div>
+          <div class="wm-actions">
+            <button type="button" class="btn-ghost" onclick="gromDepShowRecent()">View deposits</button>
+            <button type="button" class="btn-primary" onclick="gromDepSent()">I've sent the funds</button>
+          </div>
+        </section>
+
+        <!-- Screen 5 · recent deposits -->
+        <section class="dep-screen" data-screen="recent">
+          <button type="button" class="dep-back" onclick="gromDepBack('address')">‹ Back</button>
+          <h4 class="dep-h">Recent deposits</h4>
+          <div class="dep-recent-list" id="depRecentList"></div>
+          <div class="wm-actions">
+            <button type="button" class="btn-primary" onclick="closeWalletModal()">Done</button>
+          </div>
+        </section>
       </div>
 
       <!-- BUY (fiat on-ramp) -->
@@ -12341,9 +12490,9 @@ function switchWalletPane(mode) {
   });
   if (mode === 'deposit') {
     if (typeof loadConfigNetworks === 'function') {
-      loadConfigNetworks().then(function () { renderDepositNetworks(); });
+      loadConfigNetworks().then(function () { gromDepFlowOpen(); }, function () { gromDepFlowOpen(); });
     } else {
-      renderDepositNetworks();
+      gromDepFlowOpen();
     }
   }
   if (mode === 'buy') updateFiatQuote();
@@ -12563,7 +12712,7 @@ function openFiatProvider() {
   toast('Opening ' + p.name + ' widget · ' + amt + ' ' + cur + ' → ' + coin, 'info');
 }
 function copyDepAddr() {
-  var a = document.getElementById('wmDepAddr');
+  var a = document.getElementById('wmDepAddr') || document.getElementById('depAddrText');
   if (!a) return;
   var text = a.textContent || '';
   if (navigator.clipboard) {
@@ -12573,6 +12722,358 @@ function copyDepAddr() {
     );
   } else { toast('Clipboard not available', 'error'); }
 }
+
+/* ============================================================
+ * Deposit flow (5-screen, Binance/Bybit-style).
+ * UI + navigation owned here (index.html). The backend hydration
+ * (real address / QR / balances / recent deposits) is owned by
+ * grom-wallet.js → gwHydrateDepositPane(), which fills these IDs:
+ *   #depCoinSearch #depCoinList #depNetworkList #depAddrQr
+ *   #depAddrText #depMemoCard #depRecentList
+ * We render functional defaults from the local registry + DEP_NETS
+ * and NEVER show fake/seed addresses (loss-of-funds risk).
+ * ============================================================ */
+var gromDepState = { coin: null, name: '', network: null, custody: 'self', address: '', memo: '' };
+var GROM_DEP_POPULAR = ['BTC', 'ETH', 'USDT', 'USDC', 'SOL'];
+
+function gromDepCryptoList() {
+  var out = [];
+  var seen = Object.create(null);
+  var reg = Array.isArray(window.GROM_INSTRUMENTS) ? window.GROM_INSTRUMENTS : [];
+  for (var i = 0; i < reg.length; i++) {
+    var it = reg[i];
+    if (it.type !== 'crypto' || !it.base || seen[it.base]) continue;
+    seen[it.base] = 1;
+    out.push({ base: it.base, name: it.name || it.base, logo: it.logo, symbol: it.symbol });
+  }
+  // Fallback minimal set if registry missing
+  if (!out.length) {
+    GROM_DEP_POPULAR.forEach(function (b) { out.push({ base: b, name: b, logo: '', symbol: b + 'USDT' }); });
+  }
+  return out;
+}
+
+function gromDepCoinIco(c, base) {
+  if (typeof instrumentIcoHtmlLive === 'function') {
+    return instrumentIcoHtmlLive({ sym: c.symbol, base: c.base, type: 'crypto', logo: c.logo });
+  }
+  return '<span class="coin-ico ' + String(c.base || '').toLowerCase() + '">' + String(c.base || '?').slice(0, 3) + '</span>';
+}
+
+function gromDepRenderCoins(filter) {
+  var list = document.getElementById('depCoinList');
+  var pop = document.getElementById('depPopular');
+  if (!list) return;
+  var all = gromDepCryptoList();
+  var q = String(filter || '').trim().toLowerCase();
+
+  if (pop && !q) {
+    pop.style.display = '';
+    var popItems = GROM_DEP_POPULAR.map(function (b) {
+      var c = all.find(function (x) { return x.base === b; }) || { base: b, name: b, logo: '', symbol: b + 'USDT' };
+      return '<button type="button" class="dep-pop" data-coin="' + c.base + '" data-name="' + (c.name || c.base).replace(/"/g, '&quot;') + '">'
+        + gromDepCoinIco(c, c.base) + '<span>' + c.base + '</span></button>';
+    }).join('');
+    pop.innerHTML = '<span class="dep-pop-label">Popular</span>' + popItems;
+  } else if (pop) {
+    pop.style.display = 'none';
+  }
+
+  var rows = all.filter(function (c) {
+    if (!q) return true;
+    return c.base.toLowerCase().indexOf(q) !== -1 || String(c.name).toLowerCase().indexOf(q) !== -1;
+  });
+
+  if (!rows.length) {
+    list.innerHTML = '<div class="dep-coin-empty">No coins match "' + q.replace(/</g, '&lt;') + '".</div>';
+    return;
+  }
+
+  list.innerHTML = rows.map(function (c) {
+    var selCls = (gromDepState.coin === c.base) ? ' sel' : '';
+    return '<div class="dep-coin' + selCls + '" data-coin="' + c.base + '" data-name="' + String(c.name || c.base).replace(/"/g, '&quot;') + '">'
+      + gromDepCoinIco(c, c.base)
+      + '<div class="dep-coin-meta"><span class="dep-coin-tk">' + c.base + '</span>'
+      + '<span class="dep-coin-nm">' + String(c.name || c.base) + '</span></div>'
+      + '<span class="dep-coin-bal" data-bal-for="' + c.base + '"></span></div>';
+  }).join('');
+  if (typeof gromHydrateLogos === 'function') { try { gromHydrateLogos(list); } catch (_) {} }
+  if (pop && typeof gromHydrateLogos === 'function' && !q) { try { gromHydrateLogos(pop); } catch (_) {} }
+}
+
+function gromDepSelectCoin(base, name) {
+  gromDepState.coin = base;
+  gromDepState.name = name || base;
+  gromDepState.network = null;
+  document.querySelectorAll('#depCoinList .dep-coin').forEach(function (el) {
+    el.classList.toggle('sel', el.dataset.coin === base);
+  });
+  var btn = document.getElementById('depCoinContinue');
+  if (btn) btn.disabled = false;
+}
+
+function gromDepNetsFor(coin) {
+  var nets = (typeof DEP_NETS !== 'undefined' && DEP_NETS[coin]) ? DEP_NETS[coin] : null;
+  if (nets && nets.length) return nets;
+  // Sensible default when the asset isn't in the matrix yet
+  return [{ id: 'ERC20', label: 'Ethereum (ERC-20)', addr: '', min: 1, conf: 12, fee: '~$3' }];
+}
+
+function gromDepEta(conf) {
+  var c = Number(conf) || 12;
+  var mins = Math.max(1, Math.round(c / 4));
+  return '~' + mins + ' min';
+}
+
+function gromDepRenderNetworks() {
+  var wrap = document.getElementById('depNetworkList');
+  if (!wrap) return;
+  var coin = gromDepState.coin || 'USDT';
+  var nets = gromDepNetsFor(coin);
+  wrap.innerHTML = nets.map(function (n) {
+    var code = String(n.id || n.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'NET';
+    var selCls = (gromDepState.network === n.id) ? ' sel' : '';
+    var sub = 'Min deposit: ' + n.min + ' ' + coin + ' · Fee ' + (n.fee || 'n/a') + ' · ETA ' + gromDepEta(n.conf);
+    return '<button type="button" class="dep-net' + selCls + '" data-net="' + n.id + '">'
+      + '<span class="dep-net-badge">' + code + '</span>'
+      + '<span class="dep-net-body"><span class="dep-net-name">' + n.label + '</span>'
+      + '<span class="dep-net-sub">' + sub + '</span></span>'
+      + '<span class="dep-net-tick">✓</span></button>';
+  }).join('');
+  var title = document.getElementById('depNetTitle');
+  if (title) title.textContent = 'Choose deposit network for ' + coin;
+  var warn = document.getElementById('depWarnCoin');
+  if (warn) warn.textContent = coin;
+  var cont = document.getElementById('depNetContinue');
+  if (cont) cont.disabled = !gromDepState.network;
+}
+
+function gromDepSelectNetwork(id) {
+  gromDepState.network = id;
+  document.querySelectorAll('#depNetworkList .dep-net').forEach(function (el) {
+    el.classList.toggle('sel', el.dataset.net === id);
+  });
+  var cont = document.getElementById('depNetContinue');
+  if (cont) cont.disabled = false;
+}
+
+/* ---- screen navigation ---- */
+function gromDepShow(screen) {
+  document.querySelectorAll('#walletModal .dep-screen').forEach(function (s) {
+    s.classList.toggle('active', s.dataset.screen === screen);
+  });
+  // Breadcrumb: mark steps up to current as done/active
+  var order = ['coin', 'network', 'custody', 'address'];
+  var idx = order.indexOf(screen);
+  document.querySelectorAll('#depSteps .dep-step').forEach(function (st) {
+    var p = order.indexOf(st.dataset.step);
+    st.classList.toggle('active', st.dataset.step === screen);
+    st.classList.toggle('done', p > -1 && idx > -1 && p < idx);
+  });
+  var body = document.querySelector('#walletModal .wm');
+  if (body) body.scrollTop = 0;
+}
+
+function gromDepFlowOpen() {
+  // Reset to the first screen each time the deposit pane opens.
+  gromDepState = { coin: null, name: '', network: null, custody: 'self', address: '', memo: '' };
+  var search = document.getElementById('depCoinSearch');
+  if (search) search.value = '';
+  var cont = document.getElementById('depCoinContinue');
+  if (cont) cont.disabled = true;
+  gromDepRenderCoins('');
+  gromDepShow('coin');
+}
+window.gromDepFlowOpen = gromDepFlowOpen;
+
+function gromDepBack(screen) { gromDepShow(screen); }
+
+function gromDepGoNetwork() {
+  if (!gromDepState.coin) { toast('Select a coin first', 'error'); return; }
+  gromDepRenderNetworks();
+  gromDepShow('network');
+}
+
+function gromDepGoCustody() {
+  if (!gromDepState.network) { toast('Select a network first', 'error'); return; }
+  gromDepShow('custody');
+}
+
+function gromDepGoAddress() {
+  gromDepShow('address');
+  gromDepLoadAddress();
+}
+
+function gromDepShowRecent() {
+  gromDepShow('recent');
+  gromDepLoadRecent();
+}
+
+/* ---- address screen ---- */
+function gromDepNetLabel() {
+  var nets = gromDepNetsFor(gromDepState.coin || 'USDT');
+  var n = nets.find(function (x) { return x.id === gromDepState.network; }) || nets[0] || {};
+  return n;
+}
+
+async function gromDepLoadAddress() {
+  var coin = gromDepState.coin || 'USDT';
+  var n = gromDepNetLabel();
+  var net = n.label || gromDepState.network || 'Selected network';
+
+  // Chips
+  var coinChip = document.getElementById('depAddrCoinChip');
+  if (coinChip) coinChip.textContent = coin;
+  var netChip = document.getElementById('depAddrNetChip');
+  if (netChip) netChip.textContent = net;
+  var w1 = document.getElementById('depWarnCoin2'); if (w1) w1.textContent = coin;
+  var w2 = document.getElementById('depWarnNet'); if (w2) w2.textContent = net;
+
+  // Facts
+  var facts = document.getElementById('depFacts');
+  if (facts) {
+    facts.innerHTML =
+      '<div class="dep-fact"><div class="fk">Min deposit</div><div class="fv">' + (n.min != null ? n.min + ' ' + coin : '—') + '</div></div>'
+      + '<div class="dep-fact"><div class="fk">Confirmations</div><div class="fv">' + (n.conf != null ? n.conf : '—') + '</div></div>'
+      + '<div class="dep-fact"><div class="fk">ETA</div><div class="fv">' + gromDepEta(n.conf) + '</div></div>';
+  }
+
+  // Reset to pending state — NEVER show fake addresses.
+  var addrEl = document.getElementById('depAddrText');
+  var qrEl = document.getElementById('depAddrQr');
+  var memoCard = document.getElementById('depMemoCard');
+  if (memoCard) memoCard.hidden = true;
+  if (addrEl) addrEl.textContent = 'Provisioning your deposit address…';
+  if (qrEl) { qrEl.classList.add('pending'); qrEl.innerHTML = 'Generating secure address…'; }
+  gromDepState.address = ''; gromDepState.memo = '';
+
+  // Try the legit backend endpoint. If unavailable (503 / not provisioned),
+  // keep the honest pending state for grom-wallet.js to hydrate.
+  var realAddr = '', memo = '';
+  if (window.gromApiFetch) {
+    try {
+      var res = await window.gromApiFetch('/api/wallet/deposit-address?asset=' + encodeURIComponent(coin)
+        + '&network=' + encodeURIComponent(gromDepState.network || n.id || ''));
+      var obj = (res && res.depositAddress) || res;
+      if (obj && obj.address) { realAddr = obj.address; if (obj.memo) memo = obj.memo; }
+    } catch (_) { /* keep pending */ }
+  }
+
+  if (realAddr) {
+    gromDepState.address = realAddr;
+    if (addrEl) addrEl.textContent = realAddr;
+    gromDepRenderQr(realAddr);
+    if (memo) {
+      gromDepState.memo = memo;
+      var memoText = document.getElementById('depMemoText');
+      if (memoText) memoText.textContent = memo;
+      if (memoCard) memoCard.hidden = false;
+    }
+  } else {
+    if (addrEl) addrEl.textContent = 'Address provisioning — finishing account setup. Try again shortly.';
+    if (qrEl) { qrEl.classList.add('pending'); qrEl.innerHTML = 'Address pending'; }
+  }
+}
+
+function gromDepRenderQr(text) {
+  var qrEl = document.getElementById('depAddrQr');
+  if (!qrEl || !text) return;
+  qrEl.classList.remove('pending');
+  var src = 'https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=0&data=' + encodeURIComponent(text);
+  qrEl.innerHTML = '<img src="' + src + '" alt="Deposit address QR" decoding="async"/>';
+}
+
+function gromDepCopyText(text, btn) {
+  if (!text) { toast('Nothing to copy yet', 'error'); return; }
+  var done = function () {
+    toast('Copied', 'success');
+    if (btn) {
+      var orig = btn.textContent;
+      btn.classList.add('copied'); btn.textContent = 'Copied ✓';
+      setTimeout(function () { btn.classList.remove('copied'); btn.textContent = orig; }, 1600);
+    }
+  };
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(done, function () { toast('Copy failed', 'error'); });
+  } else { toast('Clipboard not available', 'error'); }
+}
+
+function gromDepCopy() {
+  var t = document.getElementById('depAddrText');
+  var v = gromDepState.address || (t ? t.textContent : '');
+  if (!gromDepState.address) { toast('Address not ready yet', 'error'); return; }
+  gromDepCopyText(v, document.getElementById('depCopyBtn'));
+}
+
+function gromDepCopyMemo() {
+  if (!gromDepState.memo) { toast('No memo to copy', 'error'); return; }
+  gromDepCopyText(gromDepState.memo, document.querySelector('#depMemoCard .dep-copy'));
+}
+
+function gromDepSent() {
+  if (typeof closeWalletModal === 'function') closeWalletModal();
+  toast('We\'ll notify you once the deposit is detected', 'info');
+  if (typeof hydrateWalletSlice === 'function') { try { hydrateWalletSlice(true); } catch (_) {} }
+}
+
+/* ---- recent deposits ---- */
+async function gromDepLoadRecent() {
+  var list = document.getElementById('depRecentList');
+  if (!list) return;
+  list.innerHTML = '<div class="dep-recent-empty">Loading…</div>';
+  var items = [];
+  if (window.gromApiFetch) {
+    try {
+      var res = await window.gromApiFetch('/api/wallet/deposits?limit=10');
+      items = (res && (res.deposits || res.items)) || [];
+    } catch (_) { items = []; }
+  }
+  if (!Array.isArray(items) || !items.length) {
+    list.innerHTML = '<div class="dep-recent-empty">No deposits yet. Once you send funds, they\'ll appear here in real time.</div>';
+    return;
+  }
+  list.innerHTML = items.slice(0, 10).map(function (d) {
+    var coin = (d.asset || d.coin || '').toUpperCase();
+    var st = String(d.status || 'pending').toLowerCase();
+    var stCls = (st === 'credited' || st === 'completed' || st === 'success') ? 'credited' : 'pending';
+    var stLabel = stCls === 'credited' ? 'Credited' : 'Pending';
+    var tx = d.txHash || d.tx || '';
+    var txShort = tx ? (tx.slice(0, 8) + '…' + tx.slice(-6)) : '';
+    var when = d.time || d.createdAt || '';
+    var ico = (typeof instrumentIcoHtmlLive === 'function')
+      ? instrumentIcoHtmlLive({ sym: coin + 'USDT', base: coin, type: 'crypto', logo: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/' + coin.toLowerCase() + '.svg' })
+      : '<span class="coin-ico">' + coin.slice(0, 3) + '</span>';
+    return '<div class="dep-recent">' + ico
+      + '<div class="dep-recent-mid"><div class="dep-recent-amt">' + (d.amount != null ? d.amount + ' ' + coin : coin) + '</div>'
+      + '<div class="dep-recent-sub">' + [txShort, when].filter(Boolean).join(' · ') + '</div></div>'
+      + '<span class="dep-recent-st ' + stCls + '">' + stLabel + '</span></div>';
+  }).join('');
+  if (typeof gromHydrateLogos === 'function') { try { gromHydrateLogos(list); } catch (_) {} }
+}
+
+/* ---- event delegation (survives innerHTML re-renders) ---- */
+(function wireDepFlow() {
+  var pane = document.querySelector('#walletModal .dep-flow');
+  if (!pane) return;
+  pane.addEventListener('click', function (e) {
+    var coinEl = e.target.closest('.dep-coin[data-coin], .dep-pop[data-coin]');
+    if (coinEl) {
+      gromDepSelectCoin(coinEl.dataset.coin, coinEl.dataset.name);
+      if (coinEl.classList.contains('dep-pop')) gromDepGoNetwork();
+      return;
+    }
+    var netEl = e.target.closest('.dep-net[data-net]');
+    if (netEl) { gromDepSelectNetwork(netEl.dataset.net); return; }
+    var custEl = e.target.closest('.dep-cust-card[data-custody]');
+    if (custEl) {
+      gromDepState.custody = custEl.dataset.custody;
+      pane.querySelectorAll('.dep-cust-card').forEach(function (c) { c.classList.toggle('sel', c === custEl); });
+      return;
+    }
+  });
+  var search = document.getElementById('depCoinSearch');
+  if (search) search.addEventListener('input', function () { gromDepRenderCoins(search.value); });
+})();
 var GROM_SWAP_CHAIN = 42161;
 var GROM_SWAP_ADDR = {
   ETH:  '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',

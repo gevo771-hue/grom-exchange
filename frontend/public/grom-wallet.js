@@ -848,11 +848,20 @@ function gwDepositAddress(netKey) {
  */
 function gwEnsureCustodyToggle() {
   if (document.getElementById('gwCustodyToggle')) return;
-  const addrEl = document.getElementById('wmDepAddr');
-  if (!addrEl) return;
+  // Mount the toggle at the very top of the deposit pane so it reads as a
+  // primary mode switch ("how do you want to receive?"). Cursor's pane is:
+  //   <wm-pane data-pane=deposit>
+  //     <wm-field>Asset</wm-field>
+  //     <wm-field>Network</wm-field>
+  //     <wm-qr>…</wm-qr>
+  //     <wm-addr>…</wm-addr>
+  //   </wm-pane>
+  // We prepend our toggle as the first child.
+  const pane = document.querySelector('.wm-pane[data-pane="deposit"]');
+  if (!pane) return;
   const wrap = document.createElement('div');
   wrap.id = 'gwCustodyToggle';
-  wrap.style.cssText = 'display:flex;gap:6px;margin:8px 0;padding:4px;background:rgba(255,255,255,0.04);border-radius:10px';
+  wrap.style.cssText = 'display:flex;gap:6px;margin:0 0 12px;padding:4px;background:rgba(255,255,255,0.04);border-radius:10px';
   for (const opt of [
     { v: 'wallet', label: 'Receive in my wallet', hint: 'Non-custodial · you control the keys' },
     { v: 'grom',   label: 'Receive on GROM',     hint: 'Custodial · held on GROM Binance account' },
@@ -862,11 +871,11 @@ function gwEnsureCustodyToggle() {
     b.dataset.cust = opt.v;
     b.title = opt.hint;
     b.textContent = opt.label;
-    b.style.cssText = 'flex:1;padding:8px 10px;border-radius:8px;border:0;background:transparent;color:var(--silver2);font-size:12px;cursor:pointer;font-weight:600';
+    b.style.cssText = 'flex:1;padding:8px 10px;border-radius:8px;border:0;background:transparent;color:var(--silver2);font-size:12px;cursor:pointer;font-weight:600;line-height:1.2';
     b.onclick = () => gwSetCustody(opt.v);
     wrap.appendChild(b);
   }
-  addrEl.parentNode.insertBefore(wrap, addrEl);
+  pane.insertBefore(wrap, pane.firstElementChild);
   gwSetCustody('wallet');
 }
 function gwSetCustody(mode) {
@@ -1063,19 +1072,19 @@ function gwHydrateFiatProviders() {
  * untouched. */
 function gwInjectModalCss() {
   if (document.getElementById('gw-modal-fixups')) return;
+  // Minimal CSS: the whole modal scrolls when content overflows. NO sticky —
+  // sticky head + sticky tabs caused overlapping headlines on the Cash pane.
+  // Just cap the modal height + let body scroll + tighten chip sizing.
   const css = `
-    .wm-overlay .wm { max-height: 90vh; display: flex; flex-direction: column; }
-    .wm-overlay .wm-head { flex: 0 0 auto; position: sticky; top: 0; background: inherit; z-index: 2; }
-    .wm-overlay .wm-tabs { flex: 0 0 auto; position: sticky; top: 44px; background: inherit; z-index: 1; }
-    .wm-overlay .wm-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
-    .wm-overlay .wm-actions { flex: 0 0 auto; position: sticky; bottom: 0; background: inherit; z-index: 1; padding-top: 8px; }
+    .wm-overlay .wm { max-height: 90vh; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
     .wm-overlay .net-grid { gap: 6px; }
     .wm-overlay .net-grid .net-chip { padding: 6px 10px; font-size: 12px; min-height: 32px; line-height: 1.2; }
-    .wm-overlay .wm-qr { width: 110px; height: 110px; margin: 8px auto; }
+    .wm-overlay .wm-qr { margin: 8px auto; }
+    .wm-overlay .wm-qr svg { width: 96px; height: 96px; }
     .wm-overlay .wm-addr { font-size: 11px; word-break: break-all; }
     @media (max-height: 720px) {
-      .wm-overlay .wm { max-height: 96vh; }
-      .wm-overlay .wm-qr { width: 88px; height: 88px; }
+      .wm-overlay .wm { max-height: 95vh; }
+      .wm-overlay .wm-qr svg { width: 80px; height: 80px; }
     }
   `;
   const style = document.createElement('style');

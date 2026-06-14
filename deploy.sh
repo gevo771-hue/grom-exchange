@@ -54,7 +54,7 @@ echo "▶ Will rebuild: $SERVICES"
 echo ""
 echo "▶ Deploying to grom-prod-fra1 ..."
 ssh -i ~/.ssh/grom_do -p 2222 root@134.122.69.161 \
-  "cd /opt/grom-exchange && git pull && docker compose build $SERVICES && docker compose up -d $SERVICES && docker compose ps $SERVICES"
+  "cd /opt/grom-exchange && git pull && docker compose build $SERVICES && docker compose up -d --remove-orphans --force-recreate $SERVICES && docker compose ps $SERVICES"
 
 echo ""
 echo "✅ Deploy done ($SERVICES). Open https://grom.exchange/ and Cmd+Shift+R to verify."

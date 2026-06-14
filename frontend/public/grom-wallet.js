@@ -1261,6 +1261,170 @@ if (document.readyState === 'loading') {
   gwInitWalletModalOps();
 }
 
+/* =====================================================================
+ * NAV EXTRAS + URL SYMBOL ROUTING (added 2026-06-15)
+ *
+ * 1. Bug fix — Cursor's hash router ignores `?symbol=` query params, so
+ *    clicking Trade in #markets and landing on #futures?symbol=XRPUSDT
+ *    leaves the BTC header. We listen for hashchange and click the right
+ *    contract row in the sidebar after the page renders.
+ *
+ * 2. Two new sidebar items — "Прогнозы" (prediction markets, Binance Web3)
+ *    and "Акции" (tokenized stocks). They open dedicated landing screens
+ *    inside GROM with a Continue button that opens the external partner
+ *    page. Not a deep integration — meant to give users discoverability
+ *    until we build/embed a proper version.
+ * ==================================================================== */
+
+function gwHandleSymbolFromHash() {
+  const raw = location.hash || '';
+  const qIdx = raw.indexOf('?');
+  if (qIdx === -1) return;
+  const qs = new URLSearchParams(raw.slice(qIdx + 1));
+  const symbol = qs.get('symbol');
+  if (!symbol) return;
+  // Retry — the page may not have rendered the contracts list yet.
+  let tries = 0;
+  const tick = () => {
+    tries++;
+    const candidates = [
+      `[data-symbol="${symbol}"]`,
+      `[data-sym="${symbol}"]`,
+      `[data-pair="${symbol}"]`,
+      `[data-base="${symbol.replace(/USDT$/i, '')}"]`,
+    ];
+    for (const s of candidates) {
+      const el = document.querySelector(s);
+      if (el && el.offsetParent !== null) { el.click(); return; }
+    }
+    if (tries < 15) setTimeout(tick, 200);
+  };
+  setTimeout(tick, 250);
+}
+window.addEventListener('hashchange', gwHandleSymbolFromHash);
+
+const GW_EXTRA_PAGES = [
+  {
+    hash: 'predict',
+    label: 'Прогнозы',
+    icon: '🎯',
+    badge: 'BETA',
+    title: 'Prediction Markets',
+    subtitle: 'Спорт · криптовалюта · политика · киберспорт · культура · экономика',
+    url: 'https://web3.binance.com/ru-UA/prediction/sports',
+    cta: 'Открыть Prediction Markets',
+    bullets: [
+      'Германия vs Кюрасао, Нидерланды vs Япония, ЧМ-2026 — ставки в режиме live',
+      'Криптовалютные исходы (BTC выше $80K к Q4, ETH ETF approval, etc.)',
+      'Политика, выборы, культура, экономические события',
+      'Settlement on-chain через Binance Web3 wallet · ликвидность $10M+',
+      'Расчёт автоматический через oracle после события',
+    ],
+  },
+  {
+    hash: 'xstocks',
+    label: 'Акции',
+    icon: '📈',
+    badge: 'NEW',
+    title: 'Tokenized Stocks',
+    subtitle: 'Торгуй S&P 500, Tesla, Apple, NVIDIA — токенизированные акции on-chain',
+    url: 'https://web3.binance.com/ru-UA/markets/tokenized-stocks?chain=bsc',
+    cta: 'Открыть Tokenized Stocks',
+    bullets: [
+      'Реальные акции, обёрнутые в токены — цена 1:1 с биржей NYSE/NASDAQ',
+      'AAPL · MSFT · NVDA · TSLA · GOOGL · META · 50+ tickers',
+      'Доступно 24/7 (включая выходные) через смарт-контракты',
+      'Расчёт через BSC / Solana · комиссии в десятки раз ниже традиционного брокера',
+      'Эмиссия — Backed Finance / Dinari (регулируемые EU/US providers)',
+    ],
+  },
+];
+
+function gwBuildExtraPageHtml(cfg) {
+  return `
+    <div style="padding:32px 28px;max-width:980px;margin:0 auto;color:var(--silver1)">
+      <div style="color:var(--silver5);font-size:12px;font-weight:600;margin-bottom:4px">GROM › ${cfg.title}</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <h1 style="margin:0;font-size:32px;font-weight:800">${cfg.title}</h1>
+        <span style="background:rgba(58,194,255,0.18);color:var(--cyan,#3ac2ff);padding:3px 10px;border-radius:8px;font-size:11px;font-weight:700;letter-spacing:0.5px">${cfg.badge}</span>
+      </div>
+      <p style="color:var(--silver3,#9ba9bf);font-size:15px;margin:0 0 24px;line-height:1.5">${cfg.subtitle}</p>
+      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:18px;padding:24px;margin-bottom:16px">
+        <h3 style="margin:0 0 16px;font-size:16px;font-weight:700;color:var(--silver1)">Что доступно</h3>
+        <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px">
+          ${cfg.bullets.map(b => `<li style="display:flex;gap:10px;align-items:flex-start;color:var(--silver2);font-size:14px;line-height:1.5"><span style="color:var(--cyan,#3ac2ff);font-size:18px;line-height:1;margin-top:1px">${cfg.icon}</span><span>${b}</span></li>`).join('')}
+        </ul>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <button onclick="window.open('${cfg.url}', '_blank', 'noopener,noreferrer')" style="background:linear-gradient(90deg,#3ac2ff,#5d8eff);color:#0a1224;border:0;padding:14px 28px;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 4px 24px rgba(58,194,255,0.3)">${cfg.cta} →</button>
+        <span style="color:var(--silver5);font-size:12px">Powered by Binance Web3 · открывается в новой вкладке</span>
+      </div>
+      <div style="margin-top:32px;padding:16px;background:rgba(245,185,77,0.08);border:1px solid rgba(245,185,77,0.2);border-radius:12px;color:var(--silver3);font-size:13px;line-height:1.5">
+        <strong style="color:var(--warn,#f5b94d)">⚠ Beta / partner integration:</strong> эта секция временно открывает партнёрский интерфейс. Прямая встроенная торговля внутри GROM появится в следующих версиях — она требует отдельной on-chain интеграции и регуляторных проверок.
+      </div>
+    </div>
+  `;
+}
+
+function gwRenderExtraPage() {
+  const raw = (location.hash || '').replace(/^#/, '');
+  const hashOnly = raw.split('?')[0];
+  let mount = document.getElementById('gwExtraPage');
+  const cfg = GW_EXTRA_PAGES.find(p => p.hash === hashOnly);
+  if (!cfg) {
+    // Wrong hash — hide our overlay if present, let Cursor's router run
+    if (mount) mount.style.display = 'none';
+    return;
+  }
+  if (!mount) {
+    mount = document.createElement('div');
+    mount.id = 'gwExtraPage';
+    // Cover the main content area — keep header + sidebar visible
+    mount.style.cssText = 'position:fixed;top:64px;left:240px;right:0;bottom:0;background:#0a1224;overflow-y:auto;z-index:5';
+    document.body.appendChild(mount);
+  }
+  mount.innerHTML = gwBuildExtraPageHtml(cfg);
+  mount.style.display = 'block';
+}
+
+function gwInjectExtraNavItems() {
+  // Find Cursor's sidebar via the existing nav anchor that targets Рынки/markets
+  const allLinks = Array.from(document.querySelectorAll('a, button')).filter(el =>
+    /Рынки|Markets/i.test(el.textContent || '') && /(#markets|markets)/.test(el.getAttribute('href') || el.dataset.target || '')
+  );
+  const after = allLinks[0];
+  if (!after) return setTimeout(gwInjectExtraNavItems, 600);
+  const parent = after.parentElement;
+  if (!parent || parent.dataset.gwExtras) return;
+  parent.dataset.gwExtras = '1';
+  for (const p of GW_EXTRA_PAGES) {
+    if (document.getElementById('gwNav_' + p.hash)) continue;
+    const link = document.createElement('a');
+    link.id = 'gwNav_' + p.hash;
+    link.href = '#' + p.hash;
+    link.className = after.className;
+    // Match Cursor's icon+label structure
+    const iconSpan = `<span style="display:inline-flex;width:18px;justify-content:center">${p.icon}</span>`;
+    const badgeHtml = p.badge ? `<span style="margin-left:auto;background:rgba(58,194,255,0.18);color:var(--cyan,#3ac2ff);padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px">${p.badge}</span>` : '';
+    link.innerHTML = `${iconSpan}<span>${p.label}</span>${badgeHtml}`;
+    link.style.cssText = (after.getAttribute('style') || '') + ';display:flex;align-items:center;gap:10px';
+    after.parentNode.insertBefore(link, after.nextSibling);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    gwInjectExtraNavItems();
+    gwRenderExtraPage();
+    gwHandleSymbolFromHash();
+  });
+} else {
+  gwInjectExtraNavItems();
+  gwRenderExtraPage();
+  gwHandleSymbolFromHash();
+}
+window.addEventListener('hashchange', gwRenderExtraPage);
+
 /* ----- экспорт для отладки ----- */
 window.gromWallet = {
   connectMetaMask, connectTrust, connectBinanceWeb3,

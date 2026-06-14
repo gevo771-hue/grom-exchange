@@ -1388,34 +1388,30 @@ function gwRenderExtraPage() {
 }
 
 function gwInjectExtraNavItems() {
-  // Try multiple strategies to find Cursor's sidebar nav item for Рынки/Markets.
-  // Cursor uses inline onclick="show('markets')" buttons, not <a href>, so we
-  // must scan all clickable elements and match by text or onclick handler.
-  const candidates = Array.from(document.querySelectorAll('button, a, [role="link"], div[onclick]'));
-  let after = null;
-  for (const el of candidates) {
-    const txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
-    const onclick = (el.getAttribute('onclick') || '').toLowerCase();
-    const href = (el.getAttribute('href') || '').toLowerCase();
-    if (
-      (txt === 'Рынки' || txt === 'Markets' || /^Рынки/.test(txt) || /^Markets/.test(txt)) &&
-      // Make sure it's inside what looks like a sidebar — left rail, not main content
-      el.getBoundingClientRect().left < 280
-    ) {
-      after = el;
-      break;
-    }
-    if ((onclick.includes("show('markets')") || onclick.includes('show("markets")') || href === '#markets') && el.getBoundingClientRect().left < 280) {
-      after = el;
-      break;
-    }
+  // Cursor's left sidebar lives under `aside.hub-nav` and each item is a
+  // `<button class="hub-link">` with the EXACT label text (e.g. "Рынки").
+  // The promo CTA grid on the dashboard (`.qa-grid`) contains buttons whose
+  // textContent starts with "Browse markets..." — earlier selectors picked
+  // those up and cloned them, so we ended up with "Акции365+ trading pairs"
+  // shoved into the home page. Lock the scope down to the sidebar.
+  const sidebar = document.querySelector('aside.hub-nav, nav.hub-nav, .hub-nav');
+  // Clean up any items previously placed in the wrong container (.qa-grid etc)
+  for (const p of GW_EXTRA_PAGES) {
+    const stray = document.getElementById('gwNav_' + p.hash);
+    if (stray && (!sidebar || !sidebar.contains(stray))) stray.remove();
   }
+  if (!sidebar) return false;
+  const items = Array.from(sidebar.querySelectorAll('a, button, .hub-link'));
+  const after = items.find(el => {
+    const txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    return txt === 'Рынки' || txt === 'Markets';
+  });
   if (!after) return false;
   const parent = after.parentElement;
-  if (!parent || parent.dataset.gwExtras === '1') return true;
-  parent.dataset.gwExtras = '1';
+  if (!parent) return false;
+  // Idempotent — don't re-insert if already present in the right container
   for (const p of GW_EXTRA_PAGES) {
-    if (document.getElementById('gwNav_' + p.hash)) continue;
+    if (parent.querySelector('#gwNav_' + p.hash)) continue;
     // Clone the Рынки item for pixel-perfect look, then mutate
     const link = after.cloneNode(true);
     link.id = 'gwNav_' + p.hash;

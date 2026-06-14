@@ -1096,6 +1096,59 @@ function gwInjectModalCss() {
   document.head.appendChild(style);
 }
 
+/* Cursor (commit d19f86c) replaced the flat deposit pane with a 5-screen
+ * Binance-style flow (#depCoinSearch / #depCoinList / #depNetworkList /
+ * #depCustody / #depAddrText / #depAddrQr / #depMemoCard / #depRecentList).
+ * His JS owns the screen navigation + initial render, and calls our backend
+ * /api/wallet/deposit-address inside gromDepLoadAddress(). What he doesn't
+ * handle: when custody === 'self' (Receive in my wallet), the address shown
+ * must be the user's CONNECTED wallet, not the backend (which would only
+ * return a Binance custodial address when BINANCE_HOT_WALLET=true).
+ *
+ * We patch gromDepLoadAddress in-place: for self-custody, render the user's
+ * EVM address directly. For grom-custody, delegate to Cursor's original
+ * implementation so the existing 503 / "provisioning" UX kicks in. */
+function gwPatchCursorDepositFlow() {
+  if (!document.getElementById('depCoinList')) return false; // new UI not present
+  const origLoadAddress = window.gromDepLoadAddress;
+  if (!origLoadAddress || origLoadAddress.__gwPatched) return true;
+  window.gromDepLoadAddress = async function gromDepLoadAddressPatched(...args) {
+    try {
+      const custody = window.gromDepState?.custody;
+      if (custody === 'self') {
+        const addr = (typeof currentAccount === 'string' && currentAccount)
+          || localStorage.getItem('grom_wallet_label')
+          || '';
+        const addrEl = document.getElementById('depAddrText');
+        const qrEl   = document.getElementById('depAddrQr');
+        const memoCard = document.getElementById('depMemoCard');
+        if (memoCard) memoCard.hidden = true;
+        if (!addr) {
+          if (addrEl) addrEl.textContent = 'Connect a wallet first — without it there\'s nowhere to receive funds.';
+          if (qrEl) { qrEl.classList.add('pending'); qrEl.innerHTML = 'Wallet not connected'; }
+          window.gromDepState.address = '';
+          return;
+        }
+        if (addrEl) addrEl.textContent = addr;
+        if (qrEl) {
+          qrEl.classList.remove('pending');
+          const src = `https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=0&data=${encodeURIComponent(addr)}`;
+          qrEl.innerHTML = `<img src="${src}" alt="Deposit address QR" decoding="async"/>`;
+        }
+        window.gromDepState.address = addr;
+        window.gromDepState.memo = '';
+        return;
+      }
+    } catch (e) {
+      console.warn('[grom-deposit] self-custody patch failed, falling back:', e);
+    }
+    return origLoadAddress.apply(this, args);
+  };
+  window.gromDepLoadAddress.__gwPatched = true;
+  console.log('[grom-walletops] patched gromDepLoadAddress for self-custody');
+  return true;
+}
+
 function gwInitWalletModalOps() {
   // Override Cursor's inline modal functions (in index.html). These globals
   // were rendering a hardcoded network list with FAKE demo addresses
@@ -1103,7 +1156,13 @@ function gwInitWalletModalOps() {
   // backend (`/api/wallet/deposit-address` in seed-fallback mode) that GROM
   // does NOT hold the private key for. Users who deposit to either lose funds.
   // We replace these with our connected-wallet (Web3-native) implementation.
-  gwInjectModalCss();
+  // If Cursor's new 5-screen deposit flow is mounted (d19f86c), skip the
+  // legacy CSS + chip overrides — his own CSS owns the layout, and his
+  // gromDep* functions own the rendering. We only patch his loadAddress for
+  // self-custody (see gwPatchCursorDepositFlow).
+  const newDepUi = !!document.getElementById('depCoinList');
+  if (!newDepUi) gwInjectModalCss();
+  gwPatchCursorDepositFlow();
   window.submitSend = gwSubmitSend;
   window.submitSwap = gwSubmitSwap;
   window.openFiatProvider = gwOpenFiatProvider;
@@ -1133,10 +1192,17 @@ function gwInitWalletModalOps() {
     const visible = modal.classList.contains('open') ||
                     getComputedStyle(modal).display !== 'none';
     if (!visible) return;
-    try { gwHydrateDepositPane(); } catch (e) { console.warn('[grom-deposit] hydrate:', e); }
+    // New 5-screen deposit UI owns its rendering — skip legacy hydrate so we
+    // don't waste cycles rendering into a hidden chunk of DOM. Still patch
+    // gromDepLoadAddress in case Cursor's script ran after init.
+    if (document.getElementById('depCoinList')) {
+      gwPatchCursorDepositFlow();
+    } else {
+      try { gwHydrateDepositPane(); } catch (e) { console.warn('[grom-deposit] hydrate:', e); }
+      // second pass to defeat any async render from Cursor's inline code
+      setTimeout(() => { try { gwHydrateDepositPane(); } catch (_) {} }, 250);
+    }
     try { gwHydrateFiatProviders(); } catch (e) { console.warn('[grom-fiat] hydrate:', e); }
-    // second pass to defeat any async render from Cursor's inline code
-    setTimeout(() => { try { gwHydrateDepositPane(); } catch (_) {} }, 250);
   };
   const obs = new MutationObserver(reHydrate);
   obs.observe(modal, { attributes: true, attributeFilter: ['style', 'class'] });

@@ -431,6 +431,35 @@ export function createWalletRouter({ requireAuth, priceAggregator, wsBroadcaster
     keyGenerator: (req) => req.user?.sub || req.ip,
   });
 
+  /* GET /api/wallet/deposits?limit=10 — recent deposit history for the new
+   * Binance-style deposit modal. Returns inbound wallet_transfers rows for the
+   * authenticated user, newest first. Each row maps to the shape Cursor's
+   * gromDepLoadRecent() consumes: { asset, amount, status, txHash, time }. */
+  r.get('/wallet/deposits', requireAuth, async (req, res, next) => {
+    try {
+      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 50);
+      const { rows } = await query(
+        `SELECT id, asset, amount, status, tx_hash, network, created_at, confirmations
+           FROM wallet_transfers
+          WHERE user_id=$1 AND direction='deposit'
+          ORDER BY created_at DESC
+          LIMIT $2`,
+        [req.user.sub, limit]
+      );
+      const deposits = rows.map((row) => ({
+        id: row.id,
+        asset: row.asset,
+        amount: Number(row.amount),
+        status: row.status,
+        txHash: row.tx_hash,
+        network: row.network,
+        confirmations: row.confirmations,
+        time: row.created_at,
+      }));
+      res.json({ deposits });
+    } catch (err) { next(err); }
+  });
+
   r.get('/wallet/deposit-address', requireAuth, async (req, res, next) => {
     try {
       const input = depositAddressSchema.parse(req.query);

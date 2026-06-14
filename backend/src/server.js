@@ -45,7 +45,7 @@ import createWsBroadcaster from './binary/ws.js';
 import startBinanceConfirmWatcher from './wallet/binance-confirmation-watcher.js';
 import startBinanceDepositReconciler from './wallet/binance-deposit-reconciler.js';
 import { binance as binanceClient } from './integrations/binance/client.js';
-import { supportedBinanceNetworkPairs } from './integrations/binance/network-map.js';
+import { supportedBinanceNetworkPairs, supportedAssets } from './integrations/binance/network-map.js';
 
 import BinanceSource from './liquidity/binance.js';
 import KrakenSource  from './liquidity/kraken.js';
@@ -186,6 +186,8 @@ async function main() {
   app.get('/api/config/networks', (_req, res) => {
     res.json({
       mode: config.binance.useAsHotWallet ? 'binance' : 'native_signers',
+      custodialEnabled: !!config.binance.useAsHotWallet,
+      assets: supportedAssets(),
       networks: supportedBinanceNetworkPairs(),
     });
   });

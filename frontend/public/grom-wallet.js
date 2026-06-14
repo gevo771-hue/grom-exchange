@@ -726,10 +726,9 @@ const GROM_FIAT_PROVIDERS = {
     label: 'Transak',
     url: (q) => `https://global.transak.com/?cryptoCurrencyCode=${encodeURIComponent(q.asset)}&fiatCurrency=${encodeURIComponent(q.fiat)}&fiatAmount=${q.amount}&walletAddress=${encodeURIComponent(q.address)}`,
   },
-  ramp: {
-    label: 'Ramp',
-    url: (q) => `https://app.ramp.network/?swapAsset=${encodeURIComponent(q.asset)}&fiatCurrency=${encodeURIComponent(q.fiat)}&fiatValue=${q.amount}&userAddress=${encodeURIComponent(q.address)}`,
-  },
+  // Ramp Network public widget rejects requests without an API key — disabling
+  // until we either obtain a B2B partner key or build a proxy. Was showing
+  // "Integration issue detected" to users.
   binanceP2P: {
     label: 'Binance P2P',
     url: (q) => `https://p2p.binance.com/${q.fiat === 'RUB' ? 'ru/' : 'en/'}trade/all-payments/${encodeURIComponent(q.asset)}?fiat=${encodeURIComponent(q.fiat)}`,
@@ -1048,6 +1047,10 @@ function gwHydrateFiatProviders() {
   const wrap = document.getElementById('fiatProviders');
   if (!wrap || wrap.dataset.gwExpanded) return;
   wrap.dataset.gwExpanded = '1';
+  // Hide Cursor's "Ramp" button — Ramp public widget rejects requests without
+  // an API key (shows "Integration issue detected"). Re-enable after partner
+  // signup.
+  wrap.querySelectorAll('.prov[data-prov="ramp"]').forEach(el => el.remove());
   const present = new Set(Array.from(wrap.querySelectorAll('.prov')).map(b => b.dataset.prov));
   const extra = [
     { key: 'binanceP2P', label: 'Binance P2P' },

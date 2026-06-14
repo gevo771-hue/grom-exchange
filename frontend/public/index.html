@@ -13224,15 +13224,35 @@ function gromSwapDedupe(changed) {
 window.refreshSwapEstimate = refreshSwapEstimate;
 
 /* ============================================================
- * Prediction / Tokenized Stocks — enhancement layer.
- * The page shells (#predict / #xstocks) are rendered by grom-wallet.js
- * (Claude's zone). We layer on top WITHOUT editing that file:
- *   1) inject sidebar links on ANY UI language (his finder is RU-only),
- *   2) make both pages functional — live stock prices + real demo-balance
- *      trades & bets, positions, balance chip.
- * All hooks are additive (capture-phase + observers) so they survive his
- * re-renders and parallel commits.
+ * Prediction Markets + Tokenized Stocks — owned end-to-end here.
+ * grom-wallet.js handed these pages to index.html, so we render real
+ * first-class `.page` sections (#page-predict / #page-xstocks) wired into
+ * the app's own show() router — fixes both click + direct-URL rendering.
+ * Functional on demo balance (shared window.boState): live stock prices,
+ * working Buy/Sell + YES/NO bets, positions w/ PnL, trade modal.
  * ============================================================ */
+var GROM_PREDICT_MARKETS = [
+  { id: 'mlb_atl_cws', cat: 'Спорт · MLB', q: 'Atlanta Braves vs Chicago White Sox — кто победит?', a: 'Atlanta Braves', b: 'Chicago White Sox', pa: 0.49, pb: 0.51, vol: 184230, ends: '15 июн, 21:40 UTC' },
+  { id: 'nl_jp_wc',    cat: 'Спорт · ЧМ-2026', q: 'Нидерланды vs Япония — Нидерланды выйдут в плей-офф?', a: 'Да', b: 'Нет', pa: 0.62, pb: 0.38, vol: 412980, ends: '22 июн, 18:00 UTC' },
+  { id: 'btc_120k',    cat: 'Крипто', q: 'BTC закроет июнь выше $120K?', a: 'Да', b: 'Нет', pa: 0.34, pb: 0.66, vol: 2840110, ends: '30 июн, 23:59 UTC' },
+  { id: 'eth_etf_q3',  cat: 'Крипто · Регуляция', q: 'SEC одобрит ETH staking ETF до конца Q3?', a: 'Да', b: 'Нет', pa: 0.41, pb: 0.59, vol: 1180550, ends: '30 сен, 23:59 UTC' },
+  { id: 'fomc_25bps',  cat: 'Экономика · FOMC', q: 'ФРС снизит ставку на 25 bps на июльском заседании?', a: 'Да', b: 'Нет', pa: 0.71, pb: 0.29, vol: 3104000, ends: '31 июл, 18:00 UTC' },
+  { id: 'sol_5b_tvl',  cat: 'Крипто · TVL', q: 'TVL Solana DeFi превысит $15B в этом квартале?', a: 'Да', b: 'Нет', pa: 0.28, pb: 0.72, vol: 624000, ends: '30 сен, 23:59 UTC' },
+];
+var GROM_XSTOCKS = [
+  { sym: 'AAPL',  name: 'Apple Inc.',          price: 234.18, chg:  0.84, vol24: '$48.2M', mc: '$3.56T' },
+  { sym: 'MSFT',  name: 'Microsoft Corp.',     price: 469.55, chg:  1.20, vol24: '$31.7M', mc: '$3.49T' },
+  { sym: 'NVDA',  name: 'NVIDIA Corp.',        price: 144.62, chg: -2.31, vol24: '$92.4M', mc: '$3.55T' },
+  { sym: 'TSLA',  name: 'Tesla Inc.',          price: 351.04, chg:  3.42, vol24: '$58.6M', mc: '$1.12T' },
+  { sym: 'GOOGL', name: 'Alphabet Inc. (C)',   price: 191.78, chg:  0.46, vol24: '$22.1M', mc: '$2.37T' },
+  { sym: 'META',  name: 'Meta Platforms',      price: 612.40, chg: -0.92, vol24: '$19.8M', mc: '$1.55T' },
+  { sym: 'AMZN',  name: 'Amazon.com Inc.',     price: 232.45, chg:  1.18, vol24: '$28.3M', mc: '$2.44T' },
+  { sym: 'AMD',   name: 'Advanced Micro Dev.', price: 134.92, chg: -1.07, vol24: '$14.6M', mc: '$218B'  },
+  { sym: 'COIN',  name: 'Coinbase Global',     price: 308.50, chg:  4.62, vol24: '$11.2M', mc: '$77B'   },
+  { sym: 'MSTR',  name: 'MicroStrategy',       price: 412.30, chg:  6.18, vol24: '$24.8M', mc: '$96B'   },
+  { sym: 'SPY',   name: 'S&P 500 ETF',         price: 596.78, chg:  0.34, vol24: '$210M',  mc: '$598B'  },
+  { sym: 'QQQ',   name: 'Nasdaq-100 ETF',      price: 524.13, chg:  0.61, vol24: '$182M',  mc: '$305B'  },
+];
 (function gromExtraEnhance() {
   function bal() {
     var b = window.boState && window.boState.balance;
@@ -13290,6 +13310,44 @@ window.refreshSwapEstimate = refreshSwapEstimate;
       + '.gtm-actions button{flex:1;padding:11px 0;border-radius:11px;font-weight:800;font-size:13px;cursor:pointer;border:none}'
       + '.gtm-cancel{background:rgba(255,255,255,.06);color:var(--silver2,#c8d4e8)}'
       + '.gtm-confirm{background:linear-gradient(135deg,#3ac2ff,#0091c4);color:#04121b}'
+      // ---- page shells (predict / xstocks) ----
+      + '.gwx-wrap{max-width:1180px}'
+      + '.gwx-hero{margin-bottom:22px}'
+      + '.gwx-hero-row{display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;margin-bottom:8px}'
+      + '.gwx-h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center;gap:12px;color:var(--silver1,#e7eef8)}'
+      + '.gwx-badge{font-size:10px;font-weight:800;letter-spacing:.8px;padding:3px 8px;border-radius:6px}'
+      + '.gwx-badge.beta{background:rgba(58,194,255,.18);color:#3ac2ff}.gwx-badge.new{background:rgba(34,197,94,.18);color:#22c55e}'
+      + '.gwx-stats{display:flex;gap:22px;align-items:center}.gwx-stats>div{display:flex;flex-direction:column}'
+      + '.gwx-stats b{font-size:15px;font-weight:800;color:var(--silver1,#e7eef8)}.gwx-stats small{font-size:11px;color:var(--silver5,#6b7a92)}'
+      + '.gwx-sub{color:var(--silver4,#8c9bb2);font-size:13.5px;line-height:1.55;max-width:720px;margin:6px 0 16px}'
+      + '.gwx-cats{display:flex;gap:8px;flex-wrap:wrap}'
+      + '.gwx-pill{background:rgba(255,255,255,.04);color:var(--silver3,#9ba9bf);border:1px solid rgba(255,255,255,.06);border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer}'
+      + '.gwx-pill:hover{background:rgba(255,255,255,.07);color:var(--silver1,#e7eef8)}.gwx-pill.on{background:rgba(58,194,255,.18);color:#3ac2ff;border-color:rgba(58,194,255,.3)}'
+      + '.gwx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}'
+      + '.gwx-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:18px;transition:.15s}'
+      + '.gwx-card:hover{background:rgba(255,255,255,.05);border-color:rgba(58,194,255,.2)}'
+      + '.gwx-cat{color:var(--silver5,#6b7a92);font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}'
+      + '.gwx-q{color:var(--silver1,#e7eef8);font-size:15px;font-weight:700;line-height:1.4;margin-bottom:12px;min-height:44px}'
+      + '.gwx-meta{display:flex;justify-content:space-between;gap:8px;color:var(--silver5,#6b7a92);font-size:11px;margin-bottom:12px}'
+      + '.gwx-bets{display:grid;grid-template-columns:1fr 1fr;gap:8px}'
+      + '.gwx-bet{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px;border-radius:10px;border:1px solid transparent;font-weight:700;cursor:pointer;transition:.12s}'
+      + '.gwx-yes{background:rgba(34,197,94,.10);color:#22c55e;border-color:rgba(34,197,94,.2)}.gwx-yes:hover{background:rgba(34,197,94,.18)}'
+      + '.gwx-no{background:rgba(239,68,68,.10);color:#f87171;border-color:rgba(239,68,68,.2)}.gwx-no:hover{background:rgba(239,68,68,.18)}'
+      + '.gwx-bet-label{font-size:12px;font-weight:700}.gwx-bet-price{font-size:18px;font-weight:800}'
+      + '.gwx-table{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:16px;overflow:hidden}'
+      + '.gwx-thead,.gwx-row{display:grid;grid-template-columns:minmax(170px,2fr) 1fr 1fr 1fr 1fr auto;gap:16px;align-items:center;padding:14px 18px}'
+      + '.gwx-thead{background:rgba(255,255,255,.03);color:var(--silver5,#6b7a92);font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.06)}'
+      + '.gwx-row{border-bottom:1px solid rgba(255,255,255,.04)}.gwx-row:last-child{border-bottom:0}.gwx-row:hover{background:rgba(255,255,255,.025)}'
+      + '.gwx-row-sym{display:flex;flex-direction:column}.gwx-tick{font-weight:800;font-size:14px;color:var(--silver1,#e7eef8)}.gwx-name{color:var(--silver5,#6b7a92);font-size:11px}'
+      + '.gwx-price{font-weight:700;font-size:14px;color:var(--silver1,#e7eef8)}.gwx-chg{font-weight:700;font-size:13px}.gwx-up{color:#22c55e}.gwx-dn{color:#f87171}'
+      + '.gwx-col-vol,.gwx-col-mc{color:var(--silver3,#9ba9bf);font-size:13px}'
+      + '.gwx-row-actions{display:flex;gap:6px;justify-self:end}'
+      + '.gwx-trade{padding:6px 12px;border-radius:8px;border:0;font-weight:700;font-size:12px;cursor:pointer}'
+      + '.gwx-buy{background:rgba(34,197,94,.20);color:#22c55e}.gwx-buy:hover{background:rgba(34,197,94,.32)}'
+      + '.gwx-sell{background:rgba(239,68,68,.20);color:#f87171}.gwx-sell:hover{background:rgba(239,68,68,.32)}'
+      + '@media(max-width:1100px){.gwx-thead .gwx-col-vol,.gwx-thead .gwx-col-mc,.gwx-row .gwx-col-vol,.gwx-row .gwx-col-mc{display:none}.gwx-thead,.gwx-row{grid-template-columns:1.5fr 1fr 1fr auto}}'
+      + '.gwx-foot{color:var(--silver5,#6b7a92);font-size:12px;line-height:1.6;margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.05)}'
+      + '.gwx-link{color:#3ac2ff;text-decoration:none}'
       + '@media(max-width:900px){.gwx-bal{border-right:none;padding-right:0}}';
     var s = document.createElement('style'); s.id = 'grom-extra-enhance-css'; s.textContent = css;
     document.head.appendChild(s);
@@ -13328,29 +13386,72 @@ window.refreshSwapEstimate = refreshSwapEstimate;
     upd(); setTimeout(function () { try { amt.focus(); } catch (_) {} }, 30);
   }
 
-  /* ---- balance chip + positions ---- */
+  /* ---- balance chip ---- */
   function updateBalChips() { document.querySelectorAll('.gwx-bal-v').forEach(function (el) { el.textContent = money(bal()); }); }
-  function injectBalChip(mount) {
-    var stats = mount.querySelector('.gwx-stats');
-    if (!stats || stats.querySelector('.gwx-bal')) return;
-    var d = document.createElement('div'); d.className = 'gwx-bal';
-    d.innerHTML = '<b class="gwx-bal-v">' + money(bal()) + '</b><small>Demo-баланс</small>';
-    stats.insertBefore(d, stats.firstChild);
+
+  /* ---- page builders ---- */
+  function fmtVol(n) { return '$' + (n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : n.toFixed(0)); }
+  function buildPredict() {
+    var cards = GROM_PREDICT_MARKETS.map(function (m) {
+      return '<div class="gwx-card" data-mid="' + m.id + '">'
+        + '<div class="gwx-cat">' + m.cat + '</div>'
+        + '<div class="gwx-q">' + m.q + '</div>'
+        + '<div class="gwx-meta"><span>Объём 24ч · ' + fmtVol(m.vol) + '</span><span>Закрытие · ' + m.ends + '</span></div>'
+        + '<div class="gwx-bets">'
+        + '<button type="button" class="gwx-bet gwx-yes" data-side="a"><span class="gwx-bet-label">' + m.a + '</span><span class="gwx-bet-price">' + Math.round(m.pa * 100) + '¢</span></button>'
+        + '<button type="button" class="gwx-bet gwx-no" data-side="b"><span class="gwx-bet-label">' + m.b + '</span><span class="gwx-bet-price">' + Math.round(m.pb * 100) + '¢</span></button>'
+        + '</div></div>';
+    }).join('');
+    return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
+      + '<h1 class="gwx-h1">🎯 Prediction Markets <span class="gwx-badge beta">BETA</span></h1>'
+      + '<div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + money(bal()) + '</b><small>Demo-баланс</small></div><div><b>$8.4M</b><small>Объём 24ч</small></div><div><b>' + GROM_PREDICT_MARKETS.length + '</b><small>Рынков</small></div></div></div>'
+      + '<p class="gwx-sub">Торгуй исходами реальных событий — спорт, крипто, экономика. Цена контракта = вероятность исхода. Ставки идут на demo-баланс.</p>'
+      + '<div class="gwx-cats"><button type="button" class="gwx-pill on">Все</button><button type="button" class="gwx-pill">Спорт</button><button type="button" class="gwx-pill">Крипто</button><button type="button" class="gwx-pill">Экономика</button></div></div>'
+      + '<div class="gwx-grid">' + cards + '</div>'
+      + '<div class="gxp" id="gromPredictPos"><div class="gxp-h">Мои ставки</div><div class="gxp-list"></div></div>'
+      + '<div class="gwx-foot">Demo-режим: ставки на виртуальный баланс. Реальные контракты будут рассчитываться через oracle (Chainlink / UMA) после фиксации исхода. Комиссия GROM — 0.5%.</div></div>';
   }
-  function ensurePosHost(mount, id, title) {
-    var ex = mount.querySelector('#' + id); if (ex) return ex;
-    var wrap = mount.querySelector('.gwx-wrap'); if (!wrap) return null;
-    var sec = document.createElement('div'); sec.id = id; sec.className = 'gxp';
-    sec.innerHTML = '<div class="gxp-h">' + title + '</div><div class="gxp-list"></div>';
-    var foot = wrap.querySelector('.gwx-foot');
-    if (foot) wrap.insertBefore(sec, foot); else wrap.appendChild(sec);
-    return sec;
+  function buildXstocks() {
+    var rows = GROM_XSTOCKS.map(function (s) {
+      var cls = s.chg >= 0 ? 'gwx-up' : 'gwx-dn';
+      return '<div class="gwx-row" data-sym="' + s.sym + '">'
+        + '<div class="gwx-row-sym"><div class="gwx-tick">' + s.sym + '</div><div class="gwx-name">' + s.name + '</div></div>'
+        + '<div class="gwx-price">$' + s.price.toFixed(2) + '</div>'
+        + '<div class="gwx-chg ' + cls + '">' + (s.chg >= 0 ? '+' : '') + s.chg.toFixed(2) + '%</div>'
+        + '<div class="gwx-col-vol">' + s.vol24 + '</div>'
+        + '<div class="gwx-col-mc">' + s.mc + '</div>'
+        + '<div class="gwx-row-actions"><button type="button" class="gwx-trade gwx-buy" data-sym="' + s.sym + '" data-side="buy">Купить</button><button type="button" class="gwx-trade gwx-sell" data-sym="' + s.sym + '" data-side="sell">Продать</button></div>'
+        + '</div>';
+    }).join('');
+    return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
+      + '<h1 class="gwx-h1">📈 Tokenized Stocks <span class="gwx-badge new">NEW</span></h1>'
+      + '<div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + money(bal()) + '</b><small>Demo-баланс</small></div><div><b>' + GROM_XSTOCKS.length + '+</b><small>Тикеров</small></div><div><b>24/7</b><small>Торговля</small></div></div></div>'
+      + '<p class="gwx-sub">Реальные акции S&amp;P 500 / NASDAQ обёрнутые в токены на BSC. Цена 1:1 с биржей, обновляется в реальном времени. Сделки — на demo-баланс.</p>'
+      + '<div class="gwx-cats"><button type="button" class="gwx-pill on">Топ</button><button type="button" class="gwx-pill">Технологии</button><button type="button" class="gwx-pill">Финансы</button><button type="button" class="gwx-pill">ETF</button></div></div>'
+      + '<div class="gwx-table"><div class="gwx-thead"><div>Тикер</div><div>Цена</div><div>24ч %</div><div class="gwx-col-vol">Объём 24ч</div><div class="gwx-col-mc">Market Cap</div><div></div></div>' + rows + '</div>'
+      + '<div class="gxp" id="gromStockPos"><div class="gxp-h">Мои позиции</div><div class="gxp-list"></div></div>'
+      + '<div class="gwx-foot">Demo-режим: сделки на виртуальный баланс. Реальный расчёт — через смарт-контракты BSC / Solana (Backed Finance / Dinari). Маржа до 5x в следующем апдейте.</div></div>';
   }
+
+  // Create real <section class="page"> shells so the app's own show() router
+  // renders them on click AND on direct #predict / #xstocks URLs.
+  function ensurePages() {
+    var anchor = document.getElementById('page-markets') || document.querySelector('main .page');
+    if (!anchor || !anchor.parentNode) return;
+    [['predict', buildPredict, 'Prediction Markets'], ['xstocks', buildXstocks, 'Tokenized Stocks']].forEach(function (p) {
+      if (document.getElementById('page-' + p[0])) return;
+      var sec = document.createElement('section'); sec.className = 'page'; sec.id = 'page-' + p[0];
+      sec.innerHTML = '<div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">' + p[2] + '</span></div>' + p[1]();
+      anchor.parentNode.appendChild(sec);
+    });
+  }
+
+  /* ---- positions ---- */
   function renderStockPos() {
-    var mount = document.getElementById('gwExtraPage'); if (!mount || mount.dataset.page !== 'xstocks') return;
-    var host = ensurePosHost(mount, 'gromStockPos', 'Мои позиции'); if (!host) return;
-    var list = host.querySelector('.gxp-list'); var arr = loadPos('grom_xstock_pos');
-    if (!arr.length) { list.innerHTML = '<div class="gxp-empty">Пока нет позиций. Купи токенизированную акцию выше — сделка пройдёт на demo-баланс.</div>'; return; }
+    var page = document.getElementById('page-xstocks'); if (!page) return;
+    var list = page.querySelector('#gromStockPos .gxp-list'); if (!list) return;
+    var arr = loadPos('grom_xstock_pos');
+    if (!arr.length) { list.innerHTML = '<div class="gxp-empty">Пока нет позиций. Купи токенизированную акцию выше — сделка на demo-баланс.</div>'; return; }
     list.innerHTML = arr.map(function (p, i) {
       var cur = livePx(p.sym) || p.px; var val = p.qty * cur;
       var pnl = (p.side === 'buy') ? (val - p.usd) : (p.usd - val);
@@ -13361,10 +13462,10 @@ window.refreshSwapEstimate = refreshSwapEstimate;
     }).join('');
   }
   function renderPredictPos() {
-    var mount = document.getElementById('gwExtraPage'); if (!mount || mount.dataset.page !== 'predict') return;
-    var host = ensurePosHost(mount, 'gromPredictPos', 'Мои ставки'); if (!host) return;
-    var list = host.querySelector('.gxp-list'); var arr = loadPos('grom_predict_pos');
-    if (!arr.length) { list.innerHTML = '<div class="gxp-empty">Пока нет ставок. Выбери исход (YES/NO) выше — ставка пройдёт на demo-баланс.</div>'; return; }
+    var page = document.getElementById('page-predict'); if (!page) return;
+    var list = page.querySelector('#gromPredictPos .gxp-list'); if (!list) return;
+    var arr = loadPos('grom_predict_pos');
+    if (!arr.length) { list.innerHTML = '<div class="gxp-empty">Пока нет ставок. Выбери исход (YES/NO) выше — ставка на demo-баланс.</div>'; return; }
     list.innerHTML = arr.map(function (p, i) {
       return '<div class="gxp-row"><div><b>' + p.label + '</b>'
         + '<small>' + money(p.stake) + ' @ ' + Math.round(p.price * 100) + '¢ · ' + (p.q || '') + '</small></div>'
@@ -13387,6 +13488,7 @@ window.refreshSwapEstimate = refreshSwapEstimate;
 
   /* ---- trade / bet handlers ---- */
   function onStock(row, side) {
+    if (!row) return;
     var sym = row.dataset.sym; if (!sym) return;
     var pxEl = row.querySelector('.gwx-price');
     var px = livePx(sym) || parseFloat((pxEl ? pxEl.textContent : '').replace(/[^0-9.]/g, '')) || 0;
@@ -13423,18 +13525,19 @@ window.refreshSwapEstimate = refreshSwapEstimate;
 
   document.addEventListener('click', function (e) {
     var bet = e.target.closest('.gwx-bet');
-    if (bet) { e.preventDefault(); e.stopImmediatePropagation(); onBet(bet); return; }
+    if (bet) { e.preventDefault(); e.stopPropagation(); onBet(bet); return; }
     var tr = e.target.closest('.gwx-trade');
-    if (tr) { e.preventDefault(); e.stopImmediatePropagation(); onStock(tr.closest('.gwx-row'), tr.dataset.side); return; }
+    if (tr) { e.preventDefault(); e.stopPropagation(); onStock(tr.closest('.gwx-row'), tr.dataset.side); return; }
     var cl = e.target.closest('.gxp-close');
-    if (cl) { e.preventDefault(); e.stopImmediatePropagation(); closePos(cl.dataset.k, parseInt(cl.dataset.i, 10)); return; }
-  }, true);
+    if (cl) { e.preventDefault(); e.stopPropagation(); closePos(cl.dataset.k, parseInt(cl.dataset.i, 10)); return; }
+    var pill = e.target.closest('.gwx-cats .gwx-pill');
+    if (pill) { var bar = pill.parentNode; bar.querySelectorAll('.gwx-pill').forEach(function (x) { x.classList.remove('on'); }); pill.classList.add('on'); return; }
+  });
 
-  /* ---- live stock prices + gentle predict drift ---- */
+  /* ---- live stock prices + gentle predict drift (only when page is active) ---- */
   function refreshStockPrices() {
-    var mount = document.getElementById('gwExtraPage');
-    if (!mount || mount.style.display === 'none' || mount.dataset.page !== 'xstocks') return;
-    mount.querySelectorAll('.gwx-row[data-sym]').forEach(function (row) {
+    var page = document.getElementById('page-xstocks'); if (!page || !page.classList.contains('active')) return;
+    page.querySelectorAll('.gwx-row[data-sym]').forEach(function (row) {
       var px = livePx(row.dataset.sym); if (px == null) return;
       var pe = row.querySelector('.gwx-price'); if (pe) pe.textContent = '$' + px.toFixed(2);
       var chg = (typeof window.gromLiveChange === 'function') ? Number(window.gromLiveChange(row.dataset.sym)) : NaN;
@@ -13442,9 +13545,8 @@ window.refreshSwapEstimate = refreshSwapEstimate;
     });
   }
   function driftPredict() {
-    var mount = document.getElementById('gwExtraPage');
-    if (!mount || mount.style.display === 'none' || mount.dataset.page !== 'predict') return;
-    mount.querySelectorAll('.gwx-card').forEach(function (card) {
+    var page = document.getElementById('page-predict'); if (!page || !page.classList.contains('active')) return;
+    page.querySelectorAll('.gwx-card').forEach(function (card) {
       var bets = card.querySelectorAll('.gwx-bet-price'); if (bets.length !== 2) return;
       var a = parseFloat(bets[0].textContent) || 50;
       a = Math.min(96, Math.max(4, a + (Math.random() * 2 - 1)));
@@ -13452,18 +13554,15 @@ window.refreshSwapEstimate = refreshSwapEstimate;
       bets[1].textContent = Math.round(100 - a) + '¢';
     });
   }
-  setInterval(function () { try { refreshStockPrices(); driftPredict(); } catch (_) {} }, 4000);
-
-  /* ---- enhance on render ---- */
-  function enhance() {
-    var mount = document.getElementById('gwExtraPage');
-    if (!mount || mount.style.display === 'none') return;
-    injectCss(); injectBalChip(mount); updateBalChips();
-    if (mount.dataset.page === 'xstocks') { renderStockPos(); refreshStockPrices(); }
-    else if (mount.dataset.page === 'predict') { renderPredictPos(); }
+  function refreshActive() {
+    var px = document.getElementById('page-xstocks');
+    var pp = document.getElementById('page-predict');
+    if (px && px.classList.contains('active')) { refreshStockPrices(); renderStockPos(); updateBalChips(); }
+    if (pp && pp.classList.contains('active')) { driftPredict(); renderPredictPos(); updateBalChips(); }
   }
+  setInterval(function () { try { refreshActive(); } catch (_) {} }, 4000);
 
-  /* ---- nav visibility on ANY language ---- */
+  /* ---- sidebar nav links (any UI language) ---- */
   function ensureNav() {
     var aside = document.querySelector('aside.sidebar'); if (!aside) return;
     var markets = aside.querySelector('.nav-item[data-page="markets"]'); if (!markets) return;
@@ -13472,7 +13571,6 @@ window.refreshSwapEstimate = refreshSwapEstimate;
       var existing = aside.querySelector('.nav-item[data-page="' + p[0] + '"]');
       if (existing) { anchor = existing; return; }
       var node = markets.cloneNode(true);
-      // Match grom-wallet.js's id scheme so neither side double-inserts in a race.
       node.classList.remove('active'); node.id = 'gwNav_' + p[0]; node.setAttribute('data-page', p[0]);
       var label = node.querySelector('.nav-label');
       if (label) { label.textContent = p[1]; label.removeAttribute('data-i18n'); } else { node.textContent = p[1]; }
@@ -13483,45 +13581,31 @@ window.refreshSwapEstimate = refreshSwapEstimate;
       node.appendChild(bdg);
       anchor.parentNode.insertBefore(node, anchor.nextSibling);
       anchor = node;
-      // Fallback router in case grom-wallet.js router isn't bound yet.
-      node.addEventListener('click', function (e) {
-        if (typeof window.gwShowExtraPage === 'function') {
-          e.preventDefault(); e.stopPropagation();
-          window.gwShowExtraPage(p[0]); setTimeout(enhance, 60);
-        }
-      });
     });
   }
 
+  // Refresh positions/balance when navigating to either page (the app's own
+  // show() router handles activation; we just freshen dynamic bits).
   document.addEventListener('click', function (e) {
-    var n = e.target.closest('aside.sidebar .nav-item[data-page]');
-    if (n && (n.dataset.page === 'predict' || n.dataset.page === 'xstocks')) setTimeout(enhance, 80);
+    var n = e.target.closest('[data-page="predict"], [data-page="xstocks"]');
+    if (n) setTimeout(refreshActive, 60);
   }, true);
   window.addEventListener('hashchange', function () {
     var h = (location.hash || '').replace(/^#/, '').split('?')[0];
-    if (h === 'predict' || h === 'xstocks') setTimeout(enhance, 90);
+    if (h === 'predict' || h === 'xstocks') setTimeout(refreshActive, 80);
   });
 
-  // Primary trigger: observe #gwExtraPage so we re-enhance every time
-  // grom-wallet.js renders/swaps the page (independent of click interception).
-  // We watch only direct children + style/data-page so our own deep mutations
-  // (balance chip, positions) never retrigger the observer.
-  var _enhanceT = null;
-  function scheduleEnhance() { clearTimeout(_enhanceT); _enhanceT = setTimeout(enhance, 40); }
-  function attachObserver() {
-    var mount = document.getElementById('gwExtraPage'); if (!mount || mount.__gromObs) return true;
-    mount.__gromObs = new MutationObserver(scheduleEnhance);
-    mount.__gromObs.observe(mount, { childList: true, attributes: true, attributeFilter: ['style', 'data-page'] });
-    scheduleEnhance();
-    return true;
-  }
   function boot() {
-    ensureNav(); injectCss();
+    injectCss(); ensurePages(); ensureNav();
     var tries = 0;
-    var iv = setInterval(function () { tries++; ensureNav(); attachObserver(); if (tries >= 30) clearInterval(iv); }, 800);
-    attachObserver();
+    var iv = setInterval(function () { tries++; ensurePages(); ensureNav(); if (tries >= 30) clearInterval(iv); }, 700);
+    // Direct URL load (#predict / #xstocks): the app's init ran before our
+    // sections existed, so re-route now that they're mounted.
     var h = (location.hash || '').replace(/^#/, '').split('?')[0];
-    if (h === 'predict' || h === 'xstocks') setTimeout(enhance, 400);
+    if ((h === 'predict' || h === 'xstocks') && typeof window.show === 'function') {
+      setTimeout(function () { window.show(h); refreshActive(); }, 60);
+    }
+    refreshActive();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();

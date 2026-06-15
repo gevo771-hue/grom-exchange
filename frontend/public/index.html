@@ -3,6 +3,35 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<script>
+(function () {
+  var ALLOW = { landing: 1, dashboard: 1, spot: 1, binary: 1, futures: 1, markets: 1, wallet: 1, referral: 1, history: 1, settings: 1, help: 1, predict: 1, xstocks: 1, backoffice: 1 };
+  var hash = (location.hash || '').replace(/^#/, '').split('?')[0];
+  var store = '';
+  try { store = localStorage.getItem('grom_page') || ''; } catch (_) {}
+  var route = (hash && ALLOW[hash]) ? hash : ((store && ALLOW[store]) ? store : 'landing');
+  document.documentElement.setAttribute('data-grom-route', route);
+})();
+</script>
+<style id="grom-route-boot-css">
+  /* Prevent landing flash on refresh — overridden once JS router is ready */
+  html:not(.grom-js-ready)[data-grom-route] main > .page { display: none !important; }
+  html:not(.grom-js-ready)[data-grom-route="landing"] #page-landing,
+  html:not(.grom-js-ready)[data-grom-route="dashboard"] #page-dashboard,
+  html:not(.grom-js-ready)[data-grom-route="spot"] #page-spot,
+  html:not(.grom-js-ready)[data-grom-route="binary"] #page-binary,
+  html:not(.grom-js-ready)[data-grom-route="futures"] #page-futures,
+  html:not(.grom-js-ready)[data-grom-route="markets"] #page-markets,
+  html:not(.grom-js-ready)[data-grom-route="wallet"] #page-wallet,
+  html:not(.grom-js-ready)[data-grom-route="referral"] #page-referral,
+  html:not(.grom-js-ready)[data-grom-route="history"] #page-history,
+  html:not(.grom-js-ready)[data-grom-route="settings"] #page-settings,
+  html:not(.grom-js-ready)[data-grom-route="help"] #page-help,
+  html:not(.grom-js-ready)[data-grom-route="backoffice"] #page-backoffice,
+  html:not(.grom-js-ready)[data-grom-route="predict"] #page-predict,
+  html:not(.grom-js-ready)[data-grom-route="xstocks"] #page-xstocks { display: block !important; }
+  html:not(.grom-js-ready)[data-grom-route="landing"] body { /* sidebar hidden via landing-layout after JS */ }
+</style>
 <meta name="theme-color" content="#080a0f" />
 <title>GROM</title>
 <meta name="description" content="GROM Exchange — hybrid CEX/DEX. Spot, Futures, Binary Options + on-chain swaps. One account, sub-millisecond fills, bank-grade security." />
@@ -4592,7 +4621,7 @@
 
   <main>
     <!-- LANDING -->
-    <section class="page active landing-cosmos" id="page-landing">
+    <section class="page landing-cosmos" id="page-landing">
       <style>
         #page-landing .lp-wrap{max-width:1240px;margin:0 auto;padding:40px 24px 80px;text-align:left}
         #page-landing .lp-hero{display:grid;grid-template-columns:1.2fr 1fr;gap:48px;align-items:center;margin-bottom:80px}
@@ -5610,6 +5639,10 @@
         <div id="marketsCount" style="padding:10px 14px;color:var(--silver4);font-size:12px;text-align:center"></div>
       </div>
     </section>
+
+    <!-- PREDICTION + XSTOCKS (content hydrated by boot script) -->
+    <section class="page" id="page-predict"></section>
+    <section class="page" id="page-xstocks"></section>
 
     <!-- WALLET -->
     <section class="page" id="page-wallet">
@@ -7301,6 +7334,8 @@ function show(page) {
   document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.toggle('active', n.dataset.page === page));
   document.querySelectorAll('.hub-link[data-page]').forEach(n => n.classList.toggle('active', n.dataset.page === page && page !== 'landing'));
   document.body.classList.toggle('landing-layout', page === 'landing');
+  document.documentElement.classList.add('grom-js-ready');
+  document.documentElement.setAttribute('data-grom-route', page);
   try { localStorage.setItem('grom_page', page); } catch (_) {}
   // Close any mobile drawer when navigating
   document.body.classList.remove('drawer-open');
@@ -7367,15 +7402,17 @@ document.addEventListener('click', function (e) {
 var _logoHome = document.getElementById('logoHome');
 if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefault(); show('landing'); });
 (function () {
-  var fromHash = (location.hash || '').replace(/^#/, '');
+  var fromHash = (location.hash || '').replace(/^#/, '').split('?')[0];
   var fromStore = '';
   try { fromStore = localStorage.getItem('grom_page') || ''; } catch (_) {}
-  var start = fromHash || fromStore;
-  if (start && document.getElementById('page-' + start)) {
+  var fromBoot = document.documentElement.getAttribute('data-grom-route') || '';
+  var start = fromHash || fromStore || fromBoot || 'landing';
+  if (document.getElementById('page-' + start)) {
     show(start);
+  } else if (start !== 'landing') {
+    show('dashboard');
   } else {
-    var a = document.querySelector('main .page.active');
-    document.body.classList.toggle('landing-layout', a && a.id === 'page-landing');
+    show('landing');
   }
 })();
 function hydratePreviewSurfaces() {
@@ -13781,10 +13818,14 @@ var GROM_XSTOCKS = [
     var anchor = document.getElementById('page-markets') || document.querySelector('main .page');
     if (!anchor || !anchor.parentNode) return;
     [['predict', buildPredict, 'Прогнозы'], ['xstocks', buildXstocks, 'Акции']].forEach(function (p) {
-      if (document.getElementById('page-' + p[0])) return;
-      var sec = document.createElement('section'); sec.className = 'page'; sec.id = 'page-' + p[0];
+      var sec = document.getElementById('page-' + p[0]);
+      if (sec && sec.dataset.gwxReady) return;
+      if (!sec) {
+        sec = document.createElement('section'); sec.className = 'page'; sec.id = 'page-' + p[0];
+        anchor.parentNode.appendChild(sec);
+      }
       sec.innerHTML = '<div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">' + p[2] + '</span></div>' + p[1]();
-      anchor.parentNode.appendChild(sec);
+      sec.dataset.gwxReady = '1';
     });
     renderPredictGrid(); renderXstocksRows();
   }
@@ -14002,12 +14043,6 @@ var GROM_XSTOCKS = [
     injectCss(); ensurePages(); ensureNav(); loadPredictLive(); renderPredictWidgets();
     var tries = 0;
     var iv = setInterval(function () { tries++; ensurePages(); ensureNav(); if (tries >= 30) clearInterval(iv); }, 700);
-    // Direct URL load (#predict / #xstocks): the app's init ran before our
-    // sections existed, so re-route now that they're mounted.
-    var h = (location.hash || '').replace(/^#/, '').split('?')[0];
-    if ((h === 'predict' || h === 'xstocks') && typeof window.show === 'function') {
-      setTimeout(function () { window.show(h); refreshActive(); }, 60);
-    }
     refreshActive();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

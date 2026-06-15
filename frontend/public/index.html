@@ -13421,19 +13421,16 @@ var GROM_XSTOCKS = [
       + '@keyframes gwxPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}'
       + '.gwx-q{display:flex;gap:11px;align-items:flex-start;color:var(--silver1,#e7eef8);font-size:15px;font-weight:700;line-height:1.38;margin-bottom:14px;min-height:42px}'
       + '.gwx-q-ico{flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:19px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}'
-      + '.gwx-outcomes{display:flex;flex-direction:column;gap:9px}'
-      + '.gwx-oc{display:flex;flex-direction:column;gap:9px;padding:11px;border-radius:13px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.045)}'
-      + '.gwx-oc-head{display:flex;align-items:center;gap:12px}'
-      + '.gwx-oc-l{flex:1;min-width:0}'
-      + '.gwx-oc-name{font-size:13px;font-weight:700;color:var(--silver2,#c8d4e8);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-      + '.gwx-bar{height:6px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}'
-      + '.gwx-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#3ac2ff,#22c55e);transition:width .5s ease}'
-      + '.gwx-oc-prob{font-size:16px;font-weight:800;color:var(--silver1,#e7eef8);font-variant-numeric:tabular-nums;min-width:44px;text-align:right}'
-      + '.gwx-oc-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}'
-      + '.gwx-bet{display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;border-radius:10px;border:1px solid transparent;font-weight:800;font-size:12.5px;cursor:pointer;transition:.13s}'
-      + '.gwx-bet b{font-weight:800;opacity:.85}'
-      + '.gwx-yes{background:rgba(34,197,94,.12);color:#34d27f;border-color:rgba(34,197,94,.22)}.gwx-yes:hover{background:rgba(34,197,94,.22);transform:translateY(-1px)}'
-      + '.gwx-no{background:rgba(239,68,68,.12);color:#f87171;border-color:rgba(239,68,68,.22)}.gwx-no:hover{background:rgba(239,68,68,.22);transform:translateY(-1px)}'
+      + '.gwx-outcomes{display:flex;flex-direction:column;gap:8px}'
+      + '.gwx-oc{position:relative;display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:9px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.06);overflow:hidden}'
+      + '.gwx-oc-fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,rgba(58,194,255,.18),rgba(34,197,94,.05));transition:width .7s cubic-bezier(.4,0,.2,1)}'
+      + '.gwx-oc>:not(.gwx-oc-fill){position:relative;z-index:1}'
+      + '.gwx-oc-name{font-size:13px;font-weight:700;color:var(--silver1,#e7eef8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+      + '.gwx-oc-prob{font-size:16px;font-weight:800;color:var(--silver1,#e7eef8);font-variant-numeric:tabular-nums;min-width:48px;text-align:right;transition:color .3s,transform .3s}'
+      + '.gwx-oc-prob.up{color:#34d27f}.gwx-oc-prob.dn{color:#f87171}'
+      + '.gwx-bet{min-width:52px;padding:7px 13px;border-radius:9px;border:1px solid transparent;font-weight:800;font-size:12.5px;cursor:pointer;transition:.13s;text-align:center}'
+      + '.gwx-yes{background:rgba(34,197,94,.14);color:#34d27f;border-color:rgba(34,197,94,.24)}.gwx-yes:hover{background:rgba(34,197,94,.28);transform:translateY(-1px)}'
+      + '.gwx-no{background:rgba(239,68,68,.14);color:#f87171;border-color:rgba(239,68,68,.24)}.gwx-no:hover{background:rgba(239,68,68,.28);transform:translateY(-1px)}'
       + '.gwx-card-foot{display:flex;gap:14px;flex-wrap:wrap;color:var(--silver5,#6b7a92);font-size:11px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.05)}'
       + '.gwx-card-foot span{display:inline-flex;align-items:center;gap:4px}'
       + '.gwx-none{grid-column:1/-1;text-align:center;color:var(--silver5,#6b7a92);font-size:14px;padding:48px 16px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.08);border-radius:16px}'
@@ -13451,8 +13448,12 @@ var GROM_XSTOCKS = [
       + '.gwx-trade{padding:7px 13px;border-radius:9px;border:0;font-weight:700;font-size:12px;cursor:pointer;transition:.13s}'
       + '.gwx-buy{background:rgba(34,197,94,.18);color:#34d27f}.gwx-buy:hover{background:rgba(34,197,94,.3);transform:translateY(-1px)}'
       + '.gwx-sell{background:rgba(239,68,68,.18);color:#f87171}.gwx-sell:hover{background:rgba(239,68,68,.3);transform:translateY(-1px)}'
+      + '.gwx-price.flash-up{animation:gwxFlashUp .6s ease}.gwx-price.flash-dn{animation:gwxFlashDn .6s ease}'
+      + '@keyframes gwxFlashUp{0%{color:#34d27f;text-shadow:0 0 12px rgba(52,210,127,.6)}100%{color:var(--silver1,#e7eef8);text-shadow:none}}'
+      + '@keyframes gwxFlashDn{0%{color:#f87171;text-shadow:0 0 12px rgba(248,113,113,.6)}100%{color:var(--silver1,#e7eef8);text-shadow:none}}'
       + '@media(max-width:1100px){.gwx-thead .gwx-col-vol,.gwx-thead .gwx-col-mc,.gwx-row .gwx-col-vol,.gwx-row .gwx-col-mc{display:none}.gwx-thead,.gwx-row{grid-template-columns:1.6fr 1fr 1fr auto}}'
-      + '@media(max-width:560px){.gwx-row-actions .gwx-sell{display:none}.gwx-h1{font-size:22px}}'
+      + '@media(max-width:760px){.gwx-toolbar{flex-direction:column;align-items:stretch;gap:10px}.gwx-cats{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:5px;scrollbar-width:none;-ms-overflow-style:none}.gwx-cats::-webkit-scrollbar{display:none}.gwx-pill{flex:0 0 auto}.gwx-search{width:100%;min-width:0}.gwx-grid{grid-template-columns:1fr;gap:12px}.gwx-hero-row{gap:14px}.gwx-stats{gap:16px;flex-wrap:wrap}.gwx-h1{font-size:21px}.gwx-sub{font-size:12.5px}}'
+      + '@media(max-width:560px){.gwx-row-actions .gwx-sell{display:none}.gwx-card{padding:16px}.gwx-bet{min-width:48px;padding:7px 10px}.gwx-oc{gap:7px;padding:9px 10px}}'
       + '.gwx-foot{color:var(--silver5,#6b7a92);font-size:12px;line-height:1.6;margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.05)}'
       + '.gwx-link{color:#3ac2ff;text-decoration:none}'
       + '@media(max-width:900px){.gwx-bal{border-right:none;padding-right:0}}';
@@ -13512,19 +13513,21 @@ var GROM_XSTOCKS = [
   }
 
   /* ---- card / row markup ---- */
+  // Markets whose probabilities track a real live underlying price (BTC, ETH,
+  // a tokenized stock, …). "above target" outcomes move with the underlying.
+  var GWX_UND = { btc_tgt: 'BTC', btc_ath: 'BTC', doge_50: 'DOGE', meta_tgt: 'META', pltr_tgt: 'PLTR', aapl_tgt: 'AAPL', nvda_tgt: 'NVDA', tsla_400: 'TSLA', sp500_6k: 'SPY' };
   function predictCardHtml(m) {
     var c = pcat(m.cat);
     var ocs = m.rows.map(function (r) {
-      var no = 100 - r.p;
-      return '<div class="gwx-oc"><div class="gwx-oc-head"><div class="gwx-oc-l">'
-        + '<div class="gwx-oc-name">' + esc(r.n) + '</div><div class="gwx-bar"><i style="width:' + r.p + '%"></i></div></div>'
-        + '<div class="gwx-oc-prob">' + r.p + '%</div></div>'
-        + '<div class="gwx-oc-btns">'
-        + '<button type="button" class="gwx-bet gwx-yes" data-side="yes" data-name="' + escA(r.n) + '" data-prob="' + r.p + '">Yes <b>' + r.p + '¢</b></button>'
-        + '<button type="button" class="gwx-bet gwx-no" data-side="no" data-name="' + escA(r.n) + '" data-prob="' + r.p + '">No <b>' + no + '¢</b></button>'
-        + '</div></div>';
+      return '<div class="gwx-oc"><span class="gwx-oc-fill" style="width:' + r.p + '%"></span>'
+        + '<span class="gwx-oc-name">' + esc(r.n) + '</span>'
+        + '<span class="gwx-oc-prob">' + r.p + '%</span>'
+        + '<button type="button" class="gwx-bet gwx-yes" data-side="yes" data-name="' + escA(r.n) + '" data-prob="' + r.p + '">Yes</button>'
+        + '<button type="button" class="gwx-bet gwx-no" data-side="no" data-name="' + escA(r.n) + '" data-prob="' + r.p + '">No</button>'
+        + '</div>';
     }).join('');
-    return '<div class="gwx-card" data-q="' + escA(m.q) + '">'
+    var und = GWX_UND[m.id] ? ' data-und="' + GWX_UND[m.id] + '"' : '';
+    return '<div class="gwx-card" data-q="' + escA(m.q) + '"' + und + '>'
       + '<div class="gwx-card-top"><span class="gwx-cat">' + c[1] + ' ' + c[2] + '</span><span class="gwx-live"><i></i> LIVE</span></div>'
       + '<div class="gwx-q"><span class="gwx-q-ico">' + m.ico + '</span><span>' + esc(m.q) + '</span></div>'
       + '<div class="gwx-outcomes">' + ocs + '</div>'
@@ -13710,41 +13713,57 @@ var GROM_XSTOCKS = [
     else if (inp.closest('#page-xstocks')) { gwxState.sQ = v; renderXstocksRows(); }
   });
 
-  /* ---- synthetic live drift (only when page is active) ---- */
+  /* ---- live drift (only when page is active) ---- */
+  var undLast = {};
+  function getUnd(sym) { if (STOCK_MAP[sym]) return curPx(sym); return livePx(sym); }
+  function flash(el, up) { if (!el) return; el.classList.remove('flash-up', 'flash-dn'); void el.offsetWidth; el.classList.add(up ? 'flash-up' : 'flash-dn'); }
   function refreshStockPrices() {
     var page = document.getElementById('page-xstocks'); if (!page || !page.classList.contains('active')) return;
     initPx();
     page.querySelectorAll('.gwx-row[data-sym]').forEach(function (row) {
       var sym = row.dataset.sym; var b0 = parseFloat(row.dataset.b0) || gwxB0[sym] || curPx(sym);
-      var p = gwxPx[sym] != null ? gwxPx[sym] : curPx(sym);
-      p = p * (1 + (Math.random() * 0.0036 - 0.0018)); gwxPx[sym] = p;
+      var prev = gwxPx[sym] != null ? gwxPx[sym] : curPx(sym);
+      var p = prev * (1 + (Math.random() * 0.004 - 0.002)); gwxPx[sym] = p;
       var chg = (p / b0 - 1) * 100;
-      var pe = row.querySelector('.gwx-price'); if (pe) pe.textContent = '$' + p.toFixed(2);
+      var pe = row.querySelector('.gwx-price'); if (pe) { pe.textContent = '$' + p.toFixed(2); flash(pe, p >= prev); }
       var ce = row.querySelector('.gwx-chg'); if (ce) { ce.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%'; ce.classList.toggle('gwx-up', chg >= 0); ce.classList.toggle('gwx-dn', chg < 0); }
     });
   }
   function driftPredict() {
     var page = document.getElementById('page-predict'); if (!page || !page.classList.contains('active')) return;
+    // Compute each live underlying's move once, then nudge linked outcomes.
+    var deltas = {};
+    page.querySelectorAll('.gwx-card[data-und]').forEach(function (card) {
+      var u = card.dataset.und; if (deltas[u] !== undefined) return;
+      var cur = getUnd(u);
+      if (cur == null || !isFinite(cur) || cur <= 0) { deltas[u] = 0; return; }
+      var last = undLast[u]; deltas[u] = (last != null && last > 0) ? (cur - last) / last * 100 : 0; undLast[u] = cur;
+    });
     page.querySelectorAll('.gwx-oc').forEach(function (oc) {
-      var probEl = oc.querySelector('.gwx-oc-prob'); var bar = oc.querySelector('.gwx-bar i');
+      var probEl = oc.querySelector('.gwx-oc-prob'); var fill = oc.querySelector('.gwx-oc-fill');
       var yes = oc.querySelector('.gwx-bet.gwx-yes'); var no = oc.querySelector('.gwx-bet.gwx-no');
       if (!probEl || !yes) return;
+      var card = oc.closest('.gwx-card'); var u = card ? card.dataset.und : null;
       var a = parseFloat(probEl.textContent) || 50;
-      a = Math.round(Math.min(99, Math.max(1, a + (Math.random() * 2 - 1))));
-      probEl.textContent = a + '%';
-      if (bar) bar.style.width = a + '%';
-      yes.dataset.prob = a; no.dataset.prob = a;
-      var yb = yes.querySelector('b'); if (yb) yb.textContent = a + '¢';
-      var nb = no.querySelector('b'); if (nb) nb.textContent = (100 - a) + '¢';
+      var dir = (u && deltas[u]) ? Math.max(-3, Math.min(3, deltas[u] * 10)) : 0;
+      var nv = Math.round(Math.min(99, Math.max(1, a + (Math.random() * 1.4 - 0.7) + dir)));
+      if (nv === a) return;
+      probEl.textContent = nv + '%';
+      if (fill) fill.style.width = nv + '%';
+      yes.dataset.prob = nv; no.dataset.prob = nv;
+      probEl.classList.remove('up', 'dn'); void probEl.offsetWidth; probEl.classList.add(nv > a ? 'up' : 'dn');
+      setTimeout(function () { probEl.classList.remove('up', 'dn'); }, 480);
     });
   }
+  var _gwxTick = 0;
   function refreshActive() {
+    _gwxTick++;
     var px = document.getElementById('page-xstocks');
     var pp = document.getElementById('page-predict');
-    if (px && px.classList.contains('active')) { refreshStockPrices(); renderStockPos(); updateBalChips(); }
-    if (pp && pp.classList.contains('active')) { driftPredict(); renderPredictPos(); updateBalChips(); }
+    if (px && px.classList.contains('active')) { refreshStockPrices(); if (_gwxTick % 4 === 0) { renderStockPos(); updateBalChips(); } }
+    if (pp && pp.classList.contains('active')) { driftPredict(); if (_gwxTick % 4 === 0) { renderPredictPos(); updateBalChips(); } }
   }
-  setInterval(function () { try { refreshActive(); } catch (_) {} }, 4000);
+  setInterval(function () { try { refreshActive(); } catch (_) {} }, 1200);
 
   /* ---- sidebar nav links (any UI language) ---- */
   function ensureNav() {

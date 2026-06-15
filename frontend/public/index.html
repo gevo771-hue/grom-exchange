@@ -13815,24 +13815,46 @@ var GROM_XSTOCKS = [
 
   /* ---- sidebar nav links (any UI language) ---- */
   function ensureNav() {
-    var aside = document.querySelector('aside.sidebar'); if (!aside) return;
-    var markets = aside.querySelector('.nav-item[data-page="markets"]'); if (!markets) return;
-    var anchor = markets;
-    [['predict', 'Прогнозы', 'BETA'], ['xstocks', 'Акции', 'NEW']].forEach(function (p) {
-      var existing = aside.querySelector('.nav-item[data-page="' + p[0] + '"]');
-      if (existing) { anchor = existing; return; }
-      var node = markets.cloneNode(true);
-      node.classList.remove('active'); node.id = 'gwNav_' + p[0]; node.setAttribute('data-page', p[0]);
-      var label = node.querySelector('.nav-label');
-      if (label) { label.textContent = p[1]; label.removeAttribute('data-i18n'); } else { node.textContent = p[1]; }
-      node.querySelectorAll('.badge, .gw-nav-badge').forEach(function (b) { b.remove(); });
-      var bdg = document.createElement('span'); bdg.className = 'gw-nav-badge';
-      bdg.textContent = p[2];
-      bdg.style.cssText = 'margin-left:auto;background:rgba(58,194,255,.18);color:#3ac2ff;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:800;letter-spacing:.3px;align-self:center';
-      node.appendChild(bdg);
-      anchor.parentNode.insertBefore(node, anchor.nextSibling);
-      anchor = node;
-    });
+    var items = [['predict', 'Прогнозы', 'BETA'], ['xstocks', 'Акции', 'NEW']];
+    var aside = document.querySelector('aside.sidebar');
+    if (aside) {
+      var markets = aside.querySelector('.nav-item[data-page="markets"]');
+      if (markets) {
+        var anchor = markets;
+        items.forEach(function (p) {
+          var existing = aside.querySelector('.nav-item[data-page="' + p[0] + '"]');
+          if (existing) { anchor = existing; return; }
+          var node = markets.cloneNode(true);
+          node.classList.remove('active'); node.id = 'gwNav_' + p[0]; node.setAttribute('data-page', p[0]);
+          var label = node.querySelector('.nav-label');
+          if (label) { label.textContent = p[1]; label.removeAttribute('data-i18n'); } else { node.textContent = p[1]; }
+          node.querySelectorAll('.badge, .gw-nav-badge').forEach(function (b) { b.remove(); });
+          var bdg = document.createElement('span'); bdg.className = 'gw-nav-badge';
+          bdg.textContent = p[2];
+          bdg.style.cssText = 'margin-left:auto;background:rgba(58,194,255,.18);color:#3ac2ff;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:800;letter-spacing:.3px;align-self:center';
+          node.appendChild(bdg);
+          anchor.parentNode.insertBefore(node, anchor.nextSibling);
+          anchor = node;
+        });
+      }
+    }
+    // Desktop top menu (hub-nav): add the same sections after "Markets".
+    var hub = document.querySelector('nav.hub-nav');
+    if (hub) {
+      var hMarkets = hub.querySelector('.hub-link[data-page="markets"]');
+      if (hMarkets) {
+        var hAnchor = hMarkets;
+        items.forEach(function (p) {
+          var ex = hub.querySelector('.hub-link[data-page="' + p[0] + '"]');
+          if (ex) { hAnchor = ex; return; }
+          var btn = document.createElement('button');
+          btn.type = 'button'; btn.className = 'hub-link'; btn.setAttribute('data-page', p[0]);
+          btn.textContent = p[1];
+          hAnchor.parentNode.insertBefore(btn, hAnchor.nextSibling);
+          hAnchor = btn;
+        });
+      }
+    }
   }
 
   // Refresh positions/balance when navigating to either page (the app's own

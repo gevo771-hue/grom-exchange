@@ -20,8 +20,89 @@ function fallbackQuotes() {
   };
 }
 
+// ---- Polymarket prediction-markets proxy (public, cached) ----
+let _predictCache = { ts: 0, data: null };
+const PREDICT_TTL = 60_000;
+
+function safeJson(str, def) { try { return JSON.parse(str); } catch { return def; } }
+function pmCategory(ev) {
+  const tags = Array.isArray(ev.tags) ? ev.tags.map((t) => t.label || t.slug || '') : [];
+  const hay = [ev.category || '', ev.title || '', ...tags].join(' ').toLowerCase();
+  const has = (...ks) => ks.some((k) => hay.includes(k));
+  if (has('esport', 'league of legends', 'dota', 'counter-strike', 'cs2', 'valorant', 'gaming')) return 'esports';
+  if (has('sport', 'nfl', 'nba', 'mlb', 'soccer', 'football', 'tennis', 'baseball', 'basketball', 'hockey', 'ufc', 'f1', 'golf', 'world cup', 'champions league')) return 'sport';
+  if (has('crypto', 'bitcoin', 'ethereum', 'solana', 'memecoin', 'altcoin', 'dogecoin', 'ripple')) return 'crypto';
+  if (has('econom', 'fed ', 'inflation', 'interest rate', 'cpi', 'gdp', 'jobs', 'recession', 'rate cut')) return 'economy';
+  if (has('stock', 'earnings', 'nasdaq', 's&p', 'tech', 'business', 'ipo', 'company', 'tesla', 'nvidia', 'apple')) return 'finance';
+  if (has('politic', 'election', 'trump', 'biden', 'senate', 'congress', 'geopolit', 'war', 'president')) return 'politics';
+  if (has('culture', 'movie', 'music', 'tv ', 'celebrit', 'award', 'oscar', 'entertain', 'pop ', 'grammy')) return 'culture';
+  return 'all';
+}
+function pmEmoji(cat) {
+  return { sport: '⚽', crypto: '🪙', esports: '🎮', politics: '🏛️', culture: '🎬', finance: '💹', economy: '📊' }[cat] || '🌐';
+}
+function pmEnds(iso) {
+  if (!iso) return '';
+  const d = new Date(iso); if (Number.isNaN(d.getTime())) return '';
+  try { return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }); } catch { return ''; }
+}
+function normalizePolymarket(events) {
+  const out = [];
+  for (const ev of Array.isArray(events) ? events : []) {
+    const mk = Array.isArray(ev.markets) ? ev.markets : [];
+    let rows = [];
+    for (const m of mk) {
+      if (m.closed || m.archived) continue;
+      const prices = safeJson(m.outcomePrices, null);
+      const outs = safeJson(m.outcomes, null);
+      if (!Array.isArray(prices) || !prices.length) continue;
+      const yes = Number(prices[0]);
+      if (!Number.isFinite(yes)) continue;
+      let name = (m.groupItemTitle && String(m.groupItemTitle).trim())
+        || (Array.isArray(outs) && outs[0] && outs[0] !== 'Yes' ? outs[0] : 'Да');
+      rows.push({ n: String(name).slice(0, 42), p: Math.max(1, Math.min(99, Math.round(yes * 100))) });
+    }
+    if (!rows.length) continue;
+    // Show the top favourites first (multi-outcome events can have dozens of markets).
+    if (rows.length > 1) rows.sort((a, b) => b.p - a.p);
+    rows = rows.slice(0, 6);
+    const cat = pmCategory(ev);
+    out.push({
+      id: 'pm_' + (ev.id || ev.slug || out.length),
+      cat,
+      ico: pmEmoji(cat),
+      q: String(ev.title || ev.question || '').slice(0, 150),
+      vol: Number(ev.volume || ev.volume24hr || 0) || 0,
+      ends: pmEnds(ev.endDate),
+      live: true,
+      rows,
+    });
+    if (out.length >= 48) break;
+  }
+  return out;
+}
+
 export function createMarketRouter() {
   const r = express.Router();
+
+  // Live prediction markets from Polymarket (server-side to bypass CORS).
+  r.get('/predict', async (_req, res) => {
+    const now = Date.now();
+    if (_predictCache.data && now - _predictCache.ts < PREDICT_TTL) {
+      return res.json({ markets: _predictCache.data, cached: true });
+    }
+    try {
+      const { data } = await axios.get('https://gamma-api.polymarket.com/events', {
+        params: { closed: false, active: true, archived: false, order: 'volume24hr', ascending: false, limit: 80 },
+        timeout: 7000,
+      });
+      const markets = normalizePolymarket(data);
+      if (markets.length) _predictCache = { ts: now, data: markets };
+      return res.json({ markets, source: 'polymarket' });
+    } catch (_) {
+      return res.json({ markets: _predictCache.data || [], error: 'upstream' });
+    }
+  });
 
   r.get('/quotes', async (_req, res) => {
     const payload = fallbackQuotes();

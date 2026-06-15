@@ -143,6 +143,7 @@
     color: var(--silver2);
     min-height: 100vh;
     overflow-x: hidden;
+    overflow-x: clip; /* clip avoids creating a scroll container (keeps sticky topbar working) */
     letter-spacing: 0.01em;
     -webkit-font-smoothing: antialiased;
     isolation: isolate;
@@ -13454,7 +13455,7 @@ var GROM_XSTOCKS = [
       + '@keyframes gwxFlashUp{0%{color:#34d27f;text-shadow:0 0 12px rgba(52,210,127,.6)}100%{color:var(--silver1,#e7eef8);text-shadow:none}}'
       + '@keyframes gwxFlashDn{0%{color:#f87171;text-shadow:0 0 12px rgba(248,113,113,.6)}100%{color:var(--silver1,#e7eef8);text-shadow:none}}'
       + '@media(max-width:1100px){.gwx-thead .gwx-col-vol,.gwx-thead .gwx-col-mc,.gwx-row .gwx-col-vol,.gwx-row .gwx-col-mc{display:none}.gwx-thead,.gwx-row{grid-template-columns:1.6fr 1fr 1fr auto}}'
-      + '@media(max-width:760px){.gwx-toolbar{flex-direction:column;align-items:stretch;gap:10px}.gwx-cats{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:5px;scrollbar-width:none;-ms-overflow-style:none}.gwx-cats::-webkit-scrollbar{display:none}.gwx-pill{flex:0 0 auto}.gwx-search{width:100%;min-width:0}.gwx-grid{grid-template-columns:1fr;gap:12px}.gwx-hero-row{gap:14px}.gwx-stats{gap:16px;flex-wrap:wrap}.gwx-h1{font-size:21px}.gwx-sub{font-size:12.5px}}'
+      + '@media(max-width:760px){.gwx-toolbar{flex-direction:column;align-items:stretch;gap:10px}.gwx-cats{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;touch-action:pan-x;width:100%;flex:0 0 auto;-webkit-overflow-scrolling:touch;padding-bottom:5px;scrollbar-width:none;-ms-overflow-style:none}.gwx-cats::-webkit-scrollbar{display:none}.gwx-pill{flex:0 0 auto}.gwx-search{width:100%;min-width:0}.gwx-grid{grid-template-columns:1fr;gap:12px}.gwx-hero-row{gap:14px}.gwx-stats{gap:16px;flex-wrap:wrap}.gwx-h1{font-size:21px}.gwx-sub{font-size:12.5px}}'
       + '@media(max-width:560px){.gwx-row-actions .gwx-sell{display:none}.gwx-card{padding:16px}.gwx-bet{min-width:48px;padding:7px 10px}.gwx-oc{gap:7px;padding:9px 10px}}'
       + '.gwx-foot{color:var(--silver5,#6b7a92);font-size:12px;line-height:1.6;margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.05)}'
       + '.gwx-link{color:#3ac2ff;text-decoration:none}'
@@ -13554,7 +13555,9 @@ var GROM_XSTOCKS = [
       + '<div class="gwx-card-top"><span class="gwx-cat">' + c[1] + ' ' + c[2] + '</span><span class="gwx-live"><i></i> LIVE</span></div>'
       + '<div class="gwx-q">' + icoHtml + '<span>' + esc(m.q) + '</span></div>'
       + '<div class="gwx-outcomes">' + ocs + '</div>'
-      + '<div class="gwx-card-foot"><span>📊 ' + fmtVol(m.vol) + '</span><span>👥 ' + m.part + '</span><span>⏱ ' + esc(m.ends) + '</span></div></div>';
+      + '<div class="gwx-card-foot"><span>📊 ' + fmtVol(m.vol) + '</span>'
+      + (m.part ? '<span>👥 ' + m.part + '</span>' : '')
+      + (m.ends ? '<span>⏱ ' + esc(m.ends) + '</span>' : '') + '</div></div>';
   }
   function stockRowHtml(s) {
     var px = curPx(s.sym), b0 = gwxB0[s.sym] || s.price, chg = (px / b0 - 1) * 100;
@@ -13604,13 +13607,35 @@ var GROM_XSTOCKS = [
       + '<div class="gxp" id="gromStockPos"><div class="gxp-h">Мои позиции</div><div class="gxp-list"></div></div>'
       + '<div class="gwx-foot">Demo-режим: сделки на виртуальный баланс. Реальный расчёт — через смарт-контракты BSC / Solana (Backed Finance / Dinari). Маржа до 5x в следующем апдейте.</div></div>';
   }
+  var GWX_LIVE = null;
+  // Live Polymarket feed first (real questions + probabilities), curated RU
+  // markets appended so every category tab stays populated.
+  function predictSource() { return (GWX_LIVE && GWX_LIVE.length) ? GWX_LIVE.concat(GROM_PREDICT_MARKETS) : GROM_PREDICT_MARKETS; }
   function renderPredictGrid() {
     var grid = document.querySelector('#page-predict .gwx-grid'); if (!grid) return;
     var q = gwxState.pQ.trim().toLowerCase();
-    var list = GROM_PREDICT_MARKETS.filter(function (m) {
+    var list = predictSource().filter(function (m) {
       return (gwxState.pCat === 'all' || m.cat === gwxState.pCat) && (!q || m.q.toLowerCase().indexOf(q) >= 0);
     });
     grid.innerHTML = list.length ? list.map(predictCardHtml).join('') : '<div class="gwx-none">Ничего не найдено по этому фильтру 🔍</div>';
+  }
+  function updatePredictStats() {
+    var page = document.getElementById('page-predict'); if (!page) return;
+    var src = predictSource();
+    var stats = page.querySelectorAll('.gwx-stats > div');
+    if (stats.length >= 3) {
+      var cb = stats[2].querySelector('b'); if (cb) cb.textContent = String(src.length);
+    }
+  }
+  function loadPredictLive() {
+    fetch('/api/market/predict', { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !Array.isArray(d.markets) || d.markets.length < 6) return; // keep curated RU fallback
+        GWX_LIVE = d.markets;
+        renderPredictGrid(); updatePredictStats();
+      })
+      .catch(function () {});
   }
   function renderXstocksRows() {
     var host = document.querySelector('#page-xstocks .gwx-rows'); if (!host) return;
@@ -13784,7 +13809,7 @@ var GROM_XSTOCKS = [
     var px = document.getElementById('page-xstocks');
     var pp = document.getElementById('page-predict');
     if (px && px.classList.contains('active')) { refreshStockPrices(); if (_gwxTick % 4 === 0) { renderStockPos(); updateBalChips(); } }
-    if (pp && pp.classList.contains('active')) { driftPredict(); if (_gwxTick % 4 === 0) { renderPredictPos(); updateBalChips(); } }
+    if (pp && pp.classList.contains('active')) { driftPredict(); if (_gwxTick % 4 === 0) { renderPredictPos(); updateBalChips(); } if (_gwxTick % 50 === 0) loadPredictLive(); }
   }
   setInterval(function () { try { refreshActive(); } catch (_) {} }, 1200);
 
@@ -13814,15 +13839,16 @@ var GROM_XSTOCKS = [
   // show() router handles activation; we just freshen dynamic bits).
   document.addEventListener('click', function (e) {
     var n = e.target.closest('[data-page="predict"], [data-page="xstocks"]');
-    if (n) setTimeout(refreshActive, 60);
+    if (n) { setTimeout(refreshActive, 60); if (n.dataset.page === 'predict') loadPredictLive(); }
   }, true);
   window.addEventListener('hashchange', function () {
     var h = (location.hash || '').replace(/^#/, '').split('?')[0];
     if (h === 'predict' || h === 'xstocks') setTimeout(refreshActive, 80);
+    if (h === 'predict') loadPredictLive();
   });
 
   function boot() {
-    injectCss(); ensurePages(); ensureNav();
+    injectCss(); ensurePages(); ensureNav(); loadPredictLive();
     var tries = 0;
     var iv = setInterval(function () { tries++; ensurePages(); ensureNav(); if (tries >= 30) clearInterval(iv); }, 700);
     // Direct URL load (#predict / #xstocks): the app's init ran before our

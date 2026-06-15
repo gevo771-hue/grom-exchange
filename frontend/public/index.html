@@ -383,10 +383,12 @@
   .banner-spot { border-color: rgba(0,194,255,.32); box-shadow: 0 8px 28px rgba(0,194,255,.10), inset 0 1px 0 rgba(255,255,255,.04); }
   .banner-binary { border-color: rgba(34,193,124,.32); box-shadow: 0 8px 28px rgba(34,193,124,.10), inset 0 1px 0 rgba(255,255,255,.04); }
   .banner-futures { border-color: rgba(245,185,77,.32); box-shadow: 0 8px 28px rgba(245,185,77,.10), inset 0 1px 0 rgba(255,255,255,.04); }
+  .banner-predict { border-color: rgba(168,85,247,.32); box-shadow: 0 8px 28px rgba(168,85,247,.10), inset 0 1px 0 rgba(255,255,255,.04); }
   .dash-banner:hover { transform: translateY(-6px) rotateX(2deg) rotateY(-2deg); }
   .banner-spot:hover { box-shadow: 0 24px 60px rgba(0,194,255,.30), 0 0 0 1px rgba(0,194,255,.5) inset; border-color: rgba(0,194,255,.7); }
   .banner-binary:hover { box-shadow: 0 24px 60px rgba(34,193,124,.30), 0 0 0 1px rgba(34,193,124,.5) inset; border-color: rgba(34,193,124,.7); }
   .banner-futures:hover { box-shadow: 0 24px 60px rgba(245,185,77,.30), 0 0 0 1px rgba(245,185,77,.5) inset; border-color: rgba(245,185,77,.7); }
+  .banner-predict:hover { box-shadow: 0 24px 60px rgba(168,85,247,.30), 0 0 0 1px rgba(168,85,247,.5) inset; border-color: rgba(168,85,247,.7); }
   .banner-mesh {
     position: absolute;
     inset: -2px;
@@ -397,6 +399,7 @@
   }
   .banner-binary .banner-mesh { background: radial-gradient(circle at 80% 20%, rgba(34,193,124,.35) 0%, transparent 50%), radial-gradient(circle at 20% 80%, rgba(14,203,129,.25) 0%, transparent 55%); }
   .banner-futures .banner-mesh { background: radial-gradient(circle at 80% 20%, rgba(245,185,77,.35) 0%, transparent 50%), radial-gradient(circle at 20% 80%, rgba(196,99,28,.25) 0%, transparent 55%); }
+  .banner-predict .banner-mesh { background: radial-gradient(circle at 80% 20%, rgba(168,85,247,.38) 0%, transparent 50%), radial-gradient(circle at 20% 80%, rgba(58,194,255,.22) 0%, transparent 55%); }
   @keyframes meshFloat { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(-8px, 6px) scale(1.06); } }
   .banner-shine {
     position: absolute;
@@ -413,14 +416,17 @@
   .banner-ico { font-size: 44px; line-height: 1; filter: drop-shadow(0 4px 14px rgba(0,194,255,.4)); }
   .banner-binary .banner-ico { filter: drop-shadow(0 4px 14px rgba(34,193,124,.4)); }
   .banner-futures .banner-ico { filter: drop-shadow(0 4px 14px rgba(245,185,77,.4)); }
+  .banner-predict .banner-ico { filter: drop-shadow(0 4px 14px rgba(168,85,247,.45)); }
   .banner-eyebrow { font-size: 10.5px; letter-spacing: .22em; text-transform: uppercase; color: #7ec5ff; font-weight: 800; margin-top: 6px; }
   .banner-binary .banner-eyebrow { color: #7eecbf; }
   .banner-futures .banner-eyebrow { color: #ffd17e; }
+  .banner-predict .banner-eyebrow { color: #d8b4fe; }
   .banner-content h3 { margin: 0; font-size: 22px; font-weight: 800; color: #f5fbff; line-height: 1.15; letter-spacing: -0.01em; }
   .banner-content p { margin: 0; font-size: 12.5px; color: #a8c2db; line-height: 1.5; }
   .banner-cta { margin-top: auto; display: inline-flex; align-items: center; gap: 6px; color: #00c2ff; font-weight: 800; font-size: 13.5px; letter-spacing: .04em; }
   .banner-binary .banner-cta { color: #22c17c; }
   .banner-futures .banner-cta { color: #f5b94d; }
+  .banner-predict .banner-cta { color: #c084fc; }
   .dash-banner:hover .banner-cta { transform: translateX(4px); transition: transform .25s; }
   .banner-tag {
     position: absolute;
@@ -438,6 +444,9 @@
     animation: pulseTag 2.4s ease-in-out infinite;
   }
   @keyframes pulseTag { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  @media (max-width: 1200px) {
+    .dash-banners { grid-template-columns: repeat(2, 1fr) !important; }
+  }
   @media (max-width: 900px) {
     .dash-banners { grid-template-columns: 1fr !important; gap: 12px !important; }
     .dash-banner { min-height: 160px; padding: 18px; }
@@ -4619,6 +4628,28 @@
         #page-landing .lp-product-card.lp-p-hot:hover{border-color:rgba(245,185,77,.55);box-shadow:0 16px 48px rgba(245,185,77,.2)}
         #page-landing .lp-product-card.lp-p-glow{border-color:rgba(34,193,124,.28)}
         #page-landing .lp-product-card.lp-p-glow:hover{border-color:rgba(34,193,124,.55);box-shadow:0 16px 48px rgba(34,193,124,.2)}
+        #page-landing .lp-product-card.lp-p-predict{border-color:rgba(168,85,247,.28)}
+        #page-landing .lp-product-card.lp-p-predict:hover{border-color:rgba(168,85,247,.55);box-shadow:0 16px 48px rgba(168,85,247,.22)}
+        #page-landing .lp-predict{margin-bottom:80px;padding:48px 36px;background:radial-gradient(ellipse 900px 420px at 50% 0%,rgba(168,85,247,.14),transparent 65%),linear-gradient(180deg,rgba(11,18,32,.75),rgba(8,12,20,.45));border:1px solid rgba(168,85,247,.22);border-radius:28px;position:relative;overflow:hidden}
+        #page-landing .lp-predict::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 100% 100%,rgba(58,194,255,.08),transparent 55%);pointer-events:none}
+        #page-landing .lp-predict-head{text-align:center;margin-bottom:36px;position:relative}
+        #page-landing .lp-predict-eyebrow{display:inline-block;padding:6px 14px;background:rgba(168,85,247,.14);border:1px solid rgba(168,85,247,.35);border-radius:99px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#d8b4fe;margin-bottom:16px}
+        #page-landing .lp-predict-sub{text-align:center;color:#9bb3c7;font-size:16px;line-height:1.55;max-width:620px;margin:0 auto}
+        #page-landing .lp-predict-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px;position:relative}
+        @media(max-width:1100px){#page-landing .lp-predict-grid{grid-template-columns:repeat(2,1fr)}}
+        @media(max-width:600px){#page-landing .lp-predict-grid{grid-template-columns:1fr}}
+        #page-landing .lp-predict-card{padding:20px;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:18px;cursor:pointer;transition:transform .22s,border-color .22s,box-shadow .22s;text-align:left}
+        #page-landing .lp-predict-card:hover{transform:translateY(-4px);border-color:rgba(168,85,247,.45);box-shadow:0 16px 40px rgba(0,0,0,.35),0 0 0 1px rgba(168,85,247,.15)}
+        #page-landing .lp-pc-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+        #page-landing .lp-pc-cat{font-size:10.5px;font-weight:700;color:#7cd4ff;background:rgba(58,194,255,.12);padding:4px 8px;border-radius:6px}
+        #page-landing .lp-pc-live{display:inline-flex;align-items:center;gap:5px;font-size:9px;font-weight:800;letter-spacing:.08em;color:#22c55e;text-transform:uppercase}
+        #page-landing .lp-pc-live i{width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e;animation:lpPvPulse 1.4s ease-in-out infinite}
+        @keyframes lpPvPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.85)}}
+        #page-landing .lp-pc-q{display:flex;gap:10px;align-items:flex-start;font-size:14px;font-weight:700;color:#e8f1fa;line-height:1.4;margin-bottom:14px;min-height:58px}
+        #page-landing .lp-pc-ico{font-size:22px;line-height:1;flex-shrink:0}
+        #page-landing .lp-pc-outs{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+        #page-landing .lp-pc-foot{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#7a8fa4}
+        #page-landing .lp-predict-cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;position:relative}
         #page-landing .lp-p-icon{font-size:36px;margin-bottom:16px;position:relative}
         #page-landing .lp-product-card h3{font-size:24px;font-weight:800;margin:0 0 12px;color:#e8f1fa;position:relative}
         #page-landing .lp-product-card p{font-size:14px;line-height:1.55;color:#9bb3c7;margin:0 0 20px;position:relative}
@@ -4671,6 +4702,14 @@
           #page-landing .lp-trust-strip{gap:14px;font-size:11.5px;flex-wrap:wrap;justify-content:flex-start}
           #page-landing .lp-trust-strip b{font-size:15px}
           #page-landing .lp-products{gap:14px;margin-bottom:48px}
+          #page-landing .lp-predict{padding:28px 18px;margin-bottom:48px}
+          #page-landing .lp-predict-head{margin-bottom:24px}
+          #page-landing .lp-predict-sub{font-size:14px}
+          #page-landing .lp-predict-grid{gap:12px;margin-bottom:22px}
+          #page-landing .lp-predict-card{padding:16px}
+          #page-landing .lp-pc-q{font-size:13px;min-height:0}
+          #page-landing .lp-predict-cta-row{flex-direction:column}
+          #page-landing .lp-predict-cta-row button{width:100%}
           #page-landing .lp-product-card{padding:22px}
           #page-landing .lp-product-card h3{font-size:20px;margin-bottom:8px}
           #page-landing .lp-product-card p{font-size:13px;margin-bottom:14px}
@@ -4769,6 +4808,20 @@
             <div class="lp-p-cta" data-i18n="lp_prod_bo_cta">Try Binary now →</div>
           </div>
         </div>
+
+        <!-- PREDICTION MARKETS SPOTLIGHT -->
+        <section class="lp-predict" id="lpPredictSec" aria-label="Рынки прогнозов">
+          <div class="lp-predict-head">
+            <span class="lp-predict-eyebrow">🎯 Live · Polymarket feed</span>
+            <h2 class="lp-h2">Рынки прогнозов</h2>
+            <p class="lp-predict-sub">Торгуй исходами спорта, крипто, политики и экономики. Цена контракта = вероятность исхода. Demo-баланс — без риска.</p>
+          </div>
+          <div id="lpPredictGrid" class="lp-predict-grid"></div>
+          <div class="lp-predict-cta-row">
+            <button type="button" class="lp-btn-primary" onclick="show('predict')">Открыть все прогнозы →</button>
+            <button type="button" class="lp-btn-secondary" onclick="show('xstocks')">Токенизированные акции</button>
+          </div>
+        </section>
 
         <!-- WHY GROM -->
         <div class="lp-why">
@@ -5006,7 +5059,7 @@
       <h1 class="page-title"><span data-i18n="dash_title">Good morning, trader</span> <span class="tag">Tier 1</span></h1>
       <p class="page-subtitle" data-i18n="dash_sub">Here's what's happening across your portfolio and watchlist.</p>
 
-      <div class="dash-banners" style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:0 0 28px">
+      <div class="dash-banners" style="display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin:0 0 28px">
         <a class="dash-banner banner-spot" onclick="show('spot')">
           <div class="banner-mesh"></div>
           <div class="banner-shine"></div>
@@ -5042,6 +5095,18 @@
             <div class="banner-cta">Open Futures →</div>
           </div>
         </a>
+        <a class="dash-banner banner-predict" onclick="show('predict')">
+          <div class="banner-mesh"></div>
+          <div class="banner-shine"></div>
+          <span class="banner-tag" style="background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff">BETA</span>
+          <div class="banner-content">
+            <div class="banner-ico">🎯</div>
+            <div class="banner-eyebrow">PREDICTION MARKETS</div>
+            <h3>Спорт · Крипто · Политика</h3>
+            <p>Live-вероятности с Polymarket. Ставки на исходы — demo-баланс, без риска.</p>
+            <div class="banner-cta">Открыть прогнозы →</div>
+          </div>
+        </a>
       </div>
 
       <div class="stats-grid">
@@ -5068,19 +5133,13 @@
       </div>
 
       <div class="grid-2">
-        <div class="card">
+        <div class="card card--predict-spot" id="dashPredictCard">
           <div class="card-head">
-            <h3 id="dashCheckTitle">Get started · 0 of 5 done</h3>
-            <span class="sub">Takes ~3 minutes</span>
+            <h3><span class="grom-pv-pulse" aria-hidden="true"></span> Рынки прогнозов <span class="grom-pv-beta">BETA</span></h3>
+            <button type="button" class="grom-pv-link" onclick="show('predict')">Все рынки →</button>
           </div>
-          <div class="progress"><span id="dashCheckProgress" style="width:0%"></span></div>
-          <div class="checklist" id="dashChecklist">
-            <div class="check-row" data-step="wallet"><div class="check-circle"></div><div class="body"><div class="title">Connect a wallet</div><div class="desc">MetaMask, Trust Wallet, Binance Web3 Wallet, WalletConnect, or email login.</div></div><a class="cta" onclick="connectWallet()">Connect →</a></div>
-            <div class="check-row" data-step="email"><div class="check-circle"></div><div class="body"><div class="title">Verify email</div><div class="desc">Unlock account recovery and faster support replies.</div></div><a class="cta" onclick="show('settings')">Start →</a></div>
-            <div class="check-row" data-step="fund"><div class="check-circle"></div><div class="body"><div class="title">Fund your account</div><div class="desc">Deposit USDT, BTC, ETH, or buy with an on-ramp.</div></div><a class="cta" onclick="show('wallet')">Open wallet →</a></div>
-            <div class="check-row" data-step="kyc"><div class="check-circle"></div><div class="body"><div class="title">Complete KYC Tier 2</div><div class="desc">Required for limits above $500/day</div></div><a class="cta" onclick="openHelpTopic('kyc')">Read requirements →</a></div>
-            <div class="check-row" data-step="trade"><div class="check-circle"></div><div class="body"><div class="title">Place your first binary trade</div><div class="desc">Start with a 60s paper trade — no risk.</div></div><a class="cta" onclick="show('binary')">Open desk →</a></div>
-          </div>
+          <p class="grom-pv-sub">Live-вероятности реальных событий — спорт, крипто, политика. Ставки на demo-баланс.</p>
+          <div id="dashPredictSpot" class="grom-pv-list"></div>
         </div>
 
         <div class="card card--market-snap">
@@ -5095,6 +5154,7 @@
       <div class="card">
         <div class="card-head"><h3>Quick actions</h3><span class="sub">Press <span class="kbd">⌘K</span> to search any action</span></div>
         <div class="qa-grid">
+          <button class="qa" onclick="show('predict')"><span class="ico">🎯</span><span class="t">Рынки прогнозов</span><span class="d">Live-вероятности · demo-ставки</span></button>
           <button class="qa" onclick="show('binary')"><span class="ico"><svg width="18" height="18"><use href="#i-binary"/></svg></span><span class="t">Place binary option</span><span class="d">60s UP/DOWN with fixed payout</span></button>
           <button class="qa" onclick="show('spot')"><span class="ico"><svg width="18" height="18"><use href="#i-spot"/></svg></span><span class="t">Spot trade</span><span class="d">Limit, market, stop orders</span></button>
           <button class="qa" onclick="show('wallet')"><span class="ico"><svg width="18" height="18"><use href="#i-deposit"/></svg></span><span class="t">Deposit crypto</span><span class="d">BTC, ETH, USDT, USDC</span></button>
@@ -7279,9 +7339,10 @@ function show(page) {
     }
     if (page === 'dashboard') {
       if (typeof updateDashboardFromWallet === 'function') updateDashboardFromWallet();
-      if (typeof updateOnboardingChecklist === 'function') updateOnboardingChecklist();
       if (typeof renderDashboardWatchlist === 'function') renderDashboardWatchlist();
+      if (typeof window.gromRenderPredictWidgets === 'function') window.gromRenderPredictWidgets();
     }
+    if (page === 'landing' && typeof window.gromRenderPredictWidgets === 'function') window.gromRenderPredictWidgets();
     if (page === 'history' && typeof applyHistoryFilter === 'function') applyHistoryFilter();
   });
   setTimeout(function () {
@@ -13459,7 +13520,27 @@ var GROM_XSTOCKS = [
       + '@media(max-width:560px){.gwx-row-actions .gwx-sell{display:none}.gwx-card{padding:16px}.gwx-bet{min-width:48px;padding:7px 10px}.gwx-oc{gap:7px;padding:9px 10px}}'
       + '.gwx-foot{color:var(--silver5,#6b7a92);font-size:12px;line-height:1.6;margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.05)}'
       + '.gwx-link{color:#3ac2ff;text-decoration:none}'
-      + '@media(max-width:900px){.gwx-bal{border-right:none;padding-right:0}}';
+      + '@media(max-width:900px){.gwx-bal{border-right:none;padding-right:0}}'
+      // ---- dashboard + landing prediction previews ----
+      + '.card--predict-spot{background:linear-gradient(180deg,rgba(168,85,247,.07),rgba(11,18,32,.35));border-color:rgba(168,85,247,.2)}'
+      + '.grom-pv-pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 10px rgba(34,197,94,.6);margin-right:6px;vertical-align:middle;animation:gwxLive 1.4s ease-in-out infinite}'
+      + '.grom-pv-beta{font-size:9px;font-weight:800;letter-spacing:.6px;padding:2px 6px;border-radius:5px;background:rgba(58,194,255,.16);color:#3ac2ff;margin-left:6px;vertical-align:middle}'
+      + '.grom-pv-link{background:none;border:none;color:#3ac2ff;font-size:12px;font-weight:700;cursor:pointer;padding:0}'
+      + '.grom-pv-link:hover{text-decoration:underline}'
+      + '.grom-pv-sub{font-size:12.5px;color:var(--silver4,#8c9bb2);line-height:1.5;margin:-4px 0 14px}'
+      + '.grom-pv-list{display:flex;flex-direction:column;gap:10px}'
+      + '.grom-pv-item{display:block;width:100%;text-align:left;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:12px 14px;cursor:pointer;transition:.18s;color:inherit;font:inherit}'
+      + '.grom-pv-item:hover{background:rgba(168,85,247,.08);border-color:rgba(168,85,247,.28);transform:translateY(-1px)}'
+      + '.grom-pv-item-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}'
+      + '.grom-pv-cat{font-size:10px;font-weight:700;color:#7cd4ff;background:rgba(58,194,255,.1);padding:3px 7px;border-radius:5px}'
+      + '.grom-pv-live-sm{display:inline-flex;align-items:center;gap:4px;font-size:8.5px;font-weight:800;letter-spacing:.08em;color:#22c55e;text-transform:uppercase}'
+      + '.grom-pv-live-sm i{width:5px;height:5px;border-radius:50%;background:#22c55e;animation:gwxLive 1.4s ease-in-out infinite}'
+      + '.grom-pv-q{font-size:13px;font-weight:700;color:var(--silver1,#e7eef8);line-height:1.35;margin-bottom:10px}'
+      + '.grom-pv-outs{display:flex;flex-direction:column;gap:6px}'
+      + '.grom-pv-oc-top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:var(--silver3,#9ba9bf);margin-bottom:4px}'
+      + '.grom-pv-oc-top b{font-size:12px;font-weight:800;color:var(--silver1,#e7eef8)}'
+      + '.grom-pv-bar{height:4px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden}'
+      + '.grom-pv-bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,rgba(58,194,255,.75),rgba(34,197,94,.9));transition:width .35s}';
     var s = document.createElement('style'); s.id = 'grom-extra-enhance-css'; s.textContent = css;
     document.head.appendChild(s);
   }
@@ -13633,10 +13714,58 @@ var GROM_XSTOCKS = [
       .then(function (d) {
         if (!d || !Array.isArray(d.markets) || d.markets.length < 6) return; // keep curated RU fallback
         GWX_LIVE = d.markets;
-        renderPredictGrid(); updatePredictStats();
+        renderPredictGrid(); updatePredictStats(); renderPredictWidgets();
       })
       .catch(function () {});
   }
+  function featuredMarkets(n) {
+    var src = predictSource().slice().sort(function (a, b) { return (b.vol || 0) - (a.vol || 0); });
+    var out = [], seen = {};
+    src.forEach(function (m) {
+      if (out.length >= n) return;
+      if (seen[m.cat]) return;
+      seen[m.cat] = 1; out.push(m);
+    });
+    src.forEach(function (m) {
+      if (out.length >= n) return;
+      if (out.indexOf(m) >= 0) return;
+      out.push(m);
+    });
+    return out.slice(0, n);
+  }
+  function previewOutcomesHtml(rows) {
+    return (rows || []).slice(0, 2).map(function (r) {
+      return '<div class="grom-pv-oc"><div class="grom-pv-oc-top"><span>' + esc(r.n) + '</span><b>' + r.p + '%</b></div>'
+        + '<div class="grom-pv-bar"><span style="width:' + r.p + '%"></span></div></div>';
+    }).join('');
+  }
+  function dashPreviewHtml(m) {
+    var c = pcat(m.cat);
+    var q = m.q.length > 88 ? m.q.slice(0, 85) + '…' : m.q;
+    return '<button type="button" class="grom-pv-item" onclick="show(\'predict\')">'
+      + '<div class="grom-pv-item-top"><span class="grom-pv-cat">' + c[1] + ' ' + c[2] + '</span><span class="grom-pv-live-sm"><i></i>LIVE</span></div>'
+      + '<div class="grom-pv-q">' + esc(q) + '</div>'
+      + '<div class="grom-pv-outs">' + previewOutcomesHtml(m.rows) + '</div>'
+      + '</button>';
+  }
+  function lpPreviewHtml(m) {
+    var c = pcat(m.cat);
+    var q = m.q.length > 112 ? m.q.slice(0, 109) + '…' : m.q;
+    return '<div class="lp-predict-card" onclick="show(\'predict\')" role="button" tabindex="0">'
+      + '<div class="lp-pc-top"><span class="lp-pc-cat">' + c[1] + ' ' + c[2] + '</span><span class="lp-pc-live"><i></i>LIVE</span></div>'
+      + '<div class="lp-pc-q"><span class="lp-pc-ico">' + esc(m.ico) + '</span><span>' + esc(q) + '</span></div>'
+      + '<div class="lp-pc-outs">' + previewOutcomesHtml(m.rows) + '</div>'
+      + '<div class="lp-pc-foot"><span>📊 ' + fmtVol(m.vol) + '</span>' + (m.ends ? '<span>⏱ ' + esc(m.ends) + '</span>' : '') + '</div>'
+      + '</div>';
+  }
+  function renderPredictWidgets() {
+    injectCss();
+    var dash = document.getElementById('dashPredictSpot');
+    if (dash) dash.innerHTML = featuredMarkets(3).map(dashPreviewHtml).join('');
+    var lp = document.getElementById('lpPredictGrid');
+    if (lp) lp.innerHTML = featuredMarkets(4).map(lpPreviewHtml).join('');
+  }
+  window.gromRenderPredictWidgets = renderPredictWidgets;
   function renderXstocksRows() {
     var host = document.querySelector('#page-xstocks .gwx-rows'); if (!host) return;
     var q = gwxState.sQ.trim().toLowerCase();
@@ -13870,7 +13999,7 @@ var GROM_XSTOCKS = [
   });
 
   function boot() {
-    injectCss(); ensurePages(); ensureNav(); loadPredictLive();
+    injectCss(); ensurePages(); ensureNav(); loadPredictLive(); renderPredictWidgets();
     var tries = 0;
     var iv = setInterval(function () { tries++; ensurePages(); ensureNav(); if (tries >= 30) clearInterval(iv); }, 700);
     // Direct URL load (#predict / #xstocks): the app's init ran before our

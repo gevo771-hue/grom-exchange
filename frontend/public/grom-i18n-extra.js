@@ -397,22 +397,218 @@
   EXTRA.hi.pg_predict_sub = 'वास्तविक इवेंट के परिणामों पर ट्रेड — खेल, क्रिप्टो, esports, राजनीति, संस्कृति, वित्त और अर्थव्यवस्था। कॉन्ट्रैक्ट कीमत = संभावना। डेमो बैलेंस पर दांव।';
   EXTRA.hi.dash_px_sub = 'वास्तविक इवेंट की लाइव संभावनाएँ — खेल, क्रिप्टो, राजनीति। डेमो बैलेंस पर दांव।';
 
-  // Merge ru/en predict keys into base STR
-  ['ru', 'en'].forEach(function (lng) {
-    if (window.GROM_STR && window.GROM_STR[lng]) Object.assign(window.GROM_STR[lng], EXTRA[lng]);
-  });
-  ['es', 'ar', 'zh', 'hi', 'tr'].forEach(function (lng) {
-    if (window.GROM_STR && window.GROM_STR[lng]) Object.assign(window.GROM_STR[lng], EXTRA[lng]);
+  var SHARED = {
+    ru: {
+      auth_login: 'Войти / Регистрация', lang_switched: 'Язык', mkt_trade: 'Торговать', nav_binary: 'Binary',
+      set_regional_title: 'Регион', set_theme_title: 'Тема', set_theme_dark: 'Тёмная', set_theme_system: 'Системная',
+      set_notif_fills: 'Исполнения и выигрыши', set_notif_transfers: 'Депозиты и выводы', set_notif_digest: 'Еженедельный дайджест', set_notif_product: 'Обновления продукта',
+      set_protect_title: 'Торговая защита', set_protect_sub: 'Ответственная торговля',
+      set_loss_cap_t: 'Дневной лимит убытка', set_loss_cap_m: 'Платформа блокирует новые binary-ордера выше настроенного риска',
+      set_cooldown_t: 'Пауза после серии', set_cooldown_m: 'Авто-пауза после частых убытков',
+      set_withdraw_t: 'Подтверждение выводов', set_withdraw_m: 'Крупные переводы требуют повторной проверки устройства и email',
+      set_enabled: 'Включено', set_strict: 'Строго', set_edit: 'Изменить', set_policy: 'Политика', set_review: 'Проверить',
+    },
+    en: {
+      auth_login: 'Sign in / Sign up', lang_switched: 'Language', mkt_trade: 'Trade', nav_binary: 'Binary',
+      set_regional_title: 'Regional', set_theme_title: 'Theme', set_theme_dark: 'Dark', set_theme_system: 'System',
+      set_notif_fills: 'Order fills & wins', set_notif_transfers: 'Deposits & withdrawals', set_notif_digest: 'Weekly digest', set_notif_product: 'Product updates',
+      set_protect_title: 'Trading protections', set_protect_sub: 'Responsible trading',
+      set_loss_cap_t: 'Daily loss cap', set_loss_cap_m: 'Platform blocks new binary orders above configured risk',
+      set_cooldown_t: 'Cooldown after streak', set_cooldown_m: 'Auto cool-off after repeated high-frequency losses',
+      set_withdraw_t: 'Withdrawal approvals', set_withdraw_m: 'Large transfers require device re-check + email confirmation',
+      set_enabled: 'Enabled', set_strict: 'Strict', set_edit: 'Edit', set_policy: 'Policy', set_review: 'Review',
+    },
+    es: {
+      auth_login: 'Iniciar / Registrarse', lang_switched: 'Idioma', mkt_trade: 'Operar', nav_binary: 'Binary',
+      set_regional_title: 'Regional', set_theme_title: 'Tema', set_theme_dark: 'Oscuro', set_theme_system: 'Sistema',
+      set_notif_fills: 'Ejecuciones y ganancias', set_notif_transfers: 'Depósitos y retiros', set_notif_digest: 'Resumen semanal', set_notif_product: 'Actualizaciones',
+      set_protect_title: 'Protecciones de trading', set_protect_sub: 'Trading responsable',
+      set_loss_cap_t: 'Límite diario de pérdida', set_loss_cap_m: 'La plataforma bloquea nuevas órdenes binary por encima del riesgo configurado',
+      set_cooldown_t: 'Pausa tras racha', set_cooldown_m: 'Pausa automática tras pérdidas frecuentes',
+      set_withdraw_t: 'Aprobación de retiros', set_withdraw_m: 'Transferencias grandes requieren re-verificación del dispositivo y email',
+      set_enabled: 'Activo', set_strict: 'Estricto', set_edit: 'Editar', set_policy: 'Política', set_review: 'Revisar',
+    },
+    ar: {
+      auth_login: 'تسجيل / إنشاء حساب', lang_switched: 'اللغة', mkt_trade: 'تداول', nav_binary: 'Binary',
+      set_regional_title: 'الإعدادات الإقليمية', set_theme_title: 'المظهر', set_theme_dark: 'داكن', set_theme_system: 'النظام',
+      set_notif_fills: 'تنفيذات وانتصارات', set_notif_transfers: 'إيداعات وسحوبات', set_notif_digest: 'ملخص أسبوعي', set_notif_product: 'تحديثات المنتج',
+      set_protect_title: 'حماية التداول', set_protect_sub: 'تداول مسؤول',
+      set_loss_cap_t: 'حد الخسارة اليومي', set_loss_cap_m: 'المنصة تمنع أوامر binary الجديدة فوق المخاطر المحددة',
+      set_cooldown_t: 'توقف بعد سلسلة', set_cooldown_m: 'توقف تلقائي بعد خسائر متكررة',
+      set_withdraw_t: 'موافقات السحب', set_withdraw_m: 'التحويلات الكبيرة تتطلب إعادة التحقق من الجهاز والبريد',
+      set_enabled: 'مفعّل', set_strict: 'صارم', set_edit: 'تعديل', set_policy: 'السياسة', set_review: 'مراجعة',
+    },
+    zh: {
+      auth_login: '登录 / 注册', lang_switched: '语言', mkt_trade: '交易', nav_binary: 'Binary',
+      set_regional_title: '区域', set_theme_title: '主题', set_theme_dark: '深色', set_theme_system: '跟随系统',
+      set_notif_fills: '成交与盈利', set_notif_transfers: '充值与提现', set_notif_digest: '每周摘要', set_notif_product: '产品更新',
+      set_protect_title: '交易保护', set_protect_sub: '负责任交易',
+      set_loss_cap_t: '每日亏损上限', set_loss_cap_m: '超过配置风险时平台将阻止新的 binary 订单',
+      set_cooldown_t: '连亏冷却', set_cooldown_m: '高频连亏后自动冷却',
+      set_withdraw_t: '提现审批', set_withdraw_m: '大额转账需重新验证设备与邮箱',
+      set_enabled: '已启用', set_strict: '严格', set_edit: '编辑', set_policy: '政策', set_review: '审核',
+    },
+    hi: {
+      auth_login: 'लॉगिन / साइन अप', lang_switched: 'भाषा', mkt_trade: 'ट्रेड', nav_binary: 'Binary',
+      set_regional_title: 'क्षेत्र', set_theme_title: 'थीम', set_theme_dark: 'डार्क', set_theme_system: 'सिस्टम',
+      set_notif_fills: 'ऑर्डर फिल और जीत', set_notif_transfers: 'जमा और निकासी', set_notif_digest: 'साप्ताहिक सार', set_notif_product: 'उत्पाद अपडेट',
+      set_protect_title: 'ट्रेडिंग सुरक्षा', set_protect_sub: 'जिम्मेदार ट्रेडिंग',
+      set_loss_cap_t: 'दैनिक हानि सीमा', set_loss_cap_m: 'प्लेटफ़ॉर्म कॉन्फ़िगर जोखिम से ऊपर नए binary ऑर्डर रोकता है',
+      set_cooldown_t: 'स्ट्रीक के बाद विराम', set_cooldown_m: 'बार-बार हानि के बाद ऑटो विराम',
+      set_withdraw_t: 'निकासी अनुमोदन', set_withdraw_m: 'बड़े ट्रांसफ़र के लिए डिवाइस + ईमेल पुनः जाँच',
+      set_enabled: 'सक्रिय', set_strict: 'सख्त', set_edit: 'संपादित', set_policy: 'नीति', set_review: 'समीक्षा',
+    },
+    tr: {
+      auth_login: 'Giriş / Kayıt', lang_switched: 'Dil', mkt_trade: 'İşlem', nav_binary: 'Binary',
+      set_regional_title: 'Bölgesel', set_theme_title: 'Tema', set_theme_dark: 'Koyu', set_theme_system: 'Sistem',
+      set_notif_fills: 'Emir gerçekleşmeleri ve kazançlar', set_notif_transfers: 'Yatırma ve çekme', set_notif_digest: 'Haftalık özet', set_notif_product: 'Ürün güncellemeleri',
+      set_protect_title: 'İşlem korumaları', set_protect_sub: 'Sorumlu işlem',
+      set_loss_cap_t: 'Günlük zarar limiti', set_loss_cap_m: 'Platform, yapılandırılmış riskin üzerinde yeni binary emirlerini engeller',
+      set_cooldown_t: 'Seri sonrası bekleme', set_cooldown_m: 'Tekrarlayan kayıplardan sonra otomatik ara',
+      set_withdraw_t: 'Çekim onayları', set_withdraw_m: 'Büyük transferler cihaz + e-posta doğrulaması gerektirir',
+      set_enabled: 'Açık', set_strict: 'Sıkı', set_edit: 'Düzenle', set_policy: 'Politika', set_review: 'İncele',
+    },
+  };
+  ['ru', 'en', 'es', 'ar', 'zh', 'hi', 'tr'].forEach(function (lng) {
+    if (EXTRA[lng] && SHARED[lng]) Object.assign(EXTRA[lng], SHARED[lng]);
   });
 
-  // Re-apply on language switch
-  var _setLang = window.setGromLang;
-  if (typeof _setLang === 'function') {
-    window.setGromLang = function (lng) {
-      _setLang(lng);
-      if (typeof window.gromRefreshI18nPages === 'function') window.gromRefreshI18nPages();
-    };
+  // Dashboard / settings / help — page strings for all langs
+  var PAGE_UI = {
+    ru: {
+      dash_banner_spot_eyebrow: 'SPOT', dash_banner_spot_h: '365 крипто-пар · комиссия 0.10%', dash_banner_spot_p: 'Ликвидность Binance · Kraken · Coinbase. On-chain свопы доступны.', dash_banner_spot_cta: 'Открыть Spot →',
+      dash_banner_bo_eyebrow: 'BINARY OPTIONS', dash_banner_bo_h: 'UP / DOWN · выплата до 87%', dash_banner_bo_p: 'Экспирации от 5с до 1ч. Жёсткий риск · без ликвидаций.', dash_banner_bo_cta: 'Торговать Binary →',
+      dash_banner_fut_eyebrow: 'FUTURES PERPS', dash_banner_fut_h: 'До 100× · маржа USDT', dash_banner_fut_p: 'Cross и isolated · funding каждые 8ч · TP/SL при входе.', dash_banner_fut_cta: 'Открыть Futures →',
+      dash_stat_portfolio: 'Стоимость портфеля', dash_stat_pnl: 'P&L за 24ч', dash_stat_open: 'Открытые позиции', dash_stat_winrate: 'Win-rate Binary (7д)',
+      dash_ms_title: 'Снимок рынка', dash_ms_live: 'LIVE', dash_ms_swipe: '← свайп →',
+      ms_cat_crypto: 'Крипто', ms_cat_fx: 'Форекс', ms_cat_index: 'Индексы', ms_cat_etf: 'ETF', ms_cat_live: 'live',
+      dash_qa_title: 'Быстрые действия', dash_qa_sub: 'Нажмите <span class="kbd">⌘K</span> для поиска',
+      qa_bo_t: 'Binary-опцион', qa_bo_d: '60с UP/DOWN с фиксированной выплатой', qa_spot_t: 'Spot-сделка', qa_spot_d: 'Limit, market, stop',
+      qa_dep_t: 'Депозит крипто', qa_dep_d: 'BTC, ETH, USDT, USDC', qa_mkt_t: 'Обзор рынков', qa_mkt_d: '365+ торговых пар',
+      qa_hist_t: 'История', qa_hist_d: 'Все сделки и переводы', qa_tour_t: 'Пройти тур', qa_tour_d: 'Обзор за 90 секунд',
+      set_profile_title: 'Профиль', set_display_name: 'Отображаемое имя', set_email: 'Email', set_wallet: 'Кошелёк', set_save: 'Сохранить',
+      set_security_title: 'Безопасность', set_2fa_lbl: 'Двухфакторная аутентификация', set_device_lbl: 'Подтверждение устройств', set_antiphish: 'Антифишинг-код', set_review_sessions: 'Активные сессии',
+      pg_binary_bc: 'Binary Options',
+    },
+    en: {
+      dash_banner_spot_eyebrow: 'SPOT TRADING', dash_banner_spot_h: '365 crypto pairs · 0.10% fee', dash_banner_spot_p: 'Aggregated liquidity from Binance · Kraken · Coinbase. Direct on-chain swaps available.', dash_banner_spot_cta: 'Open Spot →',
+      dash_banner_bo_eyebrow: 'BINARY OPTIONS', dash_banner_bo_h: 'UP / DOWN · payouts to 87%', dash_banner_bo_p: '5s to 1h expirations. Hard-capped risk · no liquidations.', dash_banner_bo_cta: 'Trade Binary →',
+      dash_banner_fut_eyebrow: 'FUTURES PERPS', dash_banner_fut_h: 'Up to 100× · USDT-margined', dash_banner_fut_p: 'Cross & isolated · funding every 8h · TP/SL at entry · one-way.', dash_banner_fut_cta: 'Open Futures →',
+      dash_stat_portfolio: 'Portfolio value', dash_stat_pnl: '24h P&L', dash_stat_open: 'Open positions', dash_stat_winrate: 'Binary win-rate (7d)',
+      dash_ms_title: 'Market snapshot', dash_ms_live: 'Live', dash_ms_swipe: '← swipe →',
+      ms_cat_crypto: 'Crypto', ms_cat_fx: 'Forex', ms_cat_index: 'Indices', ms_cat_etf: 'ETF', ms_cat_live: 'live',
+      dash_qa_title: 'Quick actions', dash_qa_sub: 'Press <span class="kbd">⌘K</span> to search any action',
+      qa_bo_t: 'Place binary option', qa_bo_d: '60s UP/DOWN with fixed payout', qa_spot_t: 'Spot trade', qa_spot_d: 'Limit, market, stop orders',
+      qa_dep_t: 'Deposit crypto', qa_dep_d: 'BTC, ETH, USDT, USDC', qa_mkt_t: 'Browse markets', qa_mkt_d: '365+ trading pairs',
+      qa_hist_t: 'View history', qa_hist_d: 'All trades & transfers', qa_tour_t: 'Take the tour', qa_tour_d: '90-second walkthrough',
+      set_profile_title: 'Profile', set_display_name: 'Display name', set_email: 'Email', set_wallet: 'Wallet', set_save: 'Save changes',
+      set_security_title: 'Security', set_2fa_lbl: 'Two-factor auth', set_device_lbl: 'Device approvals', set_antiphish: 'Anti-phishing code', set_review_sessions: 'Review active sessions',
+      pg_binary_bc: 'Binary Options',
+    },
+    es: {
+      dash_banner_spot_eyebrow: 'SPOT', dash_banner_spot_h: '365 pares cripto · comisión 0.10%', dash_banner_spot_p: 'Liquidez agregada de Binance · Kraken · Coinbase. Swaps on-chain disponibles.', dash_banner_spot_cta: 'Abrir Spot →',
+      dash_banner_bo_eyebrow: 'OPCIONES BINARIAS', dash_banner_bo_h: 'ARRIBA / ABAJO · pagos hasta 87%', dash_banner_bo_p: 'Expiraciones de 5s a 1h. Riesgo acotado · sin liquidaciones.', dash_banner_bo_cta: 'Operar Binary →',
+      dash_banner_fut_eyebrow: 'FUTUROS PERP', dash_banner_fut_h: 'Hasta 100× · margen USDT', dash_banner_fut_p: 'Cross e isolated · funding cada 8h · TP/SL al entrar.', dash_banner_fut_cta: 'Abrir Futuros →',
+      dash_stat_portfolio: 'Valor del portafolio', dash_stat_pnl: 'P&L 24h', dash_stat_open: 'Posiciones abiertas', dash_stat_winrate: 'Win-rate Binary (7d)',
+      dash_ms_title: 'Resumen de mercado', dash_ms_live: 'Live', dash_ms_swipe: '← deslizar →',
+      ms_cat_crypto: 'Cripto', ms_cat_fx: 'Forex', ms_cat_index: 'Índices', ms_cat_etf: 'ETF', ms_cat_live: 'live',
+      dash_qa_title: 'Acciones rápidas', dash_qa_sub: 'Pulsa <span class="kbd">⌘K</span> para buscar',
+      qa_bo_t: 'Opción binaria', qa_bo_d: '60s ARRIBA/ABAJO con pago fijo', qa_spot_t: 'Operar Spot', qa_spot_d: 'Limit, market, stop',
+      qa_dep_t: 'Depositar cripto', qa_dep_d: 'BTC, ETH, USDT, USDC', qa_mkt_t: 'Explorar mercados', qa_mkt_d: '365+ pares',
+      qa_hist_t: 'Ver historial', qa_hist_d: 'Todas las operaciones', qa_tour_t: 'Iniciar tour', qa_tour_d: 'Recorrido de 90 segundos',
+      set_profile_title: 'Perfil', set_display_name: 'Nombre visible', set_email: 'Email', set_wallet: 'Billetera', set_save: 'Guardar cambios',
+      set_security_title: 'Seguridad', set_2fa_lbl: 'Autenticación 2FA', set_device_lbl: 'Aprobación de dispositivos', set_antiphish: 'Código antiphishing', set_review_sessions: 'Revisar sesiones activas',
+      pg_binary_bc: 'Opciones binarias',
+    },
+    ar: {
+      dash_banner_spot_eyebrow: 'سبوت', dash_banner_spot_h: '365 زوج كريبتو · رسوم 0.10%', dash_banner_spot_p: 'سيولة مجمّعة من Binance · Kraken · Coinbase. مبادلات on-chain متاحة.', dash_banner_spot_cta: 'افتح Spot →',
+      dash_banner_bo_eyebrow: 'خيارات ثنائية', dash_banner_bo_h: 'صعود / هبوط · عائد حتى 87%', dash_banner_bo_p: 'انتهاءات 5ث–1س. مخاطر محدودة · بلا تصفيات.', dash_banner_bo_cta: 'تداول Binary →',
+      dash_banner_fut_eyebrow: 'عقود دائمة', dash_banner_fut_h: 'حتى 100× · هامش USDT', dash_banner_fut_p: 'هامش متقاطع/معزول · تمويل كل 8س · TP/SL عند الدخول.', dash_banner_fut_cta: 'افتح العقود →',
+      dash_stat_portfolio: 'قيمة المحفظة', dash_stat_pnl: 'P&L 24س', dash_stat_open: 'مراكز مفتوحة', dash_stat_winrate: 'نسبة فوز Binary (7أ)',
+      dash_ms_title: 'لمحة السوق', dash_ms_live: 'Live', dash_ms_swipe: '← اسحب →',
+      ms_cat_crypto: 'كريبتو', ms_cat_fx: 'فوركس', ms_cat_index: 'مؤشرات', ms_cat_etf: 'ETF', ms_cat_live: 'live',
+      dash_qa_title: 'إجراءات سريعة', dash_qa_sub: 'اضغط <span class="kbd">⌘K</span> للبحث',
+      qa_bo_t: 'خيار ثنائي', qa_bo_d: '60ث صعود/هبوط بعائد ثابت', qa_spot_t: 'صفقة Spot', qa_spot_d: 'Limit وmarket وstop',
+      qa_dep_t: 'إيداع كريبتو', qa_dep_d: 'BTC وETH وUSDT وUSDC', qa_mkt_t: 'تصفح الأسواق', qa_mkt_d: '365+ زوج',
+      qa_hist_t: 'عرض السجل', qa_hist_d: 'كل الصفقات والتحويلات', qa_tour_t: 'ابدأ الجولة', qa_tour_d: 'جولة 90 ثانية',
+      set_profile_title: 'الملف الشخصي', set_display_name: 'الاسم المعروض', set_email: 'البريد', set_wallet: 'المحفظة', set_save: 'حفظ التغييرات',
+      set_security_title: 'الأمان', set_2fa_lbl: 'المصادقة الثنائية', set_device_lbl: 'موافقة الأجهزة', set_antiphish: 'رمز مكافحة التصيد', set_review_sessions: 'مراجعة الجلسات النشطة',
+      pg_binary_bc: 'الخيارات الثنائية',
+    },
+    zh: {
+      dash_banner_spot_eyebrow: '现货', dash_banner_spot_h: '365+ 加密交易对 · 0.10% 手续费', dash_banner_spot_p: '聚合 Binance · Kraken · Coinbase 流动性。支持链上兑换。', dash_banner_spot_cta: '打开现货 →',
+      dash_banner_bo_eyebrow: '二元期权', dash_banner_bo_h: '涨 / 跌 · 赔付最高 87%', dash_banner_bo_p: '5秒至1小时到期。风险封顶 · 无强平。', dash_banner_bo_cta: '交易二元 →',
+      dash_banner_fut_eyebrow: '永续合约', dash_banner_fut_h: '最高 100× · USDT 保证金', dash_banner_fut_p: '全仓/逐仓 · 8小时资金费 · 入场 TP/SL。', dash_banner_fut_cta: '打开合约 →',
+      dash_stat_portfolio: '组合价值', dash_stat_pnl: '24小时盈亏', dash_stat_open: '未平仓位', dash_stat_winrate: '二元胜率 (7天)',
+      dash_ms_title: '市场快照', dash_ms_live: 'Live', dash_ms_swipe: '← 滑动 →',
+      ms_cat_crypto: '加密', ms_cat_fx: '外汇', ms_cat_index: '指数', ms_cat_etf: 'ETF', ms_cat_live: 'live',
+      dash_qa_title: '快捷操作', dash_qa_sub: '按 <span class="kbd">⌘K</span> 搜索',
+      qa_bo_t: '下二元单', qa_bo_d: '60秒涨跌固定赔付', qa_spot_t: '现货交易', qa_spot_d: '限价、市价、止损',
+      qa_dep_t: '充值', qa_dep_d: 'BTC、ETH、USDT、USDC', qa_mkt_t: '浏览市场', qa_mkt_d: '365+ 交易对',
+      qa_hist_t: '查看历史', qa_hist_d: '全部成交与划转', qa_tour_t: '开始导览', qa_tour_d: '90 秒快速了解',
+      set_profile_title: '个人资料', set_display_name: '显示名称', set_email: '邮箱', set_wallet: '钱包', set_save: '保存更改',
+      set_security_title: '安全', set_2fa_lbl: '双重验证', set_device_lbl: '设备审批', set_antiphish: '反钓鱼码', set_review_sessions: '查看活跃会话',
+      pg_binary_bc: '二元期权',
+    },
+    hi: {
+      dash_banner_spot_eyebrow: 'SPOT', dash_banner_spot_h: '365+ क्रिप्टो पेयर · 0.10% फी', dash_banner_spot_p: 'Binance · Kraken · Coinbase से एग्रीगेटेड लिक्विडिटी। on-chain स्वैप उपलब्ध।', dash_banner_spot_cta: 'Spot खोलें →',
+      dash_banner_bo_eyebrow: 'BINARY OPTIONS', dash_banner_bo_h: 'UP / DOWN · 87% तक पेआउट', dash_banner_bo_p: '5s–1h एक्सपायरी। सीमित जोखिम · कोई लिक्विडेशन नहीं।', dash_banner_bo_cta: 'Binary ट्रेड →',
+      dash_banner_fut_eyebrow: 'FUTURES PERPS', dash_banner_fut_h: '100× तक · USDT मार्जिन', dash_banner_fut_p: 'क्रॉस/आइसोलेटेड · 8h फंडिंग · एंट्री TP/SL।', dash_banner_fut_cta: 'Futures खोलें →',
+      dash_stat_portfolio: 'पोर्टफोलियो मूल्य', dash_stat_pnl: '24h P&L', dash_stat_open: 'खुली पोज़िशन', dash_stat_winrate: 'Binary विन-रेट (7d)',
+      dash_ms_title: 'मार्केट स्नैपशॉट', dash_ms_live: 'Live', dash_ms_swipe: '← स्वाइप →',
+      ms_cat_crypto: 'क्रिप्टो', ms_cat_fx: 'फॉरेक्स', ms_cat_index: 'इंडेक्स', ms_cat_etf: 'ETF', ms_cat_live: 'live',
+      dash_qa_title: 'त्वरित कार्य', dash_qa_sub: '<span class="kbd">⌘K</span> दबाकर खोजें',
+      qa_bo_t: 'बाइनरी ऑप्शन', qa_bo_d: '60s UP/DOWN फिक्स्ड पेआउट', qa_spot_t: 'Spot ट्रेड', qa_spot_d: 'Limit, market, stop',
+      qa_dep_t: 'क्रिप्टो जमा', qa_dep_d: 'BTC, ETH, USDT, USDC', qa_mkt_t: 'मार्केट देखें', qa_mkt_d: '365+ पेयर',
+      qa_hist_t: 'इतिहास', qa_hist_d: 'सभी ट्रेड और ट्रांसफर', qa_tour_t: 'टूर शुरू करें', qa_tour_d: '90-सेकंड वॉकथ्रू',
+      set_profile_title: 'प्रोफ़ाइल', set_display_name: 'प्रदर्शित नाम', set_email: 'ईमेल', set_wallet: 'वॉलेट', set_save: 'सहेजें',
+      set_security_title: 'सुरक्षा', set_2fa_lbl: 'दो-कारक प्रमाणीकरण', set_device_lbl: 'डिवाइस अनुमोदन', set_antiphish: 'एंटी-फ़िशिंग कोड', set_review_sessions: 'सक्रिय सत्र देखें',
+      pg_binary_bc: 'Binary Options',
+    },
+    tr: {
+      dash_banner_spot_eyebrow: 'SPOT', dash_banner_spot_h: '365+ kripto çift · %0.10 komisyon', dash_banner_spot_p: 'Binance · Kraken · Coinbase birleşik likidite. On-chain swap mevcut.', dash_banner_spot_cta: 'Spot aç →',
+      dash_banner_bo_eyebrow: 'İKİLİ OPSİYON', dash_banner_bo_h: 'YUKARI / AŞAĞI · %87 ödeme', dash_banner_bo_p: '5sn–1s vade. Sınırlı risk · likidasyon yok.', dash_banner_bo_cta: 'Binary işlem →',
+      dash_banner_fut_eyebrow: 'PERPETUAL FUTURES', dash_banner_fut_h: '100× · USDT marjin', dash_banner_fut_p: 'Cross/isolated · 8s funding · giriş TP/SL.', dash_banner_fut_cta: 'Vadeli aç →',
+      dash_stat_portfolio: 'Portföy değeri', dash_stat_pnl: '24s K/Z', dash_stat_open: 'Açık pozisyonlar', dash_stat_winrate: 'Binary kazanma oranı (7g)',
+      dash_ms_title: 'Piyasa özeti', dash_ms_live: 'Live', dash_ms_swipe: '← kaydır →',
+      ms_cat_crypto: 'Kripto', ms_cat_fx: 'Forex', ms_cat_index: 'Endeksler', ms_cat_etf: 'ETF', ms_cat_live: 'live',
+      dash_qa_title: 'Hızlı işlemler', dash_qa_sub: 'Aramak için <span class="kbd">⌘K</span>',
+      qa_bo_t: 'İkili opsiyon', qa_bo_d: '60sn YUKARI/AŞAĞI sabit ödeme', qa_spot_t: 'Spot işlem', qa_spot_d: 'Limit, market, stop',
+      qa_dep_t: 'Kripto yatır', qa_dep_d: 'BTC, ETH, USDT, USDC', qa_mkt_t: 'Piyasalara göz at', qa_mkt_d: '365+ çift',
+      qa_hist_t: 'Geçmişi gör', qa_hist_d: 'Tüm işlemler ve transferler', qa_tour_t: 'Turu başlat', qa_tour_d: '90 saniyelik tur',
+      set_profile_title: 'Profil', set_display_name: 'Görünen ad', set_email: 'E-posta', set_wallet: 'Cüzdan', set_save: 'Değişiklikleri kaydet',
+      set_security_title: 'Güvenlik', set_2fa_lbl: 'İki adımlı doğrulama', set_device_lbl: 'Cihaz onayları', set_antiphish: 'Anti-phishing kodu', set_review_sessions: 'Aktif oturumları incele',
+      pg_binary_bc: 'İkili opsiyonlar',
+    },
+  };
+  ['ru', 'en', 'es', 'ar', 'zh', 'hi', 'tr'].forEach(function (lng) {
+    if (EXTRA[lng] && PAGE_UI[lng]) Object.assign(EXTRA[lng], PAGE_UI[lng]);
+  });
+
+  function syncSettingsLangSeg(lng) {
+    var seg = document.getElementById('setLangSeg');
+    if (!seg) return;
+    seg.querySelectorAll('button[data-lng]').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.lng === lng);
+    });
+  }
+  function refreshAuthLoginLabel() {
+    try { if (localStorage.getItem('grom_jwt')) return; } catch (_) {}
+    var el = document.getElementById('walletLabel');
+    if (el && typeof window.t === 'function') el.textContent = window.t('auth_login');
   }
 
+  // Merge all language packs into GROM_STR
+  ['ru', 'en', 'es', 'ar', 'zh', 'hi', 'tr'].forEach(function (lng) {
+    if (!window.GROM_STR) return;
+    if (!window.GROM_STR[lng]) window.GROM_STR[lng] = {};
+    if (EXTRA[lng]) Object.assign(window.GROM_STR[lng], EXTRA[lng]);
+  });
+
+  window.syncSettingsLangSeg = syncSettingsLangSeg;
+  window.refreshAuthLoginLabel = refreshAuthLoginLabel;
+
+  syncSettingsLangSeg(typeof window.getGromLang === 'function' ? window.getGromLang() : 'en');
+  refreshAuthLoginLabel();
   if (typeof window.applyI18n === 'function') window.applyI18n();
 })();

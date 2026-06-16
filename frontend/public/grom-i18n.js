@@ -20,8 +20,11 @@
       nav_history: 'История',
       nav_settings: 'Настройки',
       nav_help: 'Помощь',
+      nav_predict: 'Прогнозы',
+      nav_xstocks: 'Акции',
       wallet_deposit: 'Депозит',
       auth_logout: 'Выйти',
+      auth_login: 'Войти / Регистрация',
       ref_share_x: 'Поделиться в X',
       common_copy: 'Копировать',
       badge_new: 'НОВОЕ',
@@ -149,7 +152,7 @@
       nav_dashboard: 'Main',
       top_brand_sub: 'Finance Hub',
       nav_spot: 'SPOT',
-      nav_binary: 'OPTIONS',
+      nav_binary: 'Binary',
       nav_wallet: 'Wallet',
       nav_markets: 'Markets',
       nav_futures: 'Futures',
@@ -157,8 +160,11 @@
       nav_history: 'History',
       nav_settings: 'Settings',
       nav_help: 'Help & support',
+      nav_predict: 'Predictions',
+      nav_xstocks: 'Stocks',
       wallet_deposit: 'Deposit',
       auth_logout: 'Logout',
+      auth_login: 'Sign in / Sign up',
       ref_share_x: 'Share on X',
       common_copy: 'Copy',
       badge_new: 'NEW',
@@ -282,7 +288,7 @@
     },
     es: {
       nav_landing: 'Inicio', nav_home: 'Inicio', nav_dashboard: 'Panel', top_brand_sub: 'Finance Hub',
-      nav_spot: 'SPOT', nav_binary: 'OPCIONES', nav_wallet: 'Billetera', nav_markets: 'Mercados',
+      nav_spot: 'SPOT', nav_binary: 'Binary', nav_wallet: 'Billetera', nav_markets: 'Mercados',
       nav_futures: 'Futuros', nav_referral: 'Referidos', nav_history: 'Historial', nav_settings: 'Ajustes',
       nav_help: 'Ayuda y soporte', wallet_deposit: 'Depositar', auth_logout: 'Salir', common_copy: 'Copiar',
       ref_share_x: 'Compartir en X', badge_new: 'NUEVO', badge_hot: 'TOP', top_help: 'Ayuda',
@@ -322,7 +328,7 @@
     },
     ar: {
       nav_landing: 'الرئيسية', nav_home: 'الرئيسية', nav_dashboard: 'لوحة التحكم', top_brand_sub: 'Finance Hub',
-      nav_spot: 'سبوت', nav_binary: 'خيارات', nav_wallet: 'المحفظة', nav_markets: 'الأسواق',
+      nav_spot: 'سبوت', nav_binary: 'Binary', nav_wallet: 'المحفظة', nav_markets: 'الأسواق',
       nav_futures: 'العقود الآجلة', nav_referral: 'الإحالات', nav_history: 'السجل', nav_settings: 'الإعدادات',
       nav_help: 'المساعدة والدعم', wallet_deposit: 'إيداع', auth_logout: 'تسجيل الخروج', common_copy: 'نسخ',
       ref_share_x: 'مشاركة على X', badge_new: 'جديد', badge_hot: 'مميز', top_help: 'مساعدة',
@@ -362,7 +368,7 @@
     },
     zh: {
       nav_landing: '首页', nav_home: '首页', nav_dashboard: '仪表盘', top_brand_sub: 'Finance Hub',
-      nav_spot: '现货', nav_binary: '二元期权', nav_wallet: '钱包', nav_markets: '市场',
+      nav_spot: '现货', nav_binary: 'Binary', nav_wallet: '钱包', nav_markets: '市场',
       nav_futures: '合约', nav_referral: '推荐', nav_history: '历史', nav_settings: '设置',
       nav_help: '帮助与支持', wallet_deposit: '充值', auth_logout: '退出', common_copy: '复制',
       ref_share_x: '分享到 X', badge_new: '新', badge_hot: '热门', top_help: '帮助',
@@ -402,7 +408,7 @@
     },
     hi: {
       nav_landing: 'होम', nav_home: 'होम', nav_dashboard: 'डैशबोर्ड', top_brand_sub: 'Finance Hub',
-      nav_spot: 'स्पॉट', nav_binary: 'ऑप्शंस', nav_wallet: 'वॉलेट', nav_markets: 'मार्केट',
+      nav_spot: 'स्पॉट', nav_binary: 'Binary', nav_wallet: 'वॉलेट', nav_markets: 'मार्केट',
       nav_futures: 'फ्यूचर्स', nav_referral: 'रेफ़रल', nav_history: 'इतिहास', nav_settings: 'सेटिंग्स',
       nav_help: 'सहायता और समर्थन', wallet_deposit: 'जमा करें', auth_logout: 'लॉग आउट', common_copy: 'कॉपी',
       ref_share_x: 'X पर शेयर करें', badge_new: 'नया', badge_hot: 'हॉट', top_help: 'सहायता',
@@ -442,7 +448,7 @@
     },
     tr: {
       nav_landing: 'Ana sayfa', nav_home: 'Ana sayfa', nav_dashboard: 'Panel', top_brand_sub: 'Finance Hub',
-      nav_spot: 'SPOT', nav_binary: 'OPSİYON', nav_wallet: 'Cüzdan', nav_markets: 'Piyasalar',
+      nav_spot: 'SPOT', nav_binary: 'Binary', nav_wallet: 'Cüzdan', nav_markets: 'Piyasalar',
       nav_futures: 'Vadeli', nav_referral: 'Referanslar', nav_history: 'Geçmiş', nav_settings: 'Ayarlar',
       nav_help: 'Yardım ve destek', wallet_deposit: 'Para yatır', auth_logout: 'Çıkış', common_copy: 'Kopyala',
       ref_share_x: "X'te paylaş", badge_new: 'YENİ', badge_hot: 'POPÜLER', top_help: 'Yardım',
@@ -510,6 +516,11 @@
     // renders Arabic text right-to-left within its own boxes.
     applyI18n();
     syncLangButtons(lng);
+    try {
+      if (typeof window.syncSettingsLangSeg === 'function') window.syncSettingsLangSeg(lng);
+      if (typeof window.refreshAuthLoginLabel === 'function') window.refreshAuthLoginLabel();
+      if (typeof window.gromRefreshI18nPages === 'function') window.gromRefreshI18nPages();
+    } catch (_) {}
   }
 
   function t(key) {

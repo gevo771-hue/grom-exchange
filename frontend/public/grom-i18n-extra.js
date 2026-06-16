@@ -43,6 +43,7 @@
       px_now: 'сейчас', px_price_unavail: 'Цена недоступна',
       px_prob_line: 'Цена {n}¢ = вероятность {n}%.',
       px_payout_line: 'Получишь {sh} контрактов · макс. выплата {pay}, если исход сыграет.',
+      px_load_more: 'Показать ещё',
     },
     en: {
       nav_predict: 'Predictions', nav_xstocks: 'Stocks',
@@ -81,6 +82,7 @@
       px_now: 'now', px_price_unavail: 'Price unavailable',
       px_prob_line: 'Price {n}¢ = probability {n}%.',
       px_payout_line: 'You get {sh} contracts · max payout {pay}, if outcome wins.',
+      px_load_more: 'Load more',
     },
     es: {
       landing_kicker: 'FINANCE HUB', landing_logo_img_alt: 'GROM Finance Hub', landing_title: 'Opera más inteligente. Opera con GROM.',
@@ -142,6 +144,7 @@
       px_now: 'ahora', px_price_unavail: 'Precio no disponible',
       px_prob_line: 'Precio {n}¢ = probabilidad {n}%.',
       px_payout_line: 'Recibirás {sh} contratos · pago máx. {pay}, si el resultado gana.',
+      px_load_more: 'Cargar más',
     },
     ar: {
       landing_kicker: 'FINANCE HUB', landing_logo_img_alt: 'GROM Finance Hub', landing_title: 'تداول بذكاء. تداول مع GROM.',
@@ -203,6 +206,7 @@
       px_now: 'الآن', px_price_unavail: 'السعر غير متاح',
       px_prob_line: 'السعر {n}¢ = احتمال {n}%.',
       px_payout_line: 'ستحصل على {sh} عقود · أقصى دفع {pay} إذا تحقق النتيجة.',
+      px_load_more: 'تحميل المزيد',
     },
     zh: {
       landing_kicker: 'FINANCE HUB', landing_logo_img_alt: 'GROM Finance Hub', landing_title: '更聪明地交易。与 GROM 同行。',
@@ -264,6 +268,7 @@
       px_now: '现价', px_price_unavail: '价格不可用',
       px_prob_line: '价格 {n}¢ = 概率 {n}%。',
       px_payout_line: '将获得 {sh} 份合约 · 最高赔付 {pay}，若结果成立。',
+      px_load_more: '加载更多',
     },
     hi: {
       landing_kicker: 'FINANCE HUB', landing_logo_img_alt: 'GROM Finance Hub', landing_title: 'समझदारी से ट्रेड करें। GROM के साथ।',
@@ -325,6 +330,7 @@
       px_now: 'अभी', px_price_unavail: 'कीमत उपलब्ध नहीं',
       px_prob_line: 'कीमत {n}¢ = संभावना {n}%.',
       px_payout_line: 'आपको {sh} कॉन्ट्रैक्ट मिलेंगे · अधिकतम भुगतान {pay}, यदि परिणाम सही हो।',
+      px_load_more: 'और दिखाएँ',
     },
     tr: {
       landing_kicker: 'FINANCE HUB', landing_logo_img_alt: 'GROM Finance Hub', landing_title: 'Daha akıllı işlem yapın. GROM ile.',
@@ -386,6 +392,7 @@
       px_now: 'şimdi', px_price_unavail: 'Fiyat kullanılamıyor',
       px_prob_line: 'Fiyat {n}¢ = olasılık {n}%.',
       px_payout_line: '{sh} sözleşme alırsınız · maks. ödeme {pay}, sonuç tutarsa.',
+      px_load_more: 'Daha fazla yükle',
     },
   };
 

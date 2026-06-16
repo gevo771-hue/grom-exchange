@@ -13869,7 +13869,9 @@ var GROM_XSTOCKS = [
       + '@keyframes gwxFlashUp{0%{color:#34d27f;text-shadow:0 0 12px rgba(52,210,127,.6)}100%{color:var(--silver1,#e7eef8);text-shadow:none}}'
       + '@keyframes gwxFlashDn{0%{color:#f87171;text-shadow:0 0 12px rgba(248,113,113,.6)}100%{color:var(--silver1,#e7eef8);text-shadow:none}}'
       + '@media(max-width:1100px){.gwx-thead .gwx-col-vol,.gwx-thead .gwx-col-mc,.gwx-row .gwx-col-vol,.gwx-row .gwx-col-mc{display:none}.gwx-thead,.gwx-row{grid-template-columns:1.6fr 1fr 1fr auto}}'
-      + '@media(max-width:760px){.gwx-toolbar{flex-direction:column;align-items:stretch;gap:10px}.gwx-cats{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;touch-action:pan-x;width:100%;flex:0 0 auto;-webkit-overflow-scrolling:touch;padding-bottom:5px;scrollbar-width:none;-ms-overflow-style:none}.gwx-cats::-webkit-scrollbar{display:none}.gwx-pill{flex:0 0 auto}.gwx-search{width:100%;min-width:0}.gwx-grid{grid-template-columns:1fr;gap:12px}.gwx-hero-row{gap:14px}.gwx-hero-aside{align-items:flex-start;width:100%}.gwx-stats{gap:16px;flex-wrap:wrap}.gwx-h1{font-size:21px}.gwx-sub{font-size:12.5px}}'
+      + '@media(max-width:760px){.gwx-toolbar{flex-direction:column;align-items:stretch;gap:10px}.gwx-cats{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;touch-action:pan-x;width:100%;flex:0 0 auto;-webkit-overflow-scrolling:touch;padding-bottom:5px;scrollbar-width:none;-ms-overflow-style:none}.gwx-cats::-webkit-scrollbar{display:none}.gwx-pill{flex:0 0 auto}.gwx-search{width:100%;min-width:0}.gwx-grid{grid-template-columns:1fr;gap:12px}.gwx-hero-row{gap:14px}.gwx-hero-aside{align-items:flex-start;width:100%}.gwx-stats{gap:16px;flex-wrap:wrap}.gwx-h1{font-size:21px}.gwx-sub{font-size:12.5px}.gwx-live i{animation:none!important}.gwx-card:hover{transform:none;box-shadow:none}.gwx-oc-fill{transition:none!important}.gwx-card{contain:layout style paint}}'
+      + '.gwx-load-more{grid-column:1/-1;display:block;width:100%;margin:4px 0 8px;padding:14px;border-radius:14px;border:1px dashed rgba(58,194,255,.35);background:rgba(58,194,255,.08);color:#7cd4ff;font:inherit;font-size:13px;font-weight:700;cursor:pointer}'
+      + '.gwx-load-more:active{background:rgba(58,194,255,.16)}'
       + '@media(max-width:560px){.gwx-row-actions .gwx-sell{display:none}.gwx-card{padding:16px}.gwx-bet{min-width:48px;padding:7px 10px}.gwx-oc{gap:7px;padding:9px 10px}}'
       + '.gwx-foot{color:var(--silver5,#6b7a92);font-size:12px;line-height:1.6;margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.05)}'
       + '.gwx-link{color:#3ac2ff;text-decoration:none}'
@@ -13935,7 +13937,10 @@ var GROM_XSTOCKS = [
   function updateBalChips() { document.querySelectorAll('.gwx-bal-v').forEach(function (el) { el.textContent = money(bal()); }); }
 
   /* ---- helpers ---- */
-  var gwxState = { pCat: 'all', pQ: '', sCat: 'all', sQ: '' };
+  var gwxState = { pCat: 'all', pQ: '', pShow: 10, sCat: 'all', sQ: '' };
+  var GWX_MOBILE_BATCH = 10;
+  function gwxMobile() { return window.matchMedia('(max-width:760px)').matches; }
+  function gwxTickMs() { return gwxMobile() ? 2800 : 1200; }
   var STOCK_MAP = {}; GROM_XSTOCKS.forEach(function (s) { STOCK_MAP[s.sym] = s; });
   var gwxPx = {}, gwxB0 = {}, gwxPxInit = false;
   function initPx() { if (gwxPxInit) return; GROM_XSTOCKS.forEach(function (s) { gwxPx[s.sym] = s.price; gwxB0[s.sym] = s.price / (1 + s.chg / 100); }); gwxPxInit = true; }
@@ -14061,16 +14066,37 @@ var GROM_XSTOCKS = [
       + '<div class="gwx-foot">' + tx('px_foot_xstocks', '') + '</div></div>';
   }
   var GWX_LIVE = null;
-  // Live Polymarket feed first (real questions + probabilities), curated RU
-  // markets appended so every category tab stays populated.
-  function predictSource() { return (GWX_LIVE && GWX_LIVE.length) ? GWX_LIVE.concat(GROM_PREDICT_MARKETS) : GROM_PREDICT_MARKETS; }
+  // Live Polymarket feed first; curated markets fill gaps (deduped by id).
+  function predictSource() {
+    if (!GWX_LIVE || !GWX_LIVE.length) return GROM_PREDICT_MARKETS;
+    var seen = Object.create(null), out = [];
+    GWX_LIVE.concat(GROM_PREDICT_MARKETS).forEach(function (m) {
+      var k = m.id || m.q;
+      if (seen[k]) return;
+      seen[k] = 1;
+      out.push(m);
+    });
+    return out;
+  }
   function renderPredictGrid() {
     var grid = document.querySelector('#page-predict .gwx-grid'); if (!grid) return;
     var q = gwxState.pQ.trim().toLowerCase();
     var list = predictSource().filter(function (m) {
       return (gwxState.pCat === 'all' || m.cat === gwxState.pCat) && (!q || m.q.toLowerCase().indexOf(q) >= 0);
     });
-    grid.innerHTML = list.length ? list.map(predictCardHtml).join('') : '<div class="gwx-none">' + tx('px_none', 'Nothing found') + '</div>';
+    var mobile = gwxMobile();
+    if (!mobile || q || gwxState.pCat !== 'all') {
+      gwxState.pShow = list.length;
+    } else if (!gwxState.pShow || gwxState.pShow < GWX_MOBILE_BATCH) {
+      gwxState.pShow = GWX_MOBILE_BATCH;
+    }
+    var showN = mobile && list.length > gwxState.pShow ? gwxState.pShow : list.length;
+    var visible = list.slice(0, showN);
+    var html = visible.length ? visible.map(predictCardHtml).join('') : '<div class="gwx-none">' + tx('px_none', 'Nothing found') + '</div>';
+    if (mobile && list.length > showN) {
+      html += '<button type="button" class="gwx-load-more" id="gwxLoadMore">' + tx('px_load_more', 'Load more') + ' (+' + (list.length - showN) + ')</button>';
+    }
+    grid.innerHTML = html;
     if (typeof window.gromHydrateLogos === 'function') window.gromHydrateLogos(grid);
   }
   function updatePredictStats() {
@@ -14262,20 +14288,29 @@ var GROM_XSTOCKS = [
     if (tr) { e.preventDefault(); e.stopPropagation(); onStock(tr.closest('.gwx-row'), tr.dataset.side); return; }
     var cl = e.target.closest('.gxp-close');
     if (cl) { e.preventDefault(); e.stopPropagation(); closePos(cl.dataset.k, parseInt(cl.dataset.i, 10)); return; }
+    if (e.target.closest('#gwxLoadMore')) {
+      gwxState.pShow = (gwxState.pShow || GWX_MOBILE_BATCH) + GWX_MOBILE_BATCH;
+      renderPredictGrid();
+      return;
+    }
     var pill = e.target.closest('.gwx-cats .gwx-pill');
     if (pill) {
       e.preventDefault(); e.stopPropagation();
       pill.parentNode.querySelectorAll('.gwx-pill').forEach(function (x) { x.classList.remove('on'); }); pill.classList.add('on');
-      if (pill.closest('#page-predict')) { gwxState.pCat = pill.dataset.cat; renderPredictGrid(); }
+      if (pill.closest('#page-predict')) { gwxState.pCat = pill.dataset.cat; gwxState.pShow = GWX_MOBILE_BATCH; renderPredictGrid(); }
       else if (pill.closest('#page-xstocks')) { gwxState.sCat = pill.dataset.cat; renderXstocksRows(); }
       return;
     }
   });
+  var _gwxSearchTimer = null;
   document.addEventListener('input', function (e) {
     var inp = e.target.closest('.gwx-search input'); if (!inp) return;
     var v = inp.value || '';
-    if (inp.closest('#page-predict')) { gwxState.pQ = v; renderPredictGrid(); }
-    else if (inp.closest('#page-xstocks')) { gwxState.sQ = v; renderXstocksRows(); }
+    clearTimeout(_gwxSearchTimer);
+    _gwxSearchTimer = setTimeout(function () {
+      if (inp.closest('#page-predict')) { gwxState.pQ = v; gwxState.pShow = GWX_MOBILE_BATCH; renderPredictGrid(); }
+      else if (inp.closest('#page-xstocks')) { gwxState.sQ = v; renderXstocksRows(); }
+    }, 280);
   });
 
   /* ---- live drift (only when page is active) ---- */
@@ -14296,7 +14331,8 @@ var GROM_XSTOCKS = [
   }
   function driftPredict() {
     var page = document.getElementById('page-predict'); if (!page || !page.classList.contains('active')) return;
-    // Compute each live underlying's move once, then nudge linked outcomes.
+    if (document.hidden) return;
+    var lite = gwxMobile();
     var deltas = {};
     page.querySelectorAll('.gwx-card[data-und]').forEach(function (card) {
       var u = card.dataset.und; if (deltas[u] !== undefined) return;
@@ -14304,31 +14340,48 @@ var GROM_XSTOCKS = [
       if (cur == null || !isFinite(cur) || cur <= 0) { deltas[u] = 0; return; }
       var last = undLast[u]; deltas[u] = (last != null && last > 0) ? (cur - last) / last * 100 : 0; undLast[u] = cur;
     });
-    page.querySelectorAll('.gwx-oc').forEach(function (oc) {
+    var ocs = page.querySelectorAll('.gwx-oc');
+    var step = lite ? 2 : 1;
+    for (var oi = 0; oi < ocs.length; oi += step) {
+      var oc = ocs[oi];
       var probEl = oc.querySelector('.gwx-oc-prob'); var fill = oc.querySelector('.gwx-oc-fill');
       var yes = oc.querySelector('.gwx-bet.gwx-yes'); var no = oc.querySelector('.gwx-bet.gwx-no');
-      if (!probEl || !yes) return;
+      if (!probEl || !yes) continue;
       var card = oc.closest('.gwx-card'); var u = card ? card.dataset.und : null;
       var a = parseFloat(probEl.textContent) || 50;
       var dir = (u && deltas[u]) ? Math.max(-3, Math.min(3, deltas[u] * 10)) : 0;
-      var nv = Math.round(Math.min(99, Math.max(1, a + (Math.random() * 1.4 - 0.7) + dir)));
-      if (nv === a) return;
+      var jitter = lite ? 0.9 : 1.4;
+      var nv = Math.round(Math.min(99, Math.max(1, a + (Math.random() * jitter - jitter / 2) + dir)));
+      if (nv === a) continue;
       probEl.textContent = nv + '%';
       if (fill) fill.style.width = nv + '%';
-      yes.dataset.prob = nv; no.dataset.prob = nv;
-      probEl.classList.remove('up', 'dn'); void probEl.offsetWidth; probEl.classList.add(nv > a ? 'up' : 'dn');
-      setTimeout(function () { probEl.classList.remove('up', 'dn'); }, 480);
-    });
+      yes.dataset.prob = nv; if (no) no.dataset.prob = nv;
+      if (!lite) {
+        probEl.classList.remove('up', 'dn'); void probEl.offsetWidth; probEl.classList.add(nv > a ? 'up' : 'dn');
+        setTimeout(function (el) { return function () { el.classList.remove('up', 'dn'); }; }(probEl), 480);
+      }
+    }
   }
   var _gwxTick = 0;
   function refreshActive() {
+    if (document.hidden) return;
     _gwxTick++;
     var px = document.getElementById('page-xstocks');
     var pp = document.getElementById('page-predict');
     if (px && px.classList.contains('active')) { refreshStockPrices(); if (_gwxTick % 4 === 0) { renderStockPos(); updateBalChips(); } }
-    if (pp && pp.classList.contains('active')) { driftPredict(); if (_gwxTick % 4 === 0) { renderPredictPos(); updateBalChips(); } if (_gwxTick % 50 === 0) loadPredictLive(); }
+    if (pp && pp.classList.contains('active')) {
+      if (!gwxMobile() || _gwxTick % 2 === 0) driftPredict();
+      if (_gwxTick % 4 === 0) { renderPredictPos(); updateBalChips(); }
+      if (_gwxTick % 50 === 0) loadPredictLive();
+    }
   }
-  setInterval(function () { try { refreshActive(); } catch (_) {} }, 1200);
+  function scheduleGwxTick() {
+    setTimeout(function () {
+      try { refreshActive(); } catch (_) {}
+      scheduleGwxTick();
+    }, gwxTickMs());
+  }
+  scheduleGwxTick();
 
   /* ---- sidebar nav links (any UI language) ---- */
   function ensureNav() {

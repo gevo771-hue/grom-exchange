@@ -14280,6 +14280,10 @@ var GROM_XSTOCKS = [
   // Markets whose probabilities track a real live underlying price (BTC, ETH,
   // a tokenized stock, …). "above target" outcomes move with the underlying.
   var GWX_UND = { btc_tgt: 'BTC', btc_ath: 'BTC', doge_50: 'DOGE', meta_tgt: 'META', pltr_tgt: 'PLTR', aapl_tgt: 'AAPL', nvda_tgt: 'NVDA', tsla_400: 'TSLA', sp500_6k: 'SPY' };
+  function liveBadgeHtml(m, cls) {
+    if (!m || !m.live) return '';
+    return '<span class="' + (cls || 'gwx-live') + '"><i></i> ' + tx('px_live', 'LIVE') + '</span>';
+  }
   function predictCardHtml(m) {
     var ocs = m.rows.map(function (r) {
       return '<div class="gwx-oc"><span class="gwx-oc-fill" style="width:' + r.p + '%"></span>'
@@ -14292,7 +14296,7 @@ var GROM_XSTOCKS = [
     var tk = GWX_UND[m.id]; var icoHtml = tk ? logoHtml(tk, m.ico).replace('gwx-logo', 'gwx-logo gwx-q-logo') : '<span class="gwx-q-ico">' + m.ico + '</span>';
     var und = GWX_UND[m.id] ? ' data-und="' + GWX_UND[m.id] + '"' : '';
     return '<div class="gwx-card" data-q="' + escA(m.q) + '"' + und + '>'
-      + '<div class="gwx-card-top"><span class="gwx-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span><span class="gwx-live"><i></i> ' + tx('px_live', 'LIVE') + '</span></div>'
+      + '<div class="gwx-card-top"><span class="gwx-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span>' + liveBadgeHtml(m) + '</div>'
       + '<div class="gwx-q">' + icoHtml + '<span>' + esc(m.q) + '</span></div>'
       + '<div class="gwx-outcomes">' + ocs + '</div>'
       + '<div class="gwx-card-foot"><span>📊 ' + fmtVol(m.vol) + '</span>'
@@ -14420,7 +14424,7 @@ var GROM_XSTOCKS = [
     return '<div class="gwx-cal-row" data-q="' + qAttr + '">'
       + '<div class="gwx-cal-time">' + esc(m.time || '—') + (m.ends ? '<small>' + esc(m.ends) + '</small>' : '') + '</div>'
       + '<div class="gwx-cal-main">'
-      + '<div class="gwx-cal-top"><span class="gwx-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span><span class="gwx-live"><i></i> ' + tx('px_live', 'LIVE') + '</span></div>'
+      + '<div class="gwx-cal-top"><span class="gwx-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span>' + liveBadgeHtml(m) + '</div>'
       + '<div class="gwx-cal-q">' + esc(m.ico) + ' ' + esc(m.q) + '</div>'
       + '<div class="gwx-cal-meta"><span><b>' + esc(top.n) + '</b> ' + top.p + '%</span><span>📊 ' + fmtVol(m.vol24 || m.vol) + '</span></div>'
       + '</div>'
@@ -14545,7 +14549,7 @@ var GROM_XSTOCKS = [
   function dashPreviewHtml(m) {
     var q = m.q.length > 88 ? m.q.slice(0, 85) + '…' : m.q;
     return '<button type="button" class="grom-pv-item" onclick="show(\'predict\')">'
-      + '<div class="grom-pv-item-top"><span class="grom-pv-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span><span class="grom-pv-live-sm"><i></i>' + tx('px_live', 'LIVE') + '</span></div>'
+      + '<div class="grom-pv-item-top"><span class="grom-pv-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span>' + liveBadgeHtml(m, 'grom-pv-live-sm') + '</div>'
       + '<div class="grom-pv-q">' + esc(q) + '</div>'
       + '<div class="grom-pv-outs">' + previewOutcomesHtml(m.rows) + '</div>'
       + '</button>';
@@ -14553,7 +14557,7 @@ var GROM_XSTOCKS = [
   function lpPreviewHtml(m) {
     var q = m.q.length > 112 ? m.q.slice(0, 109) + '…' : m.q;
     return '<div class="lp-predict-card" onclick="show(\'predict\')" role="button" tabindex="0">'
-      + '<div class="lp-pc-top"><span class="lp-pc-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span><span class="lp-pc-live"><i></i>' + tx('px_live', 'LIVE') + '</span></div>'
+      + '<div class="lp-pc-top"><span class="lp-pc-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span>' + liveBadgeHtml(m, 'lp-pc-live') + '</div>'
       + '<div class="lp-pc-q"><span class="lp-pc-ico">' + esc(m.ico) + '</span><span>' + esc(q) + '</span></div>'
       + '<div class="lp-pc-outs">' + previewOutcomesHtml(m.rows) + '</div>'
       + '<div class="lp-pc-foot"><span>📊 ' + fmtVol(m.vol) + '</span>' + (m.ends ? '<span>⏱ ' + esc(m.ends) + '</span>' : '') + '</div>'

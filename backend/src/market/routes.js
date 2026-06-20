@@ -56,6 +56,36 @@ function pmEndsAt(iso) {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
+function pmEventTimes(ev) {
+  let start = ev.startDate || ev.startTime || null;
+  let end = ev.endDate || ev.endTime || null;
+  for (const m of Array.isArray(ev.markets) ? ev.markets : []) {
+    if (!start && m.gameStartTime) start = m.gameStartTime;
+    if (!end && m.endDate) end = m.endDate;
+  }
+  return { start, end };
+}
+// LIVE = in progress or resolving very soon (sport match today, not long-dated markets).
+function pmIsLive(ev, cat) {
+  const { start, end } = pmEventTimes(ev);
+  const now = Date.now();
+  const endMs = end ? new Date(end).getTime() : NaN;
+  const startMs = start ? new Date(start).getTime() : NaN;
+  if (!Number.isFinite(endMs)) return false;
+
+  const title = String(ev.title || ev.question || '').toLowerCase();
+  const vsMatch = /\bvs\.?\b|\svs?\s|\sv\s|\s@\s/.test(title);
+  const sportish = cat === 'sport' || cat === 'esports';
+
+  if (Number.isFinite(startMs) && startMs <= now && endMs > now) return true;
+
+  const hours = (endMs - now) / 3600000;
+  if (sportish && vsMatch && hours >= -8 && hours <= 36) return true;
+  if (cat === 'esports' && hours >= -4 && hours <= 24) return true;
+  if ((cat === 'politics' || cat === 'crypto') && hours >= 0 && hours <= 24) return true;
+
+  return false;
+}
 function normalizePolymarket(events) {
   const out = [];
   for (const ev of Array.isArray(events) ? events : []) {
@@ -77,6 +107,7 @@ function normalizePolymarket(events) {
     if (rows.length > 1) rows.sort((a, b) => b.p - a.p);
     rows = rows.slice(0, 6);
     const cat = pmCategory(ev);
+    const times = pmEventTimes(ev);
     out.push({
       id: 'pm_' + (ev.id || ev.slug || out.length),
       cat,
@@ -84,10 +115,10 @@ function normalizePolymarket(events) {
       q: String(ev.title || ev.question || '').slice(0, 150),
       vol: Number(ev.volume || ev.volume24hr || 0) || 0,
       vol24: Number(ev.volume24hr || 0) || 0,
-      ends: pmEnds(ev.endDate),
-      endsAt: pmEndsAt(ev.endDate),
-      time: pmTime(ev.endDate),
-      live: true,
+      ends: pmEnds(times.end),
+      endsAt: pmEndsAt(times.end),
+      time: pmTime(times.end),
+      live: pmIsLive(ev, cat),
       rows,
     });
     if (out.length >= 48) break;

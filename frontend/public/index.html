@@ -14142,6 +14142,10 @@ var GROM_XSTOCKS = [
       + '.gwx-link{color:#3ac2ff;text-decoration:none}'
       + '@media(max-width:900px){.gwx-bal{border-right:none;padding-right:0}}'
       // ---- predict live calendar (Kalshi-style) ----
+      + '#page-predict.gwx-live-view .gwx-grid{display:none!important}'
+      + '#page-predict.gwx-live-view #gwxPredictCal{display:block!important}'
+      + '#page-predict:not(.gwx-live-view) #gwxPredictCal{display:none!important}'
+      + '.gwx-cal[hidden]{display:none!important}'
       + '.gwx-view-tabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}'
       + '.gwx-view-tab{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:var(--silver3,#9ba9bf);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;transition:.15s}'
       + '.gwx-view-tab:hover{color:var(--silver1,#e7eef8);background:rgba(255,255,255,.07)}'
@@ -14231,7 +14235,7 @@ var GROM_XSTOCKS = [
   function updateBalChips() { document.querySelectorAll('.gwx-bal-v').forEach(function (el) { el.textContent = money(bal()); }); }
 
   /* ---- helpers ---- */
-  var gwxState = { pCat: 'all', pQ: '', pShow: 10, pView: 'all', pDay: 'today', sCat: 'all', sQ: '' };
+  var gwxState = { pCat: 'all', pQ: '', pShow: 10, pView: 'live', pDay: 'today', sCat: 'all', sQ: '' };
   var GWX_MOBILE_BATCH = 10;
   function gwxMobile() { return window.matchMedia('(max-width:760px)').matches; }
   function gwxTickMs() { return gwxMobile() ? 2800 : 1200; }
@@ -14363,17 +14367,21 @@ var GROM_XSTOCKS = [
       + '<div class="gwx-foot">' + tx('px_foot_xstocks', '') + '</div></div>';
   }
   var GWX_LIVE = null;
-  // Live Polymarket feed first; curated markets fill gaps (deduped by id).
+  // Live Polymarket feed only when available; curated markets are offline fallback.
   function predictSource() {
-    if (!GWX_LIVE || !GWX_LIVE.length) return GROM_PREDICT_MARKETS;
-    var seen = Object.create(null), out = [];
-    GWX_LIVE.concat(GROM_PREDICT_MARKETS).forEach(function (m) {
-      var k = m.id || m.q;
-      if (seen[k]) return;
-      seen[k] = 1;
-      out.push(m);
+    if (GWX_LIVE && GWX_LIVE.length) return GWX_LIVE.slice();
+    return GROM_PREDICT_MARKETS;
+  }
+  function applyPredictView() {
+    var page = document.getElementById('page-predict');
+    if (!page) return;
+    var live = gwxState.pView === 'live';
+    page.classList.toggle('gwx-live-view', live);
+    page.querySelectorAll('.gwx-view-tab[data-pview]').forEach(function (tab) {
+      tab.classList.toggle('on', tab.dataset.pview === gwxState.pView);
     });
-    return out;
+    if (live) renderPredictCalendar();
+    else renderPredictGridContent();
   }
   function liveCalendarSource() {
     var src = (GWX_LIVE && GWX_LIVE.length) ? GWX_LIVE.slice() : predictSource().filter(function (m) { return m.live; });
@@ -14422,12 +14430,12 @@ var GROM_XSTOCKS = [
       + '</div></div>';
   }
   function renderPredictCalendar() {
+    var page = document.getElementById('page-predict');
     var cal = document.getElementById('gwxPredictCal');
-    var grid = document.querySelector('#page-predict .gwx-grid');
-    var toolbar = document.querySelector('#page-predict .gwx-toolbar');
-    if (!cal) return;
+    var grid = page && page.querySelector('.gwx-grid');
+    if (!cal || !page) return;
+    page.classList.add('gwx-live-view');
     if (grid) grid.hidden = true;
-    if (toolbar) toolbar.hidden = true;
     cal.hidden = false;
     var q = gwxState.pQ.trim().toLowerCase();
     var list = liveCalendarSource().filter(function (m) {
@@ -14464,18 +14472,14 @@ var GROM_XSTOCKS = [
       + '<div class="gwx-cal-days">' + dayBtns + '</div>'
       + '<div class="gwx-cal-list">' + (rows || '<div class="gwx-none" style="border:0;border-radius:0;margin:0">' + tx('px_none', 'Nothing found') + '</div>') + '</div>';
   }
-  function renderPredictGrid() {
+  function renderPredictGridContent() {
+    var page = document.getElementById('page-predict');
     var cal = document.getElementById('gwxPredictCal');
-    var grid = document.querySelector('#page-predict .gwx-grid');
-    var toolbar = document.querySelector('#page-predict .gwx-toolbar');
-    if (gwxState.pView === 'live') {
-      renderPredictCalendar();
-      return;
-    }
-    if (cal) cal.hidden = true;
-    if (toolbar) toolbar.hidden = false;
-    if (grid) grid.hidden = false;
+    var grid = page && page.querySelector('.gwx-grid');
     if (!grid) return;
+    if (page) page.classList.remove('gwx-live-view');
+    if (cal) cal.hidden = true;
+    grid.hidden = false;
     var q = gwxState.pQ.trim().toLowerCase();
     var list = predictSource().filter(function (m) {
       return (gwxState.pCat === 'all' || m.cat === gwxState.pCat) && (!q || m.q.toLowerCase().indexOf(q) >= 0);
@@ -14495,6 +14499,7 @@ var GROM_XSTOCKS = [
     grid.innerHTML = html;
     if (typeof window.gromHydrateLogos === 'function') window.gromHydrateLogos(grid);
   }
+  function renderPredictGrid() { applyPredictView(); }
   function updatePredictStats() {
     var page = document.getElementById('page-predict'); if (!page) return;
     var src = predictSource();
@@ -14507,11 +14512,14 @@ var GROM_XSTOCKS = [
     fetch('/api/market/predict', { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
-        if (!d || !Array.isArray(d.markets) || !d.markets.length) return;
-        GWX_LIVE = d.markets;
-        renderPredictGrid(); updatePredictStats(); renderPredictWidgets();
+        if (d && Array.isArray(d.markets) && d.markets.length) GWX_LIVE = d.markets;
+        applyPredictView();
+        updatePredictStats();
+        renderPredictWidgets();
       })
-      .catch(function () {});
+      .catch(function () {
+        if (gwxState.pView === 'live') applyPredictView();
+      });
   }
   function featuredMarkets(n) {
     var src = predictSource().slice().sort(function (a, b) { return (b.vol || 0) - (a.vol || 0); });
@@ -14580,16 +14588,16 @@ var GROM_XSTOCKS = [
     if (!anchor || !anchor.parentNode) return;
     [['predict', buildPredict, 'pg_predict_bc'], ['xstocks', buildXstocks, 'pg_xstocks_bc']].forEach(function (p) {
       var sec = document.getElementById('page-' + p[0]);
-      if (sec && sec.dataset.gwxReady === '2' && !sec.dataset.gwxForce) return;
+      if (sec && sec.dataset.gwxReady === '3' && !sec.dataset.gwxForce) return;
       if (!sec) {
         sec = document.createElement('section'); sec.className = 'page'; sec.id = 'page-' + p[0];
         anchor.parentNode.appendChild(sec);
       }
       sec.innerHTML = '<div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">' + tx(p[2], p[2]) + '</span></div>' + p[1]();
-      sec.dataset.gwxReady = '2';
+      sec.dataset.gwxReady = '3';
       delete sec.dataset.gwxForce;
     });
-    renderPredictGrid(); renderXstocksRows();
+    applyPredictView(); renderXstocksRows();
   }
 
   /* ---- positions ---- */
@@ -14700,11 +14708,9 @@ var GROM_XSTOCKS = [
     var viewTab = e.target.closest('.gwx-view-tab[data-pview]');
     if (viewTab && viewTab.closest('#page-predict')) {
       e.preventDefault(); e.stopPropagation();
-      viewTab.parentNode.querySelectorAll('.gwx-view-tab').forEach(function (x) { x.classList.remove('on'); });
-      viewTab.classList.add('on');
-      gwxState.pView = viewTab.dataset.pview;
+      gwxState.pView = viewTab.dataset.pview || 'all';
       if (gwxState.pView === 'live') loadPredictLive();
-      renderPredictGrid();
+      else applyPredictView();
       return;
     }
     var calDay = e.target.closest('.gwx-cal-day[data-day]');
@@ -14744,7 +14750,7 @@ var GROM_XSTOCKS = [
   }
   function driftPredict() {
     var page = document.getElementById('page-predict'); if (!page || !page.classList.contains('active')) return;
-    if (document.hidden) return;
+    if (document.hidden || gwxState.pView === 'live') return;
     var lite = gwxMobile();
     var deltas = {};
     page.querySelectorAll('.gwx-card[data-und]').forEach(function (card) {

@@ -31,11 +31,21 @@
   html:not(.grom-js-ready)[data-grom-route="predict"] #page-predict,
   html:not(.grom-js-ready)[data-grom-route="xstocks"] #page-xstocks { display: block !important; }
   html:not(.grom-js-ready)[data-grom-route="landing"] body { /* sidebar hidden via landing-layout after JS */ }
-  /* Dashboard banner carousel — show only slide 1 until JS positions carousel (no flash of other slides) */
-  html:not(.grom-banner-ready) .dash-banners { overflow: hidden !important; scroll-snap-type: none !important; }
-  html:not(.grom-banner-ready) .dash-banners .dash-banner { display: none !important; }
-  html:not(.grom-banner-ready) .dash-banners .dash-banner:first-child { display: block !important; }
-  html:not(.grom-banner-ready) .dash-banner-dots { visibility: hidden; pointer-events: none; }
+  /* Dashboard banners: stay hidden until carousel + i18n are wired (prevents stale slide flash) */
+  html:not(.grom-dash-ready) .dash-banners-wrap {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    min-height: 168px;
+  }
+  html:not(.grom-dash-ready) .dash-banners-wrap .banner-mesh,
+  html:not(.grom-dash-ready) .dash-banners-wrap .banner-shine,
+  html:not(.grom-dash-ready) .dash-banners-wrap .banner-tag {
+    animation: none !important;
+  }
+  @media (min-width: 901px) {
+    html:not(.grom-dash-ready) .dash-banners-wrap { min-height: 248px; }
+  }
 </style>
 <meta name="theme-color" content="#080a0f" />
 <title>GROM</title>
@@ -5505,7 +5515,7 @@
           </div>
         </a>
       </div>
-      <script>(function(){try{var c=document.getElementById('dashBanners');if(c)c.scrollLeft=0;}catch(_){}})();</script>
+      <script>(function(){try{var c=document.getElementById('dashBanners');if(!c)return;var idx=0,n=c.querySelectorAll('.dash-banner').length;try{var s=parseInt(sessionStorage.getItem('grom_dash_banner'),10);if(Number.isFinite(s)&&s>=0&&s<n)idx=s;}catch(_){}var w=c.clientWidth||0;if(w>0)c.scrollLeft=idx*w;}catch(_){}})();</script>
       <div class="dash-banner-dots" id="dashBannerDots" aria-hidden="true"></div>
       </div>
 
@@ -15413,18 +15423,39 @@ function wireDashBannerCarousel() {
   var dotsHost = document.getElementById('dashBannerDots');
   if (!carousel) return;
   var banners = carousel.querySelectorAll('.dash-banner');
+  if (!banners.length) return;
+  if (carousel.__dashWired) {
+    try {
+      var saved = parseInt(sessionStorage.getItem('grom_dash_banner'), 10);
+      if (Number.isFinite(saved) && saved >= 0 && saved < banners.length) {
+        var b = banners[saved];
+        carousel.scrollLeft = b ? b.offsetLeft : saved * (carousel.clientWidth || 0);
+      }
+    } catch (_) {}
+    return;
+  }
+  carousel.__dashWired = true;
   var dashBannerIdx = 0;
   try {
     var saved = parseInt(sessionStorage.getItem('grom_dash_banner'), 10);
     if (Number.isFinite(saved) && saved >= 0 && saved < banners.length) dashBannerIdx = saved;
   } catch (_) {}
 
-  function markBannerReady() {
-    document.documentElement.classList.add('grom-banner-ready');
+  function markDashReady() {
+    document.documentElement.classList.add('grom-dash-ready');
   }
 
   function persistBannerIdx(idx) {
     try { sessionStorage.setItem('grom_dash_banner', String(idx)); } catch (_) {}
+  }
+
+  function snapBanner(idx) {
+    dashBannerIdx = ((idx % banners.length) + banners.length) % banners.length;
+    var b = banners[dashBannerIdx];
+    var left = b ? b.offsetLeft : dashBannerIdx * (carousel.clientWidth || 0);
+    carousel.scrollLeft = left;
+    persistBannerIdx(dashBannerIdx);
+    syncBannerDots();
   }
 
   function goBanner(idx, smooth) {
@@ -15459,6 +15490,7 @@ function wireDashBannerCarousel() {
       if (dist < minDist) { minDist = dist; idx = i; }
     });
     dashBannerIdx = idx;
+    persistBannerIdx(idx);
     dotsHost.querySelectorAll('span').forEach(function (d, i) {
       d.classList.toggle('active', i === idx);
     });
@@ -15487,14 +15519,18 @@ function wireDashBannerCarousel() {
     });
     carousel.addEventListener('mouseleave', startDashBannerAuto);
   }
-  goBanner(dashBannerIdx, false);
-  markBannerReady();
-  requestAnimationFrame(function () {
-    goBanner(dashBannerIdx, false);
-    if (!window.__dashBannerAutoTimer) startDashBannerAuto();
-  });
+
+  snapBanner(dashBannerIdx);
+  if (typeof applyI18n === 'function') applyI18n();
+  markDashReady();
+  if (!window.__dashBannerAutoTimer) startDashBannerAuto();
 }
 window.wireDashBannerCarousel = wireDashBannerCarousel;
+(function bootDashBanners() {
+  var route = document.documentElement.getAttribute('data-grom-route') || '';
+  var onDash = route === 'dashboard' || document.getElementById('page-dashboard')?.classList.contains('active');
+  if (onDash) wireDashBannerCarousel();
+})();
 
 function updateDashboardWatchlistPrices() {
   var host = document.getElementById('watchlist');

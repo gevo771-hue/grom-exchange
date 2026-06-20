@@ -46,6 +46,16 @@ function pmEnds(iso) {
   const d = new Date(iso); if (Number.isNaN(d.getTime())) return '';
   try { return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }); } catch { return ''; }
 }
+function pmTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso); if (Number.isNaN(d.getTime())) return '';
+  try { return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
+}
+function pmEndsAt(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 function normalizePolymarket(events) {
   const out = [];
   for (const ev of Array.isArray(events) ? events : []) {
@@ -73,7 +83,10 @@ function normalizePolymarket(events) {
       ico: pmEmoji(cat),
       q: String(ev.title || ev.question || '').slice(0, 150),
       vol: Number(ev.volume || ev.volume24hr || 0) || 0,
+      vol24: Number(ev.volume24hr || 0) || 0,
       ends: pmEnds(ev.endDate),
+      endsAt: pmEndsAt(ev.endDate),
+      time: pmTime(ev.endDate),
       live: true,
       rows,
     });
@@ -93,7 +106,7 @@ export function createMarketRouter() {
     }
     try {
       const { data } = await axios.get('https://gamma-api.polymarket.com/events', {
-        params: { closed: false, active: true, archived: false, order: 'volume24hr', ascending: false, limit: 80 },
+        params: { closed: false, active: true, archived: false, order: 'volume24hr', ascending: false, limit: 120 },
         timeout: 7000,
       });
       const markets = normalizePolymarket(data);

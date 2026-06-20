@@ -332,9 +332,16 @@ STOCKS.forEach(function (s) {
 });
 
 COMMODITIES.forEach(function (c) {
+  var sym = c[0];
+  var base = sym;
+  if (sym === 'XAUUSD') base = 'XAU';
+  else if (sym === 'XAGUSD') base = 'XAG';
+  else if (sym === 'XPTUSD') base = 'XPT';
+  else if (sym === 'XPDUSD') base = 'XPD';
+  else if (sym.endsWith('USD') && sym.length > 3) base = sym.slice(0, -3);
   REG.push({
-    symbol: c[0],
-    base: c[0], quote: c[0].indexOf('XAU') === 0 || c[0].indexOf('XAG') === 0 || c[0].indexOf('XP') === 0 ? 'USD' : 'USD',
+    symbol: sym,
+    base: base, quote: 'USD',
     name: c[1],
     type: 'commodity',
     sector: c[2],

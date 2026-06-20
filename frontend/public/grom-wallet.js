@@ -1194,6 +1194,24 @@ function gwExpandSendSwapDropdowns() {
   gwExpandAssetSelect('wmSwapTo');
 }
 
+/* Hide redundant "Other wallet" row in the Connect modal. WalletConnect v2
+ * already covers any arbitrary wallet via its protocol (the QR/deep-link
+ * route works for every wallet that isn't on the named list), so the ghost
+ * "Other wallet" → cnConnect('Other wallet','ghost') row was a confusing
+ * duplicate. Injected unconditionally (the cn-modal lives in Cursor's
+ * index.html and is unaffected by his deposit-UI gating). Safe under
+ * Cursor's parallel edits — this is a single CSS rule scoped to .cn-list. */
+function gwInjectConnectModalCss() {
+  if (document.getElementById('gw-connect-modal-fixups')) return;
+  const css = `
+    .cn-list button.cn-row[onclick*="Other wallet"] { display: none !important; }
+  `;
+  const style = document.createElement('style');
+  style.id = 'gw-connect-modal-fixups';
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+
 function gwInitWalletModalOps() {
   // Override Cursor's inline modal functions (in index.html). These globals
   // were rendering a hardcoded network list with FAKE demo addresses
@@ -1207,6 +1225,7 @@ function gwInitWalletModalOps() {
   // self-custody (see gwPatchCursorDepositFlow).
   const newDepUi = !!document.getElementById('depCoinList');
   if (!newDepUi) gwInjectModalCss();
+  gwInjectConnectModalCss();
   gwPatchCursorDepositFlow();
   window.submitSend = gwSubmitSend;
   window.submitSwap = gwSubmitSwap;

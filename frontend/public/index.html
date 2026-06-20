@@ -31,6 +31,11 @@
   html:not(.grom-js-ready)[data-grom-route="predict"] #page-predict,
   html:not(.grom-js-ready)[data-grom-route="xstocks"] #page-xstocks { display: block !important; }
   html:not(.grom-js-ready)[data-grom-route="landing"] body { /* sidebar hidden via landing-layout after JS */ }
+  /* Dashboard banner carousel — show only slide 1 until JS positions carousel (no flash of other slides) */
+  html:not(.grom-banner-ready) .dash-banners { overflow: hidden !important; scroll-snap-type: none !important; }
+  html:not(.grom-banner-ready) .dash-banners .dash-banner { display: none !important; }
+  html:not(.grom-banner-ready) .dash-banners .dash-banner:first-child { display: block !important; }
+  html:not(.grom-banner-ready) .dash-banner-dots { visibility: hidden; pointer-events: none; }
 </style>
 <meta name="theme-color" content="#080a0f" />
 <title>GROM</title>
@@ -5500,6 +5505,7 @@
           </div>
         </a>
       </div>
+      <script>(function(){try{var c=document.getElementById('dashBanners');if(c)c.scrollLeft=0;}catch(_){}})();</script>
       <div class="dash-banner-dots" id="dashBannerDots" aria-hidden="true"></div>
       </div>
 
@@ -15408,11 +15414,26 @@ function wireDashBannerCarousel() {
   if (!carousel) return;
   var banners = carousel.querySelectorAll('.dash-banner');
   var dashBannerIdx = 0;
+  try {
+    var saved = parseInt(sessionStorage.getItem('grom_dash_banner'), 10);
+    if (Number.isFinite(saved) && saved >= 0 && saved < banners.length) dashBannerIdx = saved;
+  } catch (_) {}
+
+  function markBannerReady() {
+    document.documentElement.classList.add('grom-banner-ready');
+  }
+
+  function persistBannerIdx(idx) {
+    try { sessionStorage.setItem('grom_dash_banner', String(idx)); } catch (_) {}
+  }
 
   function goBanner(idx, smooth) {
     if (!banners.length) return;
     dashBannerIdx = ((idx % banners.length) + banners.length) % banners.length;
-    carousel.scrollTo({ left: banners[dashBannerIdx].offsetLeft, behavior: smooth ? 'smooth' : 'auto' });
+    var left = banners[dashBannerIdx].offsetLeft;
+    if (smooth && carousel.scrollTo) carousel.scrollTo({ left: left, behavior: 'smooth' });
+    else carousel.scrollLeft = left;
+    persistBannerIdx(dashBannerIdx);
     syncBannerDots();
   }
 
@@ -15465,9 +15486,13 @@ function wireDashBannerCarousel() {
       if (window.__dashBannerAutoTimer) clearInterval(window.__dashBannerAutoTimer);
     });
     carousel.addEventListener('mouseleave', startDashBannerAuto);
-    startDashBannerAuto();
   }
   goBanner(dashBannerIdx, false);
+  markBannerReady();
+  requestAnimationFrame(function () {
+    goBanner(dashBannerIdx, false);
+    if (!window.__dashBannerAutoTimer) startDashBannerAuto();
+  });
 }
 window.wireDashBannerCarousel = wireDashBannerCarousel;
 

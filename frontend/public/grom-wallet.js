@@ -1194,6 +1194,88 @@ function gwExpandSendSwapDropdowns() {
   gwExpandAssetSelect('wmSwapTo');
 }
 
+/* Floating Telegram contact button — pinned bottom-right on all pages, link
+ * to https://t.me/grom_finence_hub. Used for support, investor inquiries,
+ * community. CSS-injected so we don't touch Cursor's index.html. Hidden on
+ * print + reduced motion gets a static (non-animated) variant. */
+function gwInjectTelegramFab() {
+  if (document.getElementById('gw-tg-fab')) return;
+  const css = `
+    #gw-tg-fab {
+      position: fixed; right: 18px; bottom: 18px;
+      z-index: 60;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 11px 16px 11px 13px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #29a9eb 0%, #1f8fd0 60%, #166fb0 100%);
+      color: #fff !important;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      font-size: 13px; font-weight: 700; letter-spacing: .02em;
+      text-decoration: none !important;
+      box-shadow: 0 10px 28px -8px rgba(41,169,235,0.55), 0 2px 0 rgba(255,255,255,0.08) inset;
+      border: 1px solid rgba(255,255,255,0.14);
+      cursor: pointer;
+      transition: transform .25s cubic-bezier(.2,.7,.2,1), box-shadow .25s, opacity .2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #gw-tg-fab:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 14px 36px -10px rgba(41,169,235,0.7); }
+    #gw-tg-fab:active { transform: translateY(0) scale(0.98); }
+    #gw-tg-fab .gw-tg-ico {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #fff, #eaf6fe 70%);
+      display: inline-flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25) inset, 0 0 0 1px rgba(255,255,255,0.4);
+    }
+    #gw-tg-fab .gw-tg-ico svg { width: 14px; height: 14px; }
+    #gw-tg-fab::after {
+      content: "";
+      position: absolute; inset: -4px;
+      border-radius: 999px;
+      border: 2px solid rgba(41,169,235,0.55);
+      opacity: 0;
+      animation: gwTgPulse 2.4s ease-out infinite;
+      pointer-events: none;
+    }
+    @keyframes gwTgPulse {
+      0%   { opacity: 0.6; transform: scale(0.94); }
+      80%  { opacity: 0;   transform: scale(1.12); }
+      100% { opacity: 0;   transform: scale(1.12); }
+    }
+    @media (max-width: 600px) {
+      #gw-tg-fab {
+        right: 12px; bottom: 12px;
+        padding: 10px 14px 10px 11px;
+        font-size: 12.5px;
+      }
+    }
+    @media print { #gw-tg-fab { display: none !important; } }
+    @media (prefers-reduced-motion: reduce) {
+      #gw-tg-fab::after { animation: none; }
+      #gw-tg-fab:hover { transform: none; }
+    }
+  `;
+  const style = document.createElement('style');
+  style.id = 'gw-tg-fab-css';
+  style.textContent = css;
+  document.head.appendChild(style);
+
+  const mount = () => {
+    if (document.getElementById('gw-tg-fab') || !document.body) return;
+    const a = document.createElement('a');
+    a.id = 'gw-tg-fab';
+    a.href = 'https://t.me/grom_finence_hub';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.setAttribute('aria-label', 'Telegram канал GROM');
+    a.innerHTML = '<span class="gw-tg-ico"><svg viewBox="0 0 24 24" fill="#1f8fd0" xmlns="http://www.w3.org/2000/svg"><path d="M9.999 15.2l-.397 5.6c.567 0 .812-.243 1.108-.535l2.66-2.54 5.514 4.034c1.011.557 1.724.265 1.997-.937L23.92 3.06c.36-1.5-.542-2.085-1.523-1.72L1.116 9.534c-1.466.57-1.444 1.39-.25 1.762l5.46 1.704 12.683-7.99c.597-.395 1.14-.176.694.218z"/></svg></span><span>Telegram</span>';
+    document.body.appendChild(a);
+  };
+
+  if (document.body) mount();
+  else document.addEventListener('DOMContentLoaded', mount, { once: true });
+}
+
 /* Hide redundant "Other wallet" row in the Connect modal. WalletConnect v2
  * already covers any arbitrary wallet via its protocol (the QR/deep-link
  * route works for every wallet that isn't on the named list), so the ghost
@@ -1578,6 +1660,7 @@ try {
       gwInjectDashBannersCss();
     }
     gwInjectConnectModalCss();
+    gwInjectTelegramFab();
   }
 } catch (e) { /* defensive — never block module evaluation on cosmetic CSS */ }
 

@@ -7763,6 +7763,9 @@ function show(page) {
       if (typeof window.gromRenderPredictWidgets === 'function') window.gromRenderPredictWidgets();
     }
     if (page === 'landing' && typeof window.gromRenderPredictWidgets === 'function') window.gromRenderPredictWidgets();
+    if (page === 'predict') {
+      if (typeof window.gromLoadPredictLive === 'function') window.gromLoadPredictLive(true);
+    }
     if (page === 'history' && typeof applyHistoryFilter === 'function') applyHistoryFilter();
   });
   setTimeout(function () {
@@ -14311,7 +14314,7 @@ var GROM_XSTOCKS = [
     }).join('');
     var tk = GWX_UND[m.id]; var icoHtml = tk ? logoHtml(tk, m.ico).replace('gwx-logo', 'gwx-logo gwx-q-logo') : '<span class="gwx-q-ico">' + m.ico + '</span>';
     var und = GWX_UND[m.id] ? ' data-und="' + GWX_UND[m.id] + '"' : '';
-    return '<div class="gwx-card" data-q="' + escA(m.q) + '"' + und + '>'
+    return '<div class="gwx-card" data-pm-id="' + escA(m.id || m.q) + '" data-q="' + escA(m.q) + '"' + und + '>'
       + '<div class="gwx-card-top"><span class="gwx-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span>' + liveBadgeHtml(m) + '</div>'
       + '<div class="gwx-q">' + icoHtml + '<span>' + esc(m.q) + '</span></div>'
       + '<div class="gwx-outcomes">' + ocs + '</div>'
@@ -14387,6 +14390,46 @@ var GROM_XSTOCKS = [
       + '<div class="gwx-foot">' + tx('px_foot_xstocks', '') + '</div></div>';
   }
   var GWX_LIVE = null;
+  var _predictFetch = null;
+  var _predictPollTimer = null;
+  function predictMarketMap() {
+    var map = Object.create(null);
+    (GWX_LIVE || []).forEach(function (m) { map[m.id || m.q] = m; });
+    return map;
+  }
+  function patchPredictQuotes() {
+    var page = document.getElementById('page-predict');
+    if (!page || !page.classList.contains('active') || !GWX_LIVE || !GWX_LIVE.length) return;
+    var map = predictMarketMap();
+    page.querySelectorAll('.gwx-card[data-pm-id], .gwx-cal-row[data-pm-id]').forEach(function (el) {
+      var m = map[el.getAttribute('data-pm-id')];
+      if (!m || !m.rows || !m.rows.length) return;
+      if (el.classList.contains('gwx-cal-row')) {
+        var meta = el.querySelector('.gwx-cal-meta');
+        if (meta) meta.innerHTML = '<span><b>' + esc(m.rows[0].n) + '</b> ' + m.rows[0].p + '%</span><span>📊 ' + fmtVol(m.vol24 || m.vol) + '</span>';
+        return;
+      }
+      m.rows.forEach(function (r, ri) {
+        var oc = el.querySelectorAll('.gwx-oc')[ri];
+        if (!oc) return;
+        var probEl = oc.querySelector('.gwx-oc-prob');
+        var fill = oc.querySelector('.gwx-oc-fill');
+        var yes = oc.querySelector('.gwx-bet.gwx-yes');
+        var no = oc.querySelector('.gwx-bet.gwx-no');
+        if (probEl) probEl.textContent = r.p + '%';
+        if (fill) fill.style.width = r.p + '%';
+        if (yes) { yes.dataset.prob = r.p; yes.dataset.name = r.n; }
+        if (no) no.dataset.prob = r.p;
+      });
+    });
+  }
+  function ensurePredictPoll() {
+    if (_predictPollTimer) return;
+    _predictPollTimer = setInterval(function () {
+      var pp = document.getElementById('page-predict');
+      if (pp && pp.classList.contains('active') && !document.hidden) loadPredictLive();
+    }, 30000);
+  }
   // Live Polymarket feed only when available; curated markets are offline fallback.
   function predictSource() {
     if (GWX_LIVE && GWX_LIVE.length) return GWX_LIVE.slice();
@@ -14437,7 +14480,7 @@ var GROM_XSTOCKS = [
     var top = (m.rows && m.rows[0]) ? m.rows[0] : { n: '—', p: 50 };
     var qAttr = escA(m.q);
     var nameAttr = escA(top.n);
-    return '<div class="gwx-cal-row" data-q="' + qAttr + '">'
+    return '<div class="gwx-cal-row" data-pm-id="' + escA(m.id || m.q) + '" data-q="' + qAttr + '">'
       + '<div class="gwx-cal-time">' + esc(m.time || '—') + (m.ends ? '<small>' + esc(m.ends) + '</small>' : '') + '</div>'
       + '<div class="gwx-cal-main">'
       + '<div class="gwx-cal-top"><span class="gwx-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span>' + liveBadgeHtml(m) + '</div>'
@@ -14528,19 +14571,26 @@ var GROM_XSTOCKS = [
       var cb = stats[2].querySelector('b'); if (cb) cb.textContent = String(src.length);
     }
   }
-  function loadPredictLive() {
-    fetch('/api/market/predict', { headers: { Accept: 'application/json' } })
+  function loadPredictLive(force) {
+    if (_predictFetch && !force) return _predictFetch;
+    _predictFetch = fetch('/api/market/predict?_=' + Date.now(), { headers: { Accept: 'application/json' }, cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (d && Array.isArray(d.markets) && d.markets.length) GWX_LIVE = d.markets;
         applyPredictView();
+        patchPredictQuotes();
         updatePredictStats();
         renderPredictWidgets();
       })
       .catch(function () {
+        patchPredictQuotes();
         if (gwxState.pView === 'live') applyPredictView();
-      });
+      })
+      .finally(function () { _predictFetch = null; });
+    return _predictFetch;
   }
+  window.gromLoadPredictLive = loadPredictLive;
+  window.gromEnsurePredictPoll = ensurePredictPoll;
   function featuredMarkets(n) {
     var src = predictSource().slice().sort(function (a, b) { return (b.vol || 0) - (a.vol || 0); });
     var out = [], seen = {};
@@ -14729,7 +14779,7 @@ var GROM_XSTOCKS = [
     if (viewTab && viewTab.closest('#page-predict')) {
       e.preventDefault(); e.stopPropagation();
       gwxState.pView = viewTab.dataset.pview || 'all';
-      if (gwxState.pView === 'live') loadPredictLive();
+      if (gwxState.pView === 'live') loadPredictLive(true);
       else applyPredictView();
       return;
     }
@@ -14809,9 +14859,10 @@ var GROM_XSTOCKS = [
     var pp = document.getElementById('page-predict');
     if (px && px.classList.contains('active')) { refreshStockPrices(); if (_gwxTick % 4 === 0) { renderStockPos(); updateBalChips(); } }
     if (pp && pp.classList.contains('active')) {
+      if (_gwxTick % 3 === 0) patchPredictQuotes();
       if (!gwxMobile() || _gwxTick % 2 === 0) driftPredict();
       if (_gwxTick % 4 === 0) { renderPredictPos(); updateBalChips(); }
-      if (_gwxTick % 50 === 0) loadPredictLive();
+      if (_gwxTick % 10 === 0) loadPredictLive();
     }
   }
   function scheduleGwxTick() {
@@ -14885,16 +14936,21 @@ var GROM_XSTOCKS = [
   // show() router handles activation; we just freshen dynamic bits).
   document.addEventListener('click', function (e) {
     var n = e.target.closest('[data-page="predict"], [data-page="xstocks"]');
-    if (n) { setTimeout(refreshActive, 60); if (n.dataset.page === 'predict') loadPredictLive(); }
+    if (n) { setTimeout(refreshActive, 60); if (n.dataset.page === 'predict' && typeof window.gromLoadPredictLive === 'function') window.gromLoadPredictLive(true); }
   }, true);
   window.addEventListener('hashchange', function () {
     var h = (location.hash || '').replace(/^#/, '').split('?')[0];
     if (h === 'predict' || h === 'xstocks') setTimeout(refreshActive, 80);
-    if (h === 'predict') loadPredictLive();
+    if (h === 'predict') loadPredictLive(true);
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && document.getElementById('page-predict')?.classList.contains('active')) {
+      loadPredictLive(true);
+    }
   });
 
   function boot() {
-    injectCss(); ensurePages(); ensureNav(); loadPredictLive(); renderPredictWidgets();
+    injectCss(); ensurePages(); ensureNav(); loadPredictLive(true); ensurePredictPoll(); renderPredictWidgets();
     if (typeof window.applyI18n === 'function') window.applyI18n();
     var tries = 0;
     var iv = setInterval(function () { tries++; ensurePages(); ensureNav(); if (tries >= 30) clearInterval(iv); }, 700);

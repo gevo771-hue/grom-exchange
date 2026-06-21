@@ -22,7 +22,7 @@ function fallbackQuotes() {
 
 // ---- Polymarket prediction-markets proxy (public, cached) ----
 let _predictCache = { ts: 0, data: null };
-const PREDICT_TTL = 60_000;
+const PREDICT_TTL = 30_000;
 
 function safeJson(str, def) { try { return JSON.parse(str); } catch { return def; } }
 function pmCategory(ev) {
@@ -131,6 +131,7 @@ export function createMarketRouter() {
 
   // Live prediction markets from Polymarket (server-side to bypass CORS).
   r.get('/predict', async (_req, res) => {
+    res.set('Cache-Control', 'no-store, max-age=0');
     const now = Date.now();
     if (_predictCache.data && now - _predictCache.ts < PREDICT_TTL) {
       return res.json({ markets: _predictCache.data, cached: true });

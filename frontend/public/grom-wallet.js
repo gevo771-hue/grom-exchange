@@ -1194,6 +1194,202 @@ function gwExpandSendSwapDropdowns() {
   gwExpandAssetSelect('wmSwapTo');
 }
 
+/* Gate the Referral page behind authentication.
+ *
+ * Without this, anonymous visitors see hard-coded demo content (invite code
+ * "GROM-G7K3Q9", 1,284 referred, $18,473 earned, etc.) and think it's their
+ * own data. That's a credibility killer for a launching exchange — fake
+ * numbers also look like a scam. We overlay a sign-in CTA on top of
+ * `#page-referral` whenever there's no JWT in localStorage. As soon as the
+ * user logs in (and a JWT appears) the overlay self-removes and the real
+ * referral data path takes over.
+ *
+ * No edits to Cursor's index.html — fully JS/CSS injected. */
+function gwIsAuthed() {
+  try { return !!localStorage.getItem('grom_jwt'); } catch (e) { return false; }
+}
+
+function gwInjectReferralGateCss() {
+  if (document.getElementById('gw-ref-gate-css')) return;
+  const css = `
+    #gw-ref-gate {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: flex; align-items: center; justify-content: center;
+      padding: 32px 20px;
+      background:
+        radial-gradient(80% 60% at 50% 40%, rgba(0,194,255,0.12), transparent 70%),
+        rgba(8,13,24,0.92);
+      backdrop-filter: blur(10px) saturate(140%);
+      -webkit-backdrop-filter: blur(10px) saturate(140%);
+      border-radius: 18px;
+      animation: gwRefGateFade .35s ease both;
+    }
+    @keyframes gwRefGateFade { from { opacity: 0; } to { opacity: 1; } }
+    #gw-ref-gate .gw-rg-card {
+      max-width: 440px;
+      width: 100%;
+      padding: 28px 28px 24px;
+      border-radius: 18px;
+      background: linear-gradient(165deg, rgba(13,22,38,0.85) 0%, rgba(8,14,26,0.95) 100%);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 30px 60px -20px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03) inset;
+      text-align: center;
+      color: #e7eef8;
+    }
+    #gw-ref-gate .gw-rg-emo {
+      font-size: 40px;
+      line-height: 1;
+      margin-bottom: 12px;
+      filter: drop-shadow(0 6px 16px rgba(245,185,77,0.4));
+    }
+    #gw-ref-gate h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      background: linear-gradient(180deg, #ffffff, #c7d8ec);
+      -webkit-background-clip: text;
+              background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    #gw-ref-gate p {
+      margin: 0 0 18px;
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: #9bb3c7;
+    }
+    #gw-ref-gate ul {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 22px;
+      display: flex; flex-direction: column; gap: 8px;
+      text-align: left;
+    }
+    #gw-ref-gate li {
+      display: flex; align-items: flex-start; gap: 10px;
+      font-size: 13px;
+      color: #cfdfee;
+      line-height: 1.45;
+    }
+    #gw-ref-gate li::before {
+      content: "✓";
+      color: #22c17c;
+      font-weight: 800;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    #gw-ref-gate .gw-rg-actions {
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    #gw-ref-gate .gw-rg-primary {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 12px 18px;
+      border-radius: 12px;
+      border: 0;
+      background: linear-gradient(135deg, #00c2ff, #5d8eff);
+      color: #001624;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: .02em;
+      cursor: pointer;
+      box-shadow: 0 10px 26px -10px rgba(0,194,255,0.55);
+      transition: transform .2s, box-shadow .2s;
+    }
+    #gw-ref-gate .gw-rg-primary:hover { transform: translateY(-1px); box-shadow: 0 14px 30px -10px rgba(0,194,255,0.7); }
+    #gw-ref-gate .gw-rg-primary:active { transform: translateY(0); }
+    #gw-ref-gate .gw-rg-foot {
+      margin-top: 14px;
+      font-size: 11.5px;
+      color: #6b7a92;
+    }
+    /* Make sure page-referral is the positioning context */
+    #page-referral { position: relative; }
+    /* Hide the fake content underneath: cleaner than leaving demo numbers
+     * visible behind the blur, and avoids screenshots of "the leaked
+     * dashboard". Body class is toggled by gwApplyReferralGate. */
+    body.gw-ref-anon #page-referral > :not(#gw-ref-gate) {
+      filter: blur(8px);
+      pointer-events: none;
+      user-select: none;
+    }
+  `;
+  const style = document.createElement('style');
+  style.id = 'gw-ref-gate-css';
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+
+function gwOpenSignIn() {
+  // Prefer Cursor's existing openConnectModal; fallback to clicking the
+  // "Войти / Регистрация" button in the top-right corner.
+  if (typeof window.openConnectModal === 'function') {
+    try { window.openConnectModal(); return; } catch (e) {}
+  }
+  const btn = Array.from(document.querySelectorAll('button, a')).find((el) => {
+    const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    return /^(Войти|Sign in|Log in|Войти\s*\/\s*Регистрация)/i.test(t);
+  });
+  if (btn) btn.click();
+}
+
+function gwBuildReferralGate() {
+  const div = document.createElement('div');
+  div.id = 'gw-ref-gate';
+  div.innerHTML = `
+    <div class="gw-rg-card" role="dialog" aria-labelledby="gw-rg-title">
+      <div class="gw-rg-emo">🎁</div>
+      <h2 id="gw-rg-title">Реферальная программа GROM</h2>
+      <p>Зарегистрируйся, чтобы получить персональную реферальную ссылку и зарабатывать на каждой комиссии своих приглашённых — в USDT, каждый день.</p>
+      <ul>
+        <li>До 50% от комиссии каждого приглашённого, навсегда</li>
+        <li>Выплаты ежедневно в 00:00 UTC, минимум — 1 USDT</li>
+        <li>Маркетинговые материалы: баннеры, видео, brand kit</li>
+        <li>Прозрачная статистика — клики, регистрации, KYC, первые сделки</li>
+      </ul>
+      <div class="gw-rg-actions">
+        <button type="button" class="gw-rg-primary" id="gw-rg-login">Войти / Зарегистрироваться</button>
+      </div>
+      <div class="gw-rg-foot">Подключение через email, Google или Web3-кошелёк · 30 секунд</div>
+    </div>
+  `;
+  const btn = div.querySelector('#gw-rg-login');
+  if (btn) btn.addEventListener('click', (e) => { e.preventDefault(); gwOpenSignIn(); });
+  return div;
+}
+
+function gwApplyReferralGate() {
+  gwInjectReferralGateCss();
+  const page = document.getElementById('page-referral');
+  if (!page) return; // page not in DOM yet — observer below will retry
+  const authed = gwIsAuthed();
+  const existing = document.getElementById('gw-ref-gate');
+  if (authed) {
+    document.body.classList.remove('gw-ref-anon');
+    if (existing) existing.remove();
+    return;
+  }
+  document.body.classList.add('gw-ref-anon');
+  if (!existing) page.appendChild(gwBuildReferralGate());
+}
+
+function gwSetupReferralGate() {
+  // Run now + on hash change + when localStorage changes (other tabs) + when
+  // Cursor's router switches pages (we listen to the body data-* observation).
+  gwApplyReferralGate();
+  window.addEventListener('hashchange', gwApplyReferralGate);
+  window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt') gwApplyReferralGate(); });
+  // Re-check periodically the first 30 s after load — Cursor's auth flow
+  // sets grom_jwt asynchronously after OAuth callbacks.
+  let ticks = 0;
+  const id = setInterval(() => {
+    ticks++;
+    gwApplyReferralGate();
+    if (ticks >= 30) clearInterval(id);
+  }, 1000);
+}
+
 /* Floating Telegram contact button — pinned bottom-right on all pages, link
  * to https://t.me/grom_finence_hub. Used for support, investor inquiries,
  * community. CSS-injected so we don't touch Cursor's index.html. Hidden on
@@ -1661,6 +1857,7 @@ try {
     }
     gwInjectConnectModalCss();
     gwInjectTelegramFab();
+    gwSetupReferralGate();
   }
 } catch (e) { /* defensive — never block module evaluation on cosmetic CSS */ }
 

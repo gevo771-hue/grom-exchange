@@ -1503,7 +1503,9 @@ function gwInitWalletModalOps() {
   const newDepUi = !!document.getElementById('depCoinList');
   if (!newDepUi) gwInjectModalCss();
   gwInjectConnectModalCss();
-  gwInjectDashBannersCss();
+  // dash-banners CSS handled by <link rel="stylesheet" href="/grom-banners.css">
+  // in index.html <head> — gwInjectDashBannersCss is kept only as a fallback
+  // and runs from the top-level guard if the <link> didn't load.
   gwPatchCursorDepositFlow();
   window.submitSend = gwSubmitSend;
   window.submitSwap = gwSubmitSwap;
@@ -1567,7 +1569,14 @@ function gwInitWalletModalOps() {
  * the flash. Connect-modal CSS gets the same treatment for symmetry. */
 try {
   if (document.head) {
-    gwInjectDashBannersCss();
+    // dash-banners CSS now lives in /grom-banners.css and is pulled by a
+    // <link rel="stylesheet"> in index.html <head> — that's the real
+    // zero-flash path (link in head blocks first paint until CSS is ready).
+    // We keep the function in this file as a runtime fallback, but only
+    // inject if the <link> wasn't loaded for some reason.
+    if (!document.querySelector('link[href*="grom-banners.css"]')) {
+      gwInjectDashBannersCss();
+    }
     gwInjectConnectModalCss();
   }
 } catch (e) { /* defensive — never block module evaluation on cosmetic CSS */ }

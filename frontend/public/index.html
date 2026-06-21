@@ -14248,7 +14248,7 @@ var GROM_XSTOCKS = [
   function updateBalChips() { document.querySelectorAll('.gwx-bal-v').forEach(function (el) { el.textContent = money(bal()); }); }
 
   /* ---- helpers ---- */
-  var gwxState = { pCat: 'all', pQ: '', pShow: 10, pView: 'live', pDay: 'today', sCat: 'all', sQ: '' };
+  var gwxState = { pCat: 'all', pQ: '', pShow: 10, pView: 'all', pDay: 'today', sCat: 'all', sQ: '' };
   var GWX_MOBILE_BATCH = 10;
   function gwxMobile() { return window.matchMedia('(max-width:760px)').matches; }
   function gwxTickMs() { return gwxMobile() ? 2800 : 1200; }

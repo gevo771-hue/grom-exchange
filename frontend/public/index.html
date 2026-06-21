@@ -31,20 +31,13 @@
   html:not(.grom-js-ready)[data-grom-route="predict"] #page-predict,
   html:not(.grom-js-ready)[data-grom-route="xstocks"] #page-xstocks { display: block !important; }
   html:not(.grom-js-ready)[data-grom-route="landing"] body { /* sidebar hidden via landing-layout after JS */ }
-  /* Dashboard banners: stay hidden until carousel + i18n are wired (prevents stale slide flash) */
+  /* Dashboard banners: fully hidden until carousel is positioned (no glow flash) */
   html:not(.grom-dash-ready) .dash-banners-wrap {
-    opacity: 0 !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
+    display: none !important;
     min-height: 168px;
   }
-  html:not(.grom-dash-ready) .dash-banners-wrap .banner-mesh,
-  html:not(.grom-dash-ready) .dash-banners-wrap .banner-shine,
-  html:not(.grom-dash-ready) .dash-banners-wrap .banner-tag {
-    animation: none !important;
-  }
-  @media (min-width: 901px) {
-    html:not(.grom-dash-ready) .dash-banners-wrap { min-height: 248px; }
+  html.grom-dash-ready .dash-banners-wrap {
+    display: block;
   }
 </style>
 <meta name="theme-color" content="#080a0f" />
@@ -5457,7 +5450,7 @@
     <!-- DASHBOARD -->
     <section class="page" id="page-dashboard">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now" data-i18n="dash_bc">Dashboard</span></div>
-      <div class="dash-banners-wrap">
+      <div class="dash-banners-wrap" id="dashBannersWrap" hidden>
       <div class="dash-banners" id="dashBanners">
         <a class="dash-banner banner-spot" onclick="show('spot')">
           <div class="banner-mesh"></div>
@@ -14320,7 +14313,7 @@ var GROM_XSTOCKS = [
       + '<div class="gwx-outcomes">' + ocs + '</div>'
       + '<div class="gwx-card-foot"><span>📊 ' + fmtVol(m.vol) + '</span>'
       + (m.part ? '<span>👥 ' + m.part + '</span>' : '')
-      + (m.ends ? '<span>⏱ ' + esc(m.ends) + '</span>' : '') + '</div></div>';
+      + (predictWhen(m) ? '<span>⏱ ' + esc(predictWhen(m)) + '</span>' : '') + '</div></div>';
   }
   function stockRowHtml(s) {
     var px = curPx(s.sym), b0 = gwxB0[s.sym] || s.price, chg = (px / b0 - 1) * 100;
@@ -14446,18 +14439,31 @@ var GROM_XSTOCKS = [
     if (live) renderPredictCalendar();
     else renderPredictGridContent();
   }
+  function predictWhen(m) { return m.starts || m.ends || ''; }
+  function localDayIso(d) {
+    var y = d.getFullYear(), mo = d.getMonth() + 1, da = d.getDate();
+    return y + '-' + (mo < 10 ? '0' : '') + mo + '-' + (da < 10 ? '0' : '') + da;
+  }
+  function eventAnchorMs(m) {
+    if (m.startsAt) return new Date(m.startsAt).getTime();
+    if (m.endsAt) return new Date(m.endsAt).getTime();
+    return NaN;
+  }
   function liveCalendarSource() {
     var src = (GWX_LIVE && GWX_LIVE.length) ? GWX_LIVE.slice() : predictSource().filter(function (m) { return m.live; });
     return src.sort(function (a, b) {
-      var ta = a.endsAt ? new Date(a.endsAt).getTime() : Infinity;
-      var tb = b.endsAt ? new Date(b.endsAt).getTime() : Infinity;
+      var ta = eventAnchorMs(a);
+      var tb = eventAnchorMs(b);
+      if (!Number.isFinite(ta)) ta = Infinity;
+      if (!Number.isFinite(tb)) tb = Infinity;
       if (ta !== tb) return ta - tb;
       return (b.vol24 || b.vol || 0) - (a.vol24 || a.vol || 0);
     });
   }
   function calDayKey(m) {
-    if (!m.endsAt) return 'later';
-    var d = new Date(m.endsAt);
+    var iso = m.startsAt || m.endsAt;
+    if (!iso) return 'later';
+    var d = new Date(iso);
     if (Number.isNaN(d.getTime())) return 'later';
     var now = new Date();
     var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -14465,7 +14471,7 @@ var GROM_XSTOCKS = [
     var day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     if (day.getTime() === today.getTime()) return 'today';
     if (day.getTime() === tomorrow.getTime()) return 'tomorrow';
-    return d.toISOString().slice(0, 10);
+    return localDayIso(day);
   }
   function calDayLabel(key) {
     if (key === 'today') return tx('px_cal_today', 'Today');
@@ -14481,7 +14487,7 @@ var GROM_XSTOCKS = [
     var qAttr = escA(m.q);
     var nameAttr = escA(top.n);
     return '<div class="gwx-cal-row" data-pm-id="' + escA(m.id || m.q) + '" data-q="' + qAttr + '">'
-      + '<div class="gwx-cal-time">' + esc(m.time || '—') + (m.ends ? '<small>' + esc(m.ends) + '</small>' : '') + '</div>'
+      + '<div class="gwx-cal-time">' + esc(m.time || '—') + (predictWhen(m) ? '<small>' + esc(predictWhen(m)) + '</small>' : '') + '</div>'
       + '<div class="gwx-cal-main">'
       + '<div class="gwx-cal-top"><span class="gwx-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span>' + liveBadgeHtml(m) + '</div>'
       + '<div class="gwx-cal-q">' + esc(m.ico) + ' ' + esc(m.q) + '</div>'
@@ -14626,7 +14632,7 @@ var GROM_XSTOCKS = [
       + '<div class="lp-pc-top"><span class="lp-pc-cat">' + pcat(m.cat)[1] + ' ' + pcatLabel(m.cat) + '</span>' + liveBadgeHtml(m, 'lp-pc-live') + '</div>'
       + '<div class="lp-pc-q"><span class="lp-pc-ico">' + esc(m.ico) + '</span><span>' + esc(q) + '</span></div>'
       + '<div class="lp-pc-outs">' + previewOutcomesHtml(m.rows) + '</div>'
-      + '<div class="lp-pc-foot"><span>📊 ' + fmtVol(m.vol) + '</span>' + (m.ends ? '<span>⏱ ' + esc(m.ends) + '</span>' : '') + '</div>'
+      + '<div class="lp-pc-foot"><span>📊 ' + fmtVol(m.vol) + '</span>' + (predictWhen(m) ? '<span>⏱ ' + esc(predictWhen(m)) + '</span>' : '') + '</div>'
       + '</div>';
   }
   function renderPredictWidgets() {
@@ -15477,29 +15483,44 @@ window.renderDashboardWatchlist = renderDashboardWatchlist;
 function wireDashBannerCarousel() {
   var carousel = document.getElementById('dashBanners');
   var dotsHost = document.getElementById('dashBannerDots');
+  var wrap = document.getElementById('dashBannersWrap');
   if (!carousel) return;
   var banners = carousel.querySelectorAll('.dash-banner');
   if (!banners.length) return;
+
+  function revealBanners() {
+    document.documentElement.classList.add('grom-dash-ready');
+    if (wrap) wrap.hidden = false;
+  }
+
+  function hideBanners() {
+    document.documentElement.classList.remove('grom-dash-ready');
+    if (wrap) wrap.hidden = true;
+  }
+
   if (carousel.__dashWired) {
+    hideBanners();
     try {
-      var saved = parseInt(sessionStorage.getItem('grom_dash_banner'), 10);
-      if (Number.isFinite(saved) && saved >= 0 && saved < banners.length) {
-        var b = banners[saved];
-        carousel.scrollLeft = b ? b.offsetLeft : saved * (carousel.clientWidth || 0);
+      var savedIdx = parseInt(sessionStorage.getItem('grom_dash_banner'), 10);
+      if (Number.isFinite(savedIdx) && savedIdx >= 0 && savedIdx < banners.length) {
+        var b = banners[savedIdx];
+        carousel.scrollLeft = b ? b.offsetLeft : savedIdx * (carousel.clientWidth || 0);
       }
     } catch (_) {}
+    requestAnimationFrame(function () {
+      requestAnimationFrame(revealBanners);
+    });
     return;
   }
   carousel.__dashWired = true;
+  hideBanners();
   var dashBannerIdx = 0;
   try {
     var saved = parseInt(sessionStorage.getItem('grom_dash_banner'), 10);
     if (Number.isFinite(saved) && saved >= 0 && saved < banners.length) dashBannerIdx = saved;
   } catch (_) {}
 
-  function markDashReady() {
-    document.documentElement.classList.add('grom-dash-ready');
-  }
+  function markDashReady() { revealBanners(); }
 
   function persistBannerIdx(idx) {
     try { sessionStorage.setItem('grom_dash_banner', String(idx)); } catch (_) {}
@@ -15578,10 +15599,22 @@ function wireDashBannerCarousel() {
 
   snapBanner(dashBannerIdx);
   if (typeof applyI18n === 'function') applyI18n();
-  markDashReady();
-  if (!window.__dashBannerAutoTimer) startDashBannerAuto();
+  requestAnimationFrame(function () {
+    snapBanner(dashBannerIdx);
+    requestAnimationFrame(function () {
+      markDashReady();
+      if (!window.__dashBannerAutoTimer) startDashBannerAuto();
+    });
+  });
 }
 window.wireDashBannerCarousel = wireDashBannerCarousel;
+if (!window.__dashPageshowBound) {
+  window.__dashPageshowBound = true;
+  window.addEventListener('pageshow', function (e) {
+    if (!e.persisted) return;
+    if (typeof wireDashBannerCarousel === 'function') wireDashBannerCarousel();
+  });
+}
 (function bootDashBanners() {
   var route = document.documentElement.getAttribute('data-grom-route') || '';
   var onDash = route === 'dashboard' || document.getElementById('page-dashboard')?.classList.contains('active');

@@ -65,7 +65,7 @@ function pmEventTimes(ev) {
   }
   return { start, end };
 }
-// LIVE = in progress or resolving very soon (sport match today, not long-dated markets).
+// LIVE = sport/esports starting soon or politics/crypto resolving within 24h.
 function pmIsLive(ev, cat) {
   const { start, end } = pmEventTimes(ev);
   const now = Date.now();
@@ -76,13 +76,15 @@ function pmIsLive(ev, cat) {
   const title = String(ev.title || ev.question || '').toLowerCase();
   const vsMatch = /\bvs\.?\b|\svs?\s|\sv\s|\s@\s/.test(title);
   const sportish = cat === 'sport' || cat === 'esports';
+  const anchorMs = Number.isFinite(startMs) ? startMs : endMs;
+  const hoursToStart = (anchorMs - now) / 3600000;
+  const hoursToEnd = (endMs - now) / 3600000;
 
-  if (Number.isFinite(startMs) && startMs <= now && endMs > now) return true;
-
-  const hours = (endMs - now) / 3600000;
-  if (sportish && vsMatch && hours >= -8 && hours <= 36) return true;
-  if (cat === 'esports' && hours >= -4 && hours <= 24) return true;
-  if ((cat === 'politics' || cat === 'crypto') && hours >= 0 && hours <= 24) return true;
+  if (sportish && (vsMatch || cat === 'esports')) {
+    if (hoursToEnd < -8) return false;
+    if (hoursToStart <= 8 && hoursToEnd >= -6) return true;
+  }
+  if ((cat === 'politics' || cat === 'crypto') && hoursToEnd >= 0 && hoursToEnd <= 24) return true;
 
   return false;
 }
@@ -108,6 +110,8 @@ function normalizePolymarket(events) {
     rows = rows.slice(0, 6);
     const cat = pmCategory(ev);
     const times = pmEventTimes(ev);
+    const startIso = times.start || null;
+    const endIso = times.end || null;
     out.push({
       id: 'pm_' + (ev.id || ev.slug || out.length),
       cat,
@@ -115,9 +119,11 @@ function normalizePolymarket(events) {
       q: String(ev.title || ev.question || '').slice(0, 150),
       vol: Number(ev.volume || ev.volume24hr || 0) || 0,
       vol24: Number(ev.volume24hr || 0) || 0,
-      ends: pmEnds(times.end),
-      endsAt: pmEndsAt(times.end),
-      time: pmTime(times.end),
+      starts: startIso ? pmEnds(startIso) : '',
+      startsAt: startIso ? pmEndsAt(startIso) : null,
+      ends: endIso ? pmEnds(endIso) : '',
+      endsAt: endIso ? pmEndsAt(endIso) : null,
+      time: pmTime(startIso || endIso),
       live: pmIsLive(ev, cat),
       rows,
     });

@@ -12,6 +12,7 @@
 import express from 'express';
 import { createHash, randomBytes } from 'node:crypto';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { SiweMessage } from 'siwe';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
@@ -37,6 +38,31 @@ async function ensureUserSettingsRow(userId) {
 
 export function createAuthRouter() {
   const r = express.Router();
+
+  /* Rate limiters for /auth/* — protect against credential stuffing, OTP
+   * harvesting, nonce-spam DoS. Tight on login (10/min/IP), generous on
+   * nonce since SIWE wallets re-issue on every connect attempt. */
+  const loginLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'too_many_requests', retryAfterSec: 60 },
+  });
+  const nonceLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'too_many_requests', retryAfterSec: 60 },
+  });
+  const verifyLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'too_many_requests', retryAfterSec: 60 },
+  });
 
   if (config.allowDevLogin) {
     r.post('/dev-login', async (req, res, next) => {
@@ -65,7 +91,7 @@ export function createAuthRouter() {
     email: z.string().trim().toLowerCase().email().max(160),
   }).strict();
 
-  r.post('/email-login', async (req, res, next) => {
+  r.post('/email-login', loginLimiter, async (req, res, next) => {
     try {
       const { email } = emailLoginSchema.parse(req.body || {});
       const pseudoWallet = emailWalletAddress(email);
@@ -108,7 +134,7 @@ export function createAuthRouter() {
     }
   });
 
-  r.post('/nonce', async (req, res, next) => {
+  r.post('/nonce', nonceLimiter, async (req, res, next) => {
     try {
       const nonce = randomBytes(16).toString('hex');
       await query(`INSERT INTO siwe_nonces (nonce) VALUES ($1)`, [nonce]);
@@ -126,7 +152,7 @@ export function createAuthRouter() {
     signature: z.string().min(20),
   });
 
-  r.post('/verify', async (req, res, next) => {
+  r.post('/verify', verifyLimiter, async (req, res, next) => {
     try {
       const { message, signature } = verifySchema.parse(req.body);
       const siwe = new SiweMessage(message);

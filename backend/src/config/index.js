@@ -133,7 +133,10 @@ export const config = {
       BTC: env('GROM_COLD_ADDRESS_BTC', 'cold-vault-btc'),
     },
     sweepPollMs: envInt('GROM_SWEEP_POLL_MS', 600000),
-    welcomeSeed: envBool('GROM_WELCOME_SEED', true),
+    // Welcome-credit seed (~$7.8k of BTC/ETH/USDT/SOL) used for early demos.
+    // Default-OFF in prod — must be explicitly enabled via GROM_WELCOME_SEED=true
+    // for dev/staging. Showing seeded balances to real users is a launch blocker.
+    welcomeSeed: envBool('GROM_WELCOME_SEED', false),
   },
   webhooks: {
     secret: env('GROM_WEBHOOK_SECRET', ''),

@@ -1212,9 +1212,13 @@ function gwIsAuthed() {
 function gwInjectReferralGateCss() {
   if (document.getElementById('gw-ref-gate-css')) return;
   const css = `
+    /* Pin the gate to the viewport so it's always centred on screen,
+     * regardless of how long the (blurred) referral page is underneath.
+     * Offsets account for Cursor's 60px top header + 232px left sidebar
+     * (which collapses on mobile via the @media query below). */
     #gw-ref-gate {
-      position: absolute;
-      inset: 0;
+      position: fixed;
+      top: 60px; left: 232px; right: 0; bottom: 0;
       z-index: 20;
       display: flex; align-items: center; justify-content: center;
       padding: 32px 20px;
@@ -1223,8 +1227,10 @@ function gwInjectReferralGateCss() {
         rgba(8,13,24,0.92);
       backdrop-filter: blur(10px) saturate(140%);
       -webkit-backdrop-filter: blur(10px) saturate(140%);
-      border-radius: 18px;
       animation: gwRefGateFade .35s ease both;
+    }
+    @media (max-width: 900px) {
+      #gw-ref-gate { left: 0; top: 56px; padding: 16px; }
     }
     @keyframes gwRefGateFade { from { opacity: 0; } to { opacity: 1; } }
     #gw-ref-gate .gw-rg-card {
@@ -1334,24 +1340,118 @@ function gwOpenSignIn() {
   if (btn) btn.click();
 }
 
+/* Translations for the referral gate card. We don't push these into Cursor's
+ * grom-i18n.js (parallel-edit rule) — instead we keep them local and pick a
+ * language using the same `grom_lang` localStorage key that grom-i18n.js
+ * uses. Supported langs match the i18n.js SUPPORTED list:
+ *   ru · en · es · ar · zh · hi · tr  (fallback: en) */
+const GW_REF_GATE_TR = {
+  ru: {
+    title:  'Реферальная программа GROM',
+    intro:  'Зарегистрируйся, чтобы получить персональную реферальную ссылку и зарабатывать на каждой комиссии своих приглашённых — в USDT, каждый день.',
+    p1:     'До 50% от комиссии каждого приглашённого, навсегда',
+    p2:     'Выплаты ежедневно в 00:00 UTC, минимум — 1 USDT',
+    p3:     'Маркетинговые материалы: баннеры, видео, brand kit',
+    p4:     'Прозрачная статистика — клики, регистрации, KYC, первые сделки',
+    cta:    'Войти / Зарегистрироваться',
+    foot:   'Подключение через email, Google или Web3-кошелёк · 30 секунд',
+  },
+  en: {
+    title:  'GROM referral program',
+    intro:  'Sign up to claim your personal invite link and earn a share of every fee your invitees pay — paid in USDT, every day.',
+    p1:     'Up to 50% of each invitee’s fees, forever',
+    p2:     'Daily payouts at 00:00 UTC, 1 USDT minimum',
+    p3:     'Marketing kit: banners, videos, brand assets',
+    p4:     'Transparent funnel — clicks, sign-ups, KYC, first trade',
+    cta:    'Sign in / Sign up',
+    foot:   'Connect via email, Google or any Web3 wallet · 30 seconds',
+  },
+  es: {
+    title:  'Programa de referidos GROM',
+    intro:  'Regístrate para obtener tu enlace personal y ganar una parte de cada comisión que paguen tus invitados — en USDT, cada día.',
+    p1:     'Hasta 50 % de las comisiones de cada invitado, para siempre',
+    p2:     'Pagos diarios a las 00:00 UTC, mínimo 1 USDT',
+    p3:     'Kit de marketing: banners, vídeos, brand assets',
+    p4:     'Embudo transparente — clics, registros, KYC, primera operación',
+    cta:    'Iniciar sesión / Registrarse',
+    foot:   'Conecta con email, Google o cualquier cartera Web3 · 30 segundos',
+  },
+  ar: {
+    title:  'برنامج الإحالات في GROM',
+    intro:  'سجّل للحصول على رابط إحالة خاص بك واربح حصة من كل عمولة يدفعها مدعوّوك — بتسوية USDT يوميّة.',
+    p1:     'حتّى 50% من عمولات كل مدعوّ إلى الأبد',
+    p2:     'تسديد يومي عند 00:00 UTC، بحد أدنى 1 USDT',
+    p3:     'حزمة تسويق: لافتات، فيديوهات، أصول العلامة التجاريّة',
+    p4:     'إحصائيات شفّافة: النقرات، التسجيلات، KYC، أوّل صفقة',
+    cta:    'دخول / تسجيل',
+    foot:   'الاتصال عبر الإيميل، جوجل أو أيّ محفظة Web3 · 30 ثانية',
+  },
+  zh: {
+    title:  'GROM 推荐计划',
+    intro:  '注册后获取专属推荐链接，每天以 USDT 赚取被推荐者手续费的一部分。',
+    p1:     '永久最高可赚取每位被推荐者手续费的 50%',
+    p2:     '每日 00:00 UTC 结算，最低 1 USDT 起发',
+    p3:     '营销素材：Banner、视频、品牌资产包',
+    p4:     '透明的转化漏斗：点击、注册、KYC、首笔交易',
+    cta:    '登录 / 注册',
+    foot:   '以邮箱、Google 或任意 Web3 钱包连接·仅需 30 秒',
+  },
+  hi: {
+    title:  'GROM रेफरल प्रोग्राम',
+    intro:  'अपना व्यक्तिगत रेफरल लिंक पाने के लिए साइन अप करें और अपने अतिथियों की प्रत्येक फीस का हिस्सा USDT में रोज़ाना पाएं।',
+    p1:     'हर अतिथि की फीस का 50% तक, हमेशा के लिए',
+    p2:     '00:00 UTC पर रोज़ाना भुगतान, न्यूनतम 1 USDT',
+    p3:     'मार्केटिंग किट: बैनर, वीडियो, ब्रांड एसेट्स',
+    p4:     'पारदर्शी फनल: क्लिक, साइन अप, KYC, प्रथम ट्रेड',
+    cta:    'साइन इन / साइन अप',
+    foot:   'ईमेल, Google या Web3 वॉलेट से जुड़ें · 30 सेकंड',
+  },
+  tr: {
+    title:  'GROM tavsiye programı',
+    intro:  'Şahsi davet linkini almak ve davet ettiklerinin ödediği her komisyondan pay kazanmak için kaydol — her gün USDT olarak.',
+    p1:     'Her davetlinin komisyonlarının %50’sine kadar, sonsuza dek',
+    p2:     'Günlük ödeme 00:00 UTC, minimum 1 USDT',
+    p3:     'Pazarlama kiti: banner’lar, videolar, marka varlıkları',
+    p4:     'Şeffaf huni: tıklamalar, kayıtlar, KYC, ilk işlem',
+    cta:    'Giriş / Kayıt',
+    foot:   'E-posta, Google ya da herhangi bir Web3 cüzdanıyla bağla · 30 saniye',
+  },
+};
+
+function gwRefT() {
+  let lang = 'en';
+  try {
+    const stored = localStorage.getItem('grom_lang');
+    if (stored && GW_REF_GATE_TR[stored]) lang = stored;
+    else {
+      const nav = (navigator.language || '').toLowerCase();
+      for (const code of Object.keys(GW_REF_GATE_TR)) {
+        if (nav.indexOf(code) === 0) { lang = code; break; }
+      }
+    }
+  } catch (e) {}
+  return GW_REF_GATE_TR[lang] || GW_REF_GATE_TR.en;
+}
+
 function gwBuildReferralGate() {
+  const t = gwRefT();
   const div = document.createElement('div');
   div.id = 'gw-ref-gate';
   div.innerHTML = `
     <div class="gw-rg-card" role="dialog" aria-labelledby="gw-rg-title">
       <div class="gw-rg-emo">🎁</div>
-      <h2 id="gw-rg-title">Реферальная программа GROM</h2>
-      <p>Зарегистрируйся, чтобы получить персональную реферальную ссылку и зарабатывать на каждой комиссии своих приглашённых — в USDT, каждый день.</p>
+      <h2 id="gw-rg-title">${t.title}</h2>
+      <p>${t.intro}</p>
       <ul>
-        <li>До 50% от комиссии каждого приглашённого, навсегда</li>
-        <li>Выплаты ежедневно в 00:00 UTC, минимум — 1 USDT</li>
-        <li>Маркетинговые материалы: баннеры, видео, brand kit</li>
-        <li>Прозрачная статистика — клики, регистрации, KYC, первые сделки</li>
+        <li>${t.p1}</li>
+        <li>${t.p2}</li>
+        <li>${t.p3}</li>
+        <li>${t.p4}</li>
       </ul>
       <div class="gw-rg-actions">
-        <button type="button" class="gw-rg-primary" id="gw-rg-login">Войти / Зарегистрироваться</button>
+        <button type="button" class="gw-rg-primary" id="gw-rg-login">${t.cta}</button>
       </div>
-      <div class="gw-rg-foot">Подключение через email, Google или Web3-кошелёк · 30 секунд</div>
+      <div class="gw-rg-foot">${t.foot}</div>
     </div>
   `;
   const btn = div.querySelector('#gw-rg-login');
@@ -1371,13 +1471,36 @@ function gwApplyReferralGate() {
     return;
   }
   document.body.classList.add('gw-ref-anon');
-  if (!existing) page.appendChild(gwBuildReferralGate());
+  if (!existing) {
+    // First mount — gate sits OUTSIDE #page-referral so its position:fixed
+    // is relative to the viewport, not the (very tall) referral page.
+    document.body.appendChild(gwBuildReferralGate());
+  }
+}
+
+/* Re-render gate when user switches language so the copy follows the rest
+ * of the UI. Hooks into Cursor's `gromRefreshI18nPages` (called by setLang
+ * in grom-i18n.js) and falls back to the `storage` event for cross-tab. */
+function gwSetupReferralGateI18n() {
+  const refresh = () => {
+    const gate = document.getElementById('gw-ref-gate');
+    if (!gate) return;
+    const fresh = gwBuildReferralGate();
+    gate.replaceWith(fresh);
+  };
+  const prev = window.gromRefreshI18nPages;
+  window.gromRefreshI18nPages = function () {
+    try { if (typeof prev === 'function') prev.apply(this, arguments); } catch (_) {}
+    refresh();
+  };
+  window.addEventListener('storage', (e) => { if (e.key === 'grom_lang') refresh(); });
 }
 
 function gwSetupReferralGate() {
   // Run now + on hash change + when localStorage changes (other tabs) + when
   // Cursor's router switches pages (we listen to the body data-* observation).
   gwApplyReferralGate();
+  gwSetupReferralGateI18n();
   window.addEventListener('hashchange', gwApplyReferralGate);
   window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt') gwApplyReferralGate(); });
   // Re-check periodically the first 30 s after load — Cursor's auth flow

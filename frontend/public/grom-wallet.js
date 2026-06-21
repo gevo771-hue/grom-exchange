@@ -1552,6 +1552,26 @@ function gwInitWalletModalOps() {
   reHydrate();
   console.log('[grom-walletops] modal hooks installed (with Cursor overrides)');
 }
+/* PRE-DOMContentLoaded CSS injection — avoid FOUC on dashboard refresh.
+ *
+ * Cursor's baseline `.dash-banner` CSS lives in his index.html and paints
+ * the moment the HTML reaches the browser. Our premium override lives in
+ * gwInjectDashBannersCss, but if we wait for DOMContentLoaded to call it
+ * the user sees ~150–400 ms of the old design first, then a sudden swap
+ * (the "светящийся старый баннер" flash the user reported).
+ *
+ * Module scripts execute *before* DOMContentLoaded and we can talk to
+ * `document.head` immediately (head parsing precedes body parsing). So we
+ * inject the style synchronously at top-level — it lands in the cascade
+ * before first paint in most engines, eliminating or drastically shrinking
+ * the flash. Connect-modal CSS gets the same treatment for symmetry. */
+try {
+  if (document.head) {
+    gwInjectDashBannersCss();
+    gwInjectConnectModalCss();
+  }
+} catch (e) { /* defensive — never block module evaluation on cosmetic CSS */ }
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', gwInitWalletModalOps);
 } else {

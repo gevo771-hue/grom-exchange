@@ -1194,324 +1194,6 @@ function gwExpandSendSwapDropdowns() {
   gwExpandAssetSelect('wmSwapTo');
 }
 
-/* Gate the Referral page behind authentication.
- *
- * Without this, anonymous visitors see hard-coded demo content (invite code
- * "GROM-G7K3Q9", 1,284 referred, $18,473 earned, etc.) and think it's their
- * own data. That's a credibility killer for a launching exchange — fake
- * numbers also look like a scam. We overlay a sign-in CTA on top of
- * `#page-referral` whenever there's no JWT in localStorage. As soon as the
- * user logs in (and a JWT appears) the overlay self-removes and the real
- * referral data path takes over.
- *
- * No edits to Cursor's index.html — fully JS/CSS injected. */
-function gwIsAuthed() {
-  try { return !!localStorage.getItem('grom_jwt'); } catch (e) { return false; }
-}
-
-function gwInjectReferralGateCss() {
-  if (document.getElementById('gw-ref-gate-css')) return;
-  const css = `
-    /* Pin the gate to the viewport so it's always centred on screen,
-     * regardless of how long the (blurred) referral page is underneath.
-     * Offsets account for Cursor's 60px top header + 232px left sidebar
-     * (which collapses on mobile via the @media query below). */
-    #gw-ref-gate {
-      position: fixed;
-      top: 60px; left: 232px; right: 0; bottom: 0;
-      z-index: 20;
-      display: flex; align-items: center; justify-content: center;
-      padding: 32px 20px;
-      background:
-        radial-gradient(80% 60% at 50% 40%, rgba(0,194,255,0.12), transparent 70%),
-        rgba(8,13,24,0.92);
-      backdrop-filter: blur(10px) saturate(140%);
-      -webkit-backdrop-filter: blur(10px) saturate(140%);
-      animation: gwRefGateFade .35s ease both;
-    }
-    @media (max-width: 900px) {
-      #gw-ref-gate { left: 0; top: 56px; padding: 16px; }
-    }
-    @keyframes gwRefGateFade { from { opacity: 0; } to { opacity: 1; } }
-    #gw-ref-gate .gw-rg-card {
-      max-width: 440px;
-      width: 100%;
-      padding: 28px 28px 24px;
-      border-radius: 18px;
-      background: linear-gradient(165deg, rgba(13,22,38,0.85) 0%, rgba(8,14,26,0.95) 100%);
-      border: 1px solid rgba(255,255,255,0.08);
-      box-shadow: 0 30px 60px -20px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03) inset;
-      text-align: center;
-      color: #e7eef8;
-    }
-    #gw-ref-gate .gw-rg-emo {
-      font-size: 40px;
-      line-height: 1;
-      margin-bottom: 12px;
-      filter: drop-shadow(0 6px 16px rgba(245,185,77,0.4));
-    }
-    #gw-ref-gate h2 {
-      margin: 0 0 8px;
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: -0.01em;
-      background: linear-gradient(180deg, #ffffff, #c7d8ec);
-      -webkit-background-clip: text;
-              background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    #gw-ref-gate p {
-      margin: 0 0 18px;
-      font-size: 13.5px;
-      line-height: 1.55;
-      color: #9bb3c7;
-    }
-    #gw-ref-gate ul {
-      list-style: none;
-      padding: 0;
-      margin: 0 0 22px;
-      display: flex; flex-direction: column; gap: 8px;
-      text-align: left;
-    }
-    #gw-ref-gate li {
-      display: flex; align-items: flex-start; gap: 10px;
-      font-size: 13px;
-      color: #cfdfee;
-      line-height: 1.45;
-    }
-    #gw-ref-gate li::before {
-      content: "✓";
-      color: #22c17c;
-      font-weight: 800;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-    #gw-ref-gate .gw-rg-actions {
-      display: flex; flex-direction: column; gap: 10px;
-    }
-    #gw-ref-gate .gw-rg-primary {
-      display: inline-flex; align-items: center; justify-content: center;
-      padding: 12px 18px;
-      border-radius: 12px;
-      border: 0;
-      background: linear-gradient(135deg, #00c2ff, #5d8eff);
-      color: #001624;
-      font-weight: 800;
-      font-size: 14px;
-      letter-spacing: .02em;
-      cursor: pointer;
-      box-shadow: 0 10px 26px -10px rgba(0,194,255,0.55);
-      transition: transform .2s, box-shadow .2s;
-    }
-    #gw-ref-gate .gw-rg-primary:hover { transform: translateY(-1px); box-shadow: 0 14px 30px -10px rgba(0,194,255,0.7); }
-    #gw-ref-gate .gw-rg-primary:active { transform: translateY(0); }
-    #gw-ref-gate .gw-rg-foot {
-      margin-top: 14px;
-      font-size: 11.5px;
-      color: #6b7a92;
-    }
-    /* Make sure page-referral is the positioning context */
-    #page-referral { position: relative; }
-    /* Hide the fake content underneath: cleaner than leaving demo numbers
-     * visible behind the blur, and avoids screenshots of "the leaked
-     * dashboard". Body class is toggled by gwApplyReferralGate. */
-    body.gw-ref-anon #page-referral > :not(#gw-ref-gate) {
-      filter: blur(8px);
-      pointer-events: none;
-      user-select: none;
-    }
-  `;
-  const style = document.createElement('style');
-  style.id = 'gw-ref-gate-css';
-  style.textContent = css;
-  document.head.appendChild(style);
-}
-
-function gwOpenSignIn() {
-  // Prefer Cursor's existing openConnectModal; fallback to clicking the
-  // "Войти / Регистрация" button in the top-right corner.
-  if (typeof window.openConnectModal === 'function') {
-    try { window.openConnectModal(); return; } catch (e) {}
-  }
-  const btn = Array.from(document.querySelectorAll('button, a')).find((el) => {
-    const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-    return /^(Войти|Sign in|Log in|Войти\s*\/\s*Регистрация)/i.test(t);
-  });
-  if (btn) btn.click();
-}
-
-/* Translations for the referral gate card. We don't push these into Cursor's
- * grom-i18n.js (parallel-edit rule) — instead we keep them local and pick a
- * language using the same `grom_lang` localStorage key that grom-i18n.js
- * uses. Supported langs match the i18n.js SUPPORTED list:
- *   ru · en · es · ar · zh · hi · tr  (fallback: en) */
-const GW_REF_GATE_TR = {
-  ru: {
-    title:  'Реферальная программа GROM',
-    intro:  'Зарегистрируйся, чтобы получить персональную реферальную ссылку и зарабатывать на каждой комиссии своих приглашённых — в USDT, каждый день.',
-    p1:     'До 50% от комиссии каждого приглашённого, навсегда',
-    p2:     'Выплаты ежедневно в 00:00 UTC, минимум — 1 USDT',
-    p3:     'Маркетинговые материалы: баннеры, видео, brand kit',
-    p4:     'Прозрачная статистика — клики, регистрации, KYC, первые сделки',
-    cta:    'Войти / Зарегистрироваться',
-    foot:   'Подключение через email, Google или Web3-кошелёк · 30 секунд',
-  },
-  en: {
-    title:  'GROM referral program',
-    intro:  'Sign up to claim your personal invite link and earn a share of every fee your invitees pay — paid in USDT, every day.',
-    p1:     'Up to 50% of each invitee’s fees, forever',
-    p2:     'Daily payouts at 00:00 UTC, 1 USDT minimum',
-    p3:     'Marketing kit: banners, videos, brand assets',
-    p4:     'Transparent funnel — clicks, sign-ups, KYC, first trade',
-    cta:    'Sign in / Sign up',
-    foot:   'Connect via email, Google or any Web3 wallet · 30 seconds',
-  },
-  es: {
-    title:  'Programa de referidos GROM',
-    intro:  'Regístrate para obtener tu enlace personal y ganar una parte de cada comisión que paguen tus invitados — en USDT, cada día.',
-    p1:     'Hasta 50 % de las comisiones de cada invitado, para siempre',
-    p2:     'Pagos diarios a las 00:00 UTC, mínimo 1 USDT',
-    p3:     'Kit de marketing: banners, vídeos, brand assets',
-    p4:     'Embudo transparente — clics, registros, KYC, primera operación',
-    cta:    'Iniciar sesión / Registrarse',
-    foot:   'Conecta con email, Google o cualquier cartera Web3 · 30 segundos',
-  },
-  ar: {
-    title:  'برنامج الإحالات في GROM',
-    intro:  'سجّل للحصول على رابط إحالة خاص بك واربح حصة من كل عمولة يدفعها مدعوّوك — بتسوية USDT يوميّة.',
-    p1:     'حتّى 50% من عمولات كل مدعوّ إلى الأبد',
-    p2:     'تسديد يومي عند 00:00 UTC، بحد أدنى 1 USDT',
-    p3:     'حزمة تسويق: لافتات، فيديوهات، أصول العلامة التجاريّة',
-    p4:     'إحصائيات شفّافة: النقرات، التسجيلات، KYC، أوّل صفقة',
-    cta:    'دخول / تسجيل',
-    foot:   'الاتصال عبر الإيميل، جوجل أو أيّ محفظة Web3 · 30 ثانية',
-  },
-  zh: {
-    title:  'GROM 推荐计划',
-    intro:  '注册后获取专属推荐链接，每天以 USDT 赚取被推荐者手续费的一部分。',
-    p1:     '永久最高可赚取每位被推荐者手续费的 50%',
-    p2:     '每日 00:00 UTC 结算，最低 1 USDT 起发',
-    p3:     '营销素材：Banner、视频、品牌资产包',
-    p4:     '透明的转化漏斗：点击、注册、KYC、首笔交易',
-    cta:    '登录 / 注册',
-    foot:   '以邮箱、Google 或任意 Web3 钱包连接·仅需 30 秒',
-  },
-  hi: {
-    title:  'GROM रेफरल प्रोग्राम',
-    intro:  'अपना व्यक्तिगत रेफरल लिंक पाने के लिए साइन अप करें और अपने अतिथियों की प्रत्येक फीस का हिस्सा USDT में रोज़ाना पाएं।',
-    p1:     'हर अतिथि की फीस का 50% तक, हमेशा के लिए',
-    p2:     '00:00 UTC पर रोज़ाना भुगतान, न्यूनतम 1 USDT',
-    p3:     'मार्केटिंग किट: बैनर, वीडियो, ब्रांड एसेट्स',
-    p4:     'पारदर्शी फनल: क्लिक, साइन अप, KYC, प्रथम ट्रेड',
-    cta:    'साइन इन / साइन अप',
-    foot:   'ईमेल, Google या Web3 वॉलेट से जुड़ें · 30 सेकंड',
-  },
-  tr: {
-    title:  'GROM tavsiye programı',
-    intro:  'Şahsi davet linkini almak ve davet ettiklerinin ödediği her komisyondan pay kazanmak için kaydol — her gün USDT olarak.',
-    p1:     'Her davetlinin komisyonlarının %50’sine kadar, sonsuza dek',
-    p2:     'Günlük ödeme 00:00 UTC, minimum 1 USDT',
-    p3:     'Pazarlama kiti: banner’lar, videolar, marka varlıkları',
-    p4:     'Şeffaf huni: tıklamalar, kayıtlar, KYC, ilk işlem',
-    cta:    'Giriş / Kayıt',
-    foot:   'E-posta, Google ya da herhangi bir Web3 cüzdanıyla bağla · 30 saniye',
-  },
-};
-
-function gwRefT() {
-  let lang = 'en';
-  try {
-    const stored = localStorage.getItem('grom_lang');
-    if (stored && GW_REF_GATE_TR[stored]) lang = stored;
-    else {
-      const nav = (navigator.language || '').toLowerCase();
-      for (const code of Object.keys(GW_REF_GATE_TR)) {
-        if (nav.indexOf(code) === 0) { lang = code; break; }
-      }
-    }
-  } catch (e) {}
-  return GW_REF_GATE_TR[lang] || GW_REF_GATE_TR.en;
-}
-
-function gwBuildReferralGate() {
-  const t = gwRefT();
-  const div = document.createElement('div');
-  div.id = 'gw-ref-gate';
-  div.innerHTML = `
-    <div class="gw-rg-card" role="dialog" aria-labelledby="gw-rg-title">
-      <div class="gw-rg-emo">🎁</div>
-      <h2 id="gw-rg-title">${t.title}</h2>
-      <p>${t.intro}</p>
-      <ul>
-        <li>${t.p1}</li>
-        <li>${t.p2}</li>
-        <li>${t.p3}</li>
-        <li>${t.p4}</li>
-      </ul>
-      <div class="gw-rg-actions">
-        <button type="button" class="gw-rg-primary" id="gw-rg-login">${t.cta}</button>
-      </div>
-      <div class="gw-rg-foot">${t.foot}</div>
-    </div>
-  `;
-  const btn = div.querySelector('#gw-rg-login');
-  if (btn) btn.addEventListener('click', (e) => { e.preventDefault(); gwOpenSignIn(); });
-  return div;
-}
-
-function gwApplyReferralGate() {
-  gwInjectReferralGateCss();
-  const page = document.getElementById('page-referral');
-  if (!page) return; // page not in DOM yet — observer below will retry
-  const authed = gwIsAuthed();
-  const existing = document.getElementById('gw-ref-gate');
-  if (authed) {
-    document.body.classList.remove('gw-ref-anon');
-    if (existing) existing.remove();
-    return;
-  }
-  document.body.classList.add('gw-ref-anon');
-  if (!existing) {
-    // First mount — gate sits OUTSIDE #page-referral so its position:fixed
-    // is relative to the viewport, not the (very tall) referral page.
-    document.body.appendChild(gwBuildReferralGate());
-  }
-}
-
-/* Re-render gate when user switches language so the copy follows the rest
- * of the UI. Hooks into Cursor's `gromRefreshI18nPages` (called by setLang
- * in grom-i18n.js) and falls back to the `storage` event for cross-tab. */
-function gwSetupReferralGateI18n() {
-  const refresh = () => {
-    const gate = document.getElementById('gw-ref-gate');
-    if (!gate) return;
-    const fresh = gwBuildReferralGate();
-    gate.replaceWith(fresh);
-  };
-  const prev = window.gromRefreshI18nPages;
-  window.gromRefreshI18nPages = function () {
-    try { if (typeof prev === 'function') prev.apply(this, arguments); } catch (_) {}
-    refresh();
-  };
-  window.addEventListener('storage', (e) => { if (e.key === 'grom_lang') refresh(); });
-}
-
-function gwSetupReferralGate() {
-  // Run now + on hash change + when localStorage changes (other tabs) + when
-  // Cursor's router switches pages (we listen to the body data-* observation).
-  gwApplyReferralGate();
-  gwSetupReferralGateI18n();
-  window.addEventListener('hashchange', gwApplyReferralGate);
-  window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt') gwApplyReferralGate(); });
-  // Re-check periodically the first 30 s after load — Cursor's auth flow
-  // sets grom_jwt asynchronously after OAuth callbacks.
-  let ticks = 0;
-  const id = setInterval(() => {
-    ticks++;
-    gwApplyReferralGate();
-    if (ticks >= 30) clearInterval(id);
-  }, 1000);
-}
 
 /* Floating Telegram contact button — pinned bottom-right on all pages, link
  * to https://t.me/grom_finence_hub. Used for support, investor inquiries,
@@ -1611,6 +1293,383 @@ function gwInjectConnectModalCss() {
   style.id = 'gw-connect-modal-fixups';
   style.textContent = css;
   document.head.appendChild(style);
+}
+
+/* =============================================================================
+ * AUTH GATE — pages that require sign-in
+ *
+ * User feedback (2026-06-22): don't show an inline overlay on the Referral
+ * page; instead, when an anonymous user tries to open a "private" page
+ * (Referrals · Wallet · History · Settings), open the existing Connect modal
+ * and send them back to the dashboard so they don't see stale demo content.
+ *
+ * Public pages (landing, dashboard, spot, futures, binary, markets,
+ * predictions, stocks) stay open for browsing so investors can audit the UX
+ * before signing up.
+ * ============================================================================ */
+const GW_GATED_PAGES = ['referral', 'wallet', 'history', 'settings'];
+
+function gwIsAuthed() {
+  try { return !!localStorage.getItem('grom_jwt'); } catch (e) { return false; }
+}
+
+function gwOpenSignIn() {
+  if (typeof window.openConnectModal === 'function') {
+    try { window.openConnectModal(); return; } catch (e) {}
+  }
+  // Fallback — click the visible "Sign in / Sign up" button.
+  const btn = Array.from(document.querySelectorAll('button, a')).find((el) => {
+    const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    return /^(Sign in|Log in|Войти|Войти\s*\/\s*Регистрация|Iniciar sesión|登录|Giriş|دخول)/i.test(t);
+  });
+  if (btn) btn.click();
+}
+
+function gwGateCurrentPage() {
+  if (gwIsAuthed()) return false;
+  const hash = (location.hash || '').replace(/^#/, '').split('?')[0];
+  if (!GW_GATED_PAGES.includes(hash)) return false;
+  // Switch route back to dashboard BEFORE opening the modal so when the user
+  // closes it they don't land on the gated page with stale data.
+  if (location.hash !== '#dashboard') history.replaceState(null, '', '#dashboard');
+  if (typeof window.show === 'function') { try { window.show('dashboard'); } catch (_) {} }
+  setTimeout(gwOpenSignIn, 80);
+  return true;
+}
+
+function gwSetupAuthGate() {
+  gwGateCurrentPage();
+  window.addEventListener('hashchange', gwGateCurrentPage);
+  // Intercept sidebar nav-item clicks while anonymous so the user gets the
+  // login flow on click, not a page flicker.
+  document.addEventListener('click', (e) => {
+    if (gwIsAuthed()) return;
+    const item = e.target.closest('aside.sidebar .nav-item[data-page]');
+    if (!item) return;
+    if (!GW_GATED_PAGES.includes(item.dataset.page)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    gwOpenSignIn();
+  }, true);
+  // Other tabs: re-evaluate when JWT changes.
+  window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt') gwGateCurrentPage(); });
+  // First 20 s: re-check (Privy OAuth callback writes JWT asynchronously).
+  let ticks = 0;
+  const id = setInterval(() => {
+    ticks++;
+    if (gwIsAuthed() || ticks >= 20) clearInterval(id);
+  }, 1000);
+}
+
+/* =============================================================================
+ * Hide widgets the user no longer wants on the live site:
+ *   • "New to GROM? · 90-second tour" sidebar card
+ *   • "Take the tour" quick-action button on the dashboard
+ *   • Any qa-grid button whose onclick references startTour
+ * Pure CSS — never touches Cursor's index.html. */
+function gwInjectMiscOverridesCss() {
+  if (document.getElementById('gw-misc-overrides')) return;
+  const css = `
+    aside.sidebar .sidebar-footer { display: none !important; }
+    .qa-grid .qa[onclick*="startTour"] { display: none !important; }
+  `;
+  const style = document.createElement('style');
+  style.id = 'gw-misc-overrides';
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+
+/* =============================================================================
+ * DASHBOARD SWAP PANEL — premium glass card injected into #page-dashboard.
+ *
+ * Reuses backend `/api/swap/convert/quote` + `/api/swap/convert/accept`
+ * (already powering the wallet modal swap). When an anonymous user clicks
+ * "Swap", the auth-gate kicks in and opens the Connect modal.
+ *
+ * Local DOM IDs are prefixed `gwds-` to never collide with the wallet
+ * modal's `wmSwap*` inputs. */
+const GW_DS_ASSETS = [
+  { sym: 'USDT', name: 'Tether' },
+  { sym: 'BTC',  name: 'Bitcoin' },
+  { sym: 'ETH',  name: 'Ethereum' },
+  { sym: 'USDC', name: 'USD Coin' },
+  { sym: 'SOL',  name: 'Solana' },
+  { sym: 'BNB',  name: 'BNB' },
+  { sym: 'XRP',  name: 'Ripple' },
+  { sym: 'TRX',  name: 'Tron' },
+  { sym: 'DOGE', name: 'Dogecoin' },
+  { sym: 'ADA',  name: 'Cardano' },
+  { sym: 'AVAX', name: 'Avalanche' },
+];
+
+const GW_DS_TR = {
+  ru: { h: 'Мгновенный своп', sub: 'Обмен между активами без комиссий сети. Расчёт за секунды через Binance Convert.', from: 'Отдаёшь', to: 'Получаешь', est: 'Введи сумму, чтобы увидеть курс.', cta: 'Сделать своп', getting: 'Запрос курса…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
+  en: { h: 'Instant swap',     sub: 'Swap any two assets, zero network fees, settles in seconds via Binance Convert.', from: 'You pay',     to: 'You get',      est: 'Enter an amount to see the live rate.', cta: 'Swap now',  getting: 'Fetching rate…',  ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
+  es: { h: 'Swap instantáneo', sub: 'Intercambia dos activos, sin comisiones de red, liquida en segundos vía Binance Convert.', from: 'Pagas', to: 'Recibes', est: 'Introduce un importe para ver el tipo en vivo.', cta: 'Hacer swap', getting: 'Obteniendo tipo…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
+  ar: { h: 'مبادلة فوريّة', sub: 'بدّل بين أي أصلين دون رسوم شبكة، تتم التسوية خلال ثوانٍ عبر Binance Convert.', from: 'تدفع', to: 'تستلم', est: 'أدخل المبلغ لرؤية السعر.', cta: 'مبادلة', getting: 'جلب السعر…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
+  zh: { h: '极速兑换',        sub: '任意两种资产秒级兑换，零网络手续费，通过 Binance Convert 结算。', from: '你支付', to: '你得到', est: '输入金额以查看实时汇率。', cta: '立即兑换', getting: '获取报价…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
+  hi: { h: 'इंस्टेंट स्वैप',     sub: 'किन्हीं दो एसेट्स में स्वैप, शून्य नेटवर्क फी — Binance Convert के ज़रिए।', from: 'आप देते हैं', to: 'आप पाते हैं', est: 'दर देखने के लिए राशि दर्ज करें।', cta: 'अभी स्वैप करें', getting: 'दर ली जा रही है…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
+  tr: { h: 'Anlık swap',       sub: 'İki varlık arasında sıfır ağ ücretiyle saniyeler içinde takas — Binance Convert üzerinden.', from: 'Verdiğin', to: 'Aldığın', est: 'Canlı kuru görmek için bir tutar gir.', cta: 'Swap yap', getting: 'Kur çekiliyor…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
+};
+
+function gwDsLang() {
+  let lang = 'en';
+  try {
+    const stored = localStorage.getItem('grom_lang');
+    if (stored && GW_DS_TR[stored]) lang = stored;
+    else {
+      const nav = (navigator.language || '').toLowerCase();
+      for (const code of Object.keys(GW_DS_TR)) if (nav.indexOf(code) === 0) { lang = code; break; }
+    }
+  } catch (e) {}
+  return GW_DS_TR[lang] || GW_DS_TR.en;
+}
+
+function gwInjectDashSwapCss() {
+  if (document.getElementById('gw-ds-css')) return;
+  const css = `
+    .gw-ds-wrap { margin: 12px 0 4px; }
+    .gw-ds-card {
+      position: relative;
+      isolation: isolate;
+      padding: 22px 22px 20px;
+      border-radius: 22px;
+      background:
+        radial-gradient(120% 140% at 0% 0%, rgba(0,194,255,0.10), transparent 55%),
+        linear-gradient(155deg, rgba(13,22,38,0.72) 0%, rgba(8,14,26,0.92) 100%);
+      border: 1px solid rgba(255,255,255,0.07);
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.06) inset,
+        0 14px 38px -18px rgba(0,0,0,0.55);
+      backdrop-filter: blur(14px) saturate(150%);
+      -webkit-backdrop-filter: blur(14px) saturate(150%);
+      overflow: hidden;
+      color: #e7eef8;
+    }
+    .gw-ds-card::before {
+      content: ""; position: absolute; inset: -2px;
+      padding: 1.5px; border-radius: inherit;
+      background: conic-gradient(from 0deg, #00c2ff 0%, transparent 25%, #6e8dff 50%, transparent 75%, #00c2ff 100%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude;
+      opacity: 0.6;
+      animation: gwBnSpin 16s linear infinite; /* shares keyframes with banners */
+      pointer-events: none; z-index: 0;
+    }
+    .gw-ds-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; position: relative; z-index: 1; margin-bottom: 14px; }
+    .gw-ds-title { font-size: 18px; font-weight: 800; letter-spacing: -0.01em;
+      background: linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin: 0 0 4px; }
+    .gw-ds-sub { font-size: 12.5px; color: #98a8c0; line-height: 1.5; margin: 0; max-width: 520px; }
+    .gw-ds-badge { background: rgba(0,194,255,0.18); color: #3ac2ff; padding: 3px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .14em; align-self: center; }
+
+    .gw-ds-form { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr; gap: 8px; }
+    .gw-ds-row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center;
+      padding: 14px; border-radius: 14px;
+      background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); }
+    .gw-ds-row .lbl { font-size: 11px; color: #6b7a92; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; grid-column: 1 / -1; margin-bottom: -4px; }
+    .gw-ds-row select, .gw-ds-row input {
+      background: rgba(255,255,255,0.06); color: #e7eef8;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; padding: 10px 12px;
+      font-family: inherit; font-size: 15px; font-weight: 700;
+      outline: none; -webkit-appearance: none; appearance: none;
+    }
+    .gw-ds-row select { background-image: linear-gradient(45deg, transparent 50%, #8aa0bc 50%), linear-gradient(135deg, #8aa0bc 50%, transparent 50%); background-position: calc(100% - 14px) center, calc(100% - 9px) center; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 28px; }
+    .gw-ds-row input { text-align: right; }
+    .gw-ds-row input:focus, .gw-ds-row select:focus { border-color: rgba(0,194,255,0.5); }
+
+    .gw-ds-swap-icon { display: flex; justify-content: center; margin: -2px 0; }
+    .gw-ds-swap-icon button {
+      width: 34px; height: 34px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 50%; border: 1px solid rgba(255,255,255,0.1);
+      background: linear-gradient(135deg, rgba(0,194,255,0.18), rgba(110,141,255,0.10));
+      color: #3ac2ff; cursor: pointer; transition: transform .2s, background .2s;
+      font-size: 16px;
+    }
+    .gw-ds-swap-icon button:hover { transform: rotate(180deg); background: linear-gradient(135deg, rgba(0,194,255,0.30), rgba(110,141,255,0.18)); }
+
+    .gw-ds-rate { font-size: 12.5px; color: #98a8c0; padding: 4px 4px 0; min-height: 18px; }
+    .gw-ds-rate.warn { color: #f5b94d; }
+    .gw-ds-rate.err  { color: #f87171; }
+
+    .gw-ds-cta {
+      margin-top: 10px;
+      width: 100%;
+      padding: 14px 18px;
+      border-radius: 14px; border: 0;
+      background: linear-gradient(135deg, #00c2ff, #5d8eff);
+      color: #001624; font-weight: 800; font-size: 14.5px; letter-spacing: .02em;
+      cursor: pointer;
+      box-shadow: 0 10px 26px -10px rgba(0,194,255,0.55);
+      transition: transform .2s, box-shadow .2s, opacity .2s;
+    }
+    .gw-ds-cta:hover { transform: translateY(-1px); box-shadow: 0 14px 32px -10px rgba(0,194,255,0.75); }
+    .gw-ds-cta:active { transform: translateY(0); }
+    .gw-ds-cta[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+    @media (max-width: 600px) {
+      .gw-ds-row { grid-template-columns: 100px 1fr; padding: 12px; }
+      .gw-ds-row select, .gw-ds-row input { padding: 9px 10px; font-size: 14px; }
+    }
+  `;
+  const style = document.createElement('style');
+  style.id = 'gw-ds-css';
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+
+function gwDsBuildPanel() {
+  const t = gwDsLang();
+  const optionsFor = (selectedSym) => GW_DS_ASSETS
+    .map((a) => `<option value="${a.sym}" ${a.sym === selectedSym ? 'selected' : ''}>${a.sym} · ${a.name}</option>`)
+    .join('');
+  const wrap = document.createElement('div');
+  wrap.className = 'gw-ds-wrap';
+  wrap.innerHTML = `
+    <div class="gw-ds-card" id="gwDsCard">
+      <div class="gw-ds-head">
+        <div>
+          <h3 class="gw-ds-title">⚡ ${t.h}</h3>
+          <p class="gw-ds-sub">${t.sub}</p>
+        </div>
+        <span class="gw-ds-badge">LIVE</span>
+      </div>
+      <div class="gw-ds-form">
+        <div class="gw-ds-row">
+          <div class="lbl">${t.from}</div>
+          <select id="gwDsFrom">${optionsFor('USDT')}</select>
+          <input id="gwDsAmt" type="number" min="0" step="any" placeholder="0.00" />
+        </div>
+        <div class="gw-ds-swap-icon">
+          <button type="button" id="gwDsFlip" aria-label="Flip">⇅</button>
+        </div>
+        <div class="gw-ds-row">
+          <div class="lbl">${t.to}</div>
+          <select id="gwDsTo">${optionsFor('BTC')}</select>
+          <input id="gwDsOut" type="text" readonly placeholder="0.00" />
+        </div>
+        <div class="gw-ds-rate" id="gwDsRate">${t.est}</div>
+        <button type="button" class="gw-ds-cta" id="gwDsCta">${t.cta} →</button>
+      </div>
+    </div>
+  `;
+  return wrap;
+}
+
+let gwDsQuoteAbort = null;
+let gwDsQuoteTimer = null;
+async function gwDsRefreshRate() {
+  const t = gwDsLang();
+  const rateEl = document.getElementById('gwDsRate');
+  const outEl  = document.getElementById('gwDsOut');
+  if (!rateEl || !outEl) return;
+  const from = document.getElementById('gwDsFrom')?.value || 'USDT';
+  const to   = document.getElementById('gwDsTo')?.value   || 'BTC';
+  const amt  = Number(document.getElementById('gwDsAmt')?.value || 0);
+  rateEl.className = 'gw-ds-rate';
+  if (amt <= 0) { rateEl.textContent = t.est; outEl.value = ''; return; }
+  if (from === to) { rateEl.className = 'gw-ds-rate warn'; rateEl.textContent = '⚠ ' + (from === to ? 'Different assets required' : ''); outEl.value = ''; return; }
+  rateEl.textContent = t.getting;
+  try {
+    if (gwDsQuoteAbort) gwDsQuoteAbort.abort();
+    gwDsQuoteAbort = new AbortController();
+    const jwt = localStorage.getItem('grom_jwt');
+    const headers = { 'Content-Type': 'application/json' };
+    if (jwt) headers.Authorization = `Bearer ${jwt}`;
+    const r = await fetch('/api/swap/convert/quote', {
+      method: 'POST', headers, signal: gwDsQuoteAbort.signal,
+      body: JSON.stringify({ from, to, fromAmount: amt }),
+    });
+    const q = await r.json();
+    if (q.error) { rateEl.className = 'gw-ds-rate warn'; rateEl.textContent = q.error; outEl.value = ''; return; }
+    outEl.value = q.toAmount;
+    rateEl.textContent = t.ratemsg
+      .replace('{from}', from)
+      .replace('{rate}', Number(q.ratio).toFixed(6))
+      .replace('{to}', to)
+      .replace('{out}', q.toAmount);
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    rateEl.className = 'gw-ds-rate err';
+    rateEl.textContent = 'Rate unavailable';
+  }
+}
+
+async function gwDsSubmit() {
+  if (!gwIsAuthed()) { gwOpenSignIn(); return; }
+  // Re-use the wallet modal's swap submitter by mirroring values into its
+  // inputs (it's already battle-tested + handles errors uniformly).
+  const map = { gwDsFrom: 'wmSwapFrom', gwDsTo: 'wmSwapTo', gwDsAmt: 'wmSwapAmt' };
+  Object.entries(map).forEach(([from, to]) => {
+    const src = document.getElementById(from);
+    const dst = document.getElementById(to);
+    if (src && dst) dst.value = src.value;
+  });
+  if (typeof window.gwSubmitSwap === 'function') {
+    try { await window.gwSubmitSwap(); } catch (e) { console.warn('[dashSwap]', e); }
+  } else if (typeof window.submitSwap === 'function') {
+    try { await window.submitSwap(); } catch (e) { console.warn('[dashSwap]', e); }
+  }
+  // After submit, refresh dash rate
+  setTimeout(gwDsRefreshRate, 600);
+}
+
+function gwInjectDashSwapPanel() {
+  gwInjectDashSwapCss();
+  const page = document.getElementById('page-dashboard');
+  if (!page) return false;
+  if (page.querySelector('.gw-ds-wrap')) return true; // already mounted
+  // Insert AFTER the dash-banners section (or stats-grid) but before lower
+  // content, so it's prominent above-the-fold.
+  const banners = page.querySelector('.dash-banners-wrap, .dash-banners')?.closest('.dash-banners-wrap') || page.querySelector('.dash-banners-wrap');
+  const stats   = page.querySelector('.stats-grid');
+  const panel = gwDsBuildPanel();
+  if (banners && banners.parentNode === page) banners.after(panel);
+  else if (stats && stats.parentNode === page) stats.after(panel);
+  else page.prepend(panel);
+  // Wire events
+  const flipBtn = document.getElementById('gwDsFlip');
+  if (flipBtn) flipBtn.addEventListener('click', () => {
+    const a = document.getElementById('gwDsFrom');
+    const b = document.getElementById('gwDsTo');
+    if (!a || !b) return;
+    const tmp = a.value; a.value = b.value; b.value = tmp;
+    gwDsRefreshRate();
+  });
+  ['gwDsFrom', 'gwDsTo', 'gwDsAmt'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', () => {
+      clearTimeout(gwDsQuoteTimer);
+      gwDsQuoteTimer = setTimeout(gwDsRefreshRate, 250);
+    });
+    el.addEventListener('input', () => {
+      clearTimeout(gwDsQuoteTimer);
+      gwDsQuoteTimer = setTimeout(gwDsRefreshRate, 400);
+    });
+  });
+  const cta = document.getElementById('gwDsCta');
+  if (cta) cta.addEventListener('click', gwDsSubmit);
+  return true;
+}
+
+function gwSetupDashSwap() {
+  if (gwInjectDashSwapPanel()) return;
+  let tries = 0;
+  const id = setInterval(() => {
+    tries++;
+    if (gwInjectDashSwapPanel() || tries >= 30) clearInterval(id);
+  }, 1000);
+  // Re-render on language change
+  const prev = window.gromRefreshI18nPages;
+  window.gromRefreshI18nPages = function () {
+    try { if (typeof prev === 'function') prev.apply(this, arguments); } catch (_) {}
+    const card = document.querySelector('.gw-ds-wrap');
+    if (card) { card.remove(); gwInjectDashSwapPanel(); }
+  };
 }
 
 /* ---------------------------------------------------------------------------
@@ -1980,7 +2039,9 @@ try {
     }
     gwInjectConnectModalCss();
     gwInjectTelegramFab();
-    gwSetupReferralGate();
+    gwInjectMiscOverridesCss();
+    gwSetupAuthGate();
+    gwSetupDashSwap();
   }
 } catch (e) { /* defensive — never block module evaluation on cosmetic CSS */ }
 

@@ -288,8 +288,29 @@ async function connectWithProvider(provider, label) {
   if (!accounts?.length) throw new Error('User rejected');
   provider.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
   provider.on?.('chainChanged', (hex) => { currentChainId = parseInt(hex, 16); });
-  await authenticateWithSIWE(accounts[0], provider);
+  try {
+    await authenticateWithSIWE(accounts[0], provider);
+  } catch (err) {
+    gwSiweFailToast(err);
+    throw err;
+  }
   return accounts[0];
+}
+
+/* Show a friendly, actionable toast when SIWE fails. Called by all wallet
+ * connectors so a silent signature-reject never leaves the user staring at
+ * "Sign in to view balance" with no explanation. */
+function gwSiweFailToast(err) {
+  const rawMsg = String(err?.message || err || '').toLowerCase();
+  const rejected =
+    rawMsg.includes('reject') ||
+    rawMsg.includes('cancel') ||
+    rawMsg.includes('denied') ||
+    err?.code === 4001 || err?.code === -32000;
+  const msg = rejected
+    ? 'Sign the message in your wallet to finish signing in.'
+    : 'Sign-in failed: ' + (err?.message || 'signature not verified');
+  try { gwToast(msg, rejected ? 'warn' : 'error'); } catch (_) {}
 }
 
 /* ----- 1. MetaMask ----- */
@@ -362,7 +383,12 @@ async function connectCoinbase() {
   const provider = sdk.makeWeb3Provider({ options: 'all' });
   const accounts = await provider.request({ method: 'eth_requestAccounts' });
   provider.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-  await authenticateWithSIWE(accounts[0], provider);
+  try {
+    await authenticateWithSIWE(accounts[0], provider);
+  } catch (err) {
+    gwSiweFailToast(err);
+    throw err;
+  }
   return accounts[0];
 }
 
@@ -407,7 +433,17 @@ async function connectWC() {
   // Sign in with backend so /api/wallet/* returns 200 instead of 401 and the
   // balance + deposit address actually load. Required for Trust Wallet, Binance
   // Web3 Wallet, MetaMask Mobile, and every other WalletConnect-compatible app.
-  await authenticateWithSIWE(accs[0], p);
+  //
+  // If SIWE fails (user rejects the signature prompt in the wallet, or the
+  // wallet returns before signing) we surface a visible toast rather than
+  // failing silently — otherwise users see "Sign in to view balance" on the
+  // wallet page and can't figure out why.
+  try {
+    await authenticateWithSIWE(accs[0], p);
+  } catch (err) {
+    gwSiweFailToast(err);
+    throw err;
+  }
   return accs[0];
 }
 
@@ -1700,19 +1736,50 @@ function gwInjectDashSwapPanel() {
 }
 
 function gwSetupDashSwap() {
-  if (gwInjectDashSwapPanel()) return;
-  let tries = 0;
-  const id = setInterval(() => {
-    tries++;
-    if (gwInjectDashSwapPanel() || tries >= 30) clearInterval(id);
-  }, 1000);
-  // Re-render on language change
+  if (!gwInjectDashSwapPanel()) {
+    let tries = 0;
+    const id = setInterval(() => {
+      tries++;
+      if (gwInjectDashSwapPanel() || tries >= 30) clearInterval(id);
+    }, 1000);
+  }
+
+  /* Re-render whenever the user switches language. We watch three signals so
+   * we don't miss any depending on how Cursor triggers the change:
+   *   1. gromRefreshI18nPages hook (called by setLang in grom-i18n.js)
+   *   2. MutationObserver on <html lang="…"> (setLang also sets that attr)
+   *   3. `storage` event for `grom_lang` (cross-tab language change)
+   * All three end up calling the same re-render, and the panel remembers the
+   * user's current inputs (from/to/amount) via the DOM before wiping. */
+  const rerenderPanel = () => {
+    const wrap = document.querySelector('.gw-ds-wrap');
+    if (!wrap) return;
+    const from = document.getElementById('gwDsFrom')?.value;
+    const to   = document.getElementById('gwDsTo')?.value;
+    const amt  = document.getElementById('gwDsAmt')?.value;
+    wrap.remove();
+    gwInjectDashSwapPanel();
+    if (from) { const el = document.getElementById('gwDsFrom'); if (el) el.value = from; }
+    if (to)   { const el = document.getElementById('gwDsTo');   if (el) el.value = to; }
+    if (amt)  { const el = document.getElementById('gwDsAmt');  if (el) el.value = amt; }
+    if (amt) gwDsRefreshRate();
+  };
+
   const prev = window.gromRefreshI18nPages;
   window.gromRefreshI18nPages = function () {
     try { if (typeof prev === 'function') prev.apply(this, arguments); } catch (_) {}
-    const card = document.querySelector('.gw-ds-wrap');
-    if (card) { card.remove(); gwInjectDashSwapPanel(); }
+    rerenderPanel();
   };
+
+  // Belt-and-suspenders: catch <html lang="…"> mutations too.
+  try {
+    const obs = new MutationObserver((muts) => {
+      for (const m of muts) if (m.attributeName === 'lang') { rerenderPanel(); break; }
+    });
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+  } catch (_) {}
+
+  window.addEventListener('storage', (e) => { if (e.key === 'grom_lang') rerenderPanel(); });
 }
 
 /* ---------------------------------------------------------------------------

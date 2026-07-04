@@ -82,6 +82,19 @@ function updateChip(addr) {
   }
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
   if (typeof window.toast === 'function' && addr) window.toast('Wallet connected · ' + short, 'success');
+  // Broadcast address-known event so anything that renders on the connected
+  // address (e.g. the on-chain balance card on the Wallet page) refreshes
+  // immediately — no need to wait for SIWE. If SIWE later completes, the
+  // JWT-based custodial section updates through the existing hydrate hooks.
+  try {
+    if (addr) {
+      document.dispatchEvent(new CustomEvent('grom:wallet-connected', { detail: { address: addr } }));
+      try { localStorage.setItem('grom_wallet_label', addr); } catch (_) {}
+    } else {
+      document.dispatchEvent(new CustomEvent('grom:wallet-disconnected'));
+      try { localStorage.removeItem('grom_wallet_label'); } catch (_) {}
+    }
+  } catch (_) {}
 }
 
 function failToast(e) {
@@ -1508,19 +1521,33 @@ function gwInjectOnchainCardCss() {
 }
 
 function gwOcConnectedAddress() {
-  try {
-    const chip = document.getElementById('walletChipAddr')?.textContent?.trim();
-    if (chip && /^0x[a-fA-F0-9]{40}$/.test(chip)) return chip;
-  } catch (_) {}
-  try {
-    const stored = localStorage.getItem('grom_wallet_label');
-    if (stored && /^0x[a-fA-F0-9]{40}$/.test(stored)) return stored;
-  } catch (_) {}
+  const isAddr = (a) => typeof a === 'string' && /^0x[a-fA-F0-9]{40}$/.test(a.trim());
+  // 1. Live module state (set by updateChip on every connect / accountsChanged)
   try {
     if (window.gromWallet?.state) {
       const s = window.gromWallet.state();
-      if (s?.account && /^0x[a-fA-F0-9]{40}$/.test(s.account)) return s.account;
+      if (isAddr(s?.account)) return s.account.trim();
     }
+  } catch (_) {}
+  // 2. Injected wallet direct
+  try {
+    if (isAddr(window.ethereum?.selectedAddress)) return window.ethereum.selectedAddress.trim();
+  } catch (_) {}
+  // 3. WalletConnect provider (already connected but SIWE not signed yet)
+  try {
+    if (window.gromWallet?.wcProvider?.accounts?.[0] && isAddr(window.gromWallet.wcProvider.accounts[0])) {
+      return window.gromWallet.wcProvider.accounts[0].trim();
+    }
+  } catch (_) {}
+  // 4. Wallet chip in the top bar (Cursor's Sign-in / Sign-up chip after connect)
+  try {
+    const chip = document.getElementById('walletChipAddr')?.textContent?.trim();
+    if (isAddr(chip)) return chip;
+  } catch (_) {}
+  // 5. Persistent label from prior session
+  try {
+    const stored = localStorage.getItem('grom_wallet_label');
+    if (isAddr(stored)) return stored.trim();
   } catch (_) {}
   return null;
 }
@@ -1636,6 +1663,7 @@ function gwSetupOnchainCard() {
   window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt' || e.key === 'grom_wallet_label') tryRender(); });
   // Re-render on wallet-connect events fired by our own connectors.
   document.addEventListener('grom:wallet-connected', tryRender);
+  document.addEventListener('grom:wallet-disconnected', tryRender);
   // Also mount the card whenever page-wallet appears (Cursor's SPA router).
   const bodyObs = new MutationObserver(() => tryRender());
   bodyObs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });

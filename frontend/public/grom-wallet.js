@@ -1691,10 +1691,45 @@ function gwIsAuthed() {
 }
 
 function gwOpenSignIn() {
+  // Case 1 — wallet already connected (WC pairing done) but JWT missing
+  // (user cancelled SIWE prompt). Re-trigger SIWE straight away instead of
+  // opening the Connect modal. Cursor's openConnectModal shortcut in this
+  // state falls into openWalletModal('deposit'), which is why Wallet / Referral
+  // clicks were popping a Deposit modal.
+  const addr = (function () {
+    try { if (window.gromWallet?.state?.().account) return window.gromWallet.state().account; } catch (_) {}
+    try { if (window.ethereum?.selectedAddress) return window.ethereum.selectedAddress; } catch (_) {}
+    return null;
+  })();
+  const authed = (function () {
+    try { return !!localStorage.getItem('grom_jwt'); } catch (e) { return false; }
+  })();
+  if (addr && !authed) {
+    // Prefer whatever provider we already have wired up (WC or window.ethereum).
+    let provider = window.ethereum;
+    try { if (window.gromWallet?.wcProvider?.accounts?.[0]) provider = window.gromWallet.wcProvider; } catch (_) {}
+    if (provider) {
+      // Fire and forget — SIWE handler shows its own toast on reject.
+      (async () => {
+        try { await window.gromWallet?.signSiweAndVerify?.(addr, provider); } catch (_) {}
+      })();
+      return;
+    }
+  }
+
+  // Case 2 — no wallet, no JWT. Open Cursor's Connect modal DIRECTLY (skip
+  // Cursor's openConnectModal wrapper — that wrapper redirects to Deposit
+  // when GROM_CONN.connected is true, which happens if a WC session
+  // survived from a previous visit but the JWT expired).
+  const modal = document.getElementById('connectModal');
+  if (modal) {
+    modal.classList.add('open');
+    return;
+  }
+  // Fallbacks — Cursor's helper, then the visible Sign-in button.
   if (typeof window.openConnectModal === 'function') {
     try { window.openConnectModal(); return; } catch (e) {}
   }
-  // Fallback — click the visible "Sign in / Sign up" button.
   const btn = Array.from(document.querySelectorAll('button, a')).find((el) => {
     const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
     return /^(Sign in|Log in|Войти|Войти\s*\/\s*Регистрация|Iniciar sesión|登录|Giriş|دخول)/i.test(t);
@@ -1750,6 +1785,32 @@ function gwInjectMiscOverridesCss() {
   const css = `
     aside.sidebar .sidebar-footer { display: none !important; }
     .qa-grid .qa[onclick*="startTour"] { display: none !important; }
+    /* Mobile deposit modal: full-height + safe scroll + safe-area padding so
+     * the "Deposit" title never sits under the iOS status bar / notch. */
+    @media (max-width: 700px) {
+      .wm-overlay .wm {
+        max-height: 100vh !important;
+        max-height: 100dvh !important;
+        height: 100dvh !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
+        padding-top: max(env(safe-area-inset-top, 0px), 8px) !important;
+        padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px) !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+      /* The Continue button sits at the bottom of the modal — reserve room
+       * so the last coin row isn't hidden under it. */
+      .wm-overlay .dep-flow { padding-bottom: 80px !important; }
+      .wm-overlay .dep-continue-btn,
+      .wm-overlay button[onclick*="gromDepGoNetwork"],
+      .wm-overlay button[onclick*="gromDepGoAddress"] {
+        position: sticky !important;
+        bottom: max(env(safe-area-inset-bottom, 0px), 12px) !important;
+        z-index: 20 !important;
+        margin: 12px 0 0 !important;
+      }
+    }
   `;
   const style = document.createElement('style');
   style.id = 'gw-misc-overrides';
@@ -2510,8 +2571,10 @@ window.gromWallet = {
   connectOkx, connectCoinbase, connectWC,
   connectEmail, gromWalletConnect,
   disconnect, signSiwe,
+  signSiweAndVerify: authenticateWithSIWE,
   fetchOnchainBalances: window.gromFetchOnchainBalances,
   state: () => ({ account: currentAccount, chainId: currentChainId }),
+  get wcProvider() { return wcProvider; },
   networks: GROM_NETWORKS,
   assetNets: GROM_ASSET_NETS,
 };

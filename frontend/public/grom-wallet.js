@@ -1363,6 +1363,57 @@ function gwInjectTelegramFab() {
  * duplicate. Injected unconditionally (the cn-modal lives in Cursor's
  * index.html and is unaffected by his deposit-UI gating). Safe under
  * Cursor's parallel edits — this is a single CSS rule scoped to .cn-list. */
+/* Auto-advance Cursor's deposit flow on coin / network tap.
+ *
+ * The Binance-style 5-screen deposit UI (Cursor commit d19f86c) has explicit
+ * Continue buttons between steps. On mobile that means: tap coin → tap
+ * Continue → tap network → tap Continue → tap address. Four taps to see one
+ * address. User feedback (2026-07-04): "нажимаю на монету — сразу должно
+ * кидать на кошелек". We keep his HTML/CSS/state functions untouched and
+ * just fire the "next step" transition synthetically after each selection
+ * click. Popular coin chips already auto-advance; this extends the same
+ * behavior to the full coin list and the network list. */
+function gwWireDepositAutoContinue() {
+  const pane = document.querySelector('#walletModal .dep-flow');
+  if (!pane || pane.dataset.gwAutoContinue) return false;
+  pane.dataset.gwAutoContinue = '1';
+  pane.addEventListener('click', (e) => {
+    // Coin list row (dep-pop chips already auto-advance in Cursor's own
+    // handler — we skip those to avoid firing gromDepGoNetwork twice).
+    const coinRow = e.target.closest('.dep-coin[data-coin]');
+    if (coinRow && !coinRow.classList.contains('dep-pop')) {
+      setTimeout(() => {
+        try { if (typeof window.gromDepGoNetwork === 'function') window.gromDepGoNetwork(); } catch (_) {}
+      }, 0);
+      return;
+    }
+    // Network row → jump straight to the address screen (skips the custody
+    // "mode" step, which for testing/paper-swap is a formality — the user
+    // just wants their deposit address).
+    const netRow = e.target.closest('.dep-net[data-net]');
+    if (netRow) {
+      setTimeout(() => {
+        try {
+          if (typeof window.gromDepGoAddress === 'function') window.gromDepGoAddress();
+          else if (typeof window.gromDepGoCustody === 'function') window.gromDepGoCustody();
+        } catch (_) {}
+      }, 0);
+    }
+  });
+  return true;
+}
+
+// Wire when modal appears (MutationObserver on wm-overlay display), and also
+// try periodically for the first 20s in case Cursor mounts .dep-flow lazily.
+function gwSetupDepositAutoContinue() {
+  if (gwWireDepositAutoContinue()) return;
+  let tries = 0;
+  const id = setInterval(() => {
+    tries++;
+    if (gwWireDepositAutoContinue() || tries >= 20) clearInterval(id);
+  }, 1000);
+}
+
 function gwInjectConnectModalCss() {
   if (document.getElementById('gw-connect-modal-fixups')) return;
   const css = `
@@ -2152,6 +2203,7 @@ try {
     gwInjectMiscOverridesCss();
     gwSetupAuthGate();
     gwSetupDashSwap();
+    gwSetupDepositAutoContinue();
   }
 } catch (e) { /* defensive — never block module evaluation on cosmetic CSS */ }
 

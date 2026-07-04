@@ -21,20 +21,22 @@ import { EthereumProvider } from 'https://esm.sh/@walletconnect/ethereum-provide
  * url ДОЛЖЕН совпадать с реальным доменом (иначе «Недійсний домен»).
  * Нормализуем www → apex и фиксируем production origin. */
 function walletAppOrigin() {
-  const host = (location.hostname || '').replace(/^www\./i, '');
+  const host = (location.hostname || '').replace(/^www\./i, '').toLowerCase();
   if (host === 'grom.exchange') return 'https://grom.exchange';
   if (location.protocol === 'http:' || location.protocol === 'https:') {
     return location.protocol + '//' + host + (location.port ? ':' + location.port : '');
   }
   return 'https://grom.exchange';
 }
-const WALLET_APP_ORIGIN = walletAppOrigin();
-const METADATA = {
-  name: 'GROM',
-  description: 'Trade spot, binary options, and futures on GROM.',
-  url: WALLET_APP_ORIGIN,
-  icons: [WALLET_APP_ORIGIN + '/assets/grom-brand-mark-clear.png']
-};
+function walletMetadata() {
+  const origin = walletAppOrigin();
+  return {
+    name: 'GROM',
+    description: 'Trade spot, binary options, and futures on GROM.',
+    url: origin,
+    icons: [origin + '/assets/grom-brand-mark-clear.png']
+  };
+}
 
 /* ----- chains (Arbitrum по умолчанию, остальные как optional) ----- */
 const CHAINS = {
@@ -319,7 +321,7 @@ async function connectCoinbase() {
   }
   // Fallback — Coinbase Wallet SDK (QR / universal link)
   const { CoinbaseWalletSDK } = await import('https://esm.sh/@coinbase/wallet-sdk@4.0.0');
-  const sdk = new CoinbaseWalletSDK({ appName: 'GROM Exchange', appLogoUrl: METADATA.icons[0] });
+  const sdk = new CoinbaseWalletSDK({ appName: 'GROM Exchange', appLogoUrl: walletMetadata().icons[0] });
   const provider = sdk.makeWeb3Provider({ options: 'all' });
   const accounts = await provider.request({ method: 'eth_requestAccounts' });
   provider.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
@@ -338,7 +340,7 @@ async function ensureWC() {
     chains: CHAINS.required,
     optionalChains: CHAINS.optional,
     showQrModal: true,
-    metadata: METADATA,
+    metadata: walletMetadata(),
     qrModalOptions: {
       themeMode: 'dark',
       themeVariables: {

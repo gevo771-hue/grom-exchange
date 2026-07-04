@@ -224,6 +224,9 @@ Issued At: ${issuedAt}`;
   if (window.gromWS?.connect) try { window.gromWS.connect(); } catch (_) {}
   if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
   if (typeof window.hydrateReferralSlice === 'function') window.hydrateReferralSlice(true);
+  // Let listeners (e.g. gwOnchainCard) re-render immediately without waiting
+  // for the storage event, which is only delivered cross-tab.
+  try { document.dispatchEvent(new CustomEvent('grom:wallet-connected', { detail: { address } })); } catch (_) {}
 
   return verifyJson;
 }
@@ -1414,6 +1417,230 @@ function gwSetupDepositAutoContinue() {
   }, 1000);
 }
 
+/* ============================================================================
+ * ON-CHAIN WALLET CARD on the Wallet page
+ *
+ * User feedback (2026-07-04): "не нужно стартовый баланс а нужно что бы при
+ * конект показал тот баланс который есть на кошельке". Cursor's Wallet hero
+ * shows the *custodial trading account* (postgres balances). We inject an
+ * extra card that shows the **on-chain** balances of the connected wallet
+ * across every EVM chain we have RPCs for. Fetches native + USDT + USDC per
+ * chain, prices via Binance public ticker, totals in USD.
+ *
+ * Read-only, no writes. Refreshes on wallet connect and when the user opens
+ * the Wallet page. Falls back to a clean "Nothing on-chain yet" state on
+ * empty addresses so it never looks broken. */
+const GW_OC_CHAIN_META = {
+  1:     { label: 'Ethereum',  native: 'ETH', tickerSym: 'ETHUSDT' },
+  42161: { label: 'Arbitrum',  native: 'ETH', tickerSym: 'ETHUSDT' },
+  137:   { label: 'Polygon',   native: 'MATIC', tickerSym: 'MATICUSDT' },
+  8453:  { label: 'Base',      native: 'ETH', tickerSym: 'ETHUSDT' },
+  56:    { label: 'BSC',       native: 'BNB', tickerSym: 'BNBUSDT' },
+};
+
+async function gwOcFetchPrices() {
+  const symbols = new Set(['ETHUSDT', 'BNBUSDT', 'MATICUSDT']);
+  const out = { USDT: 1, USDC: 1 };
+  await Promise.all([...symbols].map(async (s) => {
+    try {
+      const r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${s}`);
+      if (!r.ok) return;
+      const j = await r.json();
+      const base = s.replace('USDT', '');
+      out[base] = Number(j.price);
+    } catch (_) {}
+  }));
+  return out;
+}
+
+async function gwOcFetchAllChains(address) {
+  if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) return [];
+  const chains = Object.keys(GW_OC_CHAIN_META).map(Number);
+  const results = await Promise.all(chains.map((chainId) =>
+    (typeof window.gromFetchOnchainBalances === 'function'
+      ? window.gromFetchOnchainBalances(address, chainId)
+      : Promise.resolve(null)
+    ).catch(() => null)
+  ));
+  return chains.map((chainId, i) => ({
+    chainId,
+    meta: GW_OC_CHAIN_META[chainId],
+    data: results[i] || null,
+  }));
+}
+
+function gwInjectOnchainCardCss() {
+  if (document.getElementById('gw-oc-card-css')) return;
+  const css = `
+    .gw-oc-card {
+      margin: 14px 0 20px;
+      padding: 18px;
+      border-radius: 18px;
+      background:
+        radial-gradient(120% 140% at 0% 0%, rgba(0,194,255,0.08), transparent 55%),
+        linear-gradient(155deg, rgba(13,22,38,0.72) 0%, rgba(8,14,26,0.92) 100%);
+      border: 1px solid rgba(0,194,255,0.14);
+      color: #e7eef8;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 12px 32px -20px rgba(0,0,0,0.55);
+    }
+    .gw-oc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+    .gw-oc-title { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 800; color: #6b7a92; margin: 0 0 4px; }
+    .gw-oc-total { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; margin: 0;
+      background: linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .gw-oc-addr { font-family: 'SF Mono', ui-monospace, monospace; font-size: 11px; color: #98a8c0; }
+    .gw-oc-refresh { padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04); color: #cfdfee; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .gw-oc-refresh:hover { background: rgba(255,255,255,0.08); }
+    .gw-oc-list { display: flex; flex-direction: column; gap: 8px; }
+    .gw-oc-chain { padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
+    .gw-oc-chain-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .gw-oc-chain-name { font-weight: 700; font-size: 13.5px; }
+    .gw-oc-chain-usd { font-size: 12.5px; color: #98a8c0; font-variant-numeric: tabular-nums; }
+    .gw-oc-toks { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 11.5px; color: #cfdfee; font-family: 'SF Mono', ui-monospace, monospace; }
+    .gw-oc-toks span { color: #9bb3c7; }
+    .gw-oc-empty { padding: 22px; text-align: center; color: #6b7a92; font-size: 13px; }
+    .gw-oc-loading { padding: 18px; text-align: center; color: #98a8c0; font-size: 12.5px; }
+  `;
+  const s = document.createElement('style');
+  s.id = 'gw-oc-card-css';
+  s.textContent = css;
+  document.head.appendChild(s);
+}
+
+function gwOcConnectedAddress() {
+  try {
+    const chip = document.getElementById('walletChipAddr')?.textContent?.trim();
+    if (chip && /^0x[a-fA-F0-9]{40}$/.test(chip)) return chip;
+  } catch (_) {}
+  try {
+    const stored = localStorage.getItem('grom_wallet_label');
+    if (stored && /^0x[a-fA-F0-9]{40}$/.test(stored)) return stored;
+  } catch (_) {}
+  try {
+    if (window.gromWallet?.state) {
+      const s = window.gromWallet.state();
+      if (s?.account && /^0x[a-fA-F0-9]{40}$/.test(s.account)) return s.account;
+    }
+  } catch (_) {}
+  return null;
+}
+
+async function gwRenderOnchainCard() {
+  const page = document.getElementById('page-wallet');
+  if (!page) return;
+  gwInjectOnchainCardCss();
+
+  let card = document.getElementById('gwOnchainCard');
+  if (!card) {
+    card = document.createElement('div');
+    card.className = 'gw-oc-card';
+    card.id = 'gwOnchainCard';
+    // Insert AFTER wallet-hero so it sits between hero and ops-grid.
+    const hero = page.querySelector('.wallet-hero');
+    if (hero && hero.parentNode) hero.after(card);
+    else page.prepend(card);
+  }
+
+  const addr = gwOcConnectedAddress();
+  if (!addr) {
+    card.innerHTML = `
+      <div class="gw-oc-head">
+        <div>
+          <p class="gw-oc-title">Ваш кошелёк · on-chain</p>
+          <p class="gw-oc-total">—</p>
+        </div>
+      </div>
+      <div class="gw-oc-empty">Подключи кошелёк, чтобы увидеть свои on-chain балансы (ETH, BNB, MATIC, USDT, USDC на 5 сетях).</div>
+    `;
+    return;
+  }
+
+  const short = addr.slice(0, 6) + '…' + addr.slice(-4);
+  card.innerHTML = `
+    <div class="gw-oc-head">
+      <div>
+        <p class="gw-oc-title">Ваш кошелёк · on-chain</p>
+        <p class="gw-oc-total" id="gwOcTotal">—</p>
+        <p class="gw-oc-addr">${short}</p>
+      </div>
+      <button type="button" class="gw-oc-refresh" id="gwOcRefresh">↻ Обновить</button>
+    </div>
+    <div class="gw-oc-loading">Загружаем балансы по 5 сетям…</div>
+  `;
+  document.getElementById('gwOcRefresh')?.addEventListener('click', gwRenderOnchainCard);
+
+  try {
+    const [prices, chains] = await Promise.all([gwOcFetchPrices(), gwOcFetchAllChains(addr)]);
+    let totalUsd = 0;
+    const rows = [];
+    for (const c of chains) {
+      if (!c.data) continue;
+      const items = [];
+      let chainUsd = 0;
+      // Native token
+      if (c.data.nativeEth != null && c.data.nativeEth > 0.0000001) {
+        const sym = c.meta.native;
+        const usd = c.data.nativeEth * (prices[sym] || 0);
+        chainUsd += usd;
+        items.push(`${sym} ${Number(c.data.nativeEth).toFixed(5)}`);
+      }
+      // ERC-20s
+      for (const [sym, amt] of Object.entries(c.data.tokens || {})) {
+        if (!(amt > 0.0001)) continue;
+        const usd = amt * (prices[sym] || 0);
+        chainUsd += usd;
+        items.push(`${sym} ${Number(amt).toFixed(2)}`);
+      }
+      if (items.length === 0) continue;
+      totalUsd += chainUsd;
+      rows.push(`
+        <div class="gw-oc-chain">
+          <div class="gw-oc-chain-head">
+            <span class="gw-oc-chain-name">${c.meta.label}</span>
+            <span class="gw-oc-chain-usd">≈ $${chainUsd.toFixed(2)}</span>
+          </div>
+          <div class="gw-oc-toks">${items.map((t) => `<span>${t}</span>`).join(' · ')}</div>
+        </div>
+      `);
+    }
+
+    const list = rows.length
+      ? `<div class="gw-oc-list">${rows.join('')}</div>`
+      : `<div class="gw-oc-empty">На поддерживаемых сетях (ETH · Arbitrum · Polygon · Base · BSC) нет баланса. Пополни кошелёк, чтобы увидеть здесь.</div>`;
+
+    card.innerHTML = `
+      <div class="gw-oc-head">
+        <div>
+          <p class="gw-oc-title">Ваш кошелёк · on-chain</p>
+          <p class="gw-oc-total">$${totalUsd.toFixed(2)}</p>
+          <p class="gw-oc-addr">${short} · всего по 5 сетям</p>
+        </div>
+        <button type="button" class="gw-oc-refresh" id="gwOcRefresh">↻ Обновить</button>
+      </div>
+      ${list}
+    `;
+    document.getElementById('gwOcRefresh')?.addEventListener('click', gwRenderOnchainCard);
+  } catch (e) {
+    card.querySelector('.gw-oc-loading')?.classList.remove('gw-oc-loading');
+    const err = document.createElement('div');
+    err.className = 'gw-oc-empty';
+    err.textContent = 'Не удалось загрузить on-chain балансы. Попробуй ещё раз через минуту.';
+    card.appendChild(err);
+  }
+}
+
+function gwSetupOnchainCard() {
+  const tryRender = () => { if (document.getElementById('page-wallet')) gwRenderOnchainCard(); };
+  tryRender();
+  window.addEventListener('hashchange', tryRender);
+  window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt' || e.key === 'grom_wallet_label') tryRender(); });
+  // Re-render on wallet-connect events fired by our own connectors.
+  document.addEventListener('grom:wallet-connected', tryRender);
+  // Also mount the card whenever page-wallet appears (Cursor's SPA router).
+  const bodyObs = new MutationObserver(() => tryRender());
+  bodyObs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+}
+
 function gwInjectConnectModalCss() {
   if (document.getElementById('gw-connect-modal-fixups')) return;
   const css = `
@@ -2204,6 +2431,7 @@ try {
     gwSetupAuthGate();
     gwSetupDashSwap();
     gwSetupDepositAutoContinue();
+    gwSetupOnchainCard();
   }
 } catch (e) { /* defensive — never block module evaluation on cosmetic CSS */ }
 

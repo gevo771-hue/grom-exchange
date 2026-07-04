@@ -138,6 +138,19 @@ export const config = {
     // for dev/staging. Showing seeded balances to real users is a launch blocker.
     welcomeSeed: envBool('GROM_WELCOME_SEED', false),
   },
+  swap: {
+    // 'paper' → use Binance public ticker price + debit/credit user postgres
+    //           balances atomically. No real Binance Convert call.
+    // 'live'  → proxy to Binance Convert on the master GROM account (legacy).
+    // Paper is the default until multi-user Convert accounting is designed —
+    // otherwise every user swap drains a shared master balance.
+    mode: env('GROM_SWAP_MODE', 'paper'),
+    // Basic sanity caps (paper mode). Live mode is bounded by Binance itself.
+    minUsd: envInt('GROM_SWAP_MIN_USD', 1),
+    maxUsd: envInt('GROM_SWAP_MAX_USD', 10000),
+    quoteTtlSec: envInt('GROM_SWAP_QUOTE_TTL', 10),
+    feePct: Number(env('GROM_SWAP_FEE_PCT', '0.1')), // 0.10% GROM fee on top of price
+  },
   webhooks: {
     secret: env('GROM_WEBHOOK_SECRET', ''),
     moonpaySecret: env('GROM_MOONPAY_WEBHOOK_SECRET', ''),

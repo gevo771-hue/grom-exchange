@@ -34,8 +34,30 @@ function walletMetadata() {
     name: 'GROM',
     description: 'Trade spot, binary options, and futures on GROM.',
     url: origin,
-    icons: [origin + '/assets/grom-brand-mark-clear.png']
+    icons: [origin + '/icon-512.png?v=20260607g']
   };
+}
+
+function isMobileUA() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+}
+function gromPageUrl() {
+  return walletAppOrigin() + (location.pathname || '/') + (location.search || '') + (location.hash || '');
+}
+function openInWalletBrowser(kind) {
+  const page = gromPageUrl();
+  if (kind === 'trust') {
+    window.location.href = 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(page);
+    return;
+  }
+  if (kind === 'mm') {
+    var hostPath = location.host + (location.pathname || '/') + (location.search || '') + (location.hash || '');
+    window.location.href = 'https://metamask.app.link/dapp/' + hostPath;
+    return;
+  }
+  if (kind === 'bnw3') {
+    window.location.href = 'https://www.bnbchain.org/en/wallet-download';
+  }
 }
 
 /* ----- chains (Arbitrum по умолчанию, остальные как optional) ----- */
@@ -275,6 +297,11 @@ async function connectMetaMask() {
   let provider = rdnsProvider('io.metamask', 'io.metamask.mobile');
   if (!provider) provider = findLegacy(isMetaMaskProvider);
   if (!provider) {
+    if (isMobileUA()) {
+      if (typeof window.toast === 'function') window.toast('Opening GROM in MetaMask…', 'info');
+      openInWalletBrowser('mm');
+      return;
+    }
     window.open('https://metamask.io/download/', '_blank');
     throw new Error('MetaMask not installed — opened download page');
   }
@@ -287,6 +314,11 @@ async function connectTrust() {
   if (!provider) provider = findLegacy(isTrustProvider);
   if (!provider && window.trustwallet?.request) provider = window.trustwallet;
   if (provider) return connectWithProvider(provider, 'Trust Wallet');
+  if (isMobileUA()) {
+    if (typeof window.toast === 'function') window.toast('Opening GROM in Trust Wallet…', 'info');
+    openInWalletBrowser('trust');
+    return;
+  }
   if (typeof window.toast === 'function') window.toast('Scan QR with Trust Wallet app', 'info');
   return connectWC();
 }
@@ -297,6 +329,11 @@ async function connectBinanceWeb3() {
   if (!provider) provider = findLegacy(isBinanceProvider);
   if (!provider && window.BinanceChain?.request) provider = window.BinanceChain;
   if (provider) return connectWithProvider(provider, 'Binance Web3 Wallet');
+  if (isMobileUA()) {
+    if (typeof window.toast === 'function') window.toast('Open grom.exchange in Binance Web3 Wallet browser, then connect', 'info');
+    openInWalletBrowser('bnw3');
+    return;
+  }
   if (typeof window.toast === 'function') window.toast('Install Binance Web3 Wallet or scan QR', 'info');
   return connectWC();
 }
@@ -330,8 +367,12 @@ async function connectCoinbase() {
 }
 
 /* ----- 4. WalletConnect (универсальный QR для любого мобильного кошелька) ----- */
-async function ensureWC() {
-  if (wcProvider) return wcProvider;
+async function ensureWC(forceNew) {
+  if (wcProvider && !forceNew) return wcProvider;
+  if (wcProvider) {
+    try { await wcProvider.disconnect(); } catch (_) {}
+    wcProvider = null;
+  }
   if (!WC_PROJECT_ID || WC_PROJECT_ID === 'YOUR_WC_PROJECT_ID_HERE') {
     throw new Error('Set WC_PROJECT_ID в grom-wallet.js');
   }
@@ -359,7 +400,7 @@ async function ensureWC() {
 }
 
 async function connectWC() {
-  const p = await ensureWC();
+  const p = await ensureWC(true);
   await p.connect();
   const accs = await p.request({ method: 'eth_accounts' });
   if (!accs?.length) throw new Error('No accounts returned');

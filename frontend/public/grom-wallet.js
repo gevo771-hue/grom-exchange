@@ -334,16 +334,14 @@ async function connectMetaMask() {
   let provider = rdnsProvider('io.metamask', 'io.metamask.mobile');
   if (!provider) provider = findLegacy(isMetaMaskProvider);
   if (provider) return connectWithProvider(provider, 'MetaMask');
-  // No injected. On mobile: use WalletConnect with a **targeted deeplink** to
-  // MetaMask so the user stays in their current browser (Safari/Chrome). We
-  // used to `openInWalletBrowser('mm')`, which yanked users into MM's own
-  // in-app browser — user feedback says that's confusing. WC deeplinks pop MM
-  // just long enough to approve, then MM's "Return" button brings the user
-  // back to the original page with the connection alive over the WC relay.
+  // No injected. On mobile Safari/Chrome we use the standard WalletConnect
+  // modal, which already contains a proper "MetaMask" deeplink button —
+  // one extra tap for the user but 100% reliable. Direct universal-link
+  // routing bypasses OS association on some iOS versions and lands users on
+  // the App Store; the WC modal path never does that.
   if (isMobileUA()) {
-    if (typeof window.toast === 'function') window.toast('Opening MetaMask for approval…', 'info');
-    try { return await connectWCTargeted('mm'); }
-    catch (_) { openInWalletBrowser('mm'); return; }
+    if (typeof window.toast === 'function') window.toast('Choose MetaMask from the WalletConnect list', 'info');
+    return connectWC();
   }
   window.open('https://metamask.io/download/', '_blank');
   throw new Error('MetaMask not installed — opened download page');
@@ -355,12 +353,7 @@ async function connectTrust() {
   if (!provider) provider = findLegacy(isTrustProvider);
   if (!provider && window.trustwallet?.request) provider = window.trustwallet;
   if (provider) return connectWithProvider(provider, 'Trust Wallet');
-  if (isMobileUA()) {
-    if (typeof window.toast === 'function') window.toast('Opening Trust Wallet for approval…', 'info');
-    try { return await connectWCTargeted('trust'); }
-    catch (_) { openInWalletBrowser('trust'); return; }
-  }
-  if (typeof window.toast === 'function') window.toast('Scan QR with Trust Wallet app', 'info');
+  if (typeof window.toast === 'function') window.toast(isMobileUA() ? 'Choose Trust from the WalletConnect list' : 'Scan QR with Trust Wallet app', 'info');
   return connectWC();
 }
 
@@ -370,58 +363,8 @@ async function connectBinanceWeb3() {
   if (!provider) provider = findLegacy(isBinanceProvider);
   if (!provider && window.BinanceChain?.request) provider = window.BinanceChain;
   if (provider) return connectWithProvider(provider, 'Binance Web3 Wallet');
-  if (isMobileUA()) {
-    if (typeof window.toast === 'function') window.toast('Opening Binance Wallet for approval…', 'info');
-    try { return await connectWCTargeted('bnw3'); }
-    catch (_) { openInWalletBrowser('bnw3'); return; }
-  }
-  if (typeof window.toast === 'function') window.toast('Install Binance Web3 Wallet or scan QR', 'info');
+  if (typeof window.toast === 'function') window.toast(isMobileUA() ? 'Choose Binance from the WalletConnect list' : 'Install Binance Web3 Wallet or scan QR', 'info');
   return connectWC();
-}
-
-/* Universal-link deeplink into a specific mobile wallet using the WC pairing
- * URI. Keeps the user in Safari/Chrome — the wallet opens briefly to approve
- * and hands control back to the origin page.
- *
- * URIs per wallet (as of 2026-Q2):
- *   MetaMask     — https://metamask.app.link/wc?uri=…
- *   Trust Wallet — https://link.trustwallet.com/wc?uri=…
- *   Binance Web3 — https://app.binance.com/en/wc-connect?uri=…
- *
- * If the wallet isn't installed the OS bounces to the App Store — that's a
- * reasonable UX for "wallet missing" without needing our own toast. */
-async function connectWCTargeted(walletKey) {
-  const p = await ensureWC(true);
-  await new Promise((resolve, reject) => {
-    let done = false;
-    const finish = (fn, arg) => { if (!done) { done = true; fn(arg); } };
-    // WC emits display_uri once the pairing URI is ready.
-    p.on('display_uri', (uri) => {
-      const encoded = encodeURIComponent(uri);
-      const links = {
-        mm:    'https://metamask.app.link/wc?uri=' + encoded,
-        trust: 'https://link.trustwallet.com/wc?uri=' + encoded,
-        bnw3:  'https://app.binance.com/en/wc-connect?uri=' + encoded,
-      };
-      const link = links[walletKey];
-      if (link) {
-        // Give the current call stack a tick so the modal state settles,
-        // then hop into the wallet via universal link.
-        setTimeout(() => { window.location.href = link; }, 50);
-      }
-    });
-    // 90s hard timeout so we don't hang forever if user never approves.
-    const to = setTimeout(() => finish(reject, new Error('WalletConnect timeout')), 90000);
-    p.connect().then(() => { clearTimeout(to); finish(resolve); }).catch((err) => {
-      clearTimeout(to); finish(reject, err);
-    });
-  });
-  const accs = await p.request({ method: 'eth_accounts' });
-  if (!accs?.length) throw new Error('No accounts returned');
-  updateChip(accs[0]);
-  try { await authenticateWithSIWE(accs[0], p); }
-  catch (err) { gwSiweFailToast(err); throw err; }
-  return accs[0];
 }
 
 /* ----- 4. OKX Wallet ----- */

@@ -1025,46 +1025,80 @@ async function gwHydrateDepositPane() {
 }
 
 /* === SEND pane: on-chain transfer via window.ethereum ==================== */
+/* Per-chain per-asset ERC-20 decimals. USDT on BSC is 18 dp, on Ethereum 6 dp
+ * — the classic footgun. USDC follows the same pattern. Native tokens are
+ * always 18. */
+const GW_SEND_DECIMALS = {
+  ETH:       { USDT: 6, USDC: 6, DAI: 18, WBTC: 8 },
+  BSC:       { USDT: 18, USDC: 18, BUSD: 18, ETH: 18, BTC: 18, CAKE: 18 },
+  ARBITRUM:  { USDT: 6, USDC: 6, DAI: 18 },
+  POLYGON:   { USDT: 6, USDC: 6, DAI: 18, WBTC: 8 },
+  BASE:      { USDC: 6 },
+  OPTIMISM:  { USDT: 6, USDC: 6 },
+  AVAXC:     { USDT: 6, USDC: 6 },
+};
+const GW_NATIVE_FOR = { ETH: 'ETH', ARBITRUM: 'ETH', BASE: 'ETH', OPTIMISM: 'ETH', BSC: 'BNB', POLYGON: 'MATIC', AVAXC: 'AVAX' };
+
 async function gwSubmitSend() {
   const asset = (document.getElementById('wmSendAsset')?.value || 'USDT').toUpperCase();
   const to    = (document.getElementById('wmSendTo')?.value || '').trim();
   const amt   = Number(document.getElementById('wmSendAmt')?.value || 0);
   if (!to || amt <= 0) { gwToast('Recipient and amount required', 'warn'); return; }
-  if (!window.ethereum) {
-    gwPromptSignIn('No EVM wallet detected. Connect MetaMask / Trust / Coinbase to send.');
-    return;
-  }
+  if (!/^0x[a-fA-F0-9]{40}$/.test(to)) { gwToast('Recipient must be a 0x… EVM address', 'warn'); return; }
+
+  // Pick the same provider we swap with — WC first (mobile/Trust), then injected
+  const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
+    ? window.gromWallet.wcProvider
+    : window.ethereum;
+  if (!provider) { gwPromptSignIn('No wallet detected. Connect MetaMask / Trust / WalletConnect to send.'); return; }
   const from = gwUserAddress();
   if (!from) { gwPromptSignIn('Connect a wallet first to sign the transaction.'); return; }
+
   try {
-    const chainHex = await window.ethereum.request({ method: 'eth_chainId' });
+    const chainHex = await provider.request({ method: 'eth_chainId' });
     const chainKey = Object.entries(GROM_NETWORKS).find(([k, v]) => v.hex === chainHex)?.[0];
     if (!chainKey) { gwToast(`Unsupported chain ${chainHex}. Switch network in your wallet.`, 'warn'); return; }
+
     let txParams;
-    if (asset === 'ETH' || asset === 'BNB' || asset === 'MATIC' || asset === 'AVAX') {
-      // Native transfer — value is amount in wei (18 dp)
-      const wei = BigInt(Math.round(amt * 1e9)) * BigInt(1e9); // safe for typical amounts
+    const nativeSym = GW_NATIVE_FOR[chainKey] || 'ETH';
+    if (asset === nativeSym) {
+      // Native transfer — value in wei (18 dp always for EVM natives).
+      // Convert amt with full precision by scaling to attoUnits via string.
+      const wei = BigInt(Math.round(amt * 1e6)) * BigInt(1e12); // 6 fractional digits kept
       txParams = { from, to, value: '0x' + wei.toString(16) };
     } else {
-      // ERC-20 transfer(address,uint256)
       const erc20 = (GROM_ERC20[chainKey] || {})[asset];
-      if (!erc20) { gwToast(`${asset} not deployed on ${chainKey}`, 'warn'); return; }
-      const decimals = (asset === 'USDT' || asset === 'USDC') ? 6 : 18;
-      const units = BigInt(Math.round(amt * Math.pow(10, decimals)));
+      if (!erc20) { gwToast(`${asset} not deployed on ${chainKey}. Switch chain or pick another asset.`, 'warn'); return; }
+      const dec = (GW_SEND_DECIMALS[chainKey] || {})[asset] || 18;
+      const units = BigInt(Math.round(amt * Math.pow(10, dec)));
       const sel4 = 'a9059cbb'; // transfer(address,uint256)
       const addr32 = to.toLowerCase().replace(/^0x/, '').padStart(64, '0');
       const amt32 = units.toString(16).padStart(64, '0');
-      txParams = { from, to: erc20, data: '0x' + sel4 + addr32 + amt32 };
+      txParams = { from, to: erc20, data: '0x' + sel4 + addr32 + amt32, value: '0x0' };
     }
-    gwToast(`Awaiting wallet signature…`, 'info');
-    const hash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [txParams] });
-    gwToast(`Sent. Hash: ${hash.slice(0, 12)}…`, 'success');
+    gwToast('Confirm the transaction in your wallet…', 'info');
+    const hash = await provider.request({ method: 'eth_sendTransaction', params: [txParams] });
+    gwToast(`Submitted — waiting for confirmation… ${hash.slice(0, 12)}…`, 'info');
+    // Wait for receipt so the user isn't left guessing
+    try { await gwWaitReceipt(provider, hash, 120000); gwToast('✓ Sent. Confirmed on-chain.', 'success'); }
+    catch (_) { gwToast(`Sent (still propagating): ${hash.slice(0, 12)}…`, 'info'); }
     if (typeof window.closeWalletModal === 'function') window.closeWalletModal();
-    // Re-hydrate balance after a beat
-    setTimeout(() => { try { window.gromFetchOnchainBalances?.(from, parseInt(chainHex, 16)); } catch (_) {} }, 3000);
+    // Re-hydrate balance
+    setTimeout(() => {
+      try { window.gromFetchOnchainBalances?.(from, parseInt(chainHex, 16)); } catch (_) {}
+      // Also refresh Wallet-page on-chain card if it's mounted
+      try { document.dispatchEvent(new CustomEvent('grom:wallet-connected', { detail: { address: from } })); } catch (_) {}
+    }, 3000);
   } catch (e) {
     console.warn('[grom-send] failed:', e);
-    gwToast(e?.message || 'Send failed', 'error');
+    const msg = String(e?.message || e || '').toLowerCase();
+    if (msg.includes('reject') || msg.includes('denied') || e?.code === 4001) {
+      gwToast('You cancelled the transaction', 'warn');
+    } else if (msg.includes('insufficient funds')) {
+      gwToast('Insufficient balance (or not enough for gas)', 'error');
+    } else {
+      gwToast(e?.message || 'Send failed', 'error');
+    }
   }
 }
 

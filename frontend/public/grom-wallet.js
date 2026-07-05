@@ -433,6 +433,15 @@ async function ensureWC(forceNew, opts) {
   if (!WC_PROJECT_ID || WC_PROJECT_ID === 'YOUR_WC_PROJECT_ID_HERE') {
     throw new Error('Set WC_PROJECT_ID в grom-wallet.js');
   }
+  // When user picks Trust / Binance / OKX etc, Reown's modal helpfully
+  // auto-adds any browser wallet extension it detects (EIP-6963) at the
+  // top — meaning "Відкрити у MetaMask" appears next to a Trust QR if
+  // the user has the MetaMask extension installed. That's confusing.
+  // Build an exclusion list of every OTHER known wallet id so only the
+  // one they clicked shows up. Fallback: exclude at least MetaMask.
+  const otherWalletIds = wantRecommend
+    ? Object.values(WC_WALLET_IDS).filter((id) => id && id !== wantRecommend)
+    : [];
   wcProvider = await EthereumProvider.init({
     projectId: WC_PROJECT_ID,
     chains: CHAINS.required,
@@ -446,7 +455,12 @@ async function ensureWC(forceNew, opts) {
         '--wcm-accent-color': '#00c2ff',
         '--wcm-background-color': '#0b1220',
       },
-      ...(wantRecommend ? { explorerRecommendedWalletIds: [wantRecommend] } : {}),
+      ...(wantRecommend ? {
+        explorerRecommendedWalletIds: [wantRecommend],
+        explorerExcludedWalletIds: otherWalletIds,
+        enableExplorer: false,           // hide the "All Wallets" browse list
+        featuredWalletIds: [wantRecommend],
+      } : {}),
     },
   });
   wcRecommendedForKey = walletKey || null;

@@ -334,14 +334,9 @@ async function connectMetaMask() {
   let provider = rdnsProvider('io.metamask', 'io.metamask.mobile');
   if (!provider) provider = findLegacy(isMetaMaskProvider);
   if (provider) return connectWithProvider(provider, 'MetaMask');
-  // No injected. On mobile Safari/Chrome we use the standard WalletConnect
-  // modal, which already contains a proper "MetaMask" deeplink button —
-  // one extra tap for the user but 100% reliable. Direct universal-link
-  // routing bypasses OS association on some iOS versions and lands users on
-  // the App Store; the WC modal path never does that.
   if (isMobileUA()) {
-    if (typeof window.toast === 'function') window.toast('Choose MetaMask from the WalletConnect list', 'info');
-    return connectWC();
+    if (typeof window.toast === 'function') window.toast('Confirm in MetaMask via WalletConnect', 'info');
+    return connectWCFor('metamask');
   }
   window.open('https://metamask.io/download/', '_blank');
   throw new Error('MetaMask not installed — opened download page');
@@ -353,8 +348,12 @@ async function connectTrust() {
   if (!provider) provider = findLegacy(isTrustProvider);
   if (!provider && window.trustwallet?.request) provider = window.trustwallet;
   if (provider) return connectWithProvider(provider, 'Trust Wallet');
-  if (typeof window.toast === 'function') window.toast(isMobileUA() ? 'Choose Trust from the WalletConnect list' : 'Scan QR with Trust Wallet app', 'info');
-  return connectWC();
+  if (typeof window.toast === 'function') {
+    window.toast(isMobileUA()
+      ? 'Confirm the connection in Trust Wallet'
+      : 'Trust is mobile-only — scan the QR with your phone', 'info');
+  }
+  return connectWCFor('trust');
 }
 
 /* ----- 3. Binance Web3 Wallet ----- */
@@ -363,19 +362,25 @@ async function connectBinanceWeb3() {
   if (!provider) provider = findLegacy(isBinanceProvider);
   if (!provider && window.BinanceChain?.request) provider = window.BinanceChain;
   if (provider) return connectWithProvider(provider, 'Binance Web3 Wallet');
-  if (typeof window.toast === 'function') window.toast(isMobileUA() ? 'Choose Binance from the WalletConnect list' : 'Install Binance Web3 Wallet or scan QR', 'info');
-  return connectWC();
+  if (typeof window.toast === 'function') {
+    window.toast(isMobileUA()
+      ? 'Confirm in Binance Web3 Wallet'
+      : 'Scan the QR with Binance Web3 Wallet on your phone', 'info');
+  }
+  return connectWCFor('binance');
 }
 
 /* ----- 4. OKX Wallet ----- */
 async function connectOkx() {
   let provider = rdnsProvider('com.okex.wallet', 'com.okx.wallet');
   if (!provider) provider = window.okxwallet;
-  if (!provider) {
-    window.open('https://www.okx.com/web3', '_blank');
-    throw new Error('OKX Wallet not installed');
+  if (provider) return connectWithProvider(provider, 'OKX Wallet');
+  if (typeof window.toast === 'function') {
+    window.toast(isMobileUA()
+      ? 'Confirm in OKX Wallet'
+      : 'Scan QR with OKX Wallet on your phone', 'info');
   }
-  return connectWithProvider(provider, 'OKX Wallet');
+  return connectWCFor('okx');
 }
 
 /* ----- 5. Coinbase Wallet (инъекция или SDK fallback) ----- */
@@ -401,8 +406,26 @@ async function connectCoinbase() {
 }
 
 /* ----- 4. WalletConnect (универсальный QR для любого мобильного кошелька) ----- */
-async function ensureWC(forceNew) {
-  if (wcProvider && !forceNew) return wcProvider;
+/* WalletConnect Cloud Explorer IDs for the wallets we surface on our connect
+ * modal. Passing one of these as `explorerRecommendedWalletIds` puts THAT
+ * wallet at the top of the WC modal's list — instead of the default which
+ * always auto-suggests MetaMask when the extension is installed. Fixes user
+ * report: "clicking Trust shows MetaMask suggestion, no Trust logo". */
+const WC_WALLET_IDS = {
+  trust:    '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0',
+  metamask: 'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96',
+  binance:  '8a0ee50d1f22f6651afcae7eb4253e5289eab6a41b3aa9a9095d31a1c9d5e01',
+  okx:      '971e689d0a5be527bac79629b4ee9b925e82208e5168b733496a09c0faed0709',
+  coinbase: 'fd20dc426fb37566d803205b19bbc1d4096b248ac04548e3cfb6b3a38bd033aa',
+  safepal:  '0b415a746fb9ee99cce155c2ceca0c6f6061b1dbca2d722b3ba16381d0562150',
+};
+let wcRecommendedForKey = null; // remembers which wallet the current provider was inited for
+
+async function ensureWC(forceNew, opts) {
+  const wantRecommend = opts?.recommendedWalletId || null;
+  const walletKey = opts?.walletKey || null;
+  const needReinit = forceNew || (wantRecommend && walletKey !== wcRecommendedForKey);
+  if (wcProvider && !needReinit) return wcProvider;
   if (wcProvider) {
     try { await wcProvider.disconnect(); } catch (_) {}
     wcProvider = null;
@@ -421,16 +444,46 @@ async function ensureWC(forceNew) {
       themeVariables: {
         '--wcm-z-index': '2000',
         '--wcm-accent-color': '#00c2ff',
-        '--wcm-background-color': '#0b1220'
-      }
-    }
+        '--wcm-background-color': '#0b1220',
+      },
+      ...(wantRecommend ? { explorerRecommendedWalletIds: [wantRecommend] } : {}),
+    },
   });
+  wcRecommendedForKey = walletKey || null;
   wcProvider.on('accountsChanged', (accs) => updateChip(accs[0] || null));
   wcProvider.on('chainChanged', (hex) => { currentChainId = parseInt(hex, 16); });
   wcProvider.on('disconnect', () => updateChip(null));
   // Восстанавливаем сессию если есть
   if (wcProvider.accounts?.length) updateChip(wcProvider.accounts[0]);
   return wcProvider;
+}
+
+/* Prefetch WC provider on page load (background, non-blocking). Kills the
+ * 1-2 second handshake delay users see on their first "Connect" click.
+ * Waits until the tab has been idle for a moment so it doesn't fight
+ * with initial render. */
+function gwPrefetchWc() {
+  const kick = () => {
+    setTimeout(() => {
+      try { ensureWC(false).catch(() => {}); } catch (_) {}
+    }, 2500);
+  };
+  if (document.readyState === 'complete') kick();
+  else window.addEventListener('load', kick, { once: true });
+}
+
+/* Connect via WalletConnect with a specific wallet featured in the modal.
+ * Falls through to authenticateWithSIWE just like connectWC. */
+async function connectWCFor(walletKey) {
+  const id = WC_WALLET_IDS[walletKey];
+  const p = await ensureWC(true, { recommendedWalletId: id, walletKey });
+  await p.connect();
+  const accs = await p.request({ method: 'eth_accounts' });
+  if (!accs?.length) throw new Error('No accounts returned');
+  updateChip(accs[0]);
+  try { await authenticateWithSIWE(accs[0], p); }
+  catch (err) { gwSiweFailToast(err); throw err; }
+  return accs[0];
 }
 
 async function connectWC() {
@@ -3546,6 +3599,7 @@ try {
     gwSetupAirdrop();
     gwSetupPredictArb();
     gwSetupCrossMargin();
+    gwPrefetchWc();
   }
 } catch (e) { /* defensive — never block module evaluation on cosmetic CSS */ }
 

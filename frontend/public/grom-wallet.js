@@ -3601,20 +3601,24 @@ try {
     }
     gwInjectConnectModalCss();
     gwInjectTelegramFab();
-    gwInjectMiscOverridesCss();
-    gwSetupAuthGate();
-    gwSetupDashSwap();
-    gwSetupDepositAutoContinue();
-    gwSetupOnchainCard();
-    gwSetupMetaPortfolio();
-    gwSetupAiCoach();
-    gwSetupYield();
-    gwSetupAirdrop();
-    gwSetupPredictArb();
-    gwSetupCrossMargin();
-    gwPrefetchWc();
+    // Each setup wrapped so one broken feature doesn't cascade-kill the
+    // others (previous bug: gwSetupAiCoach threw → yield/airdrop/predict/
+    // cross-margin never ran because they were sequential in the same try).
+    const safe = (name, fn) => { try { fn(); } catch (e) { console.error('[GROM] setup failed:', name, e); } };
+    safe('miscOverridesCss', gwInjectMiscOverridesCss);
+    safe('authGate',         gwSetupAuthGate);
+    safe('dashSwap',         gwSetupDashSwap);
+    safe('depositAutoCont',  gwSetupDepositAutoContinue);
+    safe('onchainCard',      gwSetupOnchainCard);
+    safe('metaPortfolio',    gwSetupMetaPortfolio);
+    safe('aiCoach',          gwSetupAiCoach);
+    safe('yield',            gwSetupYield);
+    safe('airdrop',          gwSetupAirdrop);
+    safe('predictArb',       gwSetupPredictArb);
+    safe('crossMargin',      gwSetupCrossMargin);
+    safe('prefetchWc',       gwPrefetchWc);
   }
-} catch (e) { /* defensive — never block module evaluation on cosmetic CSS */ }
+} catch (e) { console.error('[GROM] top-level init failed:', e); }
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', gwInitWalletModalOps);

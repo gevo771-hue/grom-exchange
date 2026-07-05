@@ -433,15 +433,15 @@ async function ensureWC(forceNew, opts) {
   if (!WC_PROJECT_ID || WC_PROJECT_ID === 'YOUR_WC_PROJECT_ID_HERE') {
     throw new Error('Set WC_PROJECT_ID в grom-wallet.js');
   }
-  // When user picks Trust / Binance / OKX etc, Reown's modal helpfully
-  // auto-adds any browser wallet extension it detects (EIP-6963) at the
-  // top — meaning "Відкрити у MetaMask" appears next to a Trust QR if
-  // the user has the MetaMask extension installed. That's confusing.
-  // Build an exclusion list of every OTHER known wallet id so only the
-  // one they clicked shows up. Fallback: exclude at least MetaMask.
-  const otherWalletIds = wantRecommend
-    ? Object.values(WC_WALLET_IDS).filter((id) => id && id !== wantRecommend)
-    : [];
+  // NOTE (2026-07-05): Earlier commit 28d26b9 tried to exclude every
+  // other wallet from the modal via explorerExcludedWalletIds +
+  // enableExplorer:false so a Trust-tap wouldn't also show MetaMask.
+  // Reown v2 interpreted the flags too aggressively and made Trust
+  // itself vanish from the recommended list. Rolled back to just
+  // featuring the wallet at top — the "Open in MetaMask" bar the user
+  // occasionally sees is a browser-level `wc:` protocol handler
+  // suggestion (Chrome, not us), not part of the Reown modal, and
+  // cannot be suppressed from JS.
   wcProvider = await EthereumProvider.init({
     projectId: WC_PROJECT_ID,
     chains: CHAINS.required,
@@ -457,8 +457,6 @@ async function ensureWC(forceNew, opts) {
       },
       ...(wantRecommend ? {
         explorerRecommendedWalletIds: [wantRecommend],
-        explorerExcludedWalletIds: otherWalletIds,
-        enableExplorer: false,           // hide the "All Wallets" browse list
         featuredWalletIds: [wantRecommend],
       } : {}),
     },

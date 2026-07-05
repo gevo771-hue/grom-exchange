@@ -3811,6 +3811,7 @@ try {
       safe('prefetchWc',       gwPrefetchWc);
       safe('telegramHelp',     gwSetupTelegramHelpCard);
       safe('killDemoNums',     gwSetupKillDemoNumbers);
+      safe('landingPolish',    gwSetupLandingPolish);
     }, 0);
   }
 } catch (e) { console.error('[GROM] top-level init failed:', e); }
@@ -4437,6 +4438,317 @@ function gwSetupCrossMargin() {
   window.addEventListener('hashchange', tryRender);
   const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
   window.addEventListener('grom:lang-change', () => { const el = document.getElementById('gwCrossMarginCard'); if (el) el.remove(); tryRender(); });
+}
+
+
+/* ============================================================================
+ * LANDING MARKETING POLISH (2026-07-05)
+ *
+ * Adds two conversion-focused sections to Cursor's #page-landing right
+ * before the final CTA:
+ *   1. Comparison strip — GROM vs Traditional CEX vs DEX. Neutralises the
+ *      "why switch" objection with a scannable side-by-side.
+ *   2. FAQ — 6 real questions that come up in support: KYC threshold, key
+ *      custody, supported fiat, withdrawal timing, insurance, sign-up
+ *      speed. Answers keep it honest (no fake claims of licensing etc).
+ * Both are fully i18n across the 7 languages we support, and re-render
+ * on language change. Injected via grom-wallet.js so we don't touch
+ * Cursor's index.html — same coexistence pattern as everything else.
+ * ============================================================================ */
+const GW_LP_TR = {
+  ru: {
+    cmpEyebrow: 'GROM vs остальные',
+    cmpH: 'Почему пользователи переходят на GROM',
+    cmpCol0: 'Возможность',
+    cmpColG: 'GROM',
+    cmpColCex: 'Традиционный CEX',
+    cmpColDex: 'DEX',
+    cmpRows: [
+      ['Свои ключи', 'Да (гибрид)', 'Нет', 'Да'],
+      ['Скорость исполнения', '<1 мс', '<1 мс', '5-30 сек'],
+      ['Комиссия', '0,10 %', '0,10-0,20 %', '0,3-1 %'],
+      ['Депозит без KYC', 'до $2 000/день', 'Нет', 'Не нужен'],
+      ['Ликвидность', 'Binance+Kraken+Coinbase', '1 источник', 'Фрагментированная'],
+      ['AI-коуч в интерфейсе', 'Есть', 'Нет', 'Нет'],
+      ['Prediction markets', 'Есть', 'Нет', 'Отдельные dApps'],
+    ],
+    faqEyebrow: 'FAQ',
+    faqH: 'Частые вопросы',
+    faqItems: [
+      ['Нужен ли KYC?', 'До $2 000/день торговли и вывода — нет. Выше — потребуется верификация через Sumsub (5-10 минут). Binary Options с демо-балансом $50 000 — вообще без регистрации.'],
+      ['У кого мои ключи?', 'На вкладке On-chain — только у тебя, GROM никогда не видит приватный ключ. На торговом счёте (Spot/Futures/Binary) баланс держится на нашей стороне для мгновенного исполнения — это гибрид, а не полный CEX.'],
+      ['Как быстро приходит депозит?', 'USDT на Tron — 3 минуты. USDT на Arbitrum/Base — 3 минуты. BTC — 30 минут. Как только Binance master-адрес получает 1 подтверждение, баланс появляется у тебя.'],
+      ['А если случится ликвидация с отрицательным equity?', 'Есть страховой USDT-пул, покрывающий такие ситуации — социализации убытков между пользователями нет.'],
+      ['Сколько времени занимает регистрация?', '30 секунд. Email + Google → сразу торгуешь. MetaMask/Trust/OKX → SIWE-подпись → готово.'],
+      ['Можно ли ввести/вывести фиатом?', 'Прямой rail с картой через MoonPay / Simplex (появляется во вкладке Cash). Гибкий вариант — купить USDT на Binance/CEX и перевести к нам, тогда ты платишь только сетевые комиссии.'],
+    ],
+  },
+  en: {
+    cmpEyebrow: 'GROM vs the rest',
+    cmpH: 'Why traders switch to GROM',
+    cmpCol0: 'Capability',
+    cmpColG: 'GROM',
+    cmpColCex: 'Traditional CEX',
+    cmpColDex: 'DEX',
+    cmpRows: [
+      ['Your keys', 'Yes (hybrid)', 'No', 'Yes'],
+      ['Fill latency', '<1 ms', '<1 ms', '5-30 s'],
+      ['Trading fee', '0.10 %', '0.10-0.20 %', '0.3-1 %'],
+      ['Deposit without KYC', 'up to $2,000/day', 'No', 'Not required'],
+      ['Liquidity source', 'Binance+Kraken+Coinbase', 'Single venue', 'Fragmented'],
+      ['AI coach inline', 'Yes', 'No', 'No'],
+      ['Prediction markets', 'Yes', 'No', 'Separate dApps'],
+    ],
+    faqEyebrow: 'FAQ',
+    faqH: 'Frequently asked',
+    faqItems: [
+      ['Do I need KYC?', 'Up to $2,000/day of trading and withdrawal — no. Above that we run Sumsub (5-10 min). Binary Options with the $50K demo balance requires no signup at all.'],
+      ['Who holds my keys?', "On-chain tab — only you; GROM never sees your private key. Trading balance (Spot/Futures/Binary) is custodied for sub-millisecond fills — that's the hybrid, not a full CEX."],
+      ['How fast are deposits?', 'USDT on Tron — 3 min. USDT on Arbitrum/Base — 3 min. BTC — 30 min. Once the Binance master address gets 1 confirmation, your balance shows up.'],
+      ['What if a negative-equity liquidation happens?', "There's a USDT insurance pool that covers those events — no socialized losses across users."],
+      ['How long is sign-up?', '30 seconds. Email + Google — trade immediately. MetaMask/Trust/OKX — SIWE signature — done.'],
+      ['Can I use fiat?', 'Direct card rail via MoonPay / Simplex on the Cash tab. Or buy USDT on Binance/any CEX and transfer to GROM — you only pay network fees.'],
+    ],
+  },
+  es: {
+    cmpEyebrow: 'GROM vs el resto',
+    cmpH: 'Por qué los traders eligen GROM',
+    cmpCol0: 'Capacidad', cmpColG: 'GROM', cmpColCex: 'CEX clásico', cmpColDex: 'DEX',
+    cmpRows: [
+      ['Tus llaves', 'Sí (híbrido)', 'No', 'Sí'],
+      ['Latencia', '<1 ms', '<1 ms', '5-30 s'],
+      ['Comisión', '0,10 %', '0,10-0,20 %', '0,3-1 %'],
+      ['Sin KYC', 'hasta $2 000/día', 'No', 'No aplica'],
+      ['Liquidez', 'Binance+Kraken+Coinbase', 'Una fuente', 'Fragmentada'],
+      ['IA coach', 'Sí', 'No', 'No'],
+      ['Prediction markets', 'Sí', 'No', 'dApps separadas'],
+    ],
+    faqEyebrow: 'FAQ', faqH: 'Preguntas frecuentes',
+    faqItems: [
+      ['¿Necesito KYC?', 'Hasta $2 000/día — no. Por encima, verificación con Sumsub (5-10 min).'],
+      ['¿Quién guarda mis llaves?', 'En on-chain solo tú. Trading es custodiado para velocidad.'],
+      ['¿Depósitos rápidos?', 'USDT Tron — 3 min. BTC — 30 min.'],
+      ['¿Liquidaciones con equity negativo?', 'Cubiertas por el fondo de seguros.'],
+      ['¿Registro?', '30 segundos con email + Google.'],
+      ['¿Fiat?', 'MoonPay / Simplex en Cash.'],
+    ],
+  },
+  ar: {
+    cmpEyebrow: 'GROM مقابل الآخرين',
+    cmpH: 'لماذا يختار المتداولون GROM',
+    cmpCol0: 'الميزة', cmpColG: 'GROM', cmpColCex: 'CEX تقليدي', cmpColDex: 'DEX',
+    cmpRows: [
+      ['مفاتيحك', 'نعم (هجين)', 'لا', 'نعم'],
+      ['السرعة', '<1 مللي', '<1 مللي', '5-30 ث'],
+      ['العمولة', '0.10٪', '0.10-0.20٪', '0.3-1٪'],
+      ['بدون KYC', 'حتى $2,000/يوم', 'لا', 'غير مطلوب'],
+      ['السيولة', 'Binance+Kraken+Coinbase', 'مصدر واحد', 'مجزأة'],
+      ['مدرّب AI', 'نعم', 'لا', 'لا'],
+      ['أسواق التنبؤ', 'نعم', 'لا', 'تطبيقات منفصلة'],
+    ],
+    faqEyebrow: 'الأسئلة', faqH: 'الأسئلة الشائعة',
+    faqItems: [
+      ['هل أحتاج KYC؟', 'حتى $2000/يوم — لا. أعلى — Sumsub خلال 5-10 دقائق.'],
+      ['من يحتفظ بمفاتيحي؟', 'On-chain: أنت فقط. Trading: عهدة للسرعة.'],
+      ['سرعة الإيداع؟', 'USDT Tron — 3 د. BTC — 30 د.'],
+      ['التصفية السلبية؟', 'صندوق تأمين USDT يغطي.'],
+      ['التسجيل؟', '30 ثانية عبر Email + Google.'],
+      ['الفيات؟', 'MoonPay / Simplex في تبويب Cash.'],
+    ],
+  },
+  zh: {
+    cmpEyebrow: 'GROM 对比',
+    cmpH: '为什么交易者选择 GROM',
+    cmpCol0: '功能', cmpColG: 'GROM', cmpColCex: '传统 CEX', cmpColDex: 'DEX',
+    cmpRows: [
+      ['你的私钥', '是（混合）', '否', '是'],
+      ['成交延迟', '<1 毫秒', '<1 毫秒', '5-30 秒'],
+      ['交易费率', '0.10%', '0.10-0.20%', '0.3-1%'],
+      ['免 KYC', '每日 $2,000', '否', '不需要'],
+      ['流动性', 'Binance+Kraken+Coinbase', '单一来源', '碎片化'],
+      ['AI 教练', '有', '无', '无'],
+      ['预测市场', '有', '无', '独立 dApp'],
+    ],
+    faqEyebrow: '常见问题', faqH: '常见问题',
+    faqItems: [
+      ['需要 KYC 吗？', '每日 $2,000 以内 — 不需要。超过 — Sumsub 5-10 分钟。'],
+      ['谁保管密钥？', '链上：只有你。交易账户：托管以获得极速成交。'],
+      ['充值多快？', 'Tron USDT — 3 分钟。BTC — 30 分钟。'],
+      ['负资产爆仓怎么办？', 'USDT 保险池覆盖，用户之间不摊派损失。'],
+      ['注册要多久？', '30 秒。邮箱 + Google 即可。'],
+      ['能用法币吗？', 'Cash 页面里 MoonPay / Simplex。'],
+    ],
+  },
+  hi: {
+    cmpEyebrow: 'GROM बनाम बाकी',
+    cmpH: 'ट्रेडर GROM क्यों चुनते हैं',
+    cmpCol0: 'क्षमता', cmpColG: 'GROM', cmpColCex: 'क्लासिक CEX', cmpColDex: 'DEX',
+    cmpRows: [
+      ['आपकी चाबियाँ', 'हाँ (हाइब्रिड)', 'नहीं', 'हाँ'],
+      ['गति', '<1 ms', '<1 ms', '5-30 s'],
+      ['शुल्क', '0.10%', '0.10-0.20%', '0.3-1%'],
+      ['बिना KYC', '$2000/दिन तक', 'नहीं', 'ज़रूरी नहीं'],
+      ['लिक्विडिटी', 'Binance+Kraken+Coinbase', 'एक स्रोत', 'बिखरी हुई'],
+      ['AI कोच', 'हाँ', 'नहीं', 'नहीं'],
+      ['Predict market', 'हाँ', 'नहीं', 'अलग dApps'],
+    ],
+    faqEyebrow: 'FAQ', faqH: 'सामान्य प्रश्न',
+    faqItems: [
+      ['KYC चाहिए?', '$2000/दिन तक नहीं।'],
+      ['चाबी किसके पास?', 'On-chain: सिर्फ आप। Trading: कस्टडी।'],
+      ['जमा गति?', 'USDT Tron — 3 मिनट।'],
+      ['लिक्विडेशन?', 'USDT बीमा पूल।'],
+      ['साइनअप?', '30 सेकंड।'],
+      ['फ़िएट?', 'MoonPay / Simplex।'],
+    ],
+  },
+  tr: {
+    cmpEyebrow: 'GROM ile karşılaştır',
+    cmpH: 'Traderlar neden GROM\'a geçiyor',
+    cmpCol0: 'Özellik', cmpColG: 'GROM', cmpColCex: 'Klasik CEX', cmpColDex: 'DEX',
+    cmpRows: [
+      ['Anahtarlar sende', 'Evet (hibrit)', 'Hayır', 'Evet'],
+      ['Gecikme', '<1 ms', '<1 ms', '5-30 sn'],
+      ['Ücret', '%0,10', '%0,10-0,20', '%0,3-1'],
+      ['KYC\'siz limit', '$2.000/gün', 'Yok', 'Gerekmez'],
+      ['Likidite', 'Binance+Kraken+Coinbase', 'Tek borsa', 'Parçalı'],
+      ['AI koç', 'Var', 'Yok', 'Yok'],
+      ['Tahmin piyasası', 'Var', 'Yok', 'Ayrı dApp'],
+    ],
+    faqEyebrow: 'SSS', faqH: 'Sık sorulanlar',
+    faqItems: [
+      ['KYC şart mı?', '$2.000/gün altı hayır.'],
+      ['Anahtarlar kimde?', 'Zincir üstü: sen. İşlem: emanet.'],
+      ['Yatırma hızı?', 'Tron USDT — 3 dk.'],
+      ['Negatif tasfiye?', 'USDT sigorta havuzu karşılar.'],
+      ['Kayıt?', '30 saniye.'],
+      ['Fiat?', 'MoonPay / Simplex Cash sekmesinde.'],
+    ],
+  },
+};
+function gwLpLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'); if (s&&GW_LP_TR[s]) l=s; } catch (_) {} return GW_LP_TR[l]||GW_LP_TR.en; }
+
+function gwInjectLpPolishCss() {
+  if (document.getElementById('gw-lp-polish-css')) return;
+  const css = `
+    .gw-lp-cmp, .gw-lp-faq { max-width: 1240px; margin: 60px auto 0; padding: 40px 24px; }
+    .gw-lp-cmp-card, .gw-lp-faq-card {
+      padding: 32px; border-radius: 24px; color: #e7eef8;
+      background: linear-gradient(180deg, rgba(11,18,32,.72), rgba(8,12,20,.55));
+      border: 1px solid rgba(122,162,199,.18);
+      backdrop-filter: blur(10px);
+    }
+    .gw-lp-eyebrow { display: inline-block; padding: 5px 12px; border-radius: 999px;
+      background: rgba(0,194,255,.12); border: 1px solid rgba(0,194,255,.3);
+      font-size: 10.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #5dd5ff; }
+    .gw-lp-h { margin: 14px 0 22px; font-size: 30px; font-weight: 900; letter-spacing: -0.01em; color: #fff; }
+    @media (max-width: 640px) { .gw-lp-h { font-size: 22px; } }
+    .gw-lp-cmp-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .gw-lp-cmp-table th, .gw-lp-cmp-table td { padding: 12px 10px; text-align: left; }
+    .gw-lp-cmp-table th { color: #98a8c0; font-weight: 800; font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .gw-lp-cmp-table th.grom { color: #00c2ff; }
+    .gw-lp-cmp-table td { border-bottom: 1px solid rgba(255,255,255,.04); color: #cfdfee; }
+    .gw-lp-cmp-table td.grom { color: #fff; font-weight: 700; }
+    .gw-lp-cmp-table tr:last-child td { border-bottom: 0; }
+    .gw-lp-cmp-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    @media (max-width: 640px) { .gw-lp-cmp-table { font-size: 12.5px; min-width: 520px; } }
+
+    .gw-lp-faq-list { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+    .gw-lp-faq-item { padding: 14px 16px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); cursor: pointer; transition: background .18s, border-color .18s; }
+    .gw-lp-faq-item:hover { background: rgba(255,255,255,.06); border-color: rgba(0,194,255,.22); }
+    .gw-lp-faq-q { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 800; font-size: 14.5px; color: #e7eef8; }
+    .gw-lp-faq-q .caret { color: #5dd5ff; font-size: 18px; transition: transform .2s; }
+    .gw-lp-faq-item.open .gw-lp-faq-q .caret { transform: rotate(45deg); }
+    .gw-lp-faq-a { max-height: 0; overflow: hidden; transition: max-height .3s; font-size: 13.5px; color: #cfdfee; line-height: 1.55; }
+    .gw-lp-faq-item.open .gw-lp-faq-a { max-height: 420px; margin-top: 10px; }
+  `;
+  const s = document.createElement('style'); s.id = 'gw-lp-polish-css'; s.textContent = css; document.head.appendChild(s);
+}
+
+function gwRenderLandingPolish() {
+  const page = document.getElementById('page-landing');
+  if (!page) return;
+  gwInjectLpPolishCss();
+  // remove old (for lang change)
+  page.querySelector('.gw-lp-cmp')?.remove();
+  page.querySelector('.gw-lp-faq')?.remove();
+
+  const t = gwLpLang();
+
+  const cmp = document.createElement('section');
+  cmp.className = 'gw-lp-cmp';
+  cmp.innerHTML = `
+    <div class="gw-lp-cmp-card">
+      <span class="gw-lp-eyebrow">${t.cmpEyebrow}</span>
+      <h2 class="gw-lp-h">${t.cmpH}</h2>
+      <div class="gw-lp-cmp-wrapper">
+        <table class="gw-lp-cmp-table">
+          <thead><tr>
+            <th>${t.cmpCol0}</th>
+            <th class="grom">${t.cmpColG}</th>
+            <th>${t.cmpColCex}</th>
+            <th>${t.cmpColDex}</th>
+          </tr></thead>
+          <tbody>
+            ${t.cmpRows.map((r) => `<tr>
+              <td>${r[0]}</td>
+              <td class="grom">${r[1]}</td>
+              <td>${r[2]}</td>
+              <td>${r[3]}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  const faq = document.createElement('section');
+  faq.className = 'gw-lp-faq';
+  faq.innerHTML = `
+    <div class="gw-lp-faq-card">
+      <span class="gw-lp-eyebrow">${t.faqEyebrow}</span>
+      <h2 class="gw-lp-h">${t.faqH}</h2>
+      <div class="gw-lp-faq-list">
+        ${t.faqItems.map((qa, i) => `
+          <div class="gw-lp-faq-item ${i === 0 ? 'open' : ''}">
+            <div class="gw-lp-faq-q">${qa[0]}<span class="caret">+</span></div>
+            <div class="gw-lp-faq-a">${qa[1]}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  // Insert BEFORE the final CTA (last .lp-final-cta or before the closing lp-wrap)
+  const finalCta = page.querySelector('.lp-final-cta');
+  const wrap = page.querySelector('.lp-wrap') || page;
+  if (finalCta && finalCta.parentNode === wrap) {
+    wrap.insertBefore(cmp, finalCta);
+    wrap.insertBefore(faq, finalCta);
+  } else {
+    wrap.appendChild(cmp);
+    wrap.appendChild(faq);
+  }
+
+  // Wire FAQ open/close.
+  faq.querySelectorAll('.gw-lp-faq-item').forEach((it) => {
+    const q = it.querySelector('.gw-lp-faq-q');
+    q.addEventListener('click', () => it.classList.toggle('open'));
+  });
+}
+
+function gwSetupLandingPolish() {
+  const tryRender = gwDebounce(() => {
+    if (document.getElementById('page-landing')) {
+      try { gwRenderLandingPolish(); console.log('[GROM] landing polish rendered'); }
+      catch (e) { console.warn('[GROM] landing polish', e); }
+    }
+  }, 200);
+  tryRender();
+  let n = 0; const id = setInterval(() => { n++; if (document.querySelector('#page-landing .gw-lp-faq') || n >= 20) clearInterval(id); else tryRender(); }, 500);
+  window.addEventListener('hashchange', tryRender);
+  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  window.addEventListener('grom:lang-change', tryRender);
 }
 
 

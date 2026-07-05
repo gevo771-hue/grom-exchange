@@ -3604,19 +3604,27 @@ try {
     // Each setup wrapped so one broken feature doesn't cascade-kill the
     // others (previous bug: gwSetupAiCoach threw → yield/airdrop/predict/
     // cross-margin never ran because they were sequential in the same try).
+    //
+    // Deferred with setTimeout(0) so const declarations that appear LATER
+    // in the file (GW_AI_TR, GW_YL_TR, GW_AD_LIST, GW_AD_TR) are past the
+    // temporal-dead-zone by the time these setups access them. Without the
+    // defer, gwSetupAiCoach threw ReferenceError because it read GW_AI_TR
+    // synchronously during module-eval, before its const initializer ran.
     const safe = (name, fn) => { try { fn(); } catch (e) { console.error('[GROM] setup failed:', name, e); } };
-    safe('miscOverridesCss', gwInjectMiscOverridesCss);
-    safe('authGate',         gwSetupAuthGate);
-    safe('dashSwap',         gwSetupDashSwap);
-    safe('depositAutoCont',  gwSetupDepositAutoContinue);
-    safe('onchainCard',      gwSetupOnchainCard);
-    safe('metaPortfolio',    gwSetupMetaPortfolio);
-    safe('aiCoach',          gwSetupAiCoach);
-    safe('yield',            gwSetupYield);
-    safe('airdrop',          gwSetupAirdrop);
-    safe('predictArb',       gwSetupPredictArb);
-    safe('crossMargin',      gwSetupCrossMargin);
-    safe('prefetchWc',       gwPrefetchWc);
+    setTimeout(() => {
+      safe('miscOverridesCss', gwInjectMiscOverridesCss);
+      safe('authGate',         gwSetupAuthGate);
+      safe('dashSwap',         gwSetupDashSwap);
+      safe('depositAutoCont',  gwSetupDepositAutoContinue);
+      safe('onchainCard',      gwSetupOnchainCard);
+      safe('metaPortfolio',    gwSetupMetaPortfolio);
+      safe('aiCoach',          gwSetupAiCoach);
+      safe('yield',            gwSetupYield);
+      safe('airdrop',          gwSetupAirdrop);
+      safe('predictArb',       gwSetupPredictArb);
+      safe('crossMargin',      gwSetupCrossMargin);
+      safe('prefetchWc',       gwPrefetchWc);
+    }, 0);
   }
 } catch (e) { console.error('[GROM] top-level init failed:', e); }
 

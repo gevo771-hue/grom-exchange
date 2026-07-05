@@ -752,18 +752,54 @@ async function hydrateReferralSlice(force) {
     setText('refDestWallet',     fmtWallet(p.payout_wallet));
     setText('refPayoutSchedule', fmtSchedule(p.schedule));
 
-    // *Delta fields (week-over-week) — backend doesn't return them yet.
-    // Leave the existing static "this week" / "+12.4%" text in place.
+    // *Delta fields (week-over-week) — backend doesn't return them yet,
+    // so we clear any hard-coded "+42 this week" / "+$1,240 this week"
+    // / "+12.4%" placeholders that Cursor left in index.html.
+    setText('refKpiTotalReferredDelta', '');
+    setText('refKpiActive30dDelta', '');
+    setText('refKpiTotalEarnedDelta', '');
+    setText('refFunnelClicksDelta', '');
+    setText('refFunnelSignupsCvr', fmtPct(f.signups_30d, f.clicks_30d, 'CVR'));
   } catch (e) {
     console.warn('[grom-referral] hydrate failed:', e);
   }
 }
 window.hydrateReferralSlice = hydrateReferralSlice;
 
+/**
+ * Wipe every hardcoded demo number Cursor left in the Referral page markup
+ * BEFORE hydrate returns. Otherwise anonymous or slow-hydrating users see
+ * "1,284 referred / $18,473.20 earned / 18,420 clicks" which look real.
+ */
+function gwZeroRefStatsPlaceholders() {
+  const ids = [
+    'refKpiTotalReferred', 'refKpiActive30d', 'refKpiActivationRate',
+    'refKpiTotalEarned',   'refKpiPendingPayout',
+    'refFunnelClicks',     'refFunnelSignups', 'refFunnelKyc', 'refFunnelFirstTrade',
+    'refFunnelSignupsCvr', 'refFunnelKycRate', 'refFunnelFirstTradeRate',
+    'refKpiTotalReferredDelta', 'refKpiActive30dDelta', 'refKpiTotalEarnedDelta',
+    'refFunnelClicksDelta',
+  ];
+  const jwt = (function () { try { return localStorage.getItem('grom_jwt'); } catch (_) { return null; } })();
+  const val = jwt ? '—' : '—'; // no user data yet either way
+  let touched = 0;
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el && el.textContent && el.textContent.trim() !== val && !el.dataset.gwZeroed) {
+      el.textContent = val;
+      el.dataset.gwZeroed = '1';
+      touched++;
+    }
+  }
+  return touched;
+}
+window.gwZeroRefStatsPlaceholders = gwZeroRefStatsPlaceholders;
+
 // Fire on page load + every time wallet slice hydrates (login/logout/connect)
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => hydrateReferralSlice(false));
+  document.addEventListener('DOMContentLoaded', () => { gwZeroRefStatsPlaceholders(); hydrateReferralSlice(false); });
 } else {
+  gwZeroRefStatsPlaceholders();
   hydrateReferralSlice(false);
 }
 
@@ -1369,86 +1405,193 @@ function gwExpandSendSwapDropdowns() {
 }
 
 
-/* Floating Telegram contact button — pinned bottom-right on all pages, link
- * to https://t.me/grom_finence_hub. Used for support, investor inquiries,
- * community. CSS-injected so we don't touch Cursor's index.html. Hidden on
- * print + reduced motion gets a static (non-animated) variant. */
-function gwInjectTelegramFab() {
-  if (document.getElementById('gw-tg-fab')) return;
+/* Telegram community card — injected into #page-help only.
+ *
+ * Previously we mounted a floating FAB in the bottom-right corner of every
+ * page (2026-06-14). User feedback (2026-07-05): "убери с главной, перенеси
+ * в Помощь". Now the CTA lives inside the Support page as a premium hero
+ * card at the top of the section, and is hidden everywhere else. */
+const GW_TG_TR = {
+  ru: { h: 'Официальный Telegram-канал GROM', sub: 'Живые обновления рынка, поддержка команды, приглашение инвесторам, комьюнити 24/7.', b1: 'Прямой канал к команде', b2: 'Новости продукта первыми', b3: 'Помощь по торговле и депозитам', cta: 'Открыть канал →', foot: 'Единственный официальный канал — не поддавайся имитациям' },
+  en: { h: 'Official GROM Telegram channel', sub: 'Live market updates, direct team support, investor invites, 24/7 community.', b1: 'Direct line to the team', b2: 'Product news first', b3: 'Trading & deposit help', cta: 'Open channel →', foot: 'Only official channel — beware of impostors' },
+  es: { h: 'Canal oficial de GROM en Telegram', sub: 'Actualizaciones de mercado, soporte del equipo, comunidad 24/7.', b1: 'Contacto directo con el equipo', b2: 'Noticias primero', b3: 'Ayuda con trading', cta: 'Abrir canal →', foot: 'Único canal oficial' },
+  ar: { h: 'قناة GROM الرسمية على تيليجرام', sub: 'تحديثات مباشرة، دعم الفريق، مجتمع على مدار الساعة.', b1: 'خط مباشر مع الفريق', b2: 'أخبار المنتج أوّلاً', b3: 'مساعدة في التداول', cta: 'فتح القناة ←', foot: 'القناة الرسمية الوحيدة' },
+  zh: { h: 'GROM 官方 Telegram 频道', sub: '实时市场更新、团队支持、社群 24/7。', b1: '与团队的直接沟通', b2: '第一手产品新闻', b3: '交易与充值帮助', cta: '打开频道 →', foot: '唯一官方渠道' },
+  hi: { h: 'GROM का आधिकारिक Telegram चैनल', sub: 'लाइव मार्केट अपडेट, टीम सपोर्ट, 24/7 समुदाय।', b1: 'टीम से सीधा संपर्क', b2: 'सबसे पहले खबरें', b3: 'ट्रेडिंग सहायता', cta: 'चैनल खोलें →', foot: 'एकमात्र आधिकारिक चैनल' },
+  tr: { h: 'GROM resmi Telegram kanalı', sub: 'Canlı piyasa güncellemeleri, ekip desteği, 7/24 topluluk.', b1: 'Ekiple doğrudan iletişim', b2: 'Ürün haberleri ilk elden', b3: 'İşlem ve yatırım desteği', cta: 'Kanalı aç →', foot: 'Tek resmi kanal' },
+};
+function gwTgLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'); if (s&&GW_TG_TR[s]) l=s; } catch (_) {} return GW_TG_TR[l]||GW_TG_TR.en; }
+const GW_TG_URL = 'https://t.me/grom_finence_hub';
+
+function gwInjectTelegramCss() {
+  if (document.getElementById('gw-tg-help-css')) return;
   const css = `
-    #gw-tg-fab {
-      position: fixed; right: 18px; bottom: 18px;
-      z-index: 60;
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 11px 16px 11px 13px;
-      border-radius: 999px;
-      background: linear-gradient(135deg, #29a9eb 0%, #1f8fd0 60%, #166fb0 100%);
-      color: #fff !important;
-      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-      font-size: 13px; font-weight: 700; letter-spacing: .02em;
-      text-decoration: none !important;
-      box-shadow: 0 10px 28px -8px rgba(41,169,235,0.55), 0 2px 0 rgba(255,255,255,0.08) inset;
-      border: 1px solid rgba(255,255,255,0.14);
-      cursor: pointer;
-      transition: transform .25s cubic-bezier(.2,.7,.2,1), box-shadow .25s, opacity .2s;
-      -webkit-tap-highlight-color: transparent;
+    /* Kill the old floating FAB in case a stale build (or Cursor) left one. */
+    #gw-tg-fab { display: none !important; }
+
+    .gw-tg-card {
+      position: relative; overflow: hidden;
+      margin: 12px 0 18px;
+      padding: 22px 22px 20px;
+      border-radius: 22px;
+      background:
+        radial-gradient(120% 140% at 100% 0%, rgba(41,169,235,0.16), transparent 55%),
+        radial-gradient(80% 100% at 0% 100%, rgba(41,169,235,0.10), transparent 55%),
+        linear-gradient(160deg, rgba(13,22,38,0.75) 0%, rgba(8,14,26,0.92) 100%);
+      border: 1px solid rgba(41,169,235,0.28);
+      color: #e7eef8;
+      box-shadow: 0 16px 42px -20px rgba(0,0,0,0.55);
     }
-    #gw-tg-fab:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 14px 36px -10px rgba(41,169,235,0.7); }
-    #gw-tg-fab:active { transform: translateY(0) scale(0.98); }
-    #gw-tg-fab .gw-tg-ico {
-      width: 24px; height: 24px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%, #fff, #eaf6fe 70%);
-      display: inline-flex; align-items: center; justify-content: center;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.25) inset, 0 0 0 1px rgba(255,255,255,0.4);
-    }
-    #gw-tg-fab .gw-tg-ico svg { width: 14px; height: 14px; }
-    #gw-tg-fab::after {
-      content: "";
-      position: absolute; inset: -4px;
-      border-radius: 999px;
-      border: 2px solid rgba(41,169,235,0.55);
-      opacity: 0;
-      animation: gwTgPulse 2.4s ease-out infinite;
+    .gw-tg-card::before {
+      content: ""; position: absolute; inset: -1px; border-radius: inherit;
+      padding: 1px;
+      background: conic-gradient(from 0deg, #29a9eb 0%, transparent 30%, #166fb0 60%, transparent 90%, #29a9eb 100%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude;
+      opacity: 0.55; animation: gwBnSpin 24s linear infinite;
       pointer-events: none;
     }
-    @keyframes gwTgPulse {
-      0%   { opacity: 0.6; transform: scale(0.94); }
-      80%  { opacity: 0;   transform: scale(1.12); }
-      100% { opacity: 0;   transform: scale(1.12); }
+    .gw-tg-hero { display: flex; gap: 16px; align-items: flex-start; position: relative; z-index: 1; }
+    .gw-tg-logo {
+      flex: 0 0 auto;
+      width: 60px; height: 60px; border-radius: 20px;
+      background: linear-gradient(135deg, #29a9eb, #166fb0);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 10px 24px -8px rgba(41,169,235,0.55), 0 0 0 1px rgba(255,255,255,0.08) inset;
     }
+    .gw-tg-logo svg { width: 32px; height: 32px; }
+    .gw-tg-body { flex: 1; min-width: 0; }
+    .gw-tg-h { margin: 0 0 4px; font-size: 18px; font-weight: 800; letter-spacing: -0.01em;
+      background: linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .gw-tg-sub { margin: 0 0 12px; font-size: 12.5px; color: #98a8c0; line-height: 1.55; }
+    .gw-tg-bullets { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: #cfdfee; }
+    .gw-tg-bullets li { display: flex; gap: 8px; align-items: baseline; }
+    .gw-tg-bullets li::before { content: "✓"; color: #29a9eb; font-weight: 800; }
+    .gw-tg-cta {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 11px 22px; border-radius: 12px; border: 0;
+      background: linear-gradient(135deg, #29a9eb, #166fb0);
+      color: #fff !important; font-weight: 800; font-size: 13px; letter-spacing: .02em;
+      text-decoration: none !important; cursor: pointer;
+      box-shadow: 0 10px 24px -8px rgba(41,169,235,0.55);
+      transition: transform .2s, box-shadow .2s;
+    }
+    .gw-tg-cta:hover { transform: translateY(-1px); box-shadow: 0 14px 30px -8px rgba(41,169,235,0.75); }
+    .gw-tg-cta:active { transform: translateY(0); }
+    .gw-tg-foot { margin: 10px 0 0; font-size: 11px; color: #6b7a92; }
     @media (max-width: 600px) {
-      #gw-tg-fab {
-        right: 12px; bottom: 12px;
-        padding: 10px 14px 10px 11px;
-        font-size: 12.5px;
-      }
-    }
-    @media print { #gw-tg-fab { display: none !important; } }
-    @media (prefers-reduced-motion: reduce) {
-      #gw-tg-fab::after { animation: none; }
-      #gw-tg-fab:hover { transform: none; }
+      .gw-tg-hero { flex-direction: column; }
+      .gw-tg-logo { width: 48px; height: 48px; border-radius: 14px; }
+      .gw-tg-h { font-size: 16.5px; }
     }
   `;
   const style = document.createElement('style');
-  style.id = 'gw-tg-fab-css';
+  style.id = 'gw-tg-help-css';
   style.textContent = css;
   document.head.appendChild(style);
+}
 
-  const mount = () => {
-    if (document.getElementById('gw-tg-fab') || !document.body) return;
-    const a = document.createElement('a');
-    a.id = 'gw-tg-fab';
-    a.href = 'https://t.me/grom_finence_hub';
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.setAttribute('aria-label', 'Telegram канал GROM');
-    a.innerHTML = '<span class="gw-tg-ico"><svg viewBox="0 0 24 24" fill="#1f8fd0" xmlns="http://www.w3.org/2000/svg"><path d="M9.999 15.2l-.397 5.6c.567 0 .812-.243 1.108-.535l2.66-2.54 5.514 4.034c1.011.557 1.724.265 1.997-.937L23.92 3.06c.36-1.5-.542-2.085-1.523-1.72L1.116 9.534c-1.466.57-1.444 1.39-.25 1.762l5.46 1.704 12.683-7.99c.597-.395 1.14-.176.694.218z"/></svg></span><span>Telegram</span>';
-    document.body.appendChild(a);
-  };
+function gwRenderTelegramHelpCard() {
+  const page = document.getElementById('page-help');
+  if (!page) return;
+  gwInjectTelegramCss();
+  if (page.querySelector('.gw-tg-card')) return; // already mounted
+  const t = gwTgLang();
+  const card = document.createElement('div');
+  card.className = 'gw-tg-card';
+  card.innerHTML = `
+    <div class="gw-tg-hero">
+      <div class="gw-tg-logo">
+        <svg viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M9.999 15.2l-.397 5.6c.567 0 .812-.243 1.108-.535l2.66-2.54 5.514 4.034c1.011.557 1.724.265 1.997-.937L23.92 3.06c.36-1.5-.542-2.085-1.523-1.72L1.116 9.534c-1.466.57-1.444 1.39-.25 1.762l5.46 1.704 12.683-7.99c.597-.395 1.14-.176.694.218z"/></svg>
+      </div>
+      <div class="gw-tg-body">
+        <h3 class="gw-tg-h">${t.h}</h3>
+        <p class="gw-tg-sub">${t.sub}</p>
+        <ul class="gw-tg-bullets">
+          <li>${t.b1}</li>
+          <li>${t.b2}</li>
+          <li>${t.b3}</li>
+        </ul>
+        <a class="gw-tg-cta" href="${GW_TG_URL}" target="_blank" rel="noopener noreferrer">${t.cta}</a>
+        <p class="gw-tg-foot">${t.foot}</p>
+      </div>
+    </div>
+  `;
+  // Insert right after the page title so it's the first "content" block
+  const title = page.querySelector('.page-title, h1');
+  const subtitle = page.querySelector('.page-subtitle');
+  const anchor = subtitle || title;
+  if (anchor && anchor.parentNode === page) anchor.after(card);
+  else page.prepend(card);
 
-  if (document.body) mount();
-  else document.addEventListener('DOMContentLoaded', mount, { once: true });
+  // ── Also patch Cursor's static "1,284 referred / $1,240 this week / All
+  // systems operational" placeholder line by keeping only the badge; and
+  // remove the "Take the 90-second tour" and "Search commands ⌘K" widgets
+  // that are non-functional in the current build (they belong in the
+  // command palette which isn't wired yet).
+  const helpGrid = page.querySelector('.help-grid');
+  if (helpGrid && !helpGrid.dataset.gwPruned) {
+    helpGrid.dataset.gwPruned = '1';
+    // Best-effort — if selectors change we just leave things be.
+    Array.from(helpGrid.children).forEach((el) => {
+      const txt = (el.textContent || '').toLowerCase();
+      if (txt.includes('90-second tour') || txt.includes('90 секунд') || txt.includes('search commands') || txt.includes('⌘k')) {
+        el.style.display = 'none';
+      }
+    });
+  }
+}
+
+function gwInjectTelegramFab() {
+  // Retained for API compatibility with older init sequences — now just
+  // guarantees the CSS is present so any stale #gw-tg-fab in the DOM is
+  // hidden. Nothing is appended; the community card handles the CTA.
+  gwInjectTelegramCss();
+  const stale = document.getElementById('gw-tg-fab');
+  if (stale) stale.remove();
+}
+
+function gwSetupTelegramHelpCard() {
+  const tryRender = gwDebounce(() => {
+    if (document.getElementById('page-help')) {
+      try { gwRenderTelegramHelpCard(); console.log('[GROM] telegram help card rendered'); }
+      catch (e) { console.warn('[GROM] telegram help card', e); }
+    }
+  }, 200);
+  tryRender();
+  let n = 0; const id = setInterval(() => { n++; if (document.querySelector('#page-help .gw-tg-card') || n >= 20) clearInterval(id); else tryRender(); }, 500);
+  window.addEventListener('hashchange', tryRender);
+  const obs = new MutationObserver(() => tryRender());
+  obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+}
+
+/**
+ * Kill every remaining demo number Cursor's index.html has hardcoded:
+ *   • Referral KPIs / funnel / deltas (re-zeroed when user switches to
+ *     #page-referral; hydrateReferralSlice then fills real values).
+ *   • Any static balance sitting inside a dashboard KPI element before our
+ *     meta-portfolio + wallet slice hydrates.
+ * Runs once at boot and on every hashchange / data-page mutation so returning
+ * to the page doesn't reveal the placeholders again.
+ */
+function gwSetupKillDemoNumbers() {
+  const run = gwDebounce(() => {
+    try {
+      if (document.getElementById('page-referral')) {
+        gwZeroRefStatsPlaceholders();
+        // Re-run hydrate — the user may have just logged in.
+        if (typeof hydrateReferralSlice === 'function') hydrateReferralSlice(true);
+      }
+    } catch (e) { console.warn('[GROM] killDemo', e); }
+  }, 150);
+  run();
+  window.addEventListener('hashchange', run);
+  const obs = new MutationObserver(() => run());
+  obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  // Also react when auth state changes
+  window.addEventListener('grom:auth', run);
+  window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt') run(); });
 }
 
 /* Hide redundant "Other wallet" row in the Connect modal. WalletConnect v2
@@ -3600,7 +3743,7 @@ try {
       gwInjectDashBannersCss();
     }
     gwInjectConnectModalCss();
-    gwInjectTelegramFab();
+    gwInjectTelegramFab();  // now legacy — just removes any stale FAB
     // Each setup wrapped so one broken feature doesn't cascade-kill the
     // others (previous bug: gwSetupAiCoach threw → yield/airdrop/predict/
     // cross-margin never ran because they were sequential in the same try).
@@ -3624,6 +3767,8 @@ try {
       safe('predictArb',       gwSetupPredictArb);
       safe('crossMargin',      gwSetupCrossMargin);
       safe('prefetchWc',       gwPrefetchWc);
+      safe('telegramHelp',     gwSetupTelegramHelpCard);
+      safe('killDemoNums',     gwSetupKillDemoNumbers);
     }, 0);
   }
 } catch (e) { console.error('[GROM] top-level init failed:', e); }
@@ -3710,13 +3855,14 @@ function gwInjectAiCoachCss() {
     #gw-ai-overlay.open { display: flex; animation: gwAiFade .25s ease both; }
     @keyframes gwAiFade { from { opacity: 0; } to { opacity: 1; } }
     #gw-ai-panel {
-      width: min(560px, 100vw); max-height: 90vh; height: 78vh;
+      width: min(560px, 100vw); max-height: 92dvh; height: 88dvh;
       background: linear-gradient(160deg, rgba(13,22,38,0.98) 0%, rgba(8,14,26,0.98) 100%);
       border: 1px solid rgba(168,85,247,0.25);
       border-radius: 22px 22px 0 0;
       display: flex; flex-direction: column; overflow: hidden;
       box-shadow: 0 -20px 60px -8px rgba(0,0,0,0.6);
     }
+    @supports not (height: 100dvh) { #gw-ai-panel { max-height: 90vh; height: 85vh; } }
     #gw-ai-panel .head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
     #gw-ai-panel .head h3 { margin: 0; font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px;
       background: linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
@@ -3728,6 +3874,15 @@ function gwInjectAiCoachCss() {
     #gw-ai-log .msg.assistant { align-self: flex-start; background: rgba(255,255,255,0.04); color: #cfdfee; border: 1px solid rgba(255,255,255,0.06); }
     #gw-ai-log .msg.system { align-self: center; color: #6b7a92; font-size: 11.5px; padding: 6px 10px; background: transparent; border: 0; }
     #gw-ai-log .msg.thinking { color: #98a8c0; font-style: italic; }
+    #gw-ai-log .gw-ai-login {
+      align-self: stretch; margin: 24px 8px; padding: 22px 20px; border-radius: 18px;
+      background: linear-gradient(160deg, rgba(168,85,247,0.18), rgba(110,141,255,0.10));
+      border: 1px solid rgba(168,85,247,0.28); color: #e7eef8; text-align: center;
+    }
+    #gw-ai-log .gw-ai-login h4 { margin: 0 0 6px; font-size: 16px; font-weight: 800; }
+    #gw-ai-log .gw-ai-login p { margin: 0 0 14px; color: #cfdfee; font-size: 13px; line-height: 1.55; }
+    #gw-ai-log .gw-ai-login button { padding: 11px 22px; border-radius: 12px; border: 0; background: linear-gradient(135deg, #a855f7, #6e8dff); color: #fff; font-weight: 800; cursor: pointer; font-size: 13px; }
+    #gw-ai-log .gw-ai-hello { align-self: stretch; margin: 8px 4px 12px; padding: 14px 16px; border-radius: 14px; background: rgba(168,85,247,0.08); border: 1px solid rgba(168,85,247,0.20); color: #e7eef8; font-size: 13.5px; line-height: 1.55; }
     #gw-ai-suggest { display: flex; gap: 6px; padding: 8px 14px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.04); }
     #gw-ai-suggest button { padding: 6px 10px; border-radius: 8px; background: rgba(168,85,247,0.10); border: 1px solid rgba(168,85,247,0.24); color: #d8b4fe; font-size: 11.5px; font-weight: 700; cursor: pointer; }
     #gw-ai-suggest button:hover { background: rgba(168,85,247,0.20); }
@@ -3794,12 +3949,20 @@ function gwAiOpen() {
   const log = document.getElementById('gw-ai-log');
   log.innerHTML = '';
   if (!authed) {
-    log.innerHTML = `<div class="msg system">${t.login}</div>`;
+    const box = document.createElement('div');
+    box.className = 'gw-ai-login';
+    box.innerHTML = `<h4>${t.h}</h4><p>${t.login}</p><button id="gwAiLoginBtn">${t.send.length < 3 ? 'Sign in' : (t.login || 'Sign in')}</button>`;
+    log.appendChild(box);
+    const btn = document.getElementById('gwAiLoginBtn');
+    if (btn) btn.onclick = () => { gwAiClose(); try { (window.openConnectModal || window.openConnectPanel || window.gwOpenSignIn || function () {})(); } catch (_) {} };
     return;
   }
   const hist = gwAiGetHistory();
   if (hist.length === 0) {
-    log.innerHTML = `<div class="msg assistant">${t.hello}</div>`;
+    const hello = document.createElement('div');
+    hello.className = 'gw-ai-hello';
+    hello.textContent = t.hello;
+    log.appendChild(hello);
   } else {
     for (const m of hist) {
       const el = document.createElement('div'); el.className = 'msg ' + m.role; el.textContent = m.content;

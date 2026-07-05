@@ -2035,14 +2035,16 @@ async function gwRenderMetaPortfolio() {
 }
 
 function gwSetupMetaPortfolio() {
-  const tryRender = () => { if (document.getElementById('page-dashboard')) gwRenderMetaPortfolio(); };
+  const tryRender = () => { if (document.getElementById('page-dashboard')) { try { gwRenderMetaPortfolio(); console.log('[GROM] meta-portfolio rendered'); } catch (e) { console.warn('[GROM] meta-portfolio', e); } } };
   tryRender();
+  // Retry poll: dashboard element may appear after this init runs (Cursor SPA)
+  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwMetaPortfolio') || n >= 20) clearInterval(id); else tryRender(); }, 500);
   window.addEventListener('hashchange', tryRender);
   window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt' || e.key === 'grom_wallet_label') tryRender(); });
   document.addEventListener('grom:wallet-connected', tryRender);
   document.addEventListener('grom:wallet-disconnected', tryRender);
   const bodyObs = new MutationObserver(() => tryRender());
-  bodyObs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  bodyObs.observe(document.body, { attributes: true, childList: true, subtree: true, attributeFilter: ['data-page'] });
   // Auto-refresh every 60s while dashboard is visible
   setInterval(() => {
     const dash = document.getElementById('page-dashboard');
@@ -3949,11 +3951,11 @@ async function gwRenderYield() {
   });
 }
 function gwSetupYield() {
-  const tryRender = () => { if (document.getElementById('page-dashboard')) gwRenderYield(); };
+  const tryRender = () => { if (document.getElementById('page-dashboard')) { try { gwRenderYield(); console.log('[GROM] yield rendered'); } catch (e) { console.warn('[GROM] yield', e); } } };
   tryRender();
+  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwYieldCard') || n >= 20) clearInterval(id); else tryRender(); }, 500);
   window.addEventListener('hashchange', tryRender);
-  const bodyObs = new MutationObserver(() => tryRender()); bodyObs.observe(document.body, { attributes: true, attributeFilter: ['data-page'] });
-  // Refresh yields every 5 minutes
+  const bodyObs = new MutationObserver(() => tryRender()); bodyObs.observe(document.body, { attributes: true, childList: true, subtree: true, attributeFilter: ['data-page'] });
   setInterval(() => { if (document.getElementById('gwYieldCard') && document.getElementById('page-dashboard')?.offsetParent) gwRenderYield(); }, 5 * 60 * 1000);
 }
 
@@ -4046,10 +4048,11 @@ function gwRenderAirdrop() {
   wrap.querySelectorAll('.mark').forEach((b) => b.onclick = () => gwAdToggle(b.dataset.key));
 }
 function gwSetupAirdrop() {
-  const tryRender = () => { if (document.getElementById('page-dashboard')) gwRenderAirdrop(); };
+  const tryRender = () => { if (document.getElementById('page-dashboard')) { try { gwRenderAirdrop(); console.log('[GROM] airdrop rendered'); } catch (e) { console.warn('[GROM] airdrop', e); } } };
   tryRender();
+  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwAirdropCard') || n >= 20) clearInterval(id); else tryRender(); }, 500);
   window.addEventListener('hashchange', tryRender);
-  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, attributeFilter: ['data-page'] });
+  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, childList: true, subtree: true, attributeFilter: ['data-page'] });
 }
 
 
@@ -4115,10 +4118,11 @@ async function gwRenderPredictArb() {
   `;
 }
 function gwSetupPredictArb() {
-  const tryRender = () => { if (document.getElementById('page-dashboard')) gwRenderPredictArb(); };
+  const tryRender = () => { if (document.getElementById('page-dashboard')) { try { gwRenderPredictArb(); console.log('[GROM] predict-arb rendered'); } catch (e) { console.warn('[GROM] predict-arb', e); } } };
   tryRender();
+  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwPredictArbCard') || n >= 20) clearInterval(id); else tryRender(); }, 500);
   window.addEventListener('hashchange', tryRender);
-  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, attributeFilter: ['data-page'] });
+  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, childList: true, subtree: true, attributeFilter: ['data-page'] });
 }
 
 
@@ -4178,10 +4182,11 @@ function gwRenderCrossMargin() {
   });
 }
 function gwSetupCrossMargin() {
-  const tryRender = () => { if (document.getElementById('page-dashboard')) gwRenderCrossMargin(); };
+  const tryRender = () => { if (document.getElementById('page-dashboard')) { try { gwRenderCrossMargin(); console.log('[GROM] cross-margin rendered'); } catch (e) { console.warn('[GROM] cross-margin', e); } } };
   tryRender();
+  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwCrossMarginCard') || n >= 20) clearInterval(id); else tryRender(); }, 500);
   window.addEventListener('hashchange', tryRender);
-  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, attributeFilter: ['data-page'] });
+  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, childList: true, subtree: true, attributeFilter: ['data-page'] });
 }
 
 

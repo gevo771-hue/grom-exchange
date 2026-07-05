@@ -1583,6 +1583,9 @@ function gwSetupKillDemoNumbers() {
         // Re-run hydrate — the user may have just logged in.
         if (typeof hydrateReferralSlice === 'function') hydrateReferralSlice(true);
       }
+      // User decision (2026-07-05): keep demo balances for Binary /
+      // Futures / Predict / Stocks (those pages are game/testnet-mode
+      // by design). Only wipe demo for dashboard/wallet/spot.
     } catch (e) { console.warn('[GROM] killDemo', e); }
   }, 150);
   run();
@@ -1593,6 +1596,13 @@ function gwSetupKillDemoNumbers() {
   window.addEventListener('grom:auth', run);
   window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt') run(); });
 }
+
+/* Placeholder — earlier version of this function zeroed Cursor's
+ * boState.balance.live seed on the Binary page. User asked (2026-07-05)
+ * to keep the demo balance on Binary / Futures / Predict / Stocks (they
+ * are game/testnet-mode by design). Left as a no-op stub so the init
+ * sequence doesn't break; delete on the next round if still unused. */
+function gwZeroBinaryDemoBalance() { /* intentionally no-op — see comment above */ }
 
 /* Hide redundant "Other wallet" row in the Connect modal. WalletConnect v2
  * already covers any arbitrary wallet via its protocol (the QR/deep-link
@@ -2141,30 +2151,31 @@ async function gwRenderMetaPortfolio() {
     </div>
   `;
 
+  const isEmpty = total < 0.01;
   wrap.querySelector('.gw-mp-card').innerHTML = `
     <div class="gw-mp-head">
       <div>
         <p class="gw-mp-eyebrow">${t.eyebrow}</p>
         <p class="gw-mp-total">${gwFmtUsd(total)}</p>
-        <p class="gw-mp-sub">${t.sub}</p>
+        <p class="gw-mp-sub">${isEmpty ? t.empty : t.sub}</p>
       </div>
       <span class="gw-mp-badge">${t.badge}</span>
     </div>
-    ${total > 0 ? `<div class="gw-mp-bar">
+    ${isEmpty ? '' : `<div class="gw-mp-bar">
       ${barSpan('custodial', cust.usd, '#00c2ff')}
       ${barSpan('onchain',   onch.usd, '#22c17c')}
       ${barSpan('predict',   pred.usd, '#a855f7')}
       ${barSpan('xstocks',   xst.usd,  '#f5b94d')}
-    </div>` : ''}
-    <div class="gw-mp-cats">
+    </div>`}
+    ${isEmpty ? '' : `<div class="gw-mp-cats">
       ${cat('custodial', t.c1, cust.usd, cust.assetsN ? `${cust.assetsN} ${t.assets}` : '—')}
       ${cat('onchain',   t.c2, onch.usd, onch.chainsN ? `${onch.chainsN} ${t.chains}` : '—')}
       ${cat('predict',   t.c3, pred.usd, pred.positionsN ? `${pred.positionsN} ${t.posN}` : '—')}
       ${cat('xstocks',   t.c4, xst.usd,  xst.positionsN ? `${xst.positionsN} ${t.posN}` : '—')}
-    </div>
+    </div>`}
     <div class="gw-mp-actions">
       <button class="gw-mp-btn primary" id="gwMpDeposit">+ ${t.a1}</button>
-      <button class="gw-mp-btn" id="gwMpSwap">${t.a2}</button>
+      ${isEmpty ? '' : `<button class="gw-mp-btn" id="gwMpSwap">${t.a2}</button>`}
       <button class="gw-mp-btn" id="gwMpRefresh">↻ ${t.a3}</button>
     </div>
   `;

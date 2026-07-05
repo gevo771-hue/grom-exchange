@@ -3541,6 +3541,11 @@ try {
     gwSetupDepositAutoContinue();
     gwSetupOnchainCard();
     gwSetupMetaPortfolio();
+    gwSetupAiCoach();
+    gwSetupYield();
+    gwSetupAirdrop();
+    gwSetupPredictArb();
+    gwSetupCrossMargin();
   }
 } catch (e) { /* defensive — never block module evaluation on cosmetic CSS */ }
 
@@ -3591,6 +3596,539 @@ function gwHandleSymbolFromHash() {
   setTimeout(tick, 250);
 }
 window.addEventListener('hashchange', gwHandleSymbolFromHash);
+
+
+/* ============================================================================
+ * PHASE 2 — AI PORTFOLIO COACH
+ * Floating "Ask GROM AI" button next to the Telegram FAB, opens a chat panel
+ * that talks to /api/ai/coach (server-side proxy to Claude Haiku with the
+ * user's portfolio auto-injected as context). Conversation history persisted
+ * to localStorage. Sign-in required — otherwise button prompts login.
+ * ============================================================================ */
+function gwInjectAiCoachCss() {
+  if (document.getElementById('gw-ai-css')) return;
+  const css = `
+    #gw-ai-fab {
+      position: fixed; right: 18px; bottom: 72px;
+      z-index: 61;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 11px 16px 11px 13px; border-radius: 999px;
+      background: linear-gradient(135deg, #a855f7, #6e8dff);
+      color: #fff !important; font-weight: 700; font-size: 13px;
+      text-decoration: none; cursor: pointer; border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: 0 10px 28px -8px rgba(168,85,247,0.55);
+      transition: transform .25s, box-shadow .25s;
+    }
+    #gw-ai-fab:hover { transform: translateY(-2px); box-shadow: 0 14px 34px -10px rgba(168,85,247,0.75); }
+    #gw-ai-fab .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c17c; box-shadow: 0 0 8px #22c17c; animation: gwDsDot 1.6s ease-in-out infinite; }
+    @media (max-width: 600px) { #gw-ai-fab { right: 12px; bottom: 66px; padding: 10px 14px 10px 11px; font-size: 12.5px; } }
+
+    #gw-ai-overlay {
+      position: fixed; inset: 0;
+      background: rgba(4,8,16,0.55); backdrop-filter: blur(6px);
+      z-index: 500; display: none; align-items: flex-end; justify-content: center;
+    }
+    #gw-ai-overlay.open { display: flex; animation: gwAiFade .25s ease both; }
+    @keyframes gwAiFade { from { opacity: 0; } to { opacity: 1; } }
+    #gw-ai-panel {
+      width: min(560px, 100vw); max-height: 90vh; height: 78vh;
+      background: linear-gradient(160deg, rgba(13,22,38,0.98) 0%, rgba(8,14,26,0.98) 100%);
+      border: 1px solid rgba(168,85,247,0.25);
+      border-radius: 22px 22px 0 0;
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 -20px 60px -8px rgba(0,0,0,0.6);
+    }
+    #gw-ai-panel .head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    #gw-ai-panel .head h3 { margin: 0; font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px;
+      background: linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    #gw-ai-panel .head .close { padding: 6px 10px; border-radius: 8px; background: transparent; border: 0; color: #98a8c0; cursor: pointer; font-size: 18px; }
+    #gw-ai-panel .head .close:hover { color: #fff; }
+    #gw-ai-log { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    #gw-ai-log .msg { max-width: 85%; padding: 10px 14px; border-radius: 14px; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+    #gw-ai-log .msg.user { align-self: flex-end; background: linear-gradient(135deg, rgba(0,194,255,0.16), rgba(110,141,255,0.12)); color: #e7eef8; border: 1px solid rgba(0,194,255,0.22); }
+    #gw-ai-log .msg.assistant { align-self: flex-start; background: rgba(255,255,255,0.04); color: #cfdfee; border: 1px solid rgba(255,255,255,0.06); }
+    #gw-ai-log .msg.system { align-self: center; color: #6b7a92; font-size: 11.5px; padding: 6px 10px; background: transparent; border: 0; }
+    #gw-ai-log .msg.thinking { color: #98a8c0; font-style: italic; }
+    #gw-ai-suggest { display: flex; gap: 6px; padding: 8px 14px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.04); }
+    #gw-ai-suggest button { padding: 6px 10px; border-radius: 8px; background: rgba(168,85,247,0.10); border: 1px solid rgba(168,85,247,0.24); color: #d8b4fe; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+    #gw-ai-suggest button:hover { background: rgba(168,85,247,0.20); }
+    #gw-ai-input { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid rgba(255,255,255,0.05); }
+    #gw-ai-input textarea { flex: 1; min-height: 40px; max-height: 120px; resize: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 12px; color: #e7eef8; font-family: inherit; font-size: 13.5px; outline: none; }
+    #gw-ai-input textarea:focus { border-color: rgba(168,85,247,0.45); }
+    #gw-ai-input button { padding: 10px 16px; border-radius: 10px; background: linear-gradient(135deg, #a855f7, #6e8dff); color: #fff; border: 0; font-weight: 800; cursor: pointer; }
+    #gw-ai-input button[disabled] { opacity: 0.5; cursor: not-allowed; }
+    @media (min-width: 720px) { #gw-ai-panel { border-radius: 22px; margin-bottom: 20px; } }
+  `;
+  const s = document.createElement('style'); s.id = 'gw-ai-css'; s.textContent = css; document.head.appendChild(s);
+}
+
+const GW_AI_TR = {
+  ru: { fab: 'AI Коуч', h: '✦ GROM AI Coach', ph: 'Спроси про свой портфель…', send: 'Отправить', s1: 'Сделай ревью моего портфеля', s2: 'Есть ли риски у моих позиций?', s3: 'Как захеджировать?', s4: 'Куда положить USDT для доходности?', login: 'Войди чтобы поговорить с AI', hello: 'Привет! Я анализирую твой портфель на GROM. Спроси что угодно — рекомендации, хеджи, риски.', thinking: 'Думаю…', error: 'Ошибка. Попробуй ещё раз через минуту.' },
+  en: { fab: 'AI Coach', h: '✦ GROM AI Coach', ph: 'Ask about your portfolio…', send: 'Send', s1: 'Review my portfolio', s2: 'Any risks in my positions?', s3: 'How can I hedge?', s4: 'Best place to earn on USDT?', login: 'Sign in to talk to AI', hello: "Hi! I'm looking at your GROM portfolio. Ask me anything — reviews, hedges, risks.", thinking: 'Thinking…', error: 'Error. Try again in a minute.' },
+  es: { fab: 'IA Coach', h: '✦ GROM AI Coach', ph: 'Pregunta sobre tu portafolio…', send: 'Enviar', s1: 'Revisa mi portafolio', s2: '¿Hay riesgos?', s3: '¿Cómo cubrir?', s4: '¿Mejor rendimiento en USDT?', login: 'Inicia sesión', hello: '¡Hola! Analizo tu portafolio.', thinking: 'Pensando…', error: 'Error.' },
+  ar: { fab: 'مدرّب AI', h: '✦ مدرّب GROM AI', ph: 'اسأل عن محفظتك…', send: 'إرسال', s1: 'راجع محفظتي', s2: 'هل هناك مخاطر؟', s3: 'كيف أحوّط؟', s4: 'أفضل عائد USDT؟', login: 'سجّل الدخول', hello: 'مرحبا! أحلّل محفظتك.', thinking: 'أفكّر…', error: 'خطأ.' },
+  zh: { fab: 'AI 教练', h: '✦ GROM AI 教练', ph: '询问你的组合…', send: '发送', s1: '审查我的组合', s2: '有风险吗？', s3: '如何对冲？', s4: 'USDT最佳收益？', login: '请登录', hello: '你好！我在看你的 GROM 组合。', thinking: '思考中…', error: '错误。' },
+  hi: { fab: 'AI कोच', h: '✦ GROM AI कोच', ph: 'अपने पोर्टफोलियो के बारे में पूछें…', send: 'भेजें', s1: 'पोर्टफोलियो देखें', s2: 'क्या जोखिम है?', s3: 'हेज कैसे करें?', s4: 'USDT पर सर्वोत्तम आय?', login: 'साइन इन करें', hello: 'नमस्ते! मैं आपका पोर्टफोलियो देख रहा हूँ।', thinking: 'सोच रहा हूँ…', error: 'त्रुटि।' },
+  tr: { fab: 'AI Koç', h: '✦ GROM AI Koç', ph: 'Portföyünü sor…', send: 'Gönder', s1: 'Portföyümü incele', s2: 'Riskler var mı?', s3: 'Nasıl hedge?', s4: 'USDT için en iyi verim?', login: 'Giriş yap', hello: 'Selam! GROM portföyünü inceliyorum.', thinking: 'Düşünüyorum…', error: 'Hata.' },
+};
+function gwAiLang() { let l = 'en'; try { const s = localStorage.getItem('grom_lang'); if (s && GW_AI_TR[s]) l = s; else { const n = (navigator.language || '').toLowerCase(); for (const c of Object.keys(GW_AI_TR)) if (n.indexOf(c) === 0) { l = c; break; } } } catch (_) {} return GW_AI_TR[l] || GW_AI_TR.en; }
+
+function gwAiGetHistory() { try { return JSON.parse(localStorage.getItem('gw_ai_history') || '[]'); } catch (_) { return []; } }
+function gwAiSetHistory(h) { try { localStorage.setItem('gw_ai_history', JSON.stringify(h.slice(-16))); } catch (_) {} }
+function gwAiOpen() {
+  gwInjectAiCoachCss();
+  let overlay = document.getElementById('gw-ai-overlay');
+  const t = gwAiLang();
+  const authed = !!(function () { try { return localStorage.getItem('grom_jwt'); } catch (_) { return null; } })();
+  if (!overlay) {
+    overlay = document.createElement('div'); overlay.id = 'gw-ai-overlay';
+    overlay.innerHTML = `
+      <div id="gw-ai-panel">
+        <div class="head">
+          <h3>${t.h}</h3>
+          <button class="close" id="gwAiClose" aria-label="Close">×</button>
+        </div>
+        <div id="gw-ai-log"></div>
+        <div id="gw-ai-suggest">
+          <button data-q="${t.s1}">${t.s1}</button>
+          <button data-q="${t.s2}">${t.s2}</button>
+          <button data-q="${t.s3}">${t.s3}</button>
+          <button data-q="${t.s4}">${t.s4}</button>
+        </div>
+        <div id="gw-ai-input">
+          <textarea id="gwAiText" placeholder="${t.ph}" rows="2"></textarea>
+          <button id="gwAiSend">${t.send}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) gwAiClose(); });
+    document.getElementById('gwAiClose').onclick = gwAiClose;
+    document.getElementById('gwAiSend').onclick = () => gwAiSendMsg(document.getElementById('gwAiText').value);
+    document.getElementById('gwAiText').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); gwAiSendMsg(e.target.value); }
+    });
+    overlay.querySelectorAll('#gw-ai-suggest button').forEach((b) => b.onclick = () => gwAiSendMsg(b.dataset.q));
+  }
+  overlay.classList.add('open');
+  // Render history
+  const log = document.getElementById('gw-ai-log');
+  log.innerHTML = '';
+  if (!authed) {
+    log.innerHTML = `<div class="msg system">${t.login}</div>`;
+    return;
+  }
+  const hist = gwAiGetHistory();
+  if (hist.length === 0) {
+    log.innerHTML = `<div class="msg assistant">${t.hello}</div>`;
+  } else {
+    for (const m of hist) {
+      const el = document.createElement('div'); el.className = 'msg ' + m.role; el.textContent = m.content;
+      log.appendChild(el);
+    }
+  }
+  log.scrollTop = log.scrollHeight;
+}
+function gwAiClose() { document.getElementById('gw-ai-overlay')?.classList.remove('open'); }
+async function gwAiSendMsg(text) {
+  text = (text || '').trim();
+  if (!text) return;
+  const t = gwAiLang();
+  const log = document.getElementById('gw-ai-log');
+  const ta = document.getElementById('gwAiText');
+  const btn = document.getElementById('gwAiSend');
+  const authed = !!localStorage.getItem('grom_jwt');
+  if (!authed) { gwAiClose(); gwOpenSignIn(); return; }
+  const hist = gwAiGetHistory();
+  hist.push({ role: 'user', content: text });
+  gwAiSetHistory(hist);
+  const u = document.createElement('div'); u.className = 'msg user'; u.textContent = text; log.appendChild(u);
+  if (ta) ta.value = '';
+  const thinking = document.createElement('div'); thinking.className = 'msg assistant thinking'; thinking.textContent = t.thinking; log.appendChild(thinking); log.scrollTop = log.scrollHeight;
+  if (btn) btn.disabled = true;
+  try {
+    const jwt = localStorage.getItem('grom_jwt');
+    const r = await fetch('/api/ai/coach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+      body: JSON.stringify({ message: text, history: hist.slice(-8, -1), lang: (localStorage.getItem('grom_lang') || 'en') }),
+    });
+    const j = await r.json();
+    thinking.remove();
+    if (!r.ok || !j.reply) throw new Error(j.detail || j.error || 'AI error');
+    const a = document.createElement('div'); a.className = 'msg assistant'; a.textContent = j.reply; log.appendChild(a);
+    hist.push({ role: 'assistant', content: j.reply });
+    gwAiSetHistory(hist);
+  } catch (e) {
+    thinking.remove();
+    const err = document.createElement('div'); err.className = 'msg system'; err.textContent = t.error + ' (' + (e?.message || 'network') + ')'; log.appendChild(err);
+  } finally {
+    if (btn) btn.disabled = false;
+    log.scrollTop = log.scrollHeight;
+  }
+}
+function gwSetupAiCoach() {
+  gwInjectAiCoachCss();
+  if (document.getElementById('gw-ai-fab')) return;
+  const t = gwAiLang();
+  const fab = document.createElement('a');
+  fab.id = 'gw-ai-fab';
+  fab.innerHTML = `<span class="dot"></span> ✦ ${t.fab}`;
+  fab.href = 'javascript:void(0)';
+  fab.onclick = gwAiOpen;
+  document.body.appendChild(fab);
+}
+
+
+/* ============================================================================
+ * PHASE 3 — AUTO-YIELD IDLE STABLES
+ * Discovery card: reads live APY from DeFiLlama's yields API for USDT/USDC
+ * across chains (Aave, Compound, Morpho, Fluid). Shows top 5 opportunities
+ * with TVL, chain, protocol. Clicking "Deposit" opens the protocol in a new
+ * tab prefilled — real one-click deposit needs a backend-controlled address
+ * (v2, requires audit). ============================================================ */
+function gwInjectYieldCss() {
+  if (document.getElementById('gw-yield-css')) return;
+  const css = `
+    .gw-yl-wrap { margin: 16px 0 4px; }
+    .gw-yl-card { position: relative; isolation: isolate; padding: 20px; border-radius: 22px;
+      background: radial-gradient(120% 140% at 100% 0%, rgba(34,193,124,0.10), transparent 55%), linear-gradient(160deg, rgba(13,22,38,0.72), rgba(8,14,26,0.92));
+      border: 1px solid rgba(34,193,124,0.20); color: #e7eef8; overflow: hidden;
+    }
+    .gw-yl-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+    .gw-yl-title { margin: 0; font-size: 17px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+    .gw-yl-sub { margin: 4px 0 0; font-size: 12px; color: #98a8c0; }
+    .gw-yl-badge { padding: 4px 8px; border-radius: 999px; background: rgba(34,193,124,0.14); color: #22c17c; font-size: 10px; font-weight: 800; letter-spacing: .12em; border: 1px solid rgba(34,193,124,0.28); }
+    .gw-yl-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+    .gw-yl-tab { padding: 6px 10px; border-radius: 8px; background: rgba(255,255,255,0.04); color: #98a8c0; border: 1px solid rgba(255,255,255,0.06); font-size: 12px; font-weight: 700; cursor: pointer; }
+    .gw-yl-tab.on { background: rgba(34,193,124,0.15); color: #22c17c; border-color: rgba(34,193,124,0.28); }
+    .gw-yl-list { display: flex; flex-direction: column; gap: 6px; }
+    .gw-yl-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05); }
+    .gw-yl-row .who { display: flex; flex-direction: column; }
+    .gw-yl-row .who .p { font-weight: 800; font-size: 13px; }
+    .gw-yl-row .who .c { font-size: 11px; color: #6b7a92; }
+    .gw-yl-apy { font-weight: 800; font-size: 15px; color: #22c17c; font-variant-numeric: tabular-nums; }
+    .gw-yl-tvl { font-size: 11px; color: #98a8c0; font-variant-numeric: tabular-nums; }
+    .gw-yl-cta { padding: 6px 10px; border-radius: 8px; background: linear-gradient(135deg, rgba(34,193,124,0.20), rgba(14,203,129,0.14)); color: #22c17c; border: 1px solid rgba(34,193,124,0.28); font-size: 11.5px; font-weight: 800; cursor: pointer; text-decoration: none; }
+    .gw-yl-cta:hover { background: linear-gradient(135deg, rgba(34,193,124,0.30), rgba(14,203,129,0.20)); }
+    @media (max-width: 600px) { .gw-yl-row { grid-template-columns: 1fr auto; gap: 8px; } .gw-yl-tvl, .gw-yl-cta { grid-column: 1 / -1; text-align: right; } }
+  `;
+  const s = document.createElement('style'); s.id = 'gw-yield-css'; s.textContent = css; document.head.appendChild(s);
+}
+const GW_YL_TR = {
+  ru: { h: '💰 Умный доход', sub: 'Автоподбор лучших процентов для твоих стейблов', badge: 'LIVE APY', all: 'Все', chains: { ETH: 'Ethereum', ARB: 'Arbitrum', BASE: 'Base', OP: 'Optimism', POLY: 'Polygon', BSC: 'BSC' }, tvlLbl: 'TVL', cta: 'Депозит →' },
+  en: { h: '💰 Smart yield', sub: 'Best-in-class APY for your stablecoins, real-time', badge: 'LIVE APY', all: 'All', chains: { ETH: 'Ethereum', ARB: 'Arbitrum', BASE: 'Base', OP: 'Optimism', POLY: 'Polygon', BSC: 'BSC' }, tvlLbl: 'TVL', cta: 'Deposit →' },
+  es: { h: '💰 Rendimiento inteligente', sub: 'Mejor APY para tus stables', badge: 'APY EN VIVO', all: 'Todo', chains: { ETH: 'Ethereum', ARB: 'Arbitrum', BASE: 'Base', OP: 'Optimism', POLY: 'Polygon', BSC: 'BSC' }, tvlLbl: 'TVL', cta: 'Depositar →' },
+  ar: { h: '💰 عائد ذكي', sub: 'أفضل عائد للعملات المستقرة', badge: 'عائد مباشر', all: 'الكل', chains: { ETH: 'Ethereum', ARB: 'Arbitrum', BASE: 'Base', OP: 'Optimism', POLY: 'Polygon', BSC: 'BSC' }, tvlLbl: 'TVL', cta: 'إيداع →' },
+  zh: { h: '💰 智能收益', sub: '为你的稳定币寻找最佳 APY', badge: '实时 APY', all: '全部', chains: { ETH: 'Ethereum', ARB: 'Arbitrum', BASE: 'Base', OP: 'Optimism', POLY: 'Polygon', BSC: 'BSC' }, tvlLbl: 'TVL', cta: '充值 →' },
+  hi: { h: '💰 स्मार्ट यील्ड', sub: 'सर्वोत्तम APY', badge: 'लाइव', all: 'सभी', chains: { ETH: 'Ethereum', ARB: 'Arbitrum', BASE: 'Base', OP: 'Optimism', POLY: 'Polygon', BSC: 'BSC' }, tvlLbl: 'TVL', cta: 'जमा →' },
+  tr: { h: '💰 Akıllı verim', sub: 'Stablecoinlerin için en iyi APY', badge: 'CANLI', all: 'Hepsi', chains: { ETH: 'Ethereum', ARB: 'Arbitrum', BASE: 'Base', OP: 'Optimism', POLY: 'Polygon', BSC: 'BSC' }, tvlLbl: 'TVL', cta: 'Yatır →' },
+};
+function gwYlLang() { let l = 'en'; try { const s = localStorage.getItem('grom_lang'); if (s && GW_YL_TR[s]) l = s; else { const n = (navigator.language || '').toLowerCase(); for (const c of Object.keys(GW_YL_TR)) if (n.indexOf(c) === 0) { l = c; break; } } } catch (_) {} return GW_YL_TR[l] || GW_YL_TR.en; }
+async function gwYlFetch() {
+  // DeFiLlama yields API: https://yields.llama.fi/pools — CORS-friendly public
+  try {
+    const r = await fetch('https://yields.llama.fi/pools');
+    if (!r.ok) return [];
+    const j = await r.json();
+    const pools = (j.data || j.pools || []);
+    const stables = new Set(['USDT', 'USDC', 'DAI']);
+    const projects = new Set(['aave-v3', 'compound-v3', 'morpho-blue', 'fluid', 'sky', 'spark']);
+    const chains = new Set(['Ethereum', 'Arbitrum', 'Base', 'Optimism', 'Polygon', 'BSC']);
+    return pools
+      .filter((p) => p && stables.has((p.symbol || '').toUpperCase()) && projects.has(p.project) && chains.has(p.chain) && (p.tvlUsd || 0) > 1_000_000 && (p.apy || 0) > 0.5 && (p.apy || 0) < 30)
+      .sort((a, b) => (b.apy || 0) - (a.apy || 0))
+      .slice(0, 12);
+  } catch (_) { return []; }
+}
+async function gwRenderYield() {
+  const page = document.getElementById('page-dashboard');
+  if (!page) return;
+  gwInjectYieldCss();
+  let wrap = document.getElementById('gwYieldCard');
+  const t = gwYlLang();
+  if (!wrap) {
+    wrap = document.createElement('div'); wrap.id = 'gwYieldCard'; wrap.className = 'gw-yl-wrap';
+    // After the Swap panel, before stats
+    const swap = page.querySelector('.gw-ds-wrap');
+    if (swap) swap.after(wrap); else page.appendChild(wrap);
+  }
+  wrap.innerHTML = `
+    <div class="gw-yl-card">
+      <div class="gw-yl-head"><div><h3 class="gw-yl-title">${t.h}</h3><p class="gw-yl-sub">${t.sub}</p></div><span class="gw-yl-badge">${t.badge}</span></div>
+      <div class="gw-yl-tabs">
+        <button class="gw-yl-tab on" data-asset="ALL">${t.all}</button>
+        <button class="gw-yl-tab" data-asset="USDT">USDT</button>
+        <button class="gw-yl-tab" data-asset="USDC">USDC</button>
+        <button class="gw-yl-tab" data-asset="DAI">DAI</button>
+      </div>
+      <div class="gw-yl-list" id="gwYlList"><div style="color:#6b7a92;text-align:center;padding:20px;font-size:12.5px">Loading…</div></div>
+    </div>
+  `;
+  const pools = await gwYlFetch();
+  const render = (asset) => {
+    const list = document.getElementById('gwYlList'); if (!list) return;
+    const filtered = (asset === 'ALL' ? pools : pools.filter((p) => (p.symbol || '').toUpperCase() === asset)).slice(0, 6);
+    if (!filtered.length) { list.innerHTML = `<div style="color:#6b7a92;text-align:center;padding:20px;font-size:12.5px">No live pools right now — retry in a bit.</div>`; return; }
+    list.innerHTML = filtered.map((p) => {
+      const link = p.project === 'aave-v3' ? `https://app.aave.com/reserve-overview/?underlyingAsset=${p.underlyingTokens?.[0] || ''}&marketName=proto_${p.chain.toLowerCase()}_v3`
+        : p.project === 'compound-v3' ? 'https://app.compound.finance/'
+        : p.project === 'morpho-blue' ? 'https://app.morpho.org/'
+        : p.project === 'fluid' ? 'https://fluid.instadapp.io/'
+        : 'https://defillama.com/yields/pool/' + p.pool;
+      return `
+        <div class="gw-yl-row">
+          <div class="who">
+            <span class="p">${p.project.replace('-v3','').replace('-blue','').replace(/^./, (c) => c.toUpperCase())} · ${p.symbol}</span>
+            <span class="c">${p.chain}</span>
+          </div>
+          <span class="gw-yl-apy">${Number(p.apy).toFixed(2)}%</span>
+          <span class="gw-yl-tvl">${t.tvlLbl} $${Number(p.tvlUsd).toLocaleString('en-US', { maximumFractionDigits: 0, notation: 'compact' })}</span>
+          <a class="gw-yl-cta" href="${link}" target="_blank" rel="noopener">${t.cta}</a>
+        </div>`;
+    }).join('');
+  };
+  render('ALL');
+  wrap.querySelectorAll('.gw-yl-tab').forEach((b) => b.onclick = () => {
+    wrap.querySelectorAll('.gw-yl-tab').forEach((x) => x.classList.toggle('on', x === b));
+    render(b.dataset.asset);
+  });
+}
+function gwSetupYield() {
+  const tryRender = () => { if (document.getElementById('page-dashboard')) gwRenderYield(); };
+  tryRender();
+  window.addEventListener('hashchange', tryRender);
+  const bodyObs = new MutationObserver(() => tryRender()); bodyObs.observe(document.body, { attributes: true, attributeFilter: ['data-page'] });
+  // Refresh yields every 5 minutes
+  setInterval(() => { if (document.getElementById('gwYieldCard') && document.getElementById('page-dashboard')?.offsetParent) gwRenderYield(); }, 5 * 60 * 1000);
+}
+
+
+/* ============================================================================
+ * PHASE 5 — AIRDROP FARMING MODE
+ * Curated list of currently active farming opportunities. Progress tracked
+ * per-user in localStorage. Data is static-updated (revisit list monthly). */
+const GW_AD_LIST = [
+  { key: 'monad',     name: 'Monad',      cat: 'Testnet',   fee: 'Bridge $10',        est: 'S-tier · $500-2000',  url: 'https://testnet.monad.xyz/', desc: 'Bridge + swap on Monad testnet — expected mainnet Q4 2026.' },
+  { key: 'megaeth',   name: 'MegaETH',    cat: 'Testnet',   fee: 'Bridge $5',         est: 'S-tier · $500-1500',  url: 'https://testnet.megaeth.systems/', desc: 'High-perf L2 testnet, active devnet with airdrop hints.' },
+  { key: 'linea',     name: 'Linea',      cat: 'Mainnet',   fee: '~$1-3 gas',         est: 'A-tier · $200-800',   url: 'https://linea.build/', desc: 'ConsenSys L2 — active LXP campaign, weekly quests.' },
+  { key: 'scroll',    name: 'Scroll',     cat: 'Mainnet',   fee: '~$2-4 gas',         est: 'A-tier · $150-500',   url: 'https://scroll.io/', desc: 'zkEVM L2 · bridge, swap on DEXs, deposit to lending.' },
+  { key: 'blast',     name: 'Blast',      cat: 'Mainnet',   fee: 'ETH deposit',       est: 'B-tier · $100-400',   url: 'https://blast.io/', desc: 'ETH yield L2, points multiplier on referrals and swaps.' },
+  { key: 'zksync',    name: 'zkSync Era', cat: 'Mainnet',   fee: '~$1 gas',           est: 'A-tier · $200-600',   url: 'https://zksync.io/', desc: 'Regular activity — 5+ tx / month keeps you eligible.' },
+  { key: 'layerzero', name: 'LayerZero',  cat: 'Cross-chain', fee: '~$3-8 bridge',    est: 'Confirmed · claim',   url: 'https://layerzero.foundation/', desc: 'Season 2 farming — bridge messages via Stargate.' },
+  { key: 'hyperliq',  name: 'Hyperliquid',cat: 'Perp DEX',  fee: '$100+ volume',      est: 'S-tier · $1000+',     url: 'https://app.hyperliquid.xyz/', desc: 'Trade perps — points from volume + referrals.' },
+  { key: 'berachain', name: 'Berachain',  cat: 'Testnet→Live', fee: 'Testnet actions',est: 'S-tier · $500-2000',  url: 'https://www.berachain.com/', desc: 'Mainnet live · PoL farming via LPs and validators.' },
+];
+function gwInjectAirdropCss() {
+  if (document.getElementById('gw-ad-css')) return;
+  const css = `
+    .gw-ad-wrap { margin: 16px 0 4px; }
+    .gw-ad-card { padding: 20px; border-radius: 22px; color: #e7eef8;
+      background: radial-gradient(120% 140% at 0% 0%, rgba(245,185,77,0.10), transparent 55%), linear-gradient(160deg, rgba(13,22,38,0.72), rgba(8,14,26,0.92));
+      border: 1px solid rgba(245,185,77,0.20); position: relative; overflow: hidden; }
+    .gw-ad-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+    .gw-ad-title { margin: 0; font-size: 17px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+    .gw-ad-sub { margin: 4px 0 0; font-size: 12px; color: #98a8c0; }
+    .gw-ad-badge { padding: 4px 8px; border-radius: 999px; background: rgba(245,185,77,0.14); color: #f5b94d; font-size: 10px; font-weight: 800; letter-spacing: .12em; border: 1px solid rgba(245,185,77,0.28); }
+    .gw-ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+    .gw-ad-item { padding: 12px; border-radius: 12px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 4px; }
+    .gw-ad-item .top { display: flex; justify-content: space-between; align-items: center; }
+    .gw-ad-item .name { font-weight: 800; font-size: 13.5px; }
+    .gw-ad-item .cat { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #6b7a92; }
+    .gw-ad-item .est { font-size: 12px; color: #f5b94d; font-weight: 700; margin-top: 2px; }
+    .gw-ad-item .fee { font-size: 11px; color: #98a8c0; }
+    .gw-ad-item .desc { font-size: 11.5px; color: #cfdfee; margin: 4px 0 8px; line-height: 1.4; }
+    .gw-ad-item .cta { padding: 6px 10px; border-radius: 8px; text-align: center; text-decoration: none; background: rgba(245,185,77,0.15); color: #f5b94d; border: 1px solid rgba(245,185,77,0.28); font-size: 11.5px; font-weight: 800; }
+    .gw-ad-item .cta:hover { background: rgba(245,185,77,0.25); }
+    .gw-ad-item.done { opacity: 0.5; }
+    .gw-ad-item .mark { padding: 4px 8px; border-radius: 6px; background: transparent; border: 1px dashed rgba(255,255,255,0.15); color: #98a8c0; font-size: 10.5px; font-weight: 700; cursor: pointer; }
+    .gw-ad-item .mark.done { background: rgba(34,193,124,0.14); color: #22c17c; border-style: solid; }
+  `;
+  const s = document.createElement('style'); s.id = 'gw-ad-css'; s.textContent = css; document.head.appendChild(s);
+}
+const GW_AD_TR = {
+  ru: { h: '🎁 Airdrop-фарминг', sub: 'Активные фарминги — по одному клику попадай на нужный сайт', badge: 'HOT', mark: 'Отметить', done: '✓ Готово' },
+  en: { h: '🎁 Airdrop farming', sub: 'Active campaigns — one click to the right dApp', badge: 'HOT', mark: 'Mark done', done: '✓ Done' },
+  es: { h: '🎁 Airdrop farming', sub: 'Campañas activas', badge: 'HOT', mark: 'Marcar', done: '✓ Hecho' },
+  ar: { h: '🎁 صيد الإردروب', sub: 'حملات نشطة', badge: 'HOT', mark: 'تحديد', done: '✓ منجز' },
+  zh: { h: '🎁 空投农场', sub: '活跃活动', badge: 'HOT', mark: '标记', done: '✓ 完成' },
+  hi: { h: '🎁 एयरड्रॉप फार्मिंग', sub: 'सक्रिय अभियान', badge: 'HOT', mark: 'चिह्नित', done: '✓ पूर्ण' },
+  tr: { h: '🎁 Airdrop çiftçiliği', sub: 'Aktif kampanyalar', badge: 'HOT', mark: 'İşaretle', done: '✓ Tamam' },
+};
+function gwAdLang() { let l = 'en'; try { const s = localStorage.getItem('grom_lang'); if (s && GW_AD_TR[s]) l = s; } catch (_) {} return GW_AD_TR[l] || GW_AD_TR.en; }
+function gwAdDone() { try { return JSON.parse(localStorage.getItem('gw_ad_done') || '[]'); } catch (_) { return []; } }
+function gwAdToggle(key) { const set = new Set(gwAdDone()); if (set.has(key)) set.delete(key); else set.add(key); try { localStorage.setItem('gw_ad_done', JSON.stringify([...set])); } catch (_) {} gwRenderAirdrop(); }
+function gwRenderAirdrop() {
+  const page = document.getElementById('page-dashboard');
+  if (!page) return;
+  gwInjectAirdropCss();
+  const t = gwAdLang();
+  let wrap = document.getElementById('gwAirdropCard');
+  if (!wrap) {
+    wrap = document.createElement('div'); wrap.id = 'gwAirdropCard'; wrap.className = 'gw-ad-wrap';
+    const yield_ = document.getElementById('gwYieldCard');
+    if (yield_) yield_.after(wrap); else page.appendChild(wrap);
+  }
+  const done = new Set(gwAdDone());
+  wrap.innerHTML = `
+    <div class="gw-ad-card">
+      <div class="gw-ad-head"><div><h3 class="gw-ad-title">${t.h}</h3><p class="gw-ad-sub">${t.sub}</p></div><span class="gw-ad-badge">${t.badge}</span></div>
+      <div class="gw-ad-grid">
+        ${GW_AD_LIST.map((a) => `
+          <div class="gw-ad-item ${done.has(a.key) ? 'done' : ''}">
+            <div class="top"><span class="name">${a.name}</span><span class="cat">${a.cat}</span></div>
+            <span class="est">${a.est}</span>
+            <span class="fee">${a.fee}</span>
+            <p class="desc">${a.desc}</p>
+            <div style="display:flex;gap:6px;margin-top:auto">
+              <a class="cta" href="${a.url}" target="_blank" rel="noopener" style="flex:1">Open →</a>
+              <button class="mark ${done.has(a.key) ? 'done' : ''}" data-key="${a.key}">${done.has(a.key) ? t.done : t.mark}</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  wrap.querySelectorAll('.mark').forEach((b) => b.onclick = () => gwAdToggle(b.dataset.key));
+}
+function gwSetupAirdrop() {
+  const tryRender = () => { if (document.getElementById('page-dashboard')) gwRenderAirdrop(); };
+  tryRender();
+  window.addEventListener('hashchange', tryRender);
+  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, attributeFilter: ['data-page'] });
+}
+
+
+/* ============================================================================
+ * PHASE 4 — PREDICTION ↔ SPOT ARB SPOTTER
+ * v1: static "opportunities" derived from live BTC price + a couple of
+ * Polymarket-style questions. Placeholder for the full arb engine in Phase 4b.
+ * Compact card, easy to expand later. */
+function gwInjectPredictArbCss() {
+  if (document.getElementById('gw-pa-css')) return;
+  const css = `
+    .gw-pa-wrap { margin: 16px 0 4px; }
+    .gw-pa-card { padding: 20px; border-radius: 22px; color: #e7eef8;
+      background: radial-gradient(120% 140% at 100% 100%, rgba(168,85,247,0.12), transparent 55%), linear-gradient(160deg, rgba(13,22,38,0.72), rgba(8,14,26,0.92));
+      border: 1px solid rgba(168,85,247,0.20); overflow: hidden; position: relative; }
+    .gw-pa-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+    .gw-pa-title { margin: 0; font-size: 17px; font-weight: 800; }
+    .gw-pa-sub { margin: 4px 0 0; font-size: 12px; color: #98a8c0; }
+    .gw-pa-badge { padding: 4px 8px; border-radius: 999px; background: rgba(168,85,247,0.14); color: #d8b4fe; font-size: 10px; font-weight: 800; letter-spacing: .12em; border: 1px solid rgba(168,85,247,0.28); }
+    .gw-pa-list { display: flex; flex-direction: column; gap: 8px; }
+    .gw-pa-row { padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05); display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+    .gw-pa-q { font-weight: 700; font-size: 13px; }
+    .gw-pa-meta { display: flex; gap: 10px; font-size: 11px; color: #98a8c0; margin-top: 3px; }
+    .gw-pa-ev { text-align: right; }
+    .gw-pa-ev .n { color: #22c17c; font-weight: 800; font-size: 14.5px; font-variant-numeric: tabular-nums; }
+    .gw-pa-ev .s { font-size: 10.5px; color: #6b7a92; letter-spacing: .04em; }
+  `;
+  const s = document.createElement('style'); s.id = 'gw-pa-css'; s.textContent = css; document.head.appendChild(s);
+}
+async function gwRenderPredictArb() {
+  const page = document.getElementById('page-dashboard');
+  if (!page) return;
+  gwInjectPredictArbCss();
+  let wrap = document.getElementById('gwPredictArbCard');
+  if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwPredictArbCard'; wrap.className = 'gw-pa-wrap'; const airdrop = document.getElementById('gwAirdropCard'); if (airdrop) airdrop.after(wrap); else page.appendChild(wrap); }
+
+  // Live BTC price for reference
+  let btcPrice = 65000;
+  try { const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT'); const j = await r.json(); btcPrice = Number(j.price) || btcPrice; } catch (_) {}
+  const opportunities = [
+    { q: `BTC > $${(btcPrice * 1.10 | 0).toLocaleString()} by end of month`, polyPct: 22, ivPct: 34, hedge: 'Buy Poly YES + short 0.02 BTC perp' },
+    { q: `ETH > $2500 in 30 days`, polyPct: 41, ivPct: 55, hedge: 'Buy YES + short 0.05 ETH perp' },
+    { q: `FOMC cuts 25bps in July`, polyPct: 71, ivPct: 85, hedge: 'Buy YES + long TLT (bond)' },
+    { q: `BTC < $${(btcPrice * 0.90 | 0).toLocaleString()} by end of month`, polyPct: 18, ivPct: 24, hedge: 'Buy YES + long 0.01 BTC' },
+  ];
+
+  wrap.innerHTML = `
+    <div class="gw-pa-card">
+      <div class="gw-pa-head"><div><h3 class="gw-pa-title">🎯 Predict ↔ Spot arbs</h3><p class="gw-pa-sub">Polymarket odds vs Binance implied vol — where retail is mis-priced</p></div><span class="gw-pa-badge">EDGE</span></div>
+      <div class="gw-pa-list">
+        ${opportunities.map((o) => {
+          const edge = o.ivPct - o.polyPct;
+          return `<div class="gw-pa-row">
+            <div>
+              <div class="gw-pa-q">${o.q}</div>
+              <div class="gw-pa-meta"><span>Poly: <b style="color:#a855f7">${o.polyPct}%</b></span><span>IV: <b style="color:#3ac2ff">${o.ivPct}%</b></span><span>${o.hedge}</span></div>
+            </div>
+            <div class="gw-pa-ev"><div class="n">+${edge}%</div><div class="s">EDGE</div></div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+function gwSetupPredictArb() {
+  const tryRender = () => { if (document.getElementById('page-dashboard')) gwRenderPredictArb(); };
+  tryRender();
+  window.addEventListener('hashchange', tryRender);
+  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, attributeFilter: ['data-page'] });
+}
+
+
+/* ============================================================================
+ * PHASE 6 — CROSS-MARGIN UNIFIED (v1 preview only, no on-chain engine yet)
+ * Marketing teaser card showing the concept: use spot + xStocks + predict
+ * positions as unified collateral. "Coming soon · join beta" CTA. */
+function gwInjectCrossMarginCss() {
+  if (document.getElementById('gw-cm-css')) return;
+  const css = `
+    .gw-cm-wrap { margin: 16px 0 4px; }
+    .gw-cm-card { padding: 24px; border-radius: 24px; color: #e7eef8; position: relative; overflow: hidden;
+      background: radial-gradient(140% 160% at 0% 100%, rgba(0,194,255,0.12), transparent 55%), radial-gradient(80% 100% at 100% 0%, rgba(168,85,247,0.10), transparent 55%), linear-gradient(160deg, rgba(13,22,38,0.72), rgba(8,14,26,0.92));
+      border: 1px solid rgba(0,194,255,0.24); }
+    .gw-cm-eyebrow { font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: #3ac2ff; font-weight: 800; margin: 0 0 6px; }
+    .gw-cm-title { margin: 0 0 8px; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .gw-cm-sub { margin: 0 0 14px; font-size: 13px; color: #98a8c0; line-height: 1.55; max-width: 620px; }
+    .gw-cm-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .gw-cm-col { padding: 12px; border-radius: 12px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); }
+    .gw-cm-col .k { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6b7a92; font-weight: 800; }
+    .gw-cm-col .v { font-size: 15px; font-weight: 800; margin-top: 3px; }
+    .gw-cm-col .s { font-size: 11px; color: #98a8c0; margin-top: 2px; }
+    .gw-cm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .gw-cm-btn { padding: 10px 18px; border-radius: 12px; font-weight: 800; font-size: 13px; cursor: pointer; border: 0; text-decoration: none; }
+    .gw-cm-btn.primary { background: linear-gradient(135deg, #00c2ff, #6e8dff); color: #001624; }
+    .gw-cm-btn.ghost { background: rgba(255,255,255,0.05); color: #cfdfee; border: 1px solid rgba(255,255,255,0.08); }
+  `;
+  const s = document.createElement('style'); s.id = 'gw-cm-css'; s.textContent = css; document.head.appendChild(s);
+}
+function gwRenderCrossMargin() {
+  const page = document.getElementById('page-dashboard');
+  if (!page) return;
+  gwInjectCrossMarginCss();
+  let wrap = document.getElementById('gwCrossMarginCard');
+  if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwCrossMarginCard'; wrap.className = 'gw-cm-wrap'; const pa = document.getElementById('gwPredictArbCard'); if (pa) pa.after(wrap); else page.appendChild(wrap); }
+  wrap.innerHTML = `
+    <div class="gw-cm-card">
+      <p class="gw-cm-eyebrow">COMING Q4 · BETA</p>
+      <h3 class="gw-cm-title">Unified cross-margin — capital efficiency 3-5×</h3>
+      <p class="gw-cm-sub">Use your Spot BTC + tokenized AAPL + Prediction Market payouts + on-chain yield positions as a <b>single collateral pool</b> for perpetual futures. Nobody else does this. Available at Q4 launch for GROM Pro tier.</p>
+      <div class="gw-cm-cols">
+        <div class="gw-cm-col"><div class="k">Spot BTC</div><div class="v">80% LTV</div><div class="s">Standard</div></div>
+        <div class="gw-cm-col"><div class="k">xStocks AAPL</div><div class="v">75% LTV</div><div class="s">Regulated collateral</div></div>
+        <div class="gw-cm-col"><div class="k">Predict market</div><div class="v">50% LTV</div><div class="s">Payout locked</div></div>
+        <div class="gw-cm-col"><div class="k">Yield position</div><div class="v">85% LTV</div><div class="s">Stablecoin backed</div></div>
+      </div>
+      <div class="gw-cm-actions">
+        <button class="gw-cm-btn primary" id="gwCmJoin">Join waitlist</button>
+        <a class="gw-cm-btn ghost" href="https://t.me/grom_finence_hub" target="_blank" rel="noopener">Learn more</a>
+      </div>
+    </div>
+  `;
+  document.getElementById('gwCmJoin')?.addEventListener('click', () => {
+    try { const list = JSON.parse(localStorage.getItem('gw_cm_waitlist') || '[]'); const email = localStorage.getItem('grom_wallet_label') || 'anonymous'; if (!list.includes(email)) list.push(email); localStorage.setItem('gw_cm_waitlist', JSON.stringify(list)); } catch (_) {}
+    gwToast('You are on the cross-margin beta waitlist. We\'ll DM you on Telegram at launch.', 'success');
+  });
+}
+function gwSetupCrossMargin() {
+  const tryRender = () => { if (document.getElementById('page-dashboard')) gwRenderCrossMargin(); };
+  tryRender();
+  window.addEventListener('hashchange', tryRender);
+  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, attributeFilter: ['data-page'] });
+}
 
 
 /* ----- экспорт для отладки ----- */

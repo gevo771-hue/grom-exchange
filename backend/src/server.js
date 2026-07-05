@@ -35,6 +35,7 @@ import createSettingsRouter from './settings/routes.js';
 import createSessionsRouter from './sessions/routes.js';
 import createReferralRouter from './referral/routes.js';
 import createSwapRouter from './swap/routes.js';
+import createAiRouter from './ai/routes.js';
 import createApiKeysRouter from './apikeys/routes.js';
 import createSupportRouter from './support/routes.js';
 import createAdminRouter from './admin/routes.js';
@@ -222,6 +223,7 @@ async function main() {
   app.use('/api/sessions', createSessionsRouter({ requireAuth }));
   app.use('/api/referral', createReferralRouter({ requireAuth }));
   app.use('/api/swap',     createSwapRouter({ requireAuth }));
+  app.use('/api/ai',       createAiRouter({ requireAuth }));
   app.use('/api/apikeys',  createApiKeysRouter({ requireAuth }));
   app.use('/api/support',  createSupportRouter({ requireAuth }));
   app.use('/api/kyc',      createKycRouter({ requireAuth }));

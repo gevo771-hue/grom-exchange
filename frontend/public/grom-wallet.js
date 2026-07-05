@@ -3769,6 +3769,53 @@ try {
     }
     gwInjectConnectModalCss();
     gwInjectTelegramFab();  // now legacy — just removes any stale FAB
+    // Silence Chrome's "Open in MetaMask" protocol handler prompt.
+    //
+    // When Reown's WalletConnect modal generates a `wc:...` pairing URI,
+    // parts of its flow will also try to navigate the parent window to
+    // that URI (or open a new tab) in case the user has a desktop wallet
+    // registered for the `wc:` protocol. Chrome sees MetaMask registered
+    // that handler at extension install and pops an orange "Open in
+    // MetaMask" bar — even when the user explicitly clicked "Trust".
+    //
+    // We can't unregister MetaMask's protocol handler, but we can stop
+    // the JS from ever navigating to a `wc:` URI. The QR still displays
+    // inside the modal, and the mobile scan flow works exactly as
+    // before — only the desktop protocol-handler nag goes away.
+    (function gwSilenceWcProtocolNav() {
+      const isWc = (v) => typeof v === 'string' && /^wc:/i.test(v);
+      try {
+        const origOpen = window.open;
+        window.open = function (u, ...a) { if (isWc(u)) { console.log('[GROM] blocked wc: open'); return null; } return origOpen.apply(this, [u, ...a]); };
+      } catch (_) {}
+      try {
+        const origAssign  = Location.prototype.assign;
+        const origReplace = Location.prototype.replace;
+        Location.prototype.assign  = function (u) { if (isWc(u)) { console.log('[GROM] blocked wc: assign'); return; } return origAssign.call(this, u); };
+        Location.prototype.replace = function (u) { if (isWc(u)) { console.log('[GROM] blocked wc: replace'); return; } return origReplace.call(this, u); };
+      } catch (_) {}
+      try {
+        // location.href = 'wc:...' — proxy the setter on the Location
+        // prototype. Some browsers don't allow reconfiguring the native
+        // descriptor; on those we just skip and rely on the other paths.
+        const desc = Object.getOwnPropertyDescriptor(Location.prototype, 'href')
+                  || Object.getOwnPropertyDescriptor(window.location, 'href');
+        if (desc && desc.configurable !== false && desc.set) {
+          const origSet = desc.set;
+          Object.defineProperty(Location.prototype, 'href', {
+            configurable: true, enumerable: true,
+            get: desc.get,
+            set: function (u) { if (isWc(u)) { console.log('[GROM] blocked wc: href='); return; } return origSet.call(this, u); },
+          });
+        }
+      } catch (_) {}
+      // Anchor clicks — if any `<a href="wc:...">` is generated we cancel
+      // the default so Chrome doesn't ask "Open in MetaMask?".
+      document.addEventListener('click', (e) => {
+        const a = e.target && e.target.closest && e.target.closest('a[href^="wc:"]');
+        if (a) { e.preventDefault(); console.log('[GROM] blocked wc: link click'); }
+      }, true);
+    })();
     // Central language reactor — dispatches window event 'grom:lang-change'
     // when any of these signals fire:
     //   1. gromRefreshI18nPages hook (Cursor's setLang -> grom-i18n.js)

@@ -2047,8 +2047,24 @@ function gwInjectDashSwapCss() {
   document.head.appendChild(style);
 }
 
-/* Persistent user prefs — mode ('paper' | 'onchain') and recent swap list */
-function gwDsGetMode() { try { return localStorage.getItem('gw_ds_mode') || 'paper'; } catch (_) { return 'paper'; } }
+/* Persistent user prefs — mode ('paper' | 'onchain') and recent swap list.
+ *
+ * Auto-pick: if the user has a connected wallet (WC/injected) but no JWT
+ * (SIWE not completed) we default to 'onchain' — that's the only mode that
+ * can actually spend their tokens. Otherwise use whatever they last picked. */
+function gwDsGetMode() {
+  try {
+    const stored = localStorage.getItem('gw_ds_mode');
+    if (stored === 'paper' || stored === 'onchain') return stored;
+  } catch (_) {}
+  // First-visit default
+  let hasWallet = false;
+  try { hasWallet = !!(window.gromWallet?.state?.().account); } catch (_) {}
+  const authed = (function () {
+    try { return !!localStorage.getItem('grom_jwt'); } catch (e) { return false; }
+  })();
+  return (hasWallet && !authed) ? 'onchain' : 'paper';
+}
 function gwDsSetMode(m) { try { localStorage.setItem('gw_ds_mode', m); } catch (_) {} }
 function gwDsGetRecent() { try { return JSON.parse(localStorage.getItem('gw_ds_recent') || '[]'); } catch (_) { return []; } }
 function gwDsPushRecent(entry) {
@@ -2420,13 +2436,41 @@ function gwInjectDashSwapPanel() {
       gwDsRefreshRate();
     });
   });
-  // Percentage chips (25/50/75/MAX) — fill amount from available balance
+  // Percentage chips (25/50/75/MAX) — fill amount from available balance.
+  // If nothing available in the current mode, offer the other mode inline
+  // instead of just a dead-end toast.
   document.querySelectorAll('.gw-ds-chip').forEach((chip) => {
     chip.addEventListener('click', async () => {
       const pct = Number(chip.dataset.pct);
       const from = document.getElementById('gwDsFrom')?.value || 'USDT';
       const avail = await gwDsAvailableAmount(from);
-      if (avail <= 0) { gwToast('No balance for ' + from, 'warn'); return; }
+      if (avail <= 0) {
+        const mode = gwDsGetMode();
+        const other = mode === 'paper' ? 'onchain' : 'paper';
+        // Peek at the other mode's balance so we can suggest specifically.
+        const savedMode = mode;
+        gwDsSetMode(other);
+        const otherBal = await gwDsAvailableAmount(from);
+        gwDsSetMode(savedMode); // don't actually switch yet, only propose
+        if (otherBal > 0) {
+          const otherName = other === 'paper' ? gwDsLang().modeT : gwDsLang().modeO;
+          const ok = confirm(`No ${from} in "${mode === 'paper' ? gwDsLang().modeT : gwDsLang().modeO}".\n\nSwitch to "${otherName}" — you have ${Number(otherBal).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} ${from} there.`);
+          if (ok) {
+            const other2Btn = document.querySelector('.gw-ds-mode[data-mode="' + other + '"]');
+            if (other2Btn) other2Btn.click();
+            setTimeout(async () => {
+              const amtEl = document.getElementById('gwDsAmt');
+              if (amtEl) {
+                amtEl.value = Number((otherBal * pct) / 100).toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+                gwDsRefreshRate();
+              }
+            }, 60);
+          }
+        } else {
+          gwToast('No ' + from + ' balance anywhere yet — deposit first', 'warn');
+        }
+        return;
+      }
       const amtEl = document.getElementById('gwDsAmt');
       if (amtEl) {
         amtEl.value = Number((avail * pct) / 100).toFixed(8).replace(/0+$/, '').replace(/\.$/, '');

@@ -2318,6 +2318,201 @@ async function gwDsRefreshBalances() {
   }
 }
 
+/* ============================================================================
+ * INLINE ON-CHAIN SWAP — no external tabs, direct wallet signing.
+ *
+ * Chain 56 (BSC) → PancakeSwap V2 router (0x10ED4…4E)
+ * Chain 1  (ETH) → Uniswap V2 router      (0x7a250…88D)
+ * Others         → throw 'unsupported' so caller can fall back to 1inch tab.
+ *
+ * We hand-encode ABI calls to avoid pulling ethers.js at load time. The
+ * encoded selectors + parameter layout come straight from the standard
+ * UniswapV2Router02 interface (swapExactETHForTokens / swapExactTokensForETH /
+ * swapExactTokensForTokens + getAmountsOut). ERC-20 approve is checked and
+ * granted with MaxUint256 to avoid re-approvals on subsequent swaps.
+ *
+ * Slippage: 0.5% (hard-coded, matches DEX aggregator defaults). */
+const GW_OC_SWAP = {
+  56: {
+    router: '0x10ED43C718714eb63d5aA57B78B54704E256024E', // PancakeSwap V2
+    native: 'BNB',
+    wrapped: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', // WBNB
+    tokens: {
+      USDT: '0x55d398326f99059fF775485246999027B3197955',
+      USDC: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+      BUSD: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
+      ETH:  '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
+      BTC:  '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', // BTCB
+      CAKE: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
+    },
+    decimals: { BNB: 18, USDT: 18, USDC: 18, BUSD: 18, ETH: 18, BTC: 18, CAKE: 18 },
+  },
+  1: {
+    router: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', // Uniswap V2
+    native: 'ETH',
+    wrapped: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // WETH
+    tokens: {
+      USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+      USDC: '0xA0b86991c6218b36c1D19d4a2e9EB0cE3606eB48',
+      DAI:  '0x6B175474E89094C44Da98b954EedeAC495271d0F',
+      WBTC: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
+    },
+    decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8 },
+  },
+};
+
+/* ----- minimal ABI encoders ----- */
+function gwHex(n) { return BigInt(n).toString(16); }
+function gwPad32(hex) { return hex.replace(/^0x/, '').padStart(64, '0'); }
+function gwUint256(n) { return gwPad32(gwHex(n)); }
+function gwAddr(a) { return gwPad32(a.toLowerCase().replace(/^0x/, '')); }
+function gwEncodeAddrArray(arr, base) {
+  // address[] as a dynamic parameter, starting at offset `base`
+  let out = gwUint256(arr.length);
+  for (const a of arr) out += gwAddr(a);
+  return out;
+}
+
+/* Call read-only method (eth_call) and parse a single uint256 (or array). */
+async function gwEthCall(provider, to, data) {
+  const raw = await provider.request({ method: 'eth_call', params: [{ to, data }, 'latest'] });
+  return raw;
+}
+
+/* getAmountsOut(uint256 amountIn, address[] path) -> uint256[] */
+async function gwGetAmountsOut(provider, router, amountIn, path) {
+  const selector = '0xd06ca61f';
+  // Params: uint256 amountIn, uint256 offset_to_path (0x40), then dynamic array
+  const data = selector
+    + gwUint256(amountIn)
+    + gwUint256(0x40)
+    + gwEncodeAddrArray(path, 0);
+  const raw = await gwEthCall(provider, router, data);
+  // Parse array: skip head (0x20 offset), read length, then N * 32 bytes
+  const hex = raw.replace(/^0x/, '');
+  const arrayLen = parseInt(hex.slice(64, 128), 16);
+  const outs = [];
+  for (let i = 0; i < arrayLen; i++) {
+    const start = 128 + i * 64;
+    outs.push(BigInt('0x' + hex.slice(start, start + 64)));
+  }
+  return outs;
+}
+
+/* ERC-20 allowance(owner, spender) -> uint256 */
+async function gwErc20Allowance(provider, token, owner, spender) {
+  const data = '0xdd62ed3e' + gwAddr(owner) + gwAddr(spender);
+  const raw = await gwEthCall(provider, token, data);
+  return BigInt(raw || '0x0');
+}
+
+/* Send: ERC-20 approve(spender, MaxUint256). Waits for receipt. */
+async function gwErc20ApproveMax(provider, token, spender, from) {
+  const MAX = 'f'.repeat(64);
+  const data = '0x095ea7b3' + gwAddr(spender) + MAX;
+  const hash = await provider.request({
+    method: 'eth_sendTransaction',
+    params: [{ from, to: token, data, value: '0x0' }],
+  });
+  await gwWaitReceipt(provider, hash);
+  return hash;
+}
+
+async function gwWaitReceipt(provider, hash, timeoutMs = 90000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const r = await provider.request({ method: 'eth_getTransactionReceipt', params: [hash] });
+      if (r && r.status) return r;
+    } catch (_) {}
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error('Transaction timed out — check your wallet');
+}
+
+/* Ensure the wallet is on the correct chain. If not, prompt to switch. */
+async function gwEnsureChain(provider, targetChainId) {
+  const current = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+  if (current === targetChainId) return;
+  const hex = '0x' + targetChainId.toString(16);
+  try {
+    await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
+  } catch (_) {
+    throw new Error(`Please switch your wallet to chain ${targetChainId}`);
+  }
+}
+
+async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
+  const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
+    ? window.gromWallet.wcProvider
+    : window.ethereum;
+  if (!provider) throw new Error('No wallet provider');
+  const [account] = await provider.request({ method: 'eth_accounts' });
+  if (!account) throw new Error('Wallet not connected');
+  const chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+  const cfg = GW_OC_SWAP[chainId];
+  if (!cfg) throw new Error(`unsupported — chain ${chainId} inline swap not wired`);
+  // Resolve token addresses
+  const tokenAddr = (s) => s === cfg.native ? cfg.wrapped : cfg.tokens[s];
+  const inAddr  = tokenAddr(fromSym);
+  const outAddr = tokenAddr(toSym);
+  if (!inAddr)  throw new Error(`unsupported — ${fromSym} not available on this chain`);
+  if (!outAddr) throw new Error(`unsupported — ${toSym} not available on this chain`);
+  const inDec  = cfg.decimals[fromSym] ?? 18;
+  const outDec = cfg.decimals[toSym]   ?? 18;
+  const amountIn = BigInt(Math.floor(amtNum * 10 ** inDec));
+  const path = [inAddr, outAddr];
+  // Read expected out & compute minOut (0.5% slippage)
+  const outs = await gwGetAmountsOut(provider, cfg.router, amountIn.toString(), path);
+  const expected = outs[outs.length - 1];
+  const minOut = (expected * 995n) / 1000n;
+  const deadline = Math.floor(Date.now() / 1000) + 20 * 60;
+
+  gwToast(`Confirm in wallet · expecting ~${(Number(expected) / 10 ** outDec).toFixed(6)} ${toSym}`, 'info');
+
+  let tx;
+  if (fromSym === cfg.native) {
+    // swapExactETHForTokens(minOut, path, to, deadline) — 0x7ff36ab5
+    const data = '0x7ff36ab5'
+      + gwUint256(minOut.toString())
+      + gwUint256(0x80)   // offset to path
+      + gwAddr(account)
+      + gwUint256(deadline)
+      + gwEncodeAddrArray(path, 0);
+    tx = { from: account, to: cfg.router, data, value: '0x' + amountIn.toString(16) };
+  } else if (toSym === cfg.native) {
+    // Need approve
+    const allow = await gwErc20Allowance(provider, inAddr, account, cfg.router);
+    if (allow < amountIn) await gwErc20ApproveMax(provider, inAddr, cfg.router, account);
+    // swapExactTokensForETH(amountIn, minOut, path, to, deadline) — 0x18cbafe5
+    const data = '0x18cbafe5'
+      + gwUint256(amountIn.toString())
+      + gwUint256(minOut.toString())
+      + gwUint256(0xa0)
+      + gwAddr(account)
+      + gwUint256(deadline)
+      + gwEncodeAddrArray(path, 0);
+    tx = { from: account, to: cfg.router, data, value: '0x0' };
+  } else {
+    // token-token: approve + swapExactTokensForTokens — 0x38ed1739
+    const allow = await gwErc20Allowance(provider, inAddr, account, cfg.router);
+    if (allow < amountIn) await gwErc20ApproveMax(provider, inAddr, cfg.router, account);
+    const data = '0x38ed1739'
+      + gwUint256(amountIn.toString())
+      + gwUint256(minOut.toString())
+      + gwUint256(0xa0)
+      + gwAddr(account)
+      + gwUint256(deadline)
+      + gwEncodeAddrArray(path, 0);
+    tx = { from: account, to: cfg.router, data, value: '0x0' };
+  }
+
+  const hash = await provider.request({ method: 'eth_sendTransaction', params: [tx] });
+  gwToast('Submitted · waiting for confirmation…', 'info');
+  await gwWaitReceipt(provider, hash);
+  return hash;
+}
+
 function gwDsFlashSuccess(msg) {
   const t = document.createElement('div');
   t.className = 'gw-ds-toast';
@@ -2338,17 +2533,32 @@ async function gwDsSubmit() {
   if (from === to) { gwToast('Choose different assets', 'warn'); return; }
 
   if (mode === 'onchain') {
-    // Build a 1inch app deeplink so the user can swap directly from their
-    // connected wallet on the correct chain. We drop them into the flow with
-    // the pair + amount prefilled. Zero backend, real swap, real slippage.
-    // Chain is best-guessed from the current provider — falls back to BSC
-    // since that's where most retail USDT sits.
-    let chainId = 1;
-    try { const s = window.gromWallet?.state?.(); if (s?.chainId) chainId = Number(s.chainId); } catch (_) {}
-    if (!(chainId in { 1: 1, 42161: 1, 137: 1, 8453: 1, 56: 1, 10: 1, 43114: 1 })) chainId = 1;
-    const url = `https://app.1inch.io/#/${chainId}/simple/swap/${from}/${to}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-    gwDsFlashSuccess('Opening 1inch aggregator…');
+    if (cta) cta.classList.add('busy');
+    try {
+      await gwOnChainSwapExec(from, to, amt);
+      gwDsPushRecent({ from, to, amt, out: '≈ market', mode: 'onchain' });
+      gwDsFlashSuccess(t.success);
+      const amtEl = document.getElementById('gwDsAmt'); if (amtEl) amtEl.value = '';
+      setTimeout(() => {
+        const wrap = document.querySelector('.gw-ds-wrap');
+        if (wrap) { wrap.remove(); gwInjectDashSwapPanel(); }
+      }, 800);
+    } catch (e) {
+      // Graceful fallback: if inline path isn't supported for this pair/chain,
+      // give the user the 1inch escape hatch instead of a dead-end error.
+      const reason = String(e?.message || e || '').slice(0, 140);
+      const label = /unsupported|not supported/i.test(reason)
+        ? 'Inline swap not available for this pair on this chain — open 1inch?'
+        : `Swap failed: ${reason}. Open 1inch instead?`;
+      const goExt = confirm(label);
+      if (goExt) {
+        let chainId = 1;
+        try { const s = window.gromWallet?.state?.(); if (s?.chainId) chainId = Number(s.chainId); } catch (_) {}
+        window.open(`https://app.1inch.io/#/${chainId}/simple/swap/${from}/${to}`, '_blank', 'noopener,noreferrer');
+      }
+    } finally {
+      if (cta) cta.classList.remove('busy');
+    }
     return;
   }
 

@@ -14,24 +14,55 @@
 -- by the `status IN ('open','closed','liquidated')` field, and the entry
 -- path (openFuturesPosition) still enforces `input.size > 0` at the API
 -- boundary, so this is safe.
+-- Drop the size > 0 constraint by every name we've ever used or Postgres
+-- might auto-name it. Prod logs (2026-07-05) call it
+-- "futures_positions_size_check" — drop that literal, plus a defensive
+-- scan for any other CHECK that references (size ... > ... 0).
+ALTER TABLE futures_positions
+  DROP CONSTRAINT IF EXISTS futures_positions_size_check;
+
 DO $$
 DECLARE
-  con_name TEXT;
+  r RECORD;
 BEGIN
-  SELECT conname INTO con_name
-    FROM pg_constraint
-   WHERE conrelid = 'futures_positions'::regclass
-     AND contype = 'c'
-     AND pg_get_constraintdef(oid) ILIKE '%(size%>%0)%';
+  FOR r IN
+    SELECT conname
+      FROM pg_constraint
+     WHERE conrelid = 'futures_positions'::regclass
+       AND contype  = 'c'
+       AND pg_get_constraintdef(oid) ~* 'size[[:space:]]*>[[:space:]]*0'
+  LOOP
+    EXECUTE 'ALTER TABLE futures_positions DROP CONSTRAINT ' || quote_ident(r.conname);
+  END LOOP;
+END $$;
 
-  IF con_name IS NOT NULL THEN
-    EXECUTE 'ALTER TABLE futures_positions DROP CONSTRAINT ' || quote_ident(con_name);
+-- Re-add relaxed constraint (idempotent via IF NOT EXISTS-style guard).
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = 'futures_positions'::regclass
+       AND conname  = 'futures_positions_size_check'
+  ) THEN
+    ALTER TABLE futures_positions
+      ADD CONSTRAINT futures_positions_size_check
+      CHECK (size >= 0);
   END IF;
 END $$;
 
-ALTER TABLE futures_positions
-  ADD CONSTRAINT futures_positions_size_check
-  CHECK (size >= 0);
+-- Data fix — flip orphan rows (size=0 AND status='open') to 'closed'.
+-- These were created by close attempts that hit the old CHECK and
+-- left the row in an inconsistent state. The mark loop keeps re-scanning
+-- them every second, so wiping this set is what actually stops the
+-- log spam.
+UPDATE futures_positions
+   SET status = 'closed',
+       closed_at = COALESCE(closed_at, NOW()),
+       close_reason = COALESCE(close_reason, 'orphan_size_zero_repair'),
+       unrealised_pnl = 0,
+       margin_usdt = 0,
+       updated_at = NOW()
+ WHERE status = 'open'
+   AND size = 0;
 
 -- Also relax entry_price and mark_price constraints defensively — a
 -- fully-closed position may retain the last known prices, but future

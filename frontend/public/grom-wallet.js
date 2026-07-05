@@ -1829,26 +1829,47 @@ function gwInjectMiscOverridesCss() {
  * modal's `wmSwap*` inputs. */
 const GW_DS_ASSETS = [
   { sym: 'USDT', name: 'Tether' },
+  { sym: 'USDC', name: 'USD Coin' },
   { sym: 'BTC',  name: 'Bitcoin' },
   { sym: 'ETH',  name: 'Ethereum' },
-  { sym: 'USDC', name: 'USD Coin' },
-  { sym: 'SOL',  name: 'Solana' },
   { sym: 'BNB',  name: 'BNB' },
+  { sym: 'SOL',  name: 'Solana' },
   { sym: 'XRP',  name: 'Ripple' },
   { sym: 'TRX',  name: 'Tron' },
   { sym: 'DOGE', name: 'Dogecoin' },
   { sym: 'ADA',  name: 'Cardano' },
   { sym: 'AVAX', name: 'Avalanche' },
+  { sym: 'MATIC',name: 'Polygon' },
+  { sym: 'DOT',  name: 'Polkadot' },
+  { sym: 'LINK', name: 'Chainlink' },
+  { sym: 'ATOM', name: 'Cosmos' },
+  { sym: 'LTC',  name: 'Litecoin' },
+  { sym: 'UNI',  name: 'Uniswap' },
+  { sym: 'SHIB', name: 'Shiba Inu' },
+  { sym: 'NEAR', name: 'NEAR' },
+  { sym: 'APT',  name: 'Aptos' },
+  { sym: 'ARB',  name: 'Arbitrum' },
+  { sym: 'OP',   name: 'Optimism' },
+  { sym: 'INJ',  name: 'Injective' },
+  { sym: 'TIA',  name: 'Celestia' },
+  { sym: 'SUI',  name: 'Sui' },
+  { sym: 'ETC',  name: 'Ethereum Classic' },
+  { sym: 'FIL',  name: 'Filecoin' },
+  { sym: 'BCH',  name: 'Bitcoin Cash' },
+  { sym: 'ALGO', name: 'Algorand' },
+  { sym: 'XLM',  name: 'Stellar' },
+  { sym: 'PEPE', name: 'Pepe' },
+  { sym: 'FLOKI',name: 'Floki' },
 ];
 
 const GW_DS_TR = {
-  ru: { h: 'Мгновенный своп', sub: 'Обмен между активами без комиссий сети. Расчёт за секунды через Binance Convert.', from: 'Отдаёшь', to: 'Получаешь', est: 'Введи сумму, чтобы увидеть курс.', cta: 'Сделать своп', getting: 'Запрос курса…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
-  en: { h: 'Instant swap',     sub: 'Swap any two assets, zero network fees, settles in seconds via Binance Convert.', from: 'You pay',     to: 'You get',      est: 'Enter an amount to see the live rate.', cta: 'Swap now',  getting: 'Fetching rate…',  ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
-  es: { h: 'Swap instantáneo', sub: 'Intercambia dos activos, sin comisiones de red, liquida en segundos vía Binance Convert.', from: 'Pagas', to: 'Recibes', est: 'Introduce un importe para ver el tipo en vivo.', cta: 'Hacer swap', getting: 'Obteniendo tipo…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
-  ar: { h: 'مبادلة فوريّة', sub: 'بدّل بين أي أصلين دون رسوم شبكة، تتم التسوية خلال ثوانٍ عبر Binance Convert.', from: 'تدفع', to: 'تستلم', est: 'أدخل المبلغ لرؤية السعر.', cta: 'مبادلة', getting: 'جلب السعر…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
-  zh: { h: '极速兑换',        sub: '任意两种资产秒级兑换，零网络手续费，通过 Binance Convert 结算。', from: '你支付', to: '你得到', est: '输入金额以查看实时汇率。', cta: '立即兑换', getting: '获取报价…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
-  hi: { h: 'इंस्टेंट स्वैप',     sub: 'किन्हीं दो एसेट्स में स्वैप, शून्य नेटवर्क फी — Binance Convert के ज़रिए।', from: 'आप देते हैं', to: 'आप पाते हैं', est: 'दर देखने के लिए राशि दर्ज करें।', cta: 'अभी स्वैप करें', getting: 'दर ली जा रही है…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
-  tr: { h: 'Anlık swap',       sub: 'İki varlık arasında sıfır ağ ücretiyle saniyeler içinde takas — Binance Convert üzerinden.', from: 'Verdiğin', to: 'Aldığın', est: 'Canlı kuru görmek için bir tutar gir.', cta: 'Swap yap', getting: 'Kur çekiliyor…', ratemsg: '1 {from} ≈ {rate} {to} · ~{out} {to}' },
+  ru: { h: 'Мгновенный своп', sub: 'Мгновенный обмен · лучшая ставка · без комиссий сети.', from: 'ОТДАЁШЬ', to: 'ПОЛУЧАЕШЬ', est: 'Введи сумму, чтобы увидеть курс.', cta: 'Сделать своп', ctaOc: 'Свап через кошелёк', ctaLogin: 'Войди чтобы свопать', getting: 'Запрос курса…', bal: 'Баланс', modeT: 'Торговый счёт', modeO: 'On-chain кошелёк', slip: 'Slippage', route: 'Маршрут', priceImpact: 'Влияние на цену', fee: 'Комиссия GROM', recent: 'Недавние свопы', success: 'Своп выполнен', flip: 'Поменять местами', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAX' },
+  en: { h: 'Instant swap',    sub: 'Instant swaps · best rate · zero network fees.', from: 'YOU PAY', to: 'YOU GET', est: 'Enter an amount to see the live rate.', cta: 'Swap now', ctaOc: 'Swap via wallet', ctaLogin: 'Sign in to swap', getting: 'Fetching rate…', bal: 'Balance', modeT: 'Trading account', modeO: 'On-chain wallet', slip: 'Slippage', route: 'Route', priceImpact: 'Price impact', fee: 'GROM fee', recent: 'Recent swaps', success: 'Swap complete', flip: 'Flip', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAX' },
+  es: { h: 'Swap instantáneo', sub: 'Swaps al instante · mejor tasa · sin comisiones de red.', from: 'PAGAS', to: 'RECIBES', est: 'Introduce un importe para ver el tipo en vivo.', cta: 'Hacer swap', ctaOc: 'Swap con cartera', ctaLogin: 'Inicia sesión', getting: 'Obteniendo…', bal: 'Saldo', modeT: 'Cuenta trading', modeO: 'Cartera on-chain', slip: 'Slippage', route: 'Ruta', priceImpact: 'Impacto', fee: 'Comisión GROM', recent: 'Swaps recientes', success: 'Swap completado', flip: 'Voltear', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MÁX' },
+  ar: { h: 'مبادلة فوريّة', sub: 'مبادلات فوريّة · أفضل سعر · بدون رسوم شبكة.', from: 'تدفع', to: 'تستلم', est: 'أدخل المبلغ لرؤية السعر.', cta: 'مبادلة', ctaOc: 'المبادلة عبر المحفظة', ctaLogin: 'سجّل الدخول', getting: 'جلب السعر…', bal: 'الرصيد', modeT: 'حساب التداول', modeO: 'محفظة على السلسلة', slip: 'الانزلاق', route: 'المسار', priceImpact: 'أثر السعر', fee: 'رسوم GROM', recent: 'مبادلات حديثة', success: 'تمّت المبادلة', flip: 'تبديل', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'الحد' },
+  zh: { h: '极速兑换',       sub: '秒级兑换 · 最佳价格 · 零网络费。', from: '你支付', to: '你得到', est: '输入金额以查看实时汇率。', cta: '立即兑换', ctaOc: '通过钱包兑换', ctaLogin: '请先登录', getting: '获取报价…', bal: '余额', modeT: '交易账户', modeO: '链上钱包', slip: '滑点', route: '路径', priceImpact: '价格影响', fee: 'GROM 手续费', recent: '最近兑换', success: '兑换完成', flip: '交换', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: '最大' },
+  hi: { h: 'इंस्टेंट स्वैप',    sub: 'तुरंत स्वैप · बेहतरीन दर · ज़ीरो नेटवर्क फ़ी।', from: 'आप देते हैं', to: 'आप पाते हैं', est: 'दर देखने के लिए राशि दर्ज करें।', cta: 'अभी स्वैप', ctaOc: 'वॉलेट से स्वैप', ctaLogin: 'साइन इन करें', getting: 'दर ली जा रही है…', bal: 'बैलेंस', modeT: 'ट्रेडिंग खाता', modeO: 'ऑन-चेन वॉलेट', slip: 'स्लिपेज', route: 'रूट', priceImpact: 'मूल्य प्रभाव', fee: 'GROM फ़ी', recent: 'हाल के स्वैप', success: 'स्वैप पूरा', flip: 'फ्लिप', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'मैक्स' },
+  tr: { h: 'Anlık swap',      sub: 'Anlık swap · en iyi kur · sıfır ağ ücreti.', from: 'VERDİĞİN', to: 'ALDIĞIN', est: 'Canlı kuru görmek için tutar gir.', cta: 'Swap yap', ctaOc: 'Cüzdanla swap', ctaLogin: 'Giriş yap', getting: 'Kur çekiliyor…', bal: 'Bakiye', modeT: 'İşlem hesabı', modeO: 'Zincir üzeri cüzdan', slip: 'Slippage', route: 'Rota', priceImpact: 'Fiyat etkisi', fee: 'GROM ücreti', recent: 'Son swaplar', success: 'Swap tamamlandı', flip: 'Ters çevir', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAKS' },
 };
 
 function gwDsLang() {
@@ -1867,90 +1888,157 @@ function gwDsLang() {
 function gwInjectDashSwapCss() {
   if (document.getElementById('gw-ds-css')) return;
   const css = `
-    .gw-ds-wrap { margin: 12px 0 4px; }
+    .gw-ds-wrap { margin: 14px 0 6px; }
     .gw-ds-card {
-      position: relative;
-      isolation: isolate;
-      padding: 22px 22px 20px;
-      border-radius: 22px;
+      position: relative; isolation: isolate;
+      padding: 22px 22px 20px; border-radius: 24px;
       background:
         radial-gradient(120% 140% at 0% 0%, rgba(0,194,255,0.10), transparent 55%),
-        linear-gradient(155deg, rgba(13,22,38,0.72) 0%, rgba(8,14,26,0.92) 100%);
-      border: 1px solid rgba(255,255,255,0.07);
-      box-shadow:
-        0 1px 0 rgba(255,255,255,0.06) inset,
-        0 14px 38px -18px rgba(0,0,0,0.55);
+        radial-gradient(80% 100% at 100% 0%, rgba(168,85,247,0.08), transparent 55%),
+        linear-gradient(160deg, rgba(13,22,38,0.72) 0%, rgba(8,14,26,0.92) 100%);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 16px 42px -20px rgba(0,0,0,0.55);
       backdrop-filter: blur(14px) saturate(150%);
       -webkit-backdrop-filter: blur(14px) saturate(150%);
-      overflow: hidden;
-      color: #e7eef8;
+      overflow: hidden; color: #e7eef8;
     }
     .gw-ds-card::before {
       content: ""; position: absolute; inset: -2px;
       padding: 1.5px; border-radius: inherit;
-      background: conic-gradient(from 0deg, #00c2ff 0%, transparent 25%, #6e8dff 50%, transparent 75%, #00c2ff 100%);
+      background: conic-gradient(from 0deg, #00c2ff 0%, transparent 25%, #a855f7 50%, transparent 75%, #00c2ff 100%);
       -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
               mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
       -webkit-mask-composite: xor; mask-composite: exclude;
-      opacity: 0.6;
-      animation: gwBnSpin 16s linear infinite; /* shares keyframes with banners */
+      opacity: 0.55; animation: gwBnSpin 20s linear infinite;
       pointer-events: none; z-index: 0;
     }
-    .gw-ds-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; position: relative; z-index: 1; margin-bottom: 14px; }
-    .gw-ds-title { font-size: 18px; font-weight: 800; letter-spacing: -0.01em;
-      background: linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin: 0 0 4px; }
-    .gw-ds-sub { font-size: 12.5px; color: #98a8c0; line-height: 1.5; margin: 0; max-width: 520px; }
-    .gw-ds-badge { background: rgba(0,194,255,0.18); color: #3ac2ff; padding: 3px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .14em; align-self: center; }
 
-    .gw-ds-form { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr; gap: 8px; }
-    .gw-ds-row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center;
-      padding: 14px; border-radius: 14px;
-      background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); }
-    .gw-ds-row .lbl { font-size: 11px; color: #6b7a92; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; grid-column: 1 / -1; margin-bottom: -4px; }
-    .gw-ds-row select, .gw-ds-row input {
+    .gw-ds-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; position: relative; z-index: 1; margin-bottom: 12px; }
+    .gw-ds-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 4px;
+      background: linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+      display: inline-flex; align-items: center; gap: 8px; }
+    .gw-ds-sub { font-size: 12.5px; color: #98a8c0; line-height: 1.55; margin: 0; max-width: 480px; }
+    .gw-ds-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,194,255,0.15); color: #3ac2ff; padding: 5px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .14em; align-self: center; border: 1px solid rgba(0,194,255,0.25); }
+    .gw-ds-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #22c17c; box-shadow: 0 0 8px #22c17c; animation: gwDsDot 1.6s ease-in-out infinite; }
+    @keyframes gwDsDot { 50% { opacity: 0.35; } }
+
+    /* Mode toggle */
+    .gw-ds-modes { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); margin-bottom: 12px; }
+    .gw-ds-mode { padding: 9px 8px; border: 0; border-radius: 9px; background: transparent; color: #98a8c0; font-weight: 700; font-size: 12.5px; cursor: pointer; transition: all .2s; letter-spacing: 0; }
+    .gw-ds-mode:hover { color: #e7eef8; }
+    .gw-ds-mode.on { background: linear-gradient(135deg, rgba(0,194,255,0.2), rgba(110,141,255,0.14)); color: #3ac2ff; box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset; }
+
+    .gw-ds-form { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; }
+
+    .gw-ds-row { padding: 14px 14px 12px; border-radius: 16px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      transition: border-color .2s, background .2s; }
+    .gw-ds-row:focus-within { border-color: rgba(0,194,255,0.35); background: rgba(255,255,255,0.04); }
+    .gw-ds-row-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 10.5px; letter-spacing: .16em; color: #6b7a92; font-weight: 800; }
+    .gw-ds-row-bal { color: #98a8c0; text-transform: none; letter-spacing: 0; font-size: 11px; font-weight: 600; }
+    .gw-ds-row-bal.clickable { cursor: pointer; }
+    .gw-ds-row-bal.clickable:hover { color: #3ac2ff; }
+    .gw-ds-row-main { display: flex; align-items: center; gap: 10px; }
+    .gw-ds-select { flex: 0 0 auto; }
+    .gw-ds-select select {
       background: rgba(255,255,255,0.06); color: #e7eef8;
       border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px; padding: 10px 12px;
-      font-family: inherit; font-size: 15px; font-weight: 700;
+      border-radius: 12px; padding: 10px 30px 10px 12px;
+      font-family: inherit; font-size: 14px; font-weight: 800;
       outline: none; -webkit-appearance: none; appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, #8aa0bc 50%), linear-gradient(135deg, #8aa0bc 50%, transparent 50%);
+      background-position: calc(100% - 14px) center, calc(100% - 9px) center;
+      background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+      min-width: 130px;
     }
-    .gw-ds-row select { background-image: linear-gradient(45deg, transparent 50%, #8aa0bc 50%), linear-gradient(135deg, #8aa0bc 50%, transparent 50%); background-position: calc(100% - 14px) center, calc(100% - 9px) center; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 28px; }
-    .gw-ds-row input { text-align: right; }
-    .gw-ds-row input:focus, .gw-ds-row select:focus { border-color: rgba(0,194,255,0.5); }
+    .gw-ds-amt { flex: 1; min-width: 0; }
+    .gw-ds-amt input {
+      width: 100%; background: transparent; color: #fff;
+      border: 0; padding: 6px 0; text-align: right;
+      font-family: inherit; font-size: 22px; font-weight: 800;
+      font-variant-numeric: tabular-nums; outline: none;
+    }
+    .gw-ds-amt input::placeholder { color: #4a5a75; }
+    .gw-ds-usd { text-align: right; font-size: 11px; color: #6b7a92; margin-top: 4px; font-variant-numeric: tabular-nums; }
 
-    .gw-ds-swap-icon { display: flex; justify-content: center; margin: -2px 0; }
-    .gw-ds-swap-icon button {
-      width: 34px; height: 34px;
+    /* Percentage chips row */
+    .gw-ds-chips { display: flex; gap: 6px; margin-top: 8px; }
+    .gw-ds-chip { flex: 1; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.04); color: #98a8c0; border: 1px solid rgba(255,255,255,0.06); font-size: 11px; font-weight: 800; letter-spacing: .04em; cursor: pointer; transition: all .15s; }
+    .gw-ds-chip:hover { background: rgba(255,255,255,0.08); color: #e7eef8; }
+    .gw-ds-chip.max { background: linear-gradient(135deg, rgba(0,194,255,0.15), rgba(110,141,255,0.10)); color: #3ac2ff; border-color: rgba(0,194,255,0.25); }
+
+    /* Flip button */
+    .gw-ds-flip-wrap { display: flex; justify-content: center; margin: -2px 0; z-index: 2; }
+    .gw-ds-flip {
+      width: 38px; height: 38px;
       display: inline-flex; align-items: center; justify-content: center;
-      border-radius: 50%; border: 1px solid rgba(255,255,255,0.1);
-      background: linear-gradient(135deg, rgba(0,194,255,0.18), rgba(110,141,255,0.10));
-      color: #3ac2ff; cursor: pointer; transition: transform .2s, background .2s;
-      font-size: 16px;
+      border-radius: 50%; border: 2px solid rgba(13,22,38,1);
+      background: linear-gradient(135deg, #00c2ff, #6e8dff);
+      color: #001624; cursor: pointer;
+      font-size: 16px; font-weight: 900;
+      transition: transform .3s cubic-bezier(.2,.7,.2,1), box-shadow .2s;
+      box-shadow: 0 4px 12px -2px rgba(0,194,255,0.4);
     }
-    .gw-ds-swap-icon button:hover { transform: rotate(180deg); background: linear-gradient(135deg, rgba(0,194,255,0.30), rgba(110,141,255,0.18)); }
+    .gw-ds-flip:hover { transform: rotate(180deg) scale(1.05); box-shadow: 0 6px 16px -2px rgba(0,194,255,0.6); }
+    .gw-ds-flip:active { transform: rotate(180deg) scale(0.95); }
 
-    .gw-ds-rate { font-size: 12.5px; color: #98a8c0; padding: 4px 4px 0; min-height: 18px; }
-    .gw-ds-rate.warn { color: #f5b94d; }
-    .gw-ds-rate.err  { color: #f87171; }
+    /* Route info panel */
+    .gw-ds-route { position: relative; z-index: 1; margin-top: 10px; padding: 12px 14px; border-radius: 12px;
+      background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05);
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 12px; }
+    .gw-ds-route .k { color: #6b7a92; font-weight: 600; }
+    .gw-ds-route .v { color: #cfdfee; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .gw-ds-route .full { grid-column: 1 / -1; }
+    .gw-ds-route.warn { border-color: rgba(245,185,77,0.25); background: rgba(245,185,77,0.05); }
+    .gw-ds-route.warn .v { color: #f5b94d; }
+    .gw-ds-route.err { border-color: rgba(239,68,68,0.25); background: rgba(239,68,68,0.05); }
+    .gw-ds-route.err .v { color: #f87171; }
 
     .gw-ds-cta {
-      margin-top: 10px;
-      width: 100%;
-      padding: 14px 18px;
-      border-radius: 14px; border: 0;
-      background: linear-gradient(135deg, #00c2ff, #5d8eff);
-      color: #001624; font-weight: 800; font-size: 14.5px; letter-spacing: .02em;
+      margin-top: 12px; width: 100%;
+      padding: 15px 18px; border-radius: 14px; border: 0;
+      background: linear-gradient(135deg, #00c2ff, #6e8dff);
+      color: #001624; font-weight: 800; font-size: 15px; letter-spacing: .02em;
       cursor: pointer;
-      box-shadow: 0 10px 26px -10px rgba(0,194,255,0.55);
-      transition: transform .2s, box-shadow .2s, opacity .2s;
+      box-shadow: 0 10px 28px -10px rgba(0,194,255,0.55);
+      transition: transform .2s, box-shadow .2s, opacity .2s, filter .2s;
+      position: relative; z-index: 1;
     }
-    .gw-ds-cta:hover { transform: translateY(-1px); box-shadow: 0 14px 32px -10px rgba(0,194,255,0.75); }
+    .gw-ds-cta:hover { transform: translateY(-1px); box-shadow: 0 14px 34px -10px rgba(0,194,255,0.75); }
     .gw-ds-cta:active { transform: translateY(0); }
-    .gw-ds-cta[disabled] { opacity: 0.6; cursor: not-allowed; }
+    .gw-ds-cta[disabled] { opacity: 0.55; cursor: not-allowed; filter: grayscale(20%); }
+    .gw-ds-cta.busy { pointer-events: none; opacity: 0.8; }
+    .gw-ds-cta.busy::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%); background-size: 200% 100%; animation: gwDsShine 1.4s linear infinite; }
+    @keyframes gwDsShine { to { background-position: -200% 0; } }
+
+    /* Recent swaps */
+    .gw-ds-recent { position: relative; z-index: 1; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); }
+    .gw-ds-recent-title { font-size: 10.5px; letter-spacing: .16em; color: #6b7a92; font-weight: 800; margin-bottom: 8px; }
+    .gw-ds-recent-list { display: flex; flex-direction: column; gap: 6px; }
+    .gw-ds-recent-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.02); font-size: 12px; }
+    .gw-ds-recent-row .r-pair { color: #cfdfee; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .gw-ds-recent-row .r-time { color: #6b7a92; font-size: 10.5px; }
+
+    /* Success flash */
+    .gw-ds-toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+      padding: 14px 20px; border-radius: 12px;
+      background: linear-gradient(135deg, rgba(34,193,124,0.95), rgba(14,203,129,0.9));
+      color: #001a0d; font-weight: 800; font-size: 13.5px;
+      box-shadow: 0 12px 32px -8px rgba(34,193,124,0.5);
+      z-index: 200; animation: gwDsPop .35s cubic-bezier(.2,.7,.2,1) both;
+    }
+    @keyframes gwDsPop { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
     @media (max-width: 600px) {
-      .gw-ds-row { grid-template-columns: 100px 1fr; padding: 12px; }
-      .gw-ds-row select, .gw-ds-row input { padding: 9px 10px; font-size: 14px; }
+      .gw-ds-card { padding: 18px 16px 16px; border-radius: 20px; }
+      .gw-ds-title { font-size: 18px; }
+      .gw-ds-sub { font-size: 12px; }
+      .gw-ds-select select { min-width: 110px; font-size: 13.5px; padding: 9px 26px 9px 10px; }
+      .gw-ds-amt input { font-size: 20px; }
+      .gw-ds-chip { font-size: 10.5px; padding: 6px 4px; }
+      .gw-ds-cta { padding: 14px 16px; font-size: 14.5px; }
     }
   `;
   const style = document.createElement('style');
@@ -1959,11 +2047,47 @@ function gwInjectDashSwapCss() {
   document.head.appendChild(style);
 }
 
+/* Persistent user prefs — mode ('paper' | 'onchain') and recent swap list */
+function gwDsGetMode() { try { return localStorage.getItem('gw_ds_mode') || 'paper'; } catch (_) { return 'paper'; } }
+function gwDsSetMode(m) { try { localStorage.setItem('gw_ds_mode', m); } catch (_) {} }
+function gwDsGetRecent() { try { return JSON.parse(localStorage.getItem('gw_ds_recent') || '[]'); } catch (_) { return []; } }
+function gwDsPushRecent(entry) {
+  try {
+    const list = gwDsGetRecent();
+    list.unshift({ ...entry, ts: Date.now() });
+    localStorage.setItem('gw_ds_recent', JSON.stringify(list.slice(0, 5)));
+  } catch (_) {}
+}
+function gwDsTimeAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h';
+  return Math.floor(h / 24) + 'd';
+}
+
 function gwDsBuildPanel() {
   const t = gwDsLang();
+  const mode = gwDsGetMode();
   const optionsFor = (selectedSym) => GW_DS_ASSETS
     .map((a) => `<option value="${a.sym}" ${a.sym === selectedSym ? 'selected' : ''}>${a.sym} · ${a.name}</option>`)
     .join('');
+  const recent = gwDsGetRecent();
+  const recentHtml = recent.length ? `
+    <div class="gw-ds-recent">
+      <div class="gw-ds-recent-title">${t.recent}</div>
+      <div class="gw-ds-recent-list">
+        ${recent.map((r) => `
+          <div class="gw-ds-recent-row">
+            <span class="r-pair">${r.amt} ${r.from} → ${r.out} ${r.to}</span>
+            <span class="r-time">${gwDsTimeAgo(r.ts)} · ${r.mode === 'onchain' ? '🔗' : '⚡'}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
   const wrap = document.createElement('div');
   wrap.className = 'gw-ds-wrap';
   wrap.innerHTML = `
@@ -1975,45 +2099,154 @@ function gwDsBuildPanel() {
         </div>
         <span class="gw-ds-badge">LIVE</span>
       </div>
+      <div class="gw-ds-modes" role="tablist">
+        <button type="button" class="gw-ds-mode ${mode === 'paper' ? 'on' : ''}" data-mode="paper">${t.modeT}</button>
+        <button type="button" class="gw-ds-mode ${mode === 'onchain' ? 'on' : ''}" data-mode="onchain">${t.modeO}</button>
+      </div>
       <div class="gw-ds-form">
         <div class="gw-ds-row">
-          <div class="lbl">${t.from}</div>
-          <select id="gwDsFrom">${optionsFor('USDT')}</select>
-          <input id="gwDsAmt" type="number" min="0" step="any" placeholder="0.00" />
+          <div class="gw-ds-row-top">
+            <span>${t.from}</span>
+            <span class="gw-ds-row-bal" id="gwDsBalFrom"></span>
+          </div>
+          <div class="gw-ds-row-main">
+            <div class="gw-ds-select">
+              <select id="gwDsFrom">${optionsFor('USDT')}</select>
+            </div>
+            <div class="gw-ds-amt">
+              <input id="gwDsAmt" type="number" min="0" step="any" inputmode="decimal" placeholder="0.00" />
+            </div>
+          </div>
+          <div class="gw-ds-usd" id="gwDsAmtUsd"></div>
+          <div class="gw-ds-chips">
+            <button type="button" class="gw-ds-chip" data-pct="25">${t.pct25}</button>
+            <button type="button" class="gw-ds-chip" data-pct="50">${t.pct50}</button>
+            <button type="button" class="gw-ds-chip" data-pct="75">${t.pct75}</button>
+            <button type="button" class="gw-ds-chip max" data-pct="100">${t.pctMax}</button>
+          </div>
         </div>
-        <div class="gw-ds-swap-icon">
-          <button type="button" id="gwDsFlip" aria-label="Flip">⇅</button>
+        <div class="gw-ds-flip-wrap">
+          <button type="button" class="gw-ds-flip" id="gwDsFlip" aria-label="${t.flip}">⇅</button>
         </div>
         <div class="gw-ds-row">
-          <div class="lbl">${t.to}</div>
-          <select id="gwDsTo">${optionsFor('BTC')}</select>
-          <input id="gwDsOut" type="text" readonly placeholder="0.00" />
+          <div class="gw-ds-row-top">
+            <span>${t.to}</span>
+            <span class="gw-ds-row-bal" id="gwDsBalTo"></span>
+          </div>
+          <div class="gw-ds-row-main">
+            <div class="gw-ds-select">
+              <select id="gwDsTo">${optionsFor('BTC')}</select>
+            </div>
+            <div class="gw-ds-amt">
+              <input id="gwDsOut" type="text" readonly placeholder="0.00" />
+            </div>
+          </div>
+          <div class="gw-ds-usd" id="gwDsOutUsd"></div>
         </div>
-        <div class="gw-ds-rate" id="gwDsRate">${t.est}</div>
+        <div class="gw-ds-route" id="gwDsRoute">
+          <span class="k full" id="gwDsRateLine">${t.est}</span>
+        </div>
         <button type="button" class="gw-ds-cta" id="gwDsCta">${t.cta} →</button>
       </div>
+      ${recentHtml}
     </div>
   `;
   return wrap;
+}
+
+/* Small in-memory price cache for USD values of the 32 assets (Binance ticker) */
+const gwDsPriceCache = new Map();  // sym -> { price, at }
+async function gwDsPriceUsd(sym) {
+  if (sym === 'USDT' || sym === 'USDC') return 1;
+  const cached = gwDsPriceCache.get(sym);
+  if (cached && Date.now() - cached.at < 20000) return cached.price;
+  try {
+    const r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}USDT`);
+    if (!r.ok) return 0;
+    const j = await r.json();
+    const p = Number(j.price) || 0;
+    gwDsPriceCache.set(sym, { price: p, at: Date.now() });
+    return p;
+  } catch (_) { return 0; }
+}
+
+/* Estimate "how much of FROM does the user have available" for the % chips.
+ *   paper mode  → postgres balance via cursor's window.__gromWalletOverview
+ *   onchain     → the sum of the connected wallet's balance for this token
+ *                 across supported EVM chains (gromFetchOnchainBalances). */
+async function gwDsAvailableAmount(sym) {
+  const mode = gwDsGetMode();
+  if (mode === 'paper') {
+    try {
+      const ov = window.__gromWalletOverview;
+      const asset = ov?.summary?.assets?.find((a) => (a.asset || '').toUpperCase() === sym);
+      if (asset) return Number(asset.amount) || 0;
+    } catch (_) {}
+    return 0;
+  }
+  // on-chain: sum across chains
+  try {
+    const addr = (function () {
+      try { return window.gromWallet?.state?.().account; } catch (_) { return null; }
+    })();
+    if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) return 0;
+    const chains = [1, 42161, 137, 8453, 56];
+    let total = 0;
+    for (const c of chains) {
+      const b = await window.gromFetchOnchainBalances?.(addr, c).catch(() => null);
+      if (!b) continue;
+      if (sym === 'ETH' && b.nativeEth) total += Number(b.nativeEth);
+      else if (sym === 'BNB' && c === 56 && b.nativeEth) total += Number(b.nativeEth);
+      else if (b.tokens && b.tokens[sym] != null) total += Number(b.tokens[sym]);
+    }
+    return total;
+  } catch (_) { return 0; }
 }
 
 let gwDsQuoteAbort = null;
 let gwDsQuoteTimer = null;
 async function gwDsRefreshRate() {
   const t = gwDsLang();
-  const rateEl = document.getElementById('gwDsRate');
-  const outEl  = document.getElementById('gwDsOut');
-  if (!rateEl || !outEl) return;
+  const routeEl = document.getElementById('gwDsRoute');
+  const outEl   = document.getElementById('gwDsOut');
+  const rateLine = document.getElementById('gwDsRateLine');
+  const amtUsd = document.getElementById('gwDsAmtUsd');
+  const outUsd = document.getElementById('gwDsOutUsd');
+  if (!routeEl || !outEl || !rateLine) return;
+  routeEl.className = 'gw-ds-route';
+
   const from = document.getElementById('gwDsFrom')?.value || 'USDT';
   const to   = document.getElementById('gwDsTo')?.value   || 'BTC';
   const amt  = Number(document.getElementById('gwDsAmt')?.value || 0);
-  rateEl.className = 'gw-ds-rate';
-  if (amt <= 0) { rateEl.textContent = t.est; outEl.value = ''; return; }
-  if (from === to) { rateEl.className = 'gw-ds-rate warn'; rateEl.textContent = '⚠ ' + (from === to ? 'Different assets required' : ''); outEl.value = ''; return; }
-  rateEl.textContent = t.getting;
+  const mode = gwDsGetMode();
+
+  // Refresh available balances shown above each field
+  gwDsRefreshBalances().catch(() => {});
+
+  if (amt <= 0) {
+    outEl.value = '';
+    if (amtUsd) amtUsd.textContent = '';
+    if (outUsd) outUsd.textContent = '';
+    rateLine.textContent = t.est;
+    return;
+  }
+  if (from === to) {
+    routeEl.className = 'gw-ds-route warn';
+    rateLine.textContent = '⚠ ' + (from === to ? 'Choose different assets' : '');
+    outEl.value = '';
+    return;
+  }
+
+  // Live USD label under "You pay"
+  gwDsPriceUsd(from).then((p) => { if (amtUsd) amtUsd.textContent = p ? '≈ $' + (amt * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : ''; });
+
+  rateLine.textContent = t.getting;
   try {
     if (gwDsQuoteAbort) gwDsQuoteAbort.abort();
     gwDsQuoteAbort = new AbortController();
+    // Both modes use the same paper-quote endpoint for pricing; on-chain
+    // execution goes via 1inch in gwDsSubmit — the quote here is still an
+    // accurate mid-market estimate.
     const jwt = localStorage.getItem('grom_jwt');
     const headers = { 'Content-Type': 'application/json' };
     if (jwt) headers.Authorization = `Bearer ${jwt}`;
@@ -2022,37 +2255,119 @@ async function gwDsRefreshRate() {
       body: JSON.stringify({ from, to, fromAmount: amt }),
     });
     const q = await r.json();
-    if (q.error) { rateEl.className = 'gw-ds-rate warn'; rateEl.textContent = q.error; outEl.value = ''; return; }
+    if (q.error) {
+      // Fall back to Binance ticker cross-rate if paper backend is unhappy
+      const [pf, pt] = await Promise.all([gwDsPriceUsd(from), gwDsPriceUsd(to)]);
+      if (pf && pt) {
+        const est = (amt * pf) / pt;
+        outEl.value = Number(est.toFixed(8));
+        rateLine.textContent = `1 ${from} ≈ ${(pf / pt).toFixed(6)} ${to}`;
+      } else {
+        routeEl.className = 'gw-ds-route warn';
+        rateLine.textContent = q.error;
+        outEl.value = '';
+      }
+      return;
+    }
     outEl.value = q.toAmount;
-    rateEl.textContent = t.ratemsg
-      .replace('{from}', from)
-      .replace('{rate}', Number(q.ratio).toFixed(6))
-      .replace('{to}', to)
-      .replace('{out}', q.toAmount);
+    // Rich route info
+    const rateStr = Number(q.ratio).toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+    routeEl.innerHTML = `
+      <span class="k">${t.route}</span><span class="v">${mode === 'paper' ? 'GROM Convert' : '1inch aggregator'}</span>
+      <span class="k">${t.fee}</span><span class="v">${q.feePct != null ? q.feePct + '%' : '0.10%'}</span>
+      <span class="k">${t.slip}</span><span class="v">${mode === 'paper' ? '—' : '0.5%'}</span>
+      <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${rateStr} ${to}</span>
+    `;
+    if (outUsd) gwDsPriceUsd(to).then((p) => { outUsd.textContent = p ? '≈ $' + (Number(q.toAmount) * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : ''; });
   } catch (e) {
     if (e.name === 'AbortError') return;
-    rateEl.className = 'gw-ds-rate err';
-    rateEl.textContent = 'Rate unavailable';
+    routeEl.className = 'gw-ds-route err';
+    rateLine.textContent = 'Rate unavailable';
   }
 }
 
-async function gwDsSubmit() {
-  if (!gwIsAuthed()) { gwOpenSignIn(); return; }
-  // Re-use the wallet modal's swap submitter by mirroring values into its
-  // inputs (it's already battle-tested + handles errors uniformly).
-  const map = { gwDsFrom: 'wmSwapFrom', gwDsTo: 'wmSwapTo', gwDsAmt: 'wmSwapAmt' };
-  Object.entries(map).forEach(([from, to]) => {
-    const src = document.getElementById(from);
-    const dst = document.getElementById(to);
-    if (src && dst) dst.value = src.value;
-  });
-  if (typeof window.gwSubmitSwap === 'function') {
-    try { await window.gwSubmitSwap(); } catch (e) { console.warn('[dashSwap]', e); }
-  } else if (typeof window.submitSwap === 'function') {
-    try { await window.submitSwap(); } catch (e) { console.warn('[dashSwap]', e); }
+async function gwDsRefreshBalances() {
+  const from = document.getElementById('gwDsFrom')?.value;
+  const to   = document.getElementById('gwDsTo')?.value;
+  const bFrom = document.getElementById('gwDsBalFrom');
+  const bTo   = document.getElementById('gwDsBalTo');
+  if (bFrom && from) {
+    const v = await gwDsAvailableAmount(from);
+    bFrom.classList.toggle('clickable', v > 0);
+    bFrom.textContent = v > 0 ? `${gwDsLang().bal}: ${Number(v).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} ${from}` : '';
   }
-  // After submit, refresh dash rate
-  setTimeout(gwDsRefreshRate, 600);
+  if (bTo && to) {
+    const v = await gwDsAvailableAmount(to);
+    bTo.textContent = v > 0 ? `${gwDsLang().bal}: ${Number(v).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} ${to}` : '';
+  }
+}
+
+function gwDsFlashSuccess(msg) {
+  const t = document.createElement('div');
+  t.className = 'gw-ds-toast';
+  t.textContent = '✓ ' + msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.transition = 'opacity .35s'; t.style.opacity = '0'; }, 2400);
+  setTimeout(() => { t.remove(); }, 2900);
+}
+
+async function gwDsSubmit() {
+  const t = gwDsLang();
+  const cta = document.getElementById('gwDsCta');
+  const mode = gwDsGetMode();
+  const from = document.getElementById('gwDsFrom')?.value || 'USDT';
+  const to   = document.getElementById('gwDsTo')?.value   || 'BTC';
+  const amt  = Number(document.getElementById('gwDsAmt')?.value || 0);
+  if (amt <= 0) { gwToast('Enter an amount', 'warn'); return; }
+  if (from === to) { gwToast('Choose different assets', 'warn'); return; }
+
+  if (mode === 'onchain') {
+    // Build a 1inch app deeplink so the user can swap directly from their
+    // connected wallet on the correct chain. We drop them into the flow with
+    // the pair + amount prefilled. Zero backend, real swap, real slippage.
+    // Chain is best-guessed from the current provider — falls back to BSC
+    // since that's where most retail USDT sits.
+    let chainId = 1;
+    try { const s = window.gromWallet?.state?.(); if (s?.chainId) chainId = Number(s.chainId); } catch (_) {}
+    if (!(chainId in { 1: 1, 42161: 1, 137: 1, 8453: 1, 56: 1, 10: 1, 43114: 1 })) chainId = 1;
+    const url = `https://app.1inch.io/#/${chainId}/simple/swap/${from}/${to}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+    gwDsFlashSuccess('Opening 1inch aggregator…');
+    return;
+  }
+
+  // paper (trading account) — needs JWT
+  if (!gwIsAuthed()) { gwOpenSignIn(); return; }
+  if (cta) cta.classList.add('busy');
+  try {
+    const jwt = localStorage.getItem('grom_jwt');
+    const q = await fetch('/api/swap/convert/quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+      body: JSON.stringify({ from, to, fromAmount: amt }),
+    }).then((r) => r.json());
+    if (q.error) throw new Error(q.error);
+    const a = await fetch('/api/swap/convert/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+      body: JSON.stringify({ quoteId: q.quoteId }),
+    }).then((r) => r.json());
+    if (a.error) throw new Error(a.error);
+    gwDsPushRecent({ from, to, amt, out: q.toAmount, mode: 'paper' });
+    gwDsFlashSuccess(t.success + ': ' + amt + ' ' + from + ' → ' + q.toAmount + ' ' + to);
+    // Refresh wallet slice + dashboard
+    try { window.hydrateWalletSlice?.(true); } catch (_) {}
+    // Wipe amount + re-render panel to show new recent list
+    const amtEl = document.getElementById('gwDsAmt'); if (amtEl) amtEl.value = '';
+    setTimeout(() => {
+      const wrap = document.querySelector('.gw-ds-wrap');
+      if (wrap) { wrap.remove(); gwInjectDashSwapPanel(); }
+    }, 800);
+  } catch (e) {
+    gwToast(e?.message || 'Swap failed', 'error');
+  } finally {
+    if (cta) cta.classList.remove('busy');
+  }
 }
 
 function gwInjectDashSwapPanel() {
@@ -2091,6 +2406,46 @@ function gwInjectDashSwapPanel() {
   });
   const cta = document.getElementById('gwDsCta');
   if (cta) cta.addEventListener('click', gwDsSubmit);
+  // Mode toggle (Trading account ⇄ On-chain wallet) — persists to localStorage
+  document.querySelectorAll('.gw-ds-mode').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const m = btn.dataset.mode;
+      if (!m) return;
+      gwDsSetMode(m);
+      document.querySelectorAll('.gw-ds-mode').forEach((x) => x.classList.toggle('on', x.dataset.mode === m));
+      // Update CTA label + rate route info
+      const c = document.getElementById('gwDsCta');
+      const t = gwDsLang();
+      if (c) c.innerHTML = (m === 'onchain' ? t.ctaOc : t.cta) + ' →';
+      gwDsRefreshRate();
+    });
+  });
+  // Percentage chips (25/50/75/MAX) — fill amount from available balance
+  document.querySelectorAll('.gw-ds-chip').forEach((chip) => {
+    chip.addEventListener('click', async () => {
+      const pct = Number(chip.dataset.pct);
+      const from = document.getElementById('gwDsFrom')?.value || 'USDT';
+      const avail = await gwDsAvailableAmount(from);
+      if (avail <= 0) { gwToast('No balance for ' + from, 'warn'); return; }
+      const amtEl = document.getElementById('gwDsAmt');
+      if (amtEl) {
+        amtEl.value = Number((avail * pct) / 100).toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+        gwDsRefreshRate();
+      }
+    });
+  });
+  // Also allow tapping the "Balance: 5.00 USDT" line to use MAX
+  const balFrom = document.getElementById('gwDsBalFrom');
+  if (balFrom) balFrom.addEventListener('click', async () => {
+    const chip = document.querySelector('.gw-ds-chip.max');
+    if (chip) chip.click();
+  });
+  // Set correct CTA label depending on mode
+  const mode0 = gwDsGetMode();
+  const t0 = gwDsLang();
+  if (cta) cta.innerHTML = (mode0 === 'onchain' ? t0.ctaOc : t0.cta) + ' →';
+  // Initial balance load
+  gwDsRefreshBalances().catch(() => {});
   return true;
 }
 

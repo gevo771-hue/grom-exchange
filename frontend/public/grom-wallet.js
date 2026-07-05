@@ -1564,6 +1564,7 @@ function gwSetupTelegramHelpCard() {
   window.addEventListener('hashchange', tryRender);
   const obs = new MutationObserver(() => tryRender());
   obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  window.addEventListener('grom:lang-change', () => { const el = document.querySelector('#page-help .gw-tg-card'); if (el) el.remove(); tryRender(); });
 }
 
 /**
@@ -2201,6 +2202,7 @@ function gwDebounce(fn, ms) {
 }
 function gwSetupMetaPortfolio() {
   const tryRender = gwDebounce(() => { if (document.getElementById('page-dashboard')) { try { gwRenderMetaPortfolio(); console.log('[GROM] meta-portfolio rendered'); } catch (e) { console.warn('[GROM] meta-portfolio', e); } } }, 200);
+  window.addEventListener('grom:lang-change', () => { const el = document.getElementById('gwMetaPortfolio'); if (el) el.remove(); tryRender(); });
   tryRender();
   // Retry poll: dashboard element may appear after this init runs (Cursor SPA)
   let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwMetaPortfolio') || n >= 20) clearInterval(id); else tryRender(); }, 500);
@@ -3755,6 +3757,35 @@ try {
     }
     gwInjectConnectModalCss();
     gwInjectTelegramFab();  // now legacy — just removes any stale FAB
+    // Central language reactor — dispatches window event 'grom:lang-change'
+    // when any of these signals fire:
+    //   1. gromRefreshI18nPages hook (Cursor's setLang -> grom-i18n.js)
+    //   2. <html lang="…"> attribute mutation
+    //   3. `storage` event for grom_lang (cross-tab)
+    //   4. Same-tab localStorage.setItem('grom_lang', ...) — we monkeypatch
+    //      setItem so we don't miss same-tab language switches.
+    (function gwLangReactor() {
+      const fire = () => { try { window.dispatchEvent(new CustomEvent('grom:lang-change', { detail: { lang: localStorage.getItem('grom_lang') } })); } catch (_) {} };
+      const prev = window.gromRefreshI18nPages;
+      window.gromRefreshI18nPages = function () {
+        try { if (typeof prev === 'function') prev.apply(this, arguments); } catch (_) {}
+        fire();
+      };
+      try {
+        const obs = new MutationObserver((muts) => { for (const m of muts) if (m.attributeName === 'lang') { fire(); break; } });
+        obs.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+      } catch (_) {}
+      window.addEventListener('storage', (e) => { if (e.key === 'grom_lang') fire(); });
+      // Monkeypatch setItem so setLang() in the same tab still triggers us.
+      try {
+        const origSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (k, v) {
+          const prev = k === 'grom_lang' ? this.getItem('grom_lang') : null;
+          origSetItem.call(this, k, v);
+          if (k === 'grom_lang' && v !== prev) fire();
+        };
+      } catch (_) {}
+    })();
     // Each setup wrapped so one broken feature doesn't cascade-kill the
     // others (previous bug: gwSetupAiCoach threw → yield/airdrop/predict/
     // cross-margin never ran because they were sequential in the same try).
@@ -4022,14 +4053,20 @@ async function gwAiSendMsg(text) {
 }
 function gwSetupAiCoach() {
   gwInjectAiCoachCss();
-  if (document.getElementById('gw-ai-fab')) return;
-  const t = gwAiLang();
-  const fab = document.createElement('a');
-  fab.id = 'gw-ai-fab';
-  fab.innerHTML = `<span class="dot"></span> ✦ ${t.fab}`;
-  fab.href = 'javascript:void(0)';
-  fab.onclick = gwAiOpen;
-  document.body.appendChild(fab);
+  const renderFab = () => {
+    const t = gwAiLang();
+    let fab = document.getElementById('gw-ai-fab');
+    if (!fab) {
+      fab = document.createElement('a');
+      fab.id = 'gw-ai-fab';
+      fab.href = 'javascript:void(0)';
+      fab.onclick = gwAiOpen;
+      document.body.appendChild(fab);
+    }
+    fab.innerHTML = `<span class="dot"></span> ✦ ${t.fab}`;
+  };
+  renderFab();
+  window.addEventListener('grom:lang-change', renderFab);
 }
 
 
@@ -4154,6 +4191,7 @@ function gwSetupYield() {
   window.addEventListener('hashchange', tryRender);
   const bodyObs = new MutationObserver(() => tryRender()); bodyObs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
   setInterval(() => { if (document.getElementById('gwYieldCard') && document.getElementById('page-dashboard')?.offsetParent) gwRenderYield(); }, 5 * 60 * 1000);
+  window.addEventListener('grom:lang-change', () => { const el = document.getElementById('gwYieldCard'); if (el) el.remove(); tryRender(); });
 }
 
 
@@ -4250,6 +4288,7 @@ function gwSetupAirdrop() {
   let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwAirdropCard') || n >= 20) clearInterval(id); else tryRender(); }, 500);
   window.addEventListener('hashchange', tryRender);
   const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  window.addEventListener('grom:lang-change', () => { const el = document.getElementById('gwAirdropCard'); if (el) el.remove(); tryRender(); });
 }
 
 
@@ -4320,6 +4359,7 @@ function gwSetupPredictArb() {
   let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwPredictArbCard') || n >= 20) clearInterval(id); else tryRender(); }, 500);
   window.addEventListener('hashchange', tryRender);
   const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  window.addEventListener('grom:lang-change', () => { const el = document.getElementById('gwPredictArbCard'); if (el) el.remove(); tryRender(); });
 }
 
 
@@ -4350,32 +4390,44 @@ function gwInjectCrossMarginCss() {
   `;
   const s = document.createElement('style'); s.id = 'gw-cm-css'; s.textContent = css; document.head.appendChild(s);
 }
+const GW_CM_TR = {
+  ru: { eyebrow: 'Q4 · БЕТА', h: 'Единый cross-margin — эффективность капитала ×3–5', sub: 'Используй Spot BTC + токенизированный AAPL + выплаты по прогнозам + yield-позиции как <b>единый залог</b> для perpetual-фьючерсов. Больше никто так не делает. Запуск для GROM Pro в Q4.', c1: 'Spot BTC', c2: 'xStocks AAPL', c3: 'Прогнозы', c4: 'Yield-позиция', std: 'Стандарт', reg: 'Регулируемый залог', pay: 'Выплата зафиксирована', stab: 'Стейблкоин', a1: 'В список ожидания', a2: 'Подробнее', toast: 'Ты в списке беты cross-margin. Напишем в Telegram при запуске.' },
+  en: { eyebrow: 'Q4 · BETA', h: 'Unified cross-margin — capital efficiency ×3–5', sub: 'Use your Spot BTC + tokenized AAPL + Prediction Market payouts + on-chain yield positions as a <b>single collateral pool</b> for perpetual futures. Nobody else does this. Available at Q4 launch for GROM Pro tier.', c1: 'Spot BTC', c2: 'xStocks AAPL', c3: 'Predict market', c4: 'Yield position', std: 'Standard', reg: 'Regulated collateral', pay: 'Payout locked', stab: 'Stablecoin backed', a1: 'Join waitlist', a2: 'Learn more', toast: "You're on the cross-margin beta waitlist. We'll DM you on Telegram at launch." },
+  es: { eyebrow: 'Q4 · BETA', h: 'Cross-margin unificado — eficiencia ×3–5', sub: 'Usa Spot BTC + AAPL tokenizado + Predict + yield como <b>colateral único</b>.', c1: 'Spot BTC', c2: 'xStocks AAPL', c3: 'Predict', c4: 'Yield', std: 'Estándar', reg: 'Colateral regulado', pay: 'Pago fijo', stab: 'Respaldo estable', a1: 'Unirse', a2: 'Saber más', toast: 'Estás en la lista.' },
+  ar: { eyebrow: 'Q4 · بيتا', h: 'هامش متقاطع موحّد — كفاءة رأس مال ×3-5', sub: 'استخدم BTC + AAPL + التنبؤات كضمان واحد.', c1: 'Spot BTC', c2: 'xStocks AAPL', c3: 'التنبؤات', c4: 'العائد', std: 'قياسي', reg: 'ضمان منظم', pay: 'دفع ثابت', stab: 'مدعوم بمستقر', a1: 'انضم', a2: 'التفاصيل', toast: 'تم إضافتك.' },
+  zh: { eyebrow: 'Q4 · 测试', h: '统一交叉保证金 — 资本效率 ×3–5', sub: '将 Spot BTC + 代币化 AAPL + 预测市场 + 收益仓位作为<b>单一抵押池</b>用于永续合约。独一无二。Q4 面向 GROM Pro 上线。', c1: 'Spot BTC', c2: 'xStocks AAPL', c3: '预测市场', c4: '收益仓位', std: '标准', reg: '受监管抵押', pay: '收益锁定', stab: '稳定币支持', a1: '加入候补', a2: '了解更多', toast: '已加入 cross-margin 测试候补名单。上线时会通过 Telegram 通知。' },
+  hi: { eyebrow: 'Q4 · बीटा', h: 'एकीकृत क्रॉस-मार्जिन — पूँजी दक्षता ×3–5', sub: 'Spot BTC + xStocks AAPL + Predict + Yield को एकल संपार्श्विक के रूप में उपयोग करें।', c1: 'Spot BTC', c2: 'xStocks AAPL', c3: 'Predict', c4: 'Yield', std: 'मानक', reg: 'विनियमित', pay: 'लॉक', stab: 'स्थिर', a1: 'शामिल हों', a2: 'और जानें', toast: 'आप सूची में हैं।' },
+  tr: { eyebrow: 'Q4 · BETA', h: 'Birleşik cross-margin — sermaye verimliliği ×3–5', sub: 'Spot BTC + xStocks AAPL + Predict + Yield tek teminat havuzu.', c1: 'Spot BTC', c2: 'xStocks AAPL', c3: 'Predict', c4: 'Yield', std: 'Standart', reg: 'Regüle teminat', pay: 'Sabit ödeme', stab: 'Stabil destekli', a1: 'Listeye katıl', a2: 'Daha fazla', toast: 'Listedesin.' },
+};
+function gwCmLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'); if (s&&GW_CM_TR[s]) l=s; } catch (_) {} return GW_CM_TR[l]||GW_CM_TR.en; }
+
 function gwRenderCrossMargin() {
   const page = document.getElementById('page-dashboard');
   if (!page) return;
   gwInjectCrossMarginCss();
   let wrap = document.getElementById('gwCrossMarginCard');
   if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwCrossMarginCard'; wrap.className = 'gw-cm-wrap'; const pa = document.getElementById('gwPredictArbCard'); if (pa) pa.after(wrap); else page.appendChild(wrap); }
+  const t = gwCmLang();
   wrap.innerHTML = `
     <div class="gw-cm-card">
-      <p class="gw-cm-eyebrow">COMING Q4 · BETA</p>
-      <h3 class="gw-cm-title">Unified cross-margin — capital efficiency 3-5×</h3>
-      <p class="gw-cm-sub">Use your Spot BTC + tokenized AAPL + Prediction Market payouts + on-chain yield positions as a <b>single collateral pool</b> for perpetual futures. Nobody else does this. Available at Q4 launch for GROM Pro tier.</p>
+      <p class="gw-cm-eyebrow">${t.eyebrow}</p>
+      <h3 class="gw-cm-title">${t.h}</h3>
+      <p class="gw-cm-sub">${t.sub}</p>
       <div class="gw-cm-cols">
-        <div class="gw-cm-col"><div class="k">Spot BTC</div><div class="v">80% LTV</div><div class="s">Standard</div></div>
-        <div class="gw-cm-col"><div class="k">xStocks AAPL</div><div class="v">75% LTV</div><div class="s">Regulated collateral</div></div>
-        <div class="gw-cm-col"><div class="k">Predict market</div><div class="v">50% LTV</div><div class="s">Payout locked</div></div>
-        <div class="gw-cm-col"><div class="k">Yield position</div><div class="v">85% LTV</div><div class="s">Stablecoin backed</div></div>
+        <div class="gw-cm-col"><div class="k">${t.c1}</div><div class="v">80% LTV</div><div class="s">${t.std}</div></div>
+        <div class="gw-cm-col"><div class="k">${t.c2}</div><div class="v">75% LTV</div><div class="s">${t.reg}</div></div>
+        <div class="gw-cm-col"><div class="k">${t.c3}</div><div class="v">50% LTV</div><div class="s">${t.pay}</div></div>
+        <div class="gw-cm-col"><div class="k">${t.c4}</div><div class="v">85% LTV</div><div class="s">${t.stab}</div></div>
       </div>
       <div class="gw-cm-actions">
-        <button class="gw-cm-btn primary" id="gwCmJoin">Join waitlist</button>
-        <a class="gw-cm-btn ghost" href="https://t.me/grom_finence_hub" target="_blank" rel="noopener">Learn more</a>
+        <button class="gw-cm-btn primary" id="gwCmJoin">${t.a1}</button>
+        <a class="gw-cm-btn ghost" href="https://t.me/grom_finence_hub" target="_blank" rel="noopener">${t.a2}</a>
       </div>
     </div>
   `;
   document.getElementById('gwCmJoin')?.addEventListener('click', () => {
     try { const list = JSON.parse(localStorage.getItem('gw_cm_waitlist') || '[]'); const email = localStorage.getItem('grom_wallet_label') || 'anonymous'; if (!list.includes(email)) list.push(email); localStorage.setItem('gw_cm_waitlist', JSON.stringify(list)); } catch (_) {}
-    gwToast('You are on the cross-margin beta waitlist. We\'ll DM you on Telegram at launch.', 'success');
+    gwToast(t.toast, 'success');
   });
 }
 function gwSetupCrossMargin() {
@@ -4384,6 +4436,7 @@ function gwSetupCrossMargin() {
   let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwCrossMarginCard') || n >= 20) clearInterval(id); else tryRender(); }, 500);
   window.addEventListener('hashchange', tryRender);
   const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  window.addEventListener('grom:lang-change', () => { const el = document.getElementById('gwCrossMarginCard'); if (el) el.remove(); tryRender(); });
 }
 
 

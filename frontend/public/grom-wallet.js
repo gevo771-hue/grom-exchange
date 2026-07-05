@@ -2366,32 +2366,113 @@ async function gwDsRefreshBalances() {
  * granted with MaxUint256 to avoid re-approvals on subsequent swaps.
  *
  * Slippage: 0.5% (hard-coded, matches DEX aggregator defaults). */
+/* Every EVM chain we support has its native V2-style DEX router. Uniswap-V2
+ * ABI is essentially identical across all of these (swapExactETHForTokens,
+ * getAmountsOut, approve(MaxUint256)), so the same hand-encoded calldata
+ * works for every one — we only differ in router address, wrapped-native
+ * address and token addresses. */
 const GW_OC_SWAP = {
-  56: {
-    router: '0x10ED43C718714eb63d5aA57B78B54704E256024E', // PancakeSwap V2
-    native: 'BNB',
-    wrapped: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', // WBNB
-    tokens: {
-      USDT: '0x55d398326f99059fF775485246999027B3197955',
-      USDC: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
-      BUSD: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
-      ETH:  '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
-      BTC:  '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', // BTCB
-      CAKE: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
-    },
-    decimals: { BNB: 18, USDT: 18, USDC: 18, BUSD: 18, ETH: 18, BTC: 18, CAKE: 18 },
-  },
-  1: {
-    router: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', // Uniswap V2
+  1: { // Ethereum · Uniswap V2
+    router: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
     native: 'ETH',
-    wrapped: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // WETH
+    wrapped: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+    dexName: 'Uniswap V2',
     tokens: {
       USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
       USDC: '0xA0b86991c6218b36c1D19d4a2e9EB0cE3606eB48',
       DAI:  '0x6B175474E89094C44Da98b954EedeAC495271d0F',
       WBTC: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
+      LINK: '0x514910771AF9Ca656af840dff83E8264EcF986CA',
+      UNI:  '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984',
+      SHIB: '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE',
+      PEPE: '0x6982508145454Ce325dDbE47a25d4ec3d2311933',
     },
-    decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8 },
+    decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8, LINK: 18, UNI: 18, SHIB: 18, PEPE: 18 },
+  },
+  56: { // BSC · PancakeSwap V2
+    router: '0x10ED43C718714eb63d5aA57B78B54704E256024E',
+    native: 'BNB',
+    wrapped: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
+    dexName: 'PancakeSwap V2',
+    tokens: {
+      USDT: '0x55d398326f99059fF775485246999027B3197955',
+      USDC: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+      BUSD: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
+      ETH:  '0x2170Ed0880ac9A755fd29B2688956BD959F933F8',
+      BTC:  '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c',
+      CAKE: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
+      DOGE: '0xbA2aE424d960c26247Dd6c32edC70B295c744C43',
+      ADA:  '0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47',
+      SHIB: '0x2859e4544C4bB03966803b044A93563Bd2D0DD4D',
+    },
+    decimals: { BNB: 18, USDT: 18, USDC: 18, BUSD: 18, ETH: 18, BTC: 18, CAKE: 18, DOGE: 8, ADA: 18, SHIB: 18 },
+  },
+  42161: { // Arbitrum · SushiSwap V2
+    router: '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506',
+    native: 'ETH',
+    wrapped: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
+    dexName: 'SushiSwap',
+    tokens: {
+      USDT: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+      USDC: '0xaf88d065e77c8cC2239327C0EDb1A48022fCcC7',
+      DAI:  '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1',
+      WBTC: '0x2f2a2543B76A4166549F7aaBB2cF6eB5C76A4166549F7aa',
+      ARB:  '0x912CE59144191C1204E64559FE8253a0e49E6548',
+      LINK: '0xf97f4df75117a78c1A5a0DBb814Af92458539FB4',
+    },
+    decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8, ARB: 18, LINK: 18 },
+  },
+  137: { // Polygon · QuickSwap V2
+    router: '0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff',
+    native: 'MATIC',
+    wrapped: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270',
+    dexName: 'QuickSwap',
+    tokens: {
+      USDT: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+      USDC: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
+      DAI:  '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063',
+      WBTC: '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6',
+      WETH: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
+    },
+    decimals: { MATIC: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8, WETH: 18 },
+  },
+  10: { // Optimism · Velodrome V2 (Solidly-style, V2-compatible for basic pairs)
+    router: '0x9c12939390052919aF3155f41Bf4160Fd3666A6f',
+    native: 'ETH',
+    wrapped: '0x4200000000000000000000000000000000000006',
+    dexName: 'Velodrome',
+    tokens: {
+      USDT: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58',
+      USDC: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
+      DAI:  '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1',
+      OP:   '0x4200000000000000000000000000000000000042',
+    },
+    decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, OP: 18 },
+  },
+  8453: { // Base · BaseSwap
+    router: '0x327Df1E6de05895d2ab08513aaDD9313Fe505d86',
+    native: 'ETH',
+    wrapped: '0x4200000000000000000000000000000000000006',
+    dexName: 'BaseSwap',
+    tokens: {
+      USDC: '0x833589fCD6eDb6E08f4c7C32D6f7b9bD686120e',
+      DAI:  '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb',
+    },
+    decimals: { ETH: 18, USDC: 6, DAI: 18 },
+  },
+  43114: { // Avalanche · TraderJoe V2
+    router: '0x60aE616a2155Ee3d9A68541Ba4544862310933d4',
+    native: 'AVAX',
+    wrapped: '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7',
+    dexName: 'TraderJoe',
+    tokens: {
+      USDT: '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7',
+      USDC: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
+      DAI:  '0xd586E7F844cEa2F87f50152665BCbc2C279D8d70',
+      WETH: '0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB',
+      WBTC: '0x50b7545627a5162F82A992c33b87aDc75187B218',
+    },
+    decimals: { AVAX: 18, USDT: 6, USDC: 6, DAI: 18, WETH: 18, WBTC: 8 },
   },
 };
 
@@ -2485,7 +2566,8 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   if (!account) throw new Error('Wallet not connected');
   const chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
   const cfg = GW_OC_SWAP[chainId];
-  if (!cfg) throw new Error(`unsupported — chain ${chainId} inline swap not wired`);
+  if (!cfg) throw new Error(`unsupported — chain ${chainId}. Switch your wallet to Ethereum, BSC, Arbitrum, Polygon, Optimism, Base or Avalanche.`);
+  const dexLabel = cfg.dexName || 'DEX';
   // Resolve token addresses
   const tokenAddr = (s) => s === cfg.native ? cfg.wrapped : cfg.tokens[s];
   const inAddr  = tokenAddr(fromSym);
@@ -2502,7 +2584,7 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   const minOut = (expected * 995n) / 1000n;
   const deadline = Math.floor(Date.now() / 1000) + 20 * 60;
 
-  gwToast(`Confirm in wallet · expecting ~${(Number(expected) / 10 ** outDec).toFixed(6)} ${toSym}`, 'info');
+  gwToast(`Confirm in wallet · ${dexLabel} · expecting ~${(Number(expected) / 10 ** outDec).toFixed(6)} ${toSym}`, 'info');
 
   let tx;
   if (fromSym === cfg.native) {

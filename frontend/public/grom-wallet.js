@@ -1695,6 +1695,308 @@ function gwSetupOnchainCard() {
   bodyObs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
 }
 
+/* =============================================================================
+ * META-PORTFOLIO — the killer feature. Aggregates FOUR portfolio "worlds"
+ * that no other exchange combines in one view:
+ *   1. Trading account balance (custodial, postgres)      — via /api/wallet/overview
+ *   2. On-chain wallet balance (across 5 EVM chains)      — via gromFetchOnchainBalances
+ *   3. Prediction market positions (Polymarket-style)     — placeholder in v1
+ *   4. Tokenized stocks positions (xStocks)               — placeholder in v1
+ *
+ * Renders a single big card on the Dashboard with the grand total, breakdown
+ * by category, and quick actions. First step toward the AI Portfolio Coach
+ * (Phase 2). Refreshes on wallet-connect, JWT change, hashchange.
+ * ============================================================================ */
+function gwInjectMetaPortfolioCss() {
+  if (document.getElementById('gw-mp-css')) return;
+  const css = `
+    .gw-mp-wrap { margin: 16px 0 8px; }
+    .gw-mp-card {
+      position: relative; isolation: isolate;
+      padding: 22px 22px 20px; border-radius: 24px;
+      background:
+        radial-gradient(120% 140% at 100% 0%, rgba(168,85,247,0.10), transparent 55%),
+        radial-gradient(80% 100% at 0% 100%, rgba(34,193,124,0.08), transparent 55%),
+        linear-gradient(160deg, rgba(13,22,38,0.72) 0%, rgba(8,14,26,0.92) 100%);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 16px 42px -20px rgba(0,0,0,0.55);
+      backdrop-filter: blur(14px) saturate(150%);
+      -webkit-backdrop-filter: blur(14px) saturate(150%);
+      overflow: hidden; color: #e7eef8;
+    }
+    .gw-mp-card::before {
+      content: ""; position: absolute; inset: -2px;
+      padding: 1.5px; border-radius: inherit;
+      background: conic-gradient(from 90deg, #a855f7 0%, transparent 25%, #22c17c 50%, transparent 75%, #a855f7 100%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude;
+      opacity: 0.5; animation: gwBnSpin 24s linear infinite;
+      pointer-events: none; z-index: 0;
+    }
+    .gw-mp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; position: relative; z-index: 1; margin-bottom: 14px; }
+    .gw-mp-eyebrow { font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: #6b7a92; font-weight: 800; margin: 0 0 4px; }
+    .gw-mp-total { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; margin: 0;
+      background: linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-variant-numeric: tabular-nums; }
+    .gw-mp-sub { font-size: 12.5px; color: #98a8c0; margin: 4px 0 0; }
+    .gw-mp-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: rgba(168,85,247,0.14); color: #d8b4fe; font-size: 10px; font-weight: 800; letter-spacing: .14em; border: 1px solid rgba(168,85,247,0.28); align-self: center; }
+    .gw-mp-badge::before { content: "✦"; opacity: 0.7; }
+
+    /* Category bar visualization */
+    .gw-mp-bar {
+      position: relative; z-index: 1;
+      height: 10px; border-radius: 999px; overflow: hidden;
+      background: rgba(255,255,255,0.04);
+      display: flex;
+      margin: 12px 0 10px;
+    }
+    .gw-mp-bar span { height: 100%; transition: width .35s ease; }
+
+    /* Category rows */
+    .gw-mp-cats { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    @media (max-width: 720px) { .gw-mp-cats { grid-template-columns: repeat(2, 1fr); } }
+    .gw-mp-cat {
+      padding: 12px 12px 10px; border-radius: 14px;
+      background: rgba(255,255,255,0.025);
+      border: 1px solid rgba(255,255,255,0.05);
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .gw-mp-cat.custodial { border-color: rgba(0,194,255,0.18); }
+    .gw-mp-cat.onchain   { border-color: rgba(34,193,124,0.18); }
+    .gw-mp-cat.predict   { border-color: rgba(168,85,247,0.18); }
+    .gw-mp-cat.xstocks   { border-color: rgba(245,185,77,0.18); }
+    .gw-mp-cat-lbl { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #6b7a92; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+    .gw-mp-cat-lbl .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .gw-mp-cat.custodial .dot { background: #00c2ff; box-shadow: 0 0 6px #00c2ff; }
+    .gw-mp-cat.onchain   .dot { background: #22c17c; box-shadow: 0 0 6px #22c17c; }
+    .gw-mp-cat.predict   .dot { background: #a855f7; box-shadow: 0 0 6px #a855f7; }
+    .gw-mp-cat.xstocks   .dot { background: #f5b94d; box-shadow: 0 0 6px #f5b94d; }
+    .gw-mp-cat-val { font-size: 18px; font-weight: 800; color: #e7eef8; font-variant-numeric: tabular-nums; }
+    .gw-mp-cat-sub { font-size: 10.5px; color: #6b7a92; }
+
+    .gw-mp-actions {
+      position: relative; z-index: 1;
+      display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;
+    }
+    .gw-mp-btn {
+      padding: 9px 14px; border-radius: 10px;
+      background: rgba(255,255,255,0.05);
+      color: #cfdfee; border: 1px solid rgba(255,255,255,0.08);
+      font-size: 12.5px; font-weight: 700; cursor: pointer;
+      transition: all .15s;
+    }
+    .gw-mp-btn:hover { background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(0,194,255,0.25); }
+    .gw-mp-btn.primary {
+      background: linear-gradient(135deg, rgba(0,194,255,0.18), rgba(168,85,247,0.12));
+      border-color: rgba(0,194,255,0.3); color: #3ac2ff;
+    }
+
+    .gw-mp-empty { padding: 22px; text-align: center; color: #6b7a92; font-size: 13px; }
+    .gw-mp-loading { padding: 12px 0; color: #98a8c0; font-size: 12.5px; }
+
+    @media (max-width: 600px) {
+      .gw-mp-card { padding: 18px 16px 16px; border-radius: 20px; }
+      .gw-mp-total { font-size: 28px; }
+    }
+  `;
+  const s = document.createElement('style');
+  s.id = 'gw-mp-css';
+  s.textContent = css;
+  document.head.appendChild(s);
+}
+
+/* Fetch each portfolio component. All safe to fail silently — the card just
+ * shows what's available. Prediction / xStocks are v1 placeholders until
+ * their real endpoints ship; we detect them via any global Cursor exposes. */
+async function gwMpFetchCustodial() {
+  const jwt = localStorage.getItem('grom_jwt');
+  if (!jwt) return { usd: 0, has: false };
+  try {
+    const r = await fetch('/api/wallet/overview', { headers: { Authorization: `Bearer ${jwt}` } });
+    if (!r.ok) return { usd: 0, has: false };
+    const j = await r.json();
+    const totalUsd = Number(j?.summary?.totalUsd) || 0;
+    const assetsN = (j?.summary?.assets || []).filter((a) => Number(a.amount) > 0).length;
+    return { usd: totalUsd, has: true, assetsN };
+  } catch (_) { return { usd: 0, has: false }; }
+}
+async function gwMpFetchOnchain() {
+  try {
+    const addr = (function () {
+      try { return window.gromWallet?.state?.().account; } catch (_) { return null; }
+    })();
+    if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) return { usd: 0, has: false };
+    const [prices, chains] = await Promise.all([
+      (typeof gwOcFetchPrices === 'function' ? gwOcFetchPrices() : Promise.resolve({ USDT: 1, USDC: 1 })),
+      (typeof gwOcFetchAllChains === 'function' ? gwOcFetchAllChains(addr) : Promise.resolve([])),
+    ]);
+    let usd = 0;
+    let chainsWithBalance = 0;
+    for (const c of chains) {
+      if (!c.data) continue;
+      let chainUsd = 0;
+      if (c.data.nativeEth != null && c.data.nativeEth > 0.0000001) {
+        chainUsd += c.data.nativeEth * (prices[c.meta.native] || 0);
+      }
+      for (const [sym, amt] of Object.entries(c.data.tokens || {})) {
+        if (!(amt > 0.0001)) continue;
+        chainUsd += amt * (prices[sym] || 0);
+      }
+      if (chainUsd > 0.01) { usd += chainUsd; chainsWithBalance++; }
+    }
+    return { usd, has: true, chainsN: chainsWithBalance };
+  } catch (_) { return { usd: 0, has: false }; }
+}
+async function gwMpFetchPredict() {
+  // v1: check Cursor's global predict state. If none, return zero.
+  try {
+    const st = window.gromPredictState || window.__gromPredictPositions;
+    if (Array.isArray(st) && st.length) {
+      const usd = st.reduce((a, p) => a + (Number(p.usd || p.value) || 0), 0);
+      return { usd, has: true, positionsN: st.length };
+    }
+  } catch (_) {}
+  return { usd: 0, has: false };
+}
+async function gwMpFetchXstocks() {
+  // v1: check Cursor's xStocks state. If none, return zero.
+  try {
+    const st = window.gromXstocksState || window.__gromXstocksPositions;
+    if (Array.isArray(st) && st.length) {
+      const usd = st.reduce((a, p) => a + (Number(p.usd || p.value) || 0), 0);
+      return { usd, has: true, positionsN: st.length };
+    }
+  } catch (_) {}
+  return { usd: 0, has: false };
+}
+
+const GW_MP_TR = {
+  ru: { eyebrow: 'МЕТА-ПОРТФЕЛЬ', badge: 'ALL-IN-ONE', sub: 'Всё что у тебя есть в GROM — в одном месте', c1: 'Торговый счёт', c2: 'On-chain', c3: 'Прогнозы', c4: 'Акции', assets: 'активов', chains: 'сетей', posN: 'позиций', empty: 'Пока пусто — подключи кошелёк или пополни счёт', a1: 'Пополнить', a2: 'Свап', a3: 'Обновить', loading: 'Загружаем портфель…' },
+  en: { eyebrow: 'META-PORTFOLIO', badge: 'ALL-IN-ONE', sub: 'Everything you own on GROM — in one place', c1: 'Trading account', c2: 'On-chain', c3: 'Predictions', c4: 'Stocks', assets: 'assets', chains: 'chains', posN: 'positions', empty: "Nothing yet — connect a wallet or top up", a1: 'Deposit', a2: 'Swap', a3: 'Refresh', loading: 'Loading portfolio…' },
+  es: { eyebrow: 'META-PORTFOLIO', badge: 'ALL-IN-ONE', sub: 'Todo lo tuyo en GROM — en un lugar', c1: 'Cuenta trading', c2: 'On-chain', c3: 'Predicciones', c4: 'Acciones', assets: 'activos', chains: 'cadenas', posN: 'posiciones', empty: 'Nada aún — conecta una cartera', a1: 'Depositar', a2: 'Swap', a3: 'Refrescar', loading: 'Cargando…' },
+  ar: { eyebrow: 'المحفظة الشاملة', badge: 'كل شيء', sub: 'كل ما تملك في GROM في مكان واحد', c1: 'حساب التداول', c2: 'على السلسلة', c3: 'التنبؤات', c4: 'الأسهم', assets: 'أصول', chains: 'شبكات', posN: 'مراكز', empty: 'لا شيء بعد', a1: 'إيداع', a2: 'مبادلة', a3: 'تحديث', loading: 'جارٍ التحميل…' },
+  zh: { eyebrow: '组合总览', badge: '一站式', sub: '你在 GROM 的一切，尽在此处', c1: '交易账户', c2: '链上', c3: '预测', c4: '股票', assets: '资产', chains: '链', posN: '仓位', empty: '暂无', a1: '充值', a2: '兑换', a3: '刷新', loading: '加载中…' },
+  hi: { eyebrow: 'मेटा-पोर्टफोलियो', badge: 'सब एक साथ', sub: 'GROM पर आपका सब कुछ — एक जगह', c1: 'ट्रेडिंग खाता', c2: 'ऑन-चेन', c3: 'भविष्यवाणी', c4: 'स्टॉक्स', assets: 'एसेट्स', chains: 'चेन्स', posN: 'पदों', empty: 'अभी कुछ नहीं', a1: 'जमा', a2: 'स्वैप', a3: 'रीफ्रेश', loading: 'लोड हो रहा है…' },
+  tr: { eyebrow: 'META-PORTFÖY', badge: 'HEP BİR ARADA', sub: "GROM'daki her şey — tek yerde", c1: 'İşlem hesabı', c2: 'Zincir üzeri', c3: 'Tahminler', c4: 'Hisseler', assets: 'varlık', chains: 'ağ', posN: 'pozisyon', empty: 'Henüz bir şey yok', a1: 'Yatır', a2: 'Swap', a3: 'Yenile', loading: 'Yükleniyor…' },
+};
+function gwMpLang() {
+  let lang = 'en';
+  try {
+    const stored = localStorage.getItem('grom_lang');
+    if (stored && GW_MP_TR[stored]) lang = stored;
+    else { const nav = (navigator.language || '').toLowerCase(); for (const c of Object.keys(GW_MP_TR)) if (nav.indexOf(c) === 0) { lang = c; break; } }
+  } catch (_) {}
+  return GW_MP_TR[lang] || GW_MP_TR.en;
+}
+
+function gwFmtUsd(n) {
+  const v = Number(n) || 0;
+  if (v >= 1000) return '$' + v.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return '$' + v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+async function gwRenderMetaPortfolio() {
+  const page = document.getElementById('page-dashboard');
+  if (!page) return;
+  gwInjectMetaPortfolioCss();
+  let wrap = document.getElementById('gwMetaPortfolio');
+  const t = gwMpLang();
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.className = 'gw-mp-wrap';
+    wrap.id = 'gwMetaPortfolio';
+    // Insert BEFORE swap panel (or at top of dash)
+    const swap = page.querySelector('.gw-ds-wrap');
+    if (swap) swap.before(wrap);
+    else {
+      const banners = page.querySelector('.dash-banners-wrap');
+      if (banners) banners.after(wrap);
+      else page.prepend(wrap);
+    }
+  }
+
+  wrap.innerHTML = `
+    <div class="gw-mp-card">
+      <div class="gw-mp-head">
+        <div>
+          <p class="gw-mp-eyebrow">${t.eyebrow}</p>
+          <p class="gw-mp-total">…</p>
+          <p class="gw-mp-sub">${t.sub}</p>
+        </div>
+        <span class="gw-mp-badge">${t.badge}</span>
+      </div>
+      <div class="gw-mp-loading">${t.loading}</div>
+    </div>
+  `;
+
+  const [cust, onch, pred, xst] = await Promise.all([
+    gwMpFetchCustodial(), gwMpFetchOnchain(), gwMpFetchPredict(), gwMpFetchXstocks(),
+  ]);
+  const total = cust.usd + onch.usd + pred.usd + xst.usd;
+
+  const barSpan = (cls, usd, color) => total > 0
+    ? `<span style="width:${(usd / total * 100).toFixed(2)}%;background:${color}"></span>`
+    : '';
+  const cat = (cls, lbl, usd, sub) => `
+    <div class="gw-mp-cat ${cls}">
+      <div class="gw-mp-cat-lbl"><span class="dot"></span>${lbl}</div>
+      <div class="gw-mp-cat-val">${gwFmtUsd(usd)}</div>
+      <div class="gw-mp-cat-sub">${sub}</div>
+    </div>
+  `;
+
+  wrap.querySelector('.gw-mp-card').innerHTML = `
+    <div class="gw-mp-head">
+      <div>
+        <p class="gw-mp-eyebrow">${t.eyebrow}</p>
+        <p class="gw-mp-total">${gwFmtUsd(total)}</p>
+        <p class="gw-mp-sub">${t.sub}</p>
+      </div>
+      <span class="gw-mp-badge">${t.badge}</span>
+    </div>
+    ${total > 0 ? `<div class="gw-mp-bar">
+      ${barSpan('custodial', cust.usd, '#00c2ff')}
+      ${barSpan('onchain',   onch.usd, '#22c17c')}
+      ${barSpan('predict',   pred.usd, '#a855f7')}
+      ${barSpan('xstocks',   xst.usd,  '#f5b94d')}
+    </div>` : ''}
+    <div class="gw-mp-cats">
+      ${cat('custodial', t.c1, cust.usd, cust.assetsN ? `${cust.assetsN} ${t.assets}` : '—')}
+      ${cat('onchain',   t.c2, onch.usd, onch.chainsN ? `${onch.chainsN} ${t.chains}` : '—')}
+      ${cat('predict',   t.c3, pred.usd, pred.positionsN ? `${pred.positionsN} ${t.posN}` : '—')}
+      ${cat('xstocks',   t.c4, xst.usd,  xst.positionsN ? `${xst.positionsN} ${t.posN}` : '—')}
+    </div>
+    <div class="gw-mp-actions">
+      <button class="gw-mp-btn primary" id="gwMpDeposit">+ ${t.a1}</button>
+      <button class="gw-mp-btn" id="gwMpSwap">${t.a2}</button>
+      <button class="gw-mp-btn" id="gwMpRefresh">↻ ${t.a3}</button>
+    </div>
+  `;
+  document.getElementById('gwMpDeposit')?.addEventListener('click', () => {
+    if (typeof window.openWalletModal === 'function') window.openWalletModal('deposit');
+  });
+  document.getElementById('gwMpSwap')?.addEventListener('click', () => {
+    document.querySelector('.gw-ds-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  document.getElementById('gwMpRefresh')?.addEventListener('click', gwRenderMetaPortfolio);
+}
+
+function gwSetupMetaPortfolio() {
+  const tryRender = () => { if (document.getElementById('page-dashboard')) gwRenderMetaPortfolio(); };
+  tryRender();
+  window.addEventListener('hashchange', tryRender);
+  window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt' || e.key === 'grom_wallet_label') tryRender(); });
+  document.addEventListener('grom:wallet-connected', tryRender);
+  document.addEventListener('grom:wallet-disconnected', tryRender);
+  const bodyObs = new MutationObserver(() => tryRender());
+  bodyObs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  // Auto-refresh every 60s while dashboard is visible
+  setInterval(() => {
+    const dash = document.getElementById('page-dashboard');
+    if (dash && dash.offsetParent !== null) gwRenderMetaPortfolio();
+  }, 60000);
+}
+
 function gwInjectConnectModalCss() {
   if (document.getElementById('gw-connect-modal-fixups')) return;
   const css = `
@@ -3238,6 +3540,7 @@ try {
     gwSetupDashSwap();
     gwSetupDepositAutoContinue();
     gwSetupOnchainCard();
+    gwSetupMetaPortfolio();
   }
 } catch (e) { /* defensive — never block module evaluation on cosmetic CSS */ }
 

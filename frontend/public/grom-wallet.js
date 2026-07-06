@@ -3988,12 +3988,17 @@ function gwInjectAiCoachCss() {
     #gw-ai-suggest { display: flex; gap: 6px; padding: 8px 14px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.04); }
     #gw-ai-suggest button { padding: 6px 10px; border-radius: 8px; background: rgba(168,85,247,0.10); border: 1px solid rgba(168,85,247,0.24); color: #d8b4fe; font-size: 11.5px; font-weight: 700; cursor: pointer; }
     #gw-ai-suggest button:hover { background: rgba(168,85,247,0.20); }
-    #gw-ai-input { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid rgba(255,255,255,0.05); }
-    #gw-ai-input textarea { flex: 1; min-height: 40px; max-height: 120px; resize: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 12px; color: #e7eef8; font-family: inherit; font-size: 13.5px; outline: none; }
+    #gw-ai-input { display: flex; gap: 8px; padding: 12px 14px; padding-bottom: max(12px, env(safe-area-inset-bottom)); border-top: 1px solid rgba(255,255,255,0.05); }
+    /* font-size: 16px is deliberate — iOS Safari auto-zooms into any
+       input under 16px on focus, which makes the whole viewport scale
+       up and everything visually shifts under the panel. */
+    #gw-ai-input textarea { flex: 1; min-height: 44px; max-height: 120px; resize: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 12px; color: #e7eef8; font-family: inherit; font-size: 16px; line-height: 1.4; outline: none; -webkit-appearance: none; appearance: none; }
     #gw-ai-input textarea:focus { border-color: rgba(168,85,247,0.45); }
-    #gw-ai-input button { padding: 10px 16px; border-radius: 10px; background: linear-gradient(135deg, #a855f7, #6e8dff); color: #fff; border: 0; font-weight: 800; cursor: pointer; }
+    #gw-ai-input button { padding: 10px 16px; border-radius: 10px; background: linear-gradient(135deg, #a855f7, #6e8dff); color: #fff; border: 0; font-weight: 800; cursor: pointer; font-size: 14px; }
     #gw-ai-input button[disabled] { opacity: 0.5; cursor: not-allowed; }
     @media (min-width: 720px) { #gw-ai-panel { border-radius: 22px; margin-bottom: 20px; } }
+    /* Prevent underlying page scroll while the AI sheet is open. */
+    body.gw-ai-open { overflow: hidden !important; }
   `;
   const s = document.createElement('style'); s.id = 'gw-ai-css'; s.textContent = css; document.head.appendChild(s);
 }
@@ -4047,6 +4052,7 @@ function gwAiOpen() {
     overlay.querySelectorAll('#gw-ai-suggest button').forEach((b) => b.onclick = () => gwAiSendMsg(b.dataset.q));
   }
   overlay.classList.add('open');
+  document.body.classList.add('gw-ai-open');
   // Render history
   const log = document.getElementById('gw-ai-log');
   log.innerHTML = '';
@@ -4073,7 +4079,10 @@ function gwAiOpen() {
   }
   log.scrollTop = log.scrollHeight;
 }
-function gwAiClose() { document.getElementById('gw-ai-overlay')?.classList.remove('open'); }
+function gwAiClose() {
+  document.getElementById('gw-ai-overlay')?.classList.remove('open');
+  document.body.classList.remove('gw-ai-open');
+}
 async function gwAiSendMsg(text) {
   text = (text || '').trim();
   if (!text) return;

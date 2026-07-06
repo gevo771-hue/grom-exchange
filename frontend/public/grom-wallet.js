@@ -4014,13 +4014,13 @@ function gwInjectAiCoachCss() {
 }
 
 const GW_AI_TR = {
-  ru: { fab: 'AI Коуч', h: '✦ GROM AI Coach', ph: 'Спроси про свой портфель…', send: 'Отправить', s1: 'Сделай ревью моего портфеля', s2: 'Есть ли риски у моих позиций?', s3: 'Как захеджировать?', s4: 'Куда положить USDT для доходности?', login: 'Войди чтобы поговорить с AI', hello: 'Привет! Я анализирую твой портфель на GROM. Спроси что угодно — рекомендации, хеджи, риски.', thinking: 'Думаю…', error: 'Ошибка. Попробуй ещё раз через минуту.' },
-  en: { fab: 'AI Coach', h: '✦ GROM AI Coach', ph: 'Ask about your portfolio…', send: 'Send', s1: 'Review my portfolio', s2: 'Any risks in my positions?', s3: 'How can I hedge?', s4: 'Best place to earn on USDT?', login: 'Sign in to talk to AI', hello: "Hi! I'm looking at your GROM portfolio. Ask me anything — reviews, hedges, risks.", thinking: 'Thinking…', error: 'Error. Try again in a minute.' },
-  es: { fab: 'IA Coach', h: '✦ GROM AI Coach', ph: 'Pregunta sobre tu portafolio…', send: 'Enviar', s1: 'Revisa mi portafolio', s2: '¿Hay riesgos?', s3: '¿Cómo cubrir?', s4: '¿Mejor rendimiento en USDT?', login: 'Inicia sesión', hello: '¡Hola! Analizo tu portafolio.', thinking: 'Pensando…', error: 'Error.' },
-  ar: { fab: 'مدرّب AI', h: '✦ مدرّب GROM AI', ph: 'اسأل عن محفظتك…', send: 'إرسال', s1: 'راجع محفظتي', s2: 'هل هناك مخاطر؟', s3: 'كيف أحوّط؟', s4: 'أفضل عائد USDT؟', login: 'سجّل الدخول', hello: 'مرحبا! أحلّل محفظتك.', thinking: 'أفكّر…', error: 'خطأ.' },
-  zh: { fab: 'AI 教练', h: '✦ GROM AI 教练', ph: '询问你的组合…', send: '发送', s1: '审查我的组合', s2: '有风险吗？', s3: '如何对冲？', s4: 'USDT最佳收益？', login: '请登录', hello: '你好！我在看你的 GROM 组合。', thinking: '思考中…', error: '错误。' },
-  hi: { fab: 'AI कोच', h: '✦ GROM AI कोच', ph: 'अपने पोर्टफोलियो के बारे में पूछें…', send: 'भेजें', s1: 'पोर्टफोलियो देखें', s2: 'क्या जोखिम है?', s3: 'हेज कैसे करें?', s4: 'USDT पर सर्वोत्तम आय?', login: 'साइन इन करें', hello: 'नमस्ते! मैं आपका पोर्टफोलियो देख रहा हूँ।', thinking: 'सोच रहा हूँ…', error: 'त्रुटि।' },
-  tr: { fab: 'AI Koç', h: '✦ GROM AI Koç', ph: 'Portföyünü sor…', send: 'Gönder', s1: 'Portföyümü incele', s2: 'Riskler var mı?', s3: 'Nasıl hedge?', s4: 'USDT için en iyi verim?', login: 'Giriş yap', hello: 'Selam! GROM portföyünü inceliyorum.', thinking: 'Düşünüyorum…', error: 'Hata.' },
+  ru: { fab: 'AI Коуч', h: '✦ GROM AI Coach', ph: 'Спроси про свой портфель…', send: 'Отправить', s1: 'Сделай ревью моего портфеля', s2: 'Есть ли риски у моих позиций?', s3: 'Как захеджировать?', s4: 'Куда положить USDT для доходности?', loginH: 'Нужен вход', loginP: 'Войди, чтобы AI-коуч видел твой портфель и давал рекомендации.', loginBtn: 'Войти', hello: 'Привет! Я анализирую твой портфель на GROM. Спроси что угодно — рекомендации, хеджи, риски.', thinking: 'Думаю…', error: 'Ошибка. Попробуй ещё раз через минуту.' },
+  en: { fab: 'AI Coach', h: '✦ GROM AI Coach', ph: 'Ask about your portfolio…', send: 'Send', s1: 'Review my portfolio', s2: 'Any risks in my positions?', s3: 'How can I hedge?', s4: 'Best place to earn on USDT?', loginH: 'Sign in first', loginP: 'The AI coach needs to see your portfolio to give real recommendations.', loginBtn: 'Sign in', hello: "Hi! I'm looking at your GROM portfolio. Ask me anything — reviews, hedges, risks.", thinking: 'Thinking…', error: 'Error. Try again in a minute.' },
+  es: { fab: 'IA Coach', h: '✦ GROM AI Coach', ph: 'Pregunta sobre tu portafolio…', send: 'Enviar', s1: 'Revisa mi portafolio', s2: '¿Hay riesgos?', s3: '¿Cómo cubrir?', s4: '¿Mejor rendimiento en USDT?', loginH: 'Inicia sesión', loginP: 'El coach IA necesita ver tu portafolio para dar recomendaciones reales.', loginBtn: 'Iniciar sesión', hello: '¡Hola! Analizo tu portafolio.', thinking: 'Pensando…', error: 'Error.' },
+  ar: { fab: 'مدرّب AI', h: '✦ مدرّب GROM AI', ph: 'اسأل عن محفظتك…', send: 'إرسال', s1: 'راجع محفظتي', s2: 'هل هناك مخاطر؟', s3: 'كيف أحوّط؟', s4: 'أفضل عائد USDT؟', loginH: 'سجّل الدخول', loginP: 'يحتاج المدرّب لرؤية محفظتك لتقديم توصيات حقيقية.', loginBtn: 'تسجيل الدخول', hello: 'مرحبا! أحلّل محفظتك.', thinking: 'أفكّر…', error: 'خطأ.' },
+  zh: { fab: 'AI 教练', h: '✦ GROM AI 教练', ph: '询问你的组合…', send: '发送', s1: '审查我的组合', s2: '有风险吗？', s3: '如何对冲？', s4: 'USDT最佳收益？', loginH: '请先登录', loginP: 'AI 教练需要看到你的组合才能给出真实建议。', loginBtn: '登录', hello: '你好！我在看你的 GROM 组合。', thinking: '思考中…', error: '错误。' },
+  hi: { fab: 'AI कोच', h: '✦ GROM AI कोच', ph: 'अपने पोर्टफोलियो के बारे में पूछें…', send: 'भेजें', s1: 'पोर्टफोलियो देखें', s2: 'क्या जोखिम है?', s3: 'हेज कैसे करें?', s4: 'USDT पर सर्वोत्तम आय?', loginH: 'साइन इन करें', loginP: 'AI कोच को सलाह देने के लिए आपके पोर्टफोलियो को देखना जरूरी है।', loginBtn: 'साइन इन', hello: 'नमस्ते! मैं आपका पोर्टफोलियो देख रहा हूँ।', thinking: 'सोच रहा हूँ…', error: 'त्रुटि।' },
+  tr: { fab: 'AI Koç', h: '✦ GROM AI Koç', ph: 'Portföyünü sor…', send: 'Gönder', s1: 'Portföyümü incele', s2: 'Riskler var mı?', s3: 'Nasıl hedge?', s4: 'USDT için en iyi verim?', loginH: 'Önce giriş yap', loginP: 'AI koç gerçek öneri vermek için portföyünü görmeli.', loginBtn: 'Giriş yap', hello: 'Selam! GROM portföyünü inceliyorum.', thinking: 'Düşünüyorum…', error: 'Hata.' },
 };
 function gwAiLang() { let l = 'en'; try { const s = localStorage.getItem('grom_lang'); if (s && GW_AI_TR[s]) l = s; else { const n = (navigator.language || '').toLowerCase(); for (const c of Object.keys(GW_AI_TR)) if (n.indexOf(c) === 0) { l = c; break; } } } catch (_) {} return GW_AI_TR[l] || GW_AI_TR.en; }
 
@@ -4091,16 +4091,34 @@ function gwAiOpen() {
   window.__gwAiScrollY = window.scrollY || 0;
   document.body.classList.add('gw-ai-open');
   gwAiLockPanel();
-  // Render history
+  gwAiRenderLog();
+}
+
+/** Render the log area based on current auth + history. Extracted so
+ * gwAiSendMsg can re-render inline when a guest tries to send instead
+ * of closing the whole panel. */
+function gwAiRenderLog() {
   const log = document.getElementById('gw-ai-log');
+  if (!log) return;
+  const t = gwAiLang();
+  const authed = !!(function () { try { return localStorage.getItem('grom_jwt'); } catch (_) { return null; } })();
   log.innerHTML = '';
   if (!authed) {
     const box = document.createElement('div');
     box.className = 'gw-ai-login';
-    box.innerHTML = `<h4>${t.h}</h4><p>${t.login}</p><button id="gwAiLoginBtn">${t.send.length < 3 ? 'Sign in' : (t.login || 'Sign in')}</button>`;
+    box.innerHTML = `<h4>${t.loginH}</h4><p>${t.loginP}</p><button id="gwAiLoginBtn">${t.loginBtn}</button>`;
     log.appendChild(box);
     const btn = document.getElementById('gwAiLoginBtn');
-    if (btn) btn.onclick = () => { gwAiClose(); try { (window.openConnectModal || window.openConnectPanel || window.gwOpenSignIn || function () {})(); } catch (_) {} };
+    if (btn) btn.onclick = () => {
+      // Don't close the AI panel — let the connect modal stack over it.
+      // Once user finishes signing in and JWT lands in localStorage, the
+      // `storage`-event listener below re-renders the log and shows chat.
+      try {
+        if (typeof window.openConnectModal === 'function') return window.openConnectModal();
+        if (typeof window.openConnectPanel === 'function') return window.openConnectPanel();
+        if (typeof window.gwOpenSignIn === 'function')     return window.gwOpenSignIn();
+      } catch (_) {}
+    };
     return;
   }
   const hist = gwAiGetHistory();
@@ -4117,6 +4135,16 @@ function gwAiOpen() {
   }
   log.scrollTop = log.scrollHeight;
 }
+// Re-render if JWT arrives/disappears while the panel is open.
+window.addEventListener('storage', (e) => {
+  if (e.key === 'grom_jwt' && document.getElementById('gw-ai-overlay')?.classList.contains('open')) {
+    gwAiRenderLog();
+  }
+});
+// Same for lang change.
+window.addEventListener('grom:lang-change', () => {
+  if (document.getElementById('gw-ai-overlay')?.classList.contains('open')) gwAiRenderLog();
+});
 function gwAiClose() {
   document.getElementById('gw-ai-overlay')?.classList.remove('open');
   document.body.classList.remove('gw-ai-open');
@@ -4134,7 +4162,13 @@ async function gwAiSendMsg(text) {
   const ta = document.getElementById('gwAiText');
   const btn = document.getElementById('gwAiSend');
   const authed = !!localStorage.getItem('grom_jwt');
-  if (!authed) { gwAiClose(); gwOpenSignIn(); return; }
+  if (!authed) {
+    // Keep the panel open; just show the login card inline. The user's
+    // draft in the textarea is preserved so it re-sends automatically
+    // after login (via the storage-event listener above).
+    gwAiRenderLog();
+    return;
+  }
   const hist = gwAiGetHistory();
   hist.push({ role: 'user', content: text });
   gwAiSetHistory(hist);

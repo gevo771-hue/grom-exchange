@@ -2,7 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<base href="/" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content" />
+<script>
+(function () {
+  var m = location.pathname.match(/^\/r\/([A-Za-z0-9]+)\/?$/i);
+  if (m) {
+    try { localStorage.setItem('grom_ref', m[1].toUpperCase()); } catch (_) {}
+    location.replace('/' + (location.search || '') + '#landing');
+    return;
+  }
+  try {
+    var ref = new URLSearchParams(location.search).get('ref');
+    if (ref) {
+      localStorage.setItem('grom_ref', ref.toUpperCase());
+      history.replaceState(null, '', location.pathname + location.hash);
+    }
+  } catch (_) {}
+})();
+</script>
 <script>
 (function () {
   var ALLOW = { landing: 1, dashboard: 1, spot: 1, binary: 1, futures: 1, markets: 1, wallet: 1, referral: 1, history: 1, settings: 1, help: 1, predict: 1, xstocks: 1, backoffice: 1 };
@@ -4145,6 +4163,7 @@
   }
 
   @media (max-width: 900px) {
+    input, select, textarea { font-size: 16px !important; }
     .burger { display: inline-flex; }
     .hub-nav { display: none; }
     .topbar {
@@ -4899,7 +4918,7 @@
     </button>
     <a href="#" class="grom-logo" id="logoHome" aria-label="GROM — Finance Hub">
       <span class="logo-img-shell logo-img-shell--header">
-        <img class="logo-raster logo-raster--header" src="assets/grom-brand-header-clear.png" width="441" height="462" alt="" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='assets/grom-brand-mark-clear.png'}else{this.onerror=null;this.src='assets/grom-brand-mark.png'}" />
+        <img class="logo-raster logo-raster--header" src="/assets/grom-brand-header-clear.png" width="441" height="462" alt="" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/assets/grom-brand-mark-clear.png'}else{this.onerror=null;this.src='/assets/grom-brand-mark.png'}" />
       </span>
       <span class="topbar-brand-lockup">
         <span class="tb-name">GROM</span>
@@ -5177,7 +5196,7 @@
                 <div class="hero-aura" aria-hidden="true"></div>
                 <div class="hero-glow" aria-hidden="true"></div>
                 <span class="landing-brand-anim">
-            <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
+            <img class="landing-brand-photo" src="/assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" decoding="async" onerror="this.onerror=null;this.src='/assets/grom-brand-mark.png'" />
                 </span>
               </div>
             </div>
@@ -5320,7 +5339,7 @@
             <div class="hero-aura" aria-hidden="true"></div>
             <div class="hero-glow" aria-hidden="true"></div>
             <span class="landing-brand-anim">
-            <img class="landing-brand-photo" src="assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" data-i18n-alt="landing_logo_img_alt" decoding="async" onerror="this.onerror=null;this.src='assets/grom-brand-mark.png'" />
+            <img class="landing-brand-photo" src="/assets/grom-brand-mark-clear.png" width="592" height="647" alt="GROM Finance Hub" data-i18n-alt="landing_logo_img_alt" decoding="async" onerror="this.onerror=null;this.src='/assets/grom-brand-mark.png'" />
             </span>
           </div>
         </div>
@@ -7517,27 +7536,31 @@
   </div>
 </div>
 
-<script src="grom-instruments.js?v=20260424x"></script>
-<script src="grom-i18n.js?v=20260616e"></script>
-<script src="grom-i18n-extra.js?v=20260616e"></script>
+<script src="/grom-instruments.js?v=20260424x"></script>
+<script src="/grom-i18n.js?v=20260616e"></script>
+<script src="/grom-i18n-extra.js?v=20260616e"></script>
 <script>
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = 'grom-wallet.js?v=20260705o';
+  walletModule.src = '/grom-wallet.js?v=20260706a';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = 'grom-privy.js?v=20260614b';
+  privyModule.src = '/grom-privy.js?v=20260614b';
   document.head.appendChild(privyModule);
 }
 </script>
 <script>
+window.GROM_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') || window.innerWidth < 900;
+window.gromPageActive = function () { return !document.hidden; };
 /* ========== Animated plexus background ========== */
 (function initPlexus() {
   const cv = document.getElementById('plexusBg');
   if (!cv) return;
+  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') || window.innerWidth < 900;
+  if (isMobile) { cv.style.display = 'none'; return; }
   const ctx = cv.getContext('2d');
   let W = 0, H = 0, dpr = window.devicePixelRatio || 1;
   let points = [];       // main lattice points (bright, connected)
@@ -8262,7 +8285,7 @@ function tickRound() {
   }
   if (boState.elapsed === 0) syncBinaryStrike(true);
 }
-setInterval(tickRound, 1000);
+setInterval(tickRound, (window.GROM_MOBILE ? 2000 : 1000));
 
 // Expiry selector
 document.addEventListener('click', e => {
@@ -8450,10 +8473,11 @@ window.placeBinary = function placeBinary(dir) {
   renderPositions();
   if (typeof drawChart === 'function') drawChart('boChart');
 };
-setInterval(renderPositions, 1000);
+setInterval(renderPositions, window.GROM_MOBILE ? 2500 : 1000);
 
 // AI signal jitter
 setInterval(() => {
+  if (!window.gromPageActive()) return;
   const confidence = 55 + Math.round(Math.sin(Date.now()/17000) * 25 + (Math.random()-0.5)*8);
   const up = confidence > 60 || (confidence > 45 && btcHistory[btcHistory.length-1] > btcHistory[btcHistory.length-8]);
   const pct = document.getElementById('sigPct'); if (pct) pct.textContent = confidence + '%';
@@ -8680,7 +8704,7 @@ setInterval(() => {
   const el = document.getElementById('fundCd');
   if (el) el.textContent = `${h}:${m}:${s}`;
 }, 1000);
-setInterval(updateFuturesBoard, 1800);
+setInterval(updateFuturesBoard, window.GROM_MOBILE ? 4000 : 1800);
 var __gromFutResizeTimer = null;
 window.addEventListener('resize', () => {
   if (!document.getElementById('page-futures')?.classList.contains('active')) return;
@@ -10673,7 +10697,7 @@ function _origDrawChart(id) {
 // Wire legacy fallback so drawChart() above can call old canvas renderer when TV lib missing.
 window._gromOldDrawChart = _origDrawChart;
 
-setInterval(tickPrices, 1800);
+setInterval(tickPrices, window.GROM_MOBILE ? 4500 : 1800);
 setTimeout(tickPrices, 100);
 var __gromWinResizeTimer = null;
 window.addEventListener('resize', function () {
@@ -10709,7 +10733,7 @@ function renderOrderBook() {
   });
   asksEl.innerHTML = aHtml; bidsEl.innerHTML = bHtml;
 }
-setInterval(renderOrderBook, 2000);
+setInterval(renderOrderBook, window.GROM_MOBILE ? 5000 : 2000);
 setTimeout(renderOrderBook, 200);
 
 /* Markets */
@@ -12017,7 +12041,7 @@ async function fetchLiveQuotes() {
   } catch (_) {}
   updateQuoteRows();
 }
-setInterval(fetchLiveQuotes, 9000);
+setInterval(fetchLiveQuotes, window.GROM_MOBILE ? 18000 : 9000);
 setTimeout(fetchLiveQuotes, 600);
 
 /* ========== History filter ========== */

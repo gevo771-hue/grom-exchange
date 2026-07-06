@@ -3963,8 +3963,17 @@ function gwInjectAiCoachCss() {
       border-radius: 22px 22px 0 0;
       display: flex; flex-direction: column; overflow: hidden;
       box-shadow: 0 -20px 60px -8px rgba(0,0,0,0.6);
+      transition: none;
     }
     @supports not (height: 100dvh) { #gw-ai-panel { max-height: 90vh; height: 85vh; } }
+    @media (max-width: 600px) {
+      #gw-ai-panel {
+        width: 100vw;
+        height: auto !important;
+        max-height: min(520px, 72vh) !important;
+      }
+      #gw-ai-overlay.open { align-items: flex-end; }
+    }
     #gw-ai-panel .head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
     #gw-ai-panel .head h3 { margin: 0; font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px;
       background: linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
@@ -3992,13 +4001,14 @@ function gwInjectAiCoachCss() {
     /* font-size: 16px is deliberate — iOS Safari auto-zooms into any
        input under 16px on focus, which makes the whole viewport scale
        up and everything visually shifts under the panel. */
-    #gw-ai-input textarea { flex: 1; min-height: 44px; max-height: 120px; resize: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 12px; color: #e7eef8; font-family: inherit; font-size: 16px; line-height: 1.4; outline: none; -webkit-appearance: none; appearance: none; }
+    #gw-ai-input textarea { flex: 1; min-height: 44px; max-height: 120px; resize: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 12px; color: #e7eef8; font-family: inherit; font-size: 16px; line-height: 1.4; outline: none; -webkit-appearance: none; appearance: none; touch-action: manipulation; }
     #gw-ai-input textarea:focus { border-color: rgba(168,85,247,0.45); }
     #gw-ai-input button { padding: 10px 16px; border-radius: 10px; background: linear-gradient(135deg, #a855f7, #6e8dff); color: #fff; border: 0; font-weight: 800; cursor: pointer; font-size: 14px; }
     #gw-ai-input button[disabled] { opacity: 0.5; cursor: not-allowed; }
     @media (min-width: 720px) { #gw-ai-panel { border-radius: 22px; margin-bottom: 20px; } }
     /* Prevent underlying page scroll while the AI sheet is open. */
-    body.gw-ai-open { overflow: hidden !important; }
+    body.gw-ai-open { overflow: hidden !important; position: fixed; width: 100%; left: 0; right: 0; }
+    body.gw-ai-open #gw-ai-overlay { overscroll-behavior: contain; }
   `;
   const s = document.createElement('style'); s.id = 'gw-ai-css'; s.textContent = css; document.head.appendChild(s);
 }
@@ -4013,6 +4023,30 @@ const GW_AI_TR = {
   tr: { fab: 'AI Koç', h: '✦ GROM AI Koç', ph: 'Portföyünü sor…', send: 'Gönder', s1: 'Portföyümü incele', s2: 'Riskler var mı?', s3: 'Nasıl hedge?', s4: 'USDT için en iyi verim?', login: 'Giriş yap', hello: 'Selam! GROM portföyünü inceliyorum.', thinking: 'Düşünüyorum…', error: 'Hata.' },
 };
 function gwAiLang() { let l = 'en'; try { const s = localStorage.getItem('grom_lang'); if (s && GW_AI_TR[s]) l = s; else { const n = (navigator.language || '').toLowerCase(); for (const c of Object.keys(GW_AI_TR)) if (n.indexOf(c) === 0) { l = c; break; } } } catch (_) {} return GW_AI_TR[l] || GW_AI_TR.en; }
+
+function gwAiLockPanel() {
+  const panel = document.getElementById('gw-ai-panel');
+  const overlay = document.getElementById('gw-ai-overlay');
+  if (!panel) return;
+  const h = Math.min(Math.round((window.innerHeight || 600) * 0.72), 520);
+  panel.style.height = h + 'px';
+  panel.style.maxHeight = h + 'px';
+  if (overlay && window.visualViewport) {
+    overlay.style.height = window.visualViewport.height + 'px';
+    overlay.style.top = window.visualViewport.offsetTop + 'px';
+  }
+}
+function gwAiBindViewport() {
+  if (gwAiBindViewport._on) return;
+  gwAiBindViewport._on = true;
+  const fix = () => {
+    if (!document.getElementById('gw-ai-overlay')?.classList.contains('open')) return;
+    gwAiLockPanel();
+  };
+  window.visualViewport?.addEventListener('resize', fix);
+  window.visualViewport?.addEventListener('scroll', fix);
+  window.addEventListener('orientationchange', fix);
+}
 
 function gwAiGetHistory() { try { return JSON.parse(localStorage.getItem('gw_ai_history') || '[]'); } catch (_) { return []; } }
 function gwAiSetHistory(h) { try { localStorage.setItem('gw_ai_history', JSON.stringify(h.slice(-16))); } catch (_) {} }
@@ -4037,7 +4071,7 @@ function gwAiOpen() {
           <button data-q="${t.s4}">${t.s4}</button>
         </div>
         <div id="gw-ai-input">
-          <textarea id="gwAiText" placeholder="${t.ph}" rows="2"></textarea>
+          <textarea id="gwAiText" placeholder="${t.ph}" rows="2" inputmode="text" enterkeyhint="send" autocomplete="off" autocorrect="on"></textarea>
           <button id="gwAiSend">${t.send}</button>
         </div>
       </div>
@@ -4049,10 +4083,14 @@ function gwAiOpen() {
     document.getElementById('gwAiText').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); gwAiSendMsg(e.target.value); }
     });
+    document.getElementById('gwAiText').addEventListener('focus', gwAiLockPanel);
     overlay.querySelectorAll('#gw-ai-suggest button').forEach((b) => b.onclick = () => gwAiSendMsg(b.dataset.q));
+    gwAiBindViewport();
   }
   overlay.classList.add('open');
+  window.__gwAiScrollY = window.scrollY || 0;
   document.body.classList.add('gw-ai-open');
+  gwAiLockPanel();
   // Render history
   const log = document.getElementById('gw-ai-log');
   log.innerHTML = '';
@@ -4082,6 +4120,11 @@ function gwAiOpen() {
 function gwAiClose() {
   document.getElementById('gw-ai-overlay')?.classList.remove('open');
   document.body.classList.remove('gw-ai-open');
+  document.body.style.position = '';
+  document.body.style.width = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
+  try { window.scrollTo(0, window.__gwAiScrollY || 0); } catch (_) {}
 }
 async function gwAiSendMsg(text) {
   text = (text || '').trim();

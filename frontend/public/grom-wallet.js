@@ -2034,15 +2034,41 @@ function gwInjectMetaPortfolioCss() {
 /* Fetch each portfolio component. All safe to fail silently — the card just
  * shows what's available. Prediction / xStocks are v1 placeholders until
  * their real endpoints ship; we detect them via any global Cursor exposes. */
-/* Meta-Portfolio perf cache (2026-07-06). User feedback: "потупливает
- * при обновлении" — every dashboard refresh re-runs a multi-chain RPC
- * balance read (500-1500 ms) plus a backend overview call. Store the
- * last successful result and hand it back synchronously while a fresh
- * one loads in the background. Stale-while-revalidate keeps the UI
- * snappy without lying about values older than 30 s. */
+/* Meta-Portfolio perf cache (2026-07-06/07).
+ *
+ * Two-layer cache to keep the dashboard snappy:
+ *   Layer 1 (in-memory)   — 30 s TTL for the current session
+ *   Layer 2 (localStorage)— survives hard reload, up to 10 min old
+ *
+ * Stale-while-revalidate: hand back the cached value immediately and
+ * kick off a background refresh that repaints when it lands. User
+ * feedback ("потупливает при обновлении") was fine on soft reloads
+ * (in-memory hit) but bad on Ctrl+Shift+R because in-memory was
+ * wiped. localStorage bridges the reload. */
 const GW_MP_CACHE = { custodial: null, onchain: null }; // { at:ms, val }
 const GW_MP_TTL = 30_000;
+const GW_MP_LS_TTL = 10 * 60_000;
+const GW_MP_LS_KEY = 'gw_mp_cache_v1';
 const GW_MP_INFLIGHT = { custodial: null, onchain: null };
+// Hydrate the in-memory cache from localStorage at module load so the
+// very first render after a hard refresh sees the last known values.
+(function _gwMpHydrate() {
+  try {
+    const raw = localStorage.getItem(GW_MP_KEY_OR_LEGACY());
+    if (!raw) return;
+    const obj = JSON.parse(raw);
+    const now = Date.now();
+    if (obj?.custodial && now - obj.custodial.at < GW_MP_LS_TTL) GW_MP_CACHE.custodial = obj.custodial;
+    if (obj?.onchain   && now - obj.onchain.at   < GW_MP_LS_TTL) GW_MP_CACHE.onchain   = obj.onchain;
+  } catch (_) {}
+})();
+function GW_MP_KEY_OR_LEGACY() { return GW_MP_LS_KEY; } // hoisted alias for readability
+function _gwMpPersist() {
+  try { localStorage.setItem(GW_MP_LS_KEY, JSON.stringify({
+    custodial: GW_MP_CACHE.custodial,
+    onchain:   GW_MP_CACHE.onchain,
+  })); } catch (_) {}
+}
 
 async function _mpCustodialRaw() {
   const jwt = localStorage.getItem('grom_jwt');
@@ -2097,6 +2123,7 @@ async function _mpCached(kind) {
     const fn = kind === 'custodial' ? _mpCustodialRaw : _mpOnchainRaw;
     GW_MP_INFLIGHT[kind] = fn().then((v) => {
       GW_MP_CACHE[kind] = { at: Date.now(), val: v };
+      _gwMpPersist();
       GW_MP_INFLIGHT[kind] = null;
       return v;
     }, (e) => { GW_MP_INFLIGHT[kind] = null; throw e; });

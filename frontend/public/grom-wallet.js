@@ -2205,13 +2205,16 @@ async function gwRenderMetaPortfolio() {
     }
   }
 
-  // Only show the "…/loading" skeleton if we've never rendered this
-  // wrap before AND we have no cached values. If either cache slot is
-  // populated we jump straight to the real render (with cached data)
-  // — the async pass below then repaints when fresh values arrive.
-  const alreadyMounted = !!wrap.querySelector('.gw-mp-cats');
-  const anyCache = !!(GW_MP_CACHE.custodial || GW_MP_CACHE.onchain);
-  if (!alreadyMounted && !anyCache) {
+  // Ensure the `.gw-mp-card` shell always exists so the async
+  // Promise.all below can safely find it via `wrap.querySelector`.
+  // If we have cached values we skip the loading strip so no "…" flash
+  // is shown between reload and the cached-value repaint on line ~2200.
+  // Regression fix for d4af91e (2026-07-07): previously we skipped the
+  // whole skeleton when cache was present, but `wrap` was still empty
+  // on first render → wrap.querySelector('.gw-mp-card') === null →
+  // TypeError. Users saw a blank slot where Meta-Portfolio used to be.
+  if (!wrap.querySelector('.gw-mp-card')) {
+    const anyCache = !!(GW_MP_CACHE.custodial || GW_MP_CACHE.onchain);
     wrap.innerHTML = `
       <div class="gw-mp-card">
         <div class="gw-mp-head">
@@ -2222,7 +2225,7 @@ async function gwRenderMetaPortfolio() {
           </div>
           <span class="gw-mp-badge">${t.badge}</span>
         </div>
-        <div class="gw-mp-loading">${t.loading}</div>
+        ${anyCache ? '' : `<div class="gw-mp-loading">${t.loading}</div>`}
       </div>
     `;
   }

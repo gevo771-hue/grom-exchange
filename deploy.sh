@@ -1,7 +1,23 @@
 #!/bin/bash
-# GROM one-click deploy.
-# Stages + commits local changes, pushes to GitHub, SSHes into prod, pulls,
-# and rebuilds ONLY the services whose source files actually changed.
+# GROM one-click deploy — with zero-downtime frontend hot-swap.
+#
+# Stages + commits local changes, pushes to GitHub, SSHes into prod,
+# then picks the LEAST disruptive path for what actually changed:
+#
+#   1. Frontend static files only (frontend/public/*)  → zero-downtime:
+#        docker cp new files into the running nginx container +
+#        `nginx -s reload`.  Users see the fresh files on their next
+#        request; no 502 window at all.
+#
+#   2. Frontend infra (Dockerfile / nginx.conf)        → full rebuild
+#        of the frontend container (brief ~5-10 s outage — rare path).
+#
+#   3. Backend changes                                 → rebuild +
+#        recreate backend only.  The frontend nginx keeps serving
+#        `index.html` and static assets throughout, so grom.exchange
+#        itself never returns 502; only `/api/*` calls fail during
+#        the ~15-25 s backend startup (browser side just retries).
+#
 # Usage:  ./deploy.sh "commit message"
 # Or:     ./deploy.sh           (auto-generated commit message with date)
 
@@ -38,23 +54,75 @@ echo ""
 echo "▶ Pushing to GitHub ..."
 git push
 
-# Auto-detect which compose services to rebuild from the diff vs. previous HEAD.
-# Default to frontend if we somehow can't compute a diff (safe fallback).
+# ---- Classify what actually changed since PREV_HEAD ----
 CHANGED=$(git diff --name-only "$PREV_HEAD" HEAD 2>/dev/null || true)
-SERVICES=""
-if echo "$CHANGED" | grep -qE '^frontend/'; then SERVICES="$SERVICES frontend"; fi
-if echo "$CHANGED" | grep -qE '^backend/';  then SERVICES="$SERVICES backend";  fi
-SERVICES=$(echo "$SERVICES" | xargs)   # trim
-if [ -z "$SERVICES" ]; then
-  echo "▶ No service-affecting changes detected — rebuilding frontend by default."
-  SERVICES="frontend"
+
+BACKEND_CHANGED=false
+FRONTEND_CHANGED=false
+FRONTEND_STATIC_ONLY=true
+
+if echo "$CHANGED" | grep -qE '^backend/';  then BACKEND_CHANGED=true;  fi
+if echo "$CHANGED" | grep -qE '^frontend/'; then FRONTEND_CHANGED=true; fi
+# If any frontend/ path is outside frontend/public/, we can't hot-swap.
+if echo "$CHANGED" | grep -E '^frontend/' | grep -qvE '^frontend/public/'; then
+  FRONTEND_STATIC_ONLY=false
 fi
-echo "▶ Will rebuild: $SERVICES"
+
+# Nothing changed?  Fall back to a static-only refresh (safe no-op).
+if ! $BACKEND_CHANGED && ! $FRONTEND_CHANGED; then
+  echo "▶ No service-affecting changes — treating as static-only refresh."
+  FRONTEND_CHANGED=true
+  FRONTEND_STATIC_ONLY=true
+fi
 
 echo ""
-echo "▶ Deploying to grom-prod-fra1 ..."
-ssh -i ~/.ssh/grom_do -p 2222 root@134.122.69.161 \
-  "cd /opt/grom-exchange && git pull && docker compose build $SERVICES && docker compose up -d --remove-orphans --force-recreate $SERVICES && docker compose ps $SERVICES"
+echo "▶ Deploy plan:"
+echo "    backend changed:          $BACKEND_CHANGED"
+echo "    frontend changed:         $FRONTEND_CHANGED"
+echo "    frontend static-only:     $FRONTEND_STATIC_ONLY"
+
+SSH="ssh -i $HOME/.ssh/grom_do -p 2222 root@134.122.69.161"
+
+# ---- Always start with git pull on prod ----
+echo ""
+echo "▶ Pulling latest into /opt/grom-exchange on prod ..."
+$SSH "cd /opt/grom-exchange && git pull"
+
+# ---- Frontend ----
+if $FRONTEND_CHANGED; then
+  if $FRONTEND_STATIC_ONLY; then
+    echo ""
+    echo "▶ ZERO-DOWNTIME frontend hot-swap:"
+    echo "    - docker cp frontend/public/. → running grom_frontend container"
+    echo "    - nginx -s reload (no restart, no 502)"
+    $SSH "cd /opt/grom-exchange && \
+          docker cp frontend/public/. grom_frontend:/usr/share/nginx/html/ && \
+          docker exec grom_frontend nginx -s reload"
+  else
+    echo ""
+    echo "▶ Frontend Dockerfile/nginx.conf changed — full rebuild required:"
+    $SSH "cd /opt/grom-exchange && \
+          docker compose build frontend && \
+          docker compose up -d --force-recreate --no-deps frontend"
+  fi
+fi
+
+# ---- Backend ----
+if $BACKEND_CHANGED; then
+  echo ""
+  echo "▶ Rebuilding backend (frontend nginx keeps serving throughout):"
+  $SSH "cd /opt/grom-exchange && \
+        docker compose build backend && \
+        docker compose up -d --force-recreate --no-deps backend"
+fi
 
 echo ""
-echo "✅ Deploy done ($SERVICES). Open https://grom.exchange/ and Cmd+Shift+R to verify."
+echo "▶ Container status:"
+$SSH "cd /opt/grom-exchange && docker compose ps"
+
+echo ""
+if $FRONTEND_CHANGED && $FRONTEND_STATIC_ONLY && ! $BACKEND_CHANGED; then
+  echo "✅ Zero-downtime deploy done.  https://grom.exchange/  (Cmd+Shift+R to verify)"
+else
+  echo "✅ Deploy done.  https://grom.exchange/  (Cmd+Shift+R to verify)"
+fi

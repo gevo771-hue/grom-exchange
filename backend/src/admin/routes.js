@@ -80,7 +80,7 @@ const kycSchema = z.object({
   metadata: z.record(z.any()).optional(),
 }).strict();
 
-const VALID_STATUS = { approve: 'approved', limit: 'limited', block: 'blocked' };
+const VALID_STATUS = { approve: 'verified', limit: 'pending', block: 'rejected' };
 const withdrawalReviewSchema = z.object({
   action: z.enum(['approve', 'reject']),
   reason: z.string().max(500).optional(),
@@ -145,9 +145,9 @@ export function createAdminRouter({ requireAuth }) {
   r.get('/kyc/queue', async (_req, res, next) => {
     try {
       const { rows } = await query(
-        `SELECT id, address, kyc_status, created_at
+        `SELECT id, wallet_address AS address, kyc_status, created_at
            FROM users
-           WHERE kyc_status IN ('pending', 'review')
+           WHERE kyc_status IN ('pending')
            ORDER BY created_at ASC
            LIMIT 50`
       );

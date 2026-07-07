@@ -131,7 +131,7 @@ async function connectEmail(email) {
   const response = await fetch('/auth/email-login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: normalized })
+    body: JSON.stringify({ email: normalized, ...gromReferralPayload() })
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.token) {
@@ -165,6 +165,13 @@ function openEmailFallback(providerName = 'email') {
  *   5. Persist JWT + update GROM_CONN + reconnect WS
  * If the user rejects the signature, throws and the caller disconnects.
  */
+function gromReferralPayload() {
+  try {
+    const code = localStorage.getItem('grom_ref');
+    return code ? { referralCode: code } : {};
+  } catch (_) { return {}; }
+}
+
 async function authenticateWithSIWE(address, provider) {
   if (!address || !provider) throw new Error('SIWE: missing address or provider');
 
@@ -211,7 +218,7 @@ Issued At: ${issuedAt}`;
   const verifyRes = await fetch('/auth/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, signature })
+    body: JSON.stringify({ message, signature, ...gromReferralPayload() })
   });
   const verifyJson = await verifyRes.json().catch(() => ({}));
   if (!verifyRes.ok || !verifyJson.token) {
@@ -2027,7 +2034,17 @@ function gwInjectMetaPortfolioCss() {
 /* Fetch each portfolio component. All safe to fail silently — the card just
  * shows what's available. Prediction / xStocks are v1 placeholders until
  * their real endpoints ship; we detect them via any global Cursor exposes. */
-async function gwMpFetchCustodial() {
+/* Meta-Portfolio perf cache (2026-07-06). User feedback: "потупливает
+ * при обновлении" — every dashboard refresh re-runs a multi-chain RPC
+ * balance read (500-1500 ms) plus a backend overview call. Store the
+ * last successful result and hand it back synchronously while a fresh
+ * one loads in the background. Stale-while-revalidate keeps the UI
+ * snappy without lying about values older than 30 s. */
+const GW_MP_CACHE = { custodial: null, onchain: null }; // { at:ms, val }
+const GW_MP_TTL = 30_000;
+const GW_MP_INFLIGHT = { custodial: null, onchain: null };
+
+async function _mpCustodialRaw() {
   const jwt = localStorage.getItem('grom_jwt');
   if (!jwt) return { usd: 0, has: false };
   try {
@@ -2039,7 +2056,7 @@ async function gwMpFetchCustodial() {
     return { usd: totalUsd, has: true, assetsN };
   } catch (_) { return { usd: 0, has: false }; }
 }
-async function gwMpFetchOnchain() {
+async function _mpOnchainRaw() {
   try {
     const addr = (function () {
       try { return window.gromWallet?.state?.().account; } catch (_) { return null; }
@@ -2066,6 +2083,33 @@ async function gwMpFetchOnchain() {
     return { usd, has: true, chainsN: chainsWithBalance };
   } catch (_) { return { usd: 0, has: false }; }
 }
+/**
+ * Cached wrapper. Returns { val, fresh } — val is either the fresh
+ * result or the last cached one; fresh:false means "the caller can
+ * expect a background refresh to complete and should re-render then".
+ */
+async function _mpCached(kind) {
+  const now = Date.now();
+  const c = GW_MP_CACHE[kind];
+  if (c && (now - c.at) < GW_MP_TTL) return { val: c.val, fresh: true };
+  // Cache miss / stale. Deduplicate in-flight requests.
+  if (!GW_MP_INFLIGHT[kind]) {
+    const fn = kind === 'custodial' ? _mpCustodialRaw : _mpOnchainRaw;
+    GW_MP_INFLIGHT[kind] = fn().then((v) => {
+      GW_MP_CACHE[kind] = { at: Date.now(), val: v };
+      GW_MP_INFLIGHT[kind] = null;
+      return v;
+    }, (e) => { GW_MP_INFLIGHT[kind] = null; throw e; });
+  }
+  if (c) {
+    // Return stale immediately, let the caller re-render when fresh arrives.
+    GW_MP_INFLIGHT[kind].then(() => { try { gwRenderMetaPortfolio(); } catch (_) {} });
+    return { val: c.val, fresh: false };
+  }
+  return { val: await GW_MP_INFLIGHT[kind], fresh: true };
+}
+async function gwMpFetchCustodial() { return (await _mpCached('custodial')).val; }
+async function gwMpFetchOnchain()   { return (await _mpCached('onchain')).val; }
 async function gwMpFetchPredict() {
   // v1: check Cursor's global predict state. If none, return zero.
   try {
@@ -2134,19 +2178,27 @@ async function gwRenderMetaPortfolio() {
     }
   }
 
-  wrap.innerHTML = `
-    <div class="gw-mp-card">
-      <div class="gw-mp-head">
-        <div>
-          <p class="gw-mp-eyebrow">${t.eyebrow}</p>
-          <p class="gw-mp-total">…</p>
-          <p class="gw-mp-sub">${t.sub}</p>
+  // Only show the "…/loading" skeleton if we've never rendered this
+  // wrap before AND we have no cached values. If either cache slot is
+  // populated we jump straight to the real render (with cached data)
+  // — the async pass below then repaints when fresh values arrive.
+  const alreadyMounted = !!wrap.querySelector('.gw-mp-cats');
+  const anyCache = !!(GW_MP_CACHE.custodial || GW_MP_CACHE.onchain);
+  if (!alreadyMounted && !anyCache) {
+    wrap.innerHTML = `
+      <div class="gw-mp-card">
+        <div class="gw-mp-head">
+          <div>
+            <p class="gw-mp-eyebrow">${t.eyebrow}</p>
+            <p class="gw-mp-total">…</p>
+            <p class="gw-mp-sub">${t.sub}</p>
+          </div>
+          <span class="gw-mp-badge">${t.badge}</span>
         </div>
-        <span class="gw-mp-badge">${t.badge}</span>
+        <div class="gw-mp-loading">${t.loading}</div>
       </div>
-      <div class="gw-mp-loading">${t.loading}</div>
-    </div>
-  `;
+    `;
+  }
 
   const [cust, onch, pred, xst] = await Promise.all([
     gwMpFetchCustodial(), gwMpFetchOnchain(), gwMpFetchPredict(), gwMpFetchXstocks(),
@@ -2340,7 +2392,8 @@ function gwSetupAuthGate() {
   let ticks = 0;
   const id = setInterval(() => {
     ticks++;
-    if (gwIsAuthed() || ticks >= 20) clearInterval(id);
+    if (gwIsAuthed()) { gwGateCurrentPage(); clearInterval(id); return; }
+    if (ticks >= 20) clearInterval(id);
   }, 1000);
 }
 
@@ -3922,6 +3975,11 @@ function gwHandleSymbolFromHash() {
   setTimeout(tick, 250);
 }
 window.addEventListener('hashchange', gwHandleSymbolFromHash);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', gwHandleSymbolFromHash);
+} else {
+  gwHandleSymbolFromHash();
+}
 
 
 /* ============================================================================
@@ -4199,6 +4257,9 @@ async function gwAiSendMsg(text) {
 }
 function gwSetupAiCoach() {
   gwInjectAiCoachCss();
+  document.addEventListener('grom:wallet-connected', function () {
+    if (document.getElementById('gw-ai-overlay')?.classList.contains('open')) gwAiOpen();
+  });
   const renderFab = () => {
     const t = gwAiLang();
     let fab = document.getElementById('gw-ai-fab');

@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { query } from '../db/pool.js';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
+import { attachReferralCode } from '../referral/invite.js';
 import { buildOtpAuthUrl, randomBase32, verifyTotp } from '../utils/totp.js';
 import { ensureWelcomeWalletSeed } from './welcome-seed.js';
 
@@ -89,11 +90,12 @@ export function createAuthRouter() {
 
   const emailLoginSchema = z.object({
     email: z.string().trim().toLowerCase().email().max(160),
+    referralCode: z.string().trim().max(16).optional(),
   }).strict();
 
   r.post('/email-login', loginLimiter, async (req, res, next) => {
     try {
-      const { email } = emailLoginSchema.parse(req.body || {});
+      const { email, referralCode } = emailLoginSchema.parse(req.body || {});
       const pseudoWallet = emailWalletAddress(email);
       const { rows } = await query(
         `INSERT INTO users (wallet_address, chain_id)
@@ -108,6 +110,7 @@ export function createAuthRouter() {
 
       await ensureUserSettingsRow(user.id);
       await ensureWelcomeWalletSeed(user.id);
+      await attachReferralCode(user.id, referralCode).catch(() => {});
       await query(
         `UPDATE user_settings
             SET email=$2,
@@ -117,7 +120,7 @@ export function createAuthRouter() {
         [user.id, email]
       );
       await query(
-        `INSERT INTO notifications_outbox (user_id, channel, template_key, payload)
+        `INSERT INTO notifications_outbox (user_id, channel, template, payload)
          VALUES ($1, 'email', 'login_alert', $2::jsonb)`,
         [user.id, JSON.stringify({ email, method: 'email', at: new Date().toISOString() })]
       ).catch(() => {});
@@ -150,11 +153,12 @@ export function createAuthRouter() {
   const verifySchema = z.object({
     message:   z.string().min(20),
     signature: z.string().min(20),
+    referralCode: z.string().trim().max(16).optional(),
   });
 
   r.post('/verify', verifyLimiter, async (req, res, next) => {
     try {
-      const { message, signature } = verifySchema.parse(req.body);
+      const { message, signature, referralCode } = verifySchema.parse(req.body);
       const siwe = new SiweMessage(message);
       const result = await siwe.verify({ signature });
       if (!result.success) return res.status(401).json({ error: 'bad signature' });
@@ -185,13 +189,15 @@ export function createAuthRouter() {
          VALUES ($1,$2)
          ON CONFLICT (wallet_address) DO UPDATE
            SET last_seen_at = NOW(), chain_id = EXCLUDED.chain_id
-         RETURNING id, wallet_address, chain_id, kyc_status, risk_level`,
+         RETURNING id, wallet_address, chain_id, kyc_status, risk_level, role`,
         [addr, chainId]
       );
       const user = rows[0];
       if (user.risk_level === 'blocked') return res.status(403).json({ error: 'account blocked' });
 
       await ensureWelcomeWalletSeed(user.id);
+      await ensureUserSettingsRow(user.id);
+      await attachReferralCode(user.id, referralCode).catch(() => {});
 
       const token = jwt.sign(
         { sub: user.id, addr: user.wallet_address, chain: user.chain_id, role: user.role || 'user' },
@@ -315,12 +321,21 @@ export function createAuthRouter() {
   return r;
 }
 
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
   const hdr = req.headers.authorization || '';
   const m = /^Bearer (.+)$/.exec(hdr);
   if (!m) return res.status(401).json({ error: 'missing token' });
   try {
     req.user = jwt.verify(m[1], config.auth.jwtSecret);
+    const { rows } = await query(
+      `SELECT status, risk_level FROM users WHERE id=$1 LIMIT 1`,
+      [req.user.sub]
+    );
+    const row = rows[0];
+    if (!row) return res.status(401).json({ error: 'invalid token' });
+    if (row.status === 'suspended' || row.risk_level === 'blocked') {
+      return res.status(403).json({ error: 'account_suspended' });
+    }
     next();
   } catch {
     res.status(401).json({ error: 'invalid token' });

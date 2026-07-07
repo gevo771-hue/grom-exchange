@@ -22,7 +22,7 @@ export function createConsoleNotificationProvider() {
 
 async function resolveRecipient(userId) {
   const { rows } = await query(
-    `SELECT u.address, s.email
+    `SELECT u.wallet_address, s.email
        FROM users u
        LEFT JOIN user_settings s ON s.user_id = u.id
       WHERE u.id=$1

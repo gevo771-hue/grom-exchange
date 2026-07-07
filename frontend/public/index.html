@@ -7543,18 +7543,23 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260706b';
+  walletModule.src = '/grom-wallet.js?v=20260706c';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = '/grom-privy.js?v=20260614b';
+  privyModule.src = '/grom-privy.js?v=20260706b';
   document.head.appendChild(privyModule);
 }
 </script>
 <script>
 window.GROM_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') || window.innerWidth < 900;
 window.gromPageActive = function () { return !document.hidden; };
+window.addEventListener('resize', function () {
+  var wasMobile = window.GROM_MOBILE;
+  window.GROM_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') || window.innerWidth < 900;
+  if (wasMobile !== window.GROM_MOBILE && typeof updateAuthUi === 'function') updateAuthUi();
+}, { passive: true });
 /* ========== Animated plexus background ========== */
 (function initPlexus() {
   const cv = document.getElementById('plexusBg');
@@ -7977,10 +7982,11 @@ async function cnSubmitEmail() {
   var oldText = btn ? btn.textContent : '';
   try {
     if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+    var refPayload = (function () { try { var c = localStorage.getItem('grom_ref'); return c ? { referralCode: c } : {}; } catch (_) { return {}; } })();
     var res = await fetch('/auth/email-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: v })
+      body: JSON.stringify(Object.assign({ email: v }, refPayload))
     });
     var data = await res.json().catch(function () { return {}; });
     if (!res.ok || !data.token) throw new Error(data.error || 'email_login_failed');
@@ -8021,17 +8027,7 @@ function cnConnect(name, kind, ev) {
     window.gromWalletConnect(kind, name);
     return;
   }
-  // Last-resort fallback: legacy demo simulation. This should not run on production
-  // once grom-wallet.js + grom-privy.js are loaded — kept only so the UI degrades
-  // gracefully if the modules fail to download.
-  var fakeAddr = '0x' + Math.random().toString(16).slice(2, 10) + '…' + Math.random().toString(16).slice(2, 6);
-  GROM_CONN = { connected: true, label: name + ' · ' + fakeAddr, method: kind };
-  try { localStorage.setItem('grom_jwt', 'demo-session'); } catch (_) {}
-  try { localStorage.setItem('grom_wallet_label', fakeAddr); } catch (_) {}
-  setWalletLabel(fakeAddr);
-  updateAuthUi();
-  closeConnectModal();
-  toast(name + ' connected · ' + fakeAddr + ' (demo)', 'success');
+  toast('Wallet module is still loading. Please wait a moment and try again.', 'error');
 }
 function connectWallet() { openConnectModal(); }
 var _wc = document.getElementById('walletChip');
@@ -8285,7 +8281,11 @@ function tickRound() {
   }
   if (boState.elapsed === 0) syncBinaryStrike(true);
 }
-setInterval(tickRound, (window.GROM_MOBILE ? 2000 : 1000));
+setInterval(function () {
+  if (!window.gromPageActive()) return;
+  if (!document.getElementById('page-binary')?.classList.contains('active')) return;
+  tickRound();
+}, (window.GROM_MOBILE ? 2000 : 1000));
 
 // Expiry selector
 document.addEventListener('click', e => {
@@ -8473,7 +8473,11 @@ window.placeBinary = function placeBinary(dir) {
   renderPositions();
   if (typeof drawChart === 'function') drawChart('boChart');
 };
-setInterval(renderPositions, window.GROM_MOBILE ? 2500 : 1000);
+setInterval(function () {
+  if (!window.gromPageActive()) return;
+  if (!document.getElementById('page-binary')?.classList.contains('active')) return;
+  renderPositions();
+}, window.GROM_MOBILE ? 2500 : 1000);
 
 // AI signal jitter
 setInterval(() => {
@@ -8696,7 +8700,9 @@ function renderFuturesProPanels() {
 }
 // Funding countdown
 let fundSec = 2 * 3600 + 48 * 60 + 12;
-setInterval(() => {
+setInterval(function () {
+  if (!window.gromPageActive()) return;
+  if (!document.getElementById('page-futures')?.classList.contains('active')) return;
   fundSec = Math.max(0, fundSec - 1);
   const h = String(Math.floor(fundSec/3600)).padStart(2,'0');
   const m = String(Math.floor((fundSec%3600)/60)).padStart(2,'0');
@@ -8704,7 +8710,11 @@ setInterval(() => {
   const el = document.getElementById('fundCd');
   if (el) el.textContent = `${h}:${m}:${s}`;
 }, 1000);
-setInterval(updateFuturesBoard, window.GROM_MOBILE ? 4000 : 1800);
+setInterval(function () {
+  if (!window.gromPageActive()) return;
+  if (!document.getElementById('page-futures')?.classList.contains('active')) return;
+  updateFuturesBoard();
+}, window.GROM_MOBILE ? 4000 : 1800);
 var __gromFutResizeTimer = null;
 window.addEventListener('resize', () => {
   if (!document.getElementById('page-futures')?.classList.contains('active')) return;
@@ -9368,6 +9378,7 @@ function syncTradingDeskPrices() {
 }
 
 function tickPrices() {
+  if (!window.gromPageActive()) return;
   if (window.__gromLiveFeedActive && Date.now() - (window.__gromLastLiveTick || 0) < 20000) {
     gromSyncCorePricesFromLive();
     var pairPxLive = priceForPair(boState.pair);
@@ -10733,7 +10744,11 @@ function renderOrderBook() {
   });
   asksEl.innerHTML = aHtml; bidsEl.innerHTML = bHtml;
 }
-setInterval(renderOrderBook, window.GROM_MOBILE ? 5000 : 2000);
+setInterval(function () {
+  if (!window.gromPageActive()) return;
+  if (!document.getElementById('page-spot')?.classList.contains('active')) return;
+  renderOrderBook();
+}, window.GROM_MOBILE ? 5000 : 2000);
 setTimeout(renderOrderBook, 200);
 
 /* Markets */
@@ -12041,7 +12056,14 @@ async function fetchLiveQuotes() {
   } catch (_) {}
   updateQuoteRows();
 }
-setInterval(fetchLiveQuotes, window.GROM_MOBILE ? 18000 : 9000);
+setInterval(function () {
+  if (!window.gromPageActive()) return;
+  var onQuotesPage = ['page-landing', 'page-predict', 'page-dashboard', 'page-markets', 'page-xstocks'].some(function (id) {
+    return document.getElementById(id)?.classList.contains('active');
+  });
+  if (!onQuotesPage) return;
+  fetchLiveQuotes();
+}, window.GROM_MOBILE ? 18000 : 9000);
 setTimeout(fetchLiveQuotes, 600);
 
 /* ========== History filter ========== */
@@ -13174,9 +13196,10 @@ function exportHistoryCsv() {
 initMarketsFilter();
 
 function openHelpTopic(topic) {
+  var map = { 'responsible-trading': 'responsible', 'terms': 'terms', 'privacy': 'privacy' };
   show('help');
   requestAnimationFrame(function () {
-    var el = document.getElementById('topic-' + topic);
+    var el = document.getElementById('topic-' + (map[topic] || topic));
     if (el) {
       el.open = true;
       el.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -13196,13 +13219,14 @@ function closeWalletModal() {
   if (ov) ov.classList.remove('open');
 }
 function switchWalletPane(mode) {
+  var i18n = typeof t === 'function' ? t : function (k, fb) { return fb || k; };
   var titles = {
-    deposit: typeof t === 'function' ? t('wallet_deposit') : 'Deposit',
-    buy: typeof t === 'function' ? t('wallet_cash') : 'Cash',
-    send: typeof t === 'function' ? t('wallet_send') : 'Send',
-    swap: typeof t === 'function' ? t('wallet_swap') : 'Swap'
+    deposit: i18n('wallet_deposit', 'Deposit'),
+    buy: i18n('wallet_cash', 'Cash'),
+    send: i18n('wallet_send', 'Send'),
+    swap: i18n('wallet_swap', 'Swap')
   };
-  var t = document.getElementById('wmTitle'); if (t) t.textContent = titles[mode] || 'Wallet';
+  var titleEl = document.getElementById('wmTitle'); if (titleEl) titleEl.textContent = titles[mode] || 'Wallet';
   document.querySelectorAll('#wmTabs button').forEach(function (b) {
     b.classList.toggle('active', b.dataset.mode === mode);
   });
@@ -15171,7 +15195,7 @@ updateAuthUi = function updateAuthUiPatched() {
   var sbLogout = document.getElementById('sidebarLogout');
   if (sbLogout) sbLogout.style.display = connected ? '' : 'none';
   var topLogout = document.getElementById('topLogoutBtn');
-  if (topLogout) topLogout.style.display = 'none';
+  if (topLogout) topLogout.style.display = connected && !window.GROM_MOBILE ? '' : 'none';
   if (!connected) {
     setWalletLabel(gromSignInLabel());
     if (typeof window.gromResetWalletUi === 'function') window.gromResetWalletUi();
@@ -15181,6 +15205,7 @@ updateAuthUi = function updateAuthUiPatched() {
 };
 var __baseDisconnect = disconnectWallet;
 disconnectWallet = function disconnectWalletPatched() {
+  if (typeof window.gromHardLogout === 'function') { window.gromHardLogout(); return; }
   if (typeof __baseDisconnect === 'function') __baseDisconnect();
   setWalletLabel(gromSignInLabel());
   if (typeof window.gromResetWalletUi === 'function') window.gromResetWalletUi();
@@ -15189,7 +15214,14 @@ disconnectWallet = function disconnectWalletPatched() {
 var __logoHomeLive = document.getElementById('logoHome');
 if (__logoHomeLive) __logoHomeLive.onclick = function (e) { e.preventDefault(); show(GROM_CONN.connected ? 'dashboard' : 'landing'); };
 var __baseShowLive = show;
+var GW_GATED_PAGES = ['referral', 'wallet', 'history', 'settings'];
+function gromIsAuthed() { try { return !!localStorage.getItem('grom_jwt'); } catch (_) { return false; } }
 show = function showLivePatched(page) {
+  if (!gromIsAuthed() && GW_GATED_PAGES.indexOf(page) >= 0) {
+    if (typeof window.gwOpenSignIn === 'function') window.gwOpenSignIn();
+    else if (typeof openConnectModal === 'function') openConnectModal();
+    page = 'dashboard';
+  }
   if (typeof __baseShowLive === 'function') __baseShowLive(page);
   try {
     var newHash = page === 'landing' ? '' : ('#' + page);
@@ -15197,7 +15229,7 @@ show = function showLivePatched(page) {
   } catch (_) {}
 };
 window.addEventListener('hashchange', function () {
-  var p = (location.hash || '').replace(/^#/, '');
+  var p = (location.hash || '').replace(/^#/, '').split('?')[0];
   if (p && document.getElementById('page-' + p)) show(p);
 });
 if (typeof renderCmdk === 'function') {

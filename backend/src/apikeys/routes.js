@@ -27,7 +27,7 @@ function makeKey() {
 function hash(prefix, secret) {
   return crypto
     .createHash('sha256')
-    .update(prefix + ':' + secret + ':' + (config.jwtSecret || ''))
+    .update(prefix + ':' + secret + ':' + (config.auth.jwtSecret || ''))
     .digest('hex');
 }
 

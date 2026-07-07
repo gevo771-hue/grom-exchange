@@ -78,10 +78,11 @@ async function exchangeGromSession(user) {
   const email = String(emailAccount?.address || user?.email || googleAccount?.email || '').trim().toLowerCase();
   if (!email) return null;
 
+  const ref = (function () { try { const c = localStorage.getItem('grom_ref'); return c ? { referralCode: c } : {}; } catch (_) { return {}; } })();
   const res = await fetch('/auth/email-login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email })
+    body: JSON.stringify({ email, ...ref })
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.token) throw new Error(data.error || 'GROM session failed');

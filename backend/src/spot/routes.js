@@ -250,7 +250,16 @@ async function applyFill(tx, order, fillAmount, fillPrice) {
   const [base, quote] = String(order.pair).split('/');
   const orderAmount = toNum(order.amount);
   const currentFilled = toNum(order.filled);
-  const price = fillPrice || toNum(order.price);
+  const orderPrice = toNum(order.price);
+  const price = fillPrice || orderPrice;
+  if (fillPrice != null && orderPrice > 0) {
+    const slippage = Math.abs(price - orderPrice) / orderPrice;
+    if (slippage > 0.005) {
+      const err = new Error('fill price out of allowed range');
+      err.status = 400;
+      throw err;
+    }
+  }
   const remaining = Math.max(orderAmount - currentFilled, 0);
   const actualFill = Math.min(fillAmount, remaining);
   if (actualFill <= 0) {

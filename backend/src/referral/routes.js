@@ -6,18 +6,15 @@
  *   POST /api/referral/claim       — mark pending commissions as queued for payout
  */
 import express from 'express';
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
+import config from '../config/index.js';
+import { inviteCode } from './invite.js';
 
 // Deterministic short invite code from user id — same input always yields same
 // 6-char base32-style code, e.g. GROM-K8R2QX. No DB schema change required.
-function inviteCode(userId) {
-  const hash = createHash('sha256').update(`grom-invite:${userId}`).digest();
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // base32 minus look-alikes (0,O,1,I)
-  let code = '';
-  for (let i = 0; i < 6; i++) code += alphabet[hash[i] % alphabet.length];
-  return `GROM-${code}`;
+function inviteCodeFromUser(userId) {
+  return inviteCode(userId);
 }
 
 function inviteLink(req, code) {
@@ -35,6 +32,7 @@ const payoutSchema = z.object({
 }).strict();
 
 async function ensureSeed(userId) {
+  if (config.env === 'production') return;
   // Both inserts depend on a FK to users(id). If the caller authenticated via
   // an external IdP (Privy / SIWE wallet) and there's no row in users yet,
   // these INSERTs will violate FK and throw. We swallow errors here so the
@@ -116,7 +114,7 @@ export function createReferralRouter({ requireAuth }) {
       // Funnel stats are deterministic dev numbers; in prod they come from analytics ETL
       let code = null, link = null;
       try {
-        code = inviteCode(req.user.sub);
+        code = inviteCodeFromUser(req.user.sub);
         link = inviteLink(req, code);
       } catch (e) {
         // Never let invite-code generation crash the whole endpoint
@@ -128,7 +126,9 @@ export function createReferralRouter({ requireAuth }) {
         totals: totals.rows[0] || { total_settled: 0, total_pending: 0, total_accrued: 0 },
         recent: recent.rows,
         payout: payout.rows[0] || null,
-        funnel: { clicks_30d: 18420, signups_30d: 1284, kyc_30d: 742, first_trade_30d: 487 },
+        funnel: config.env === 'production'
+          ? { clicks_30d: 0, signups_30d: 0, kyc_30d: 0, first_trade_30d: 0 }
+          : { clicks_30d: 18420, signups_30d: 1284, kyc_30d: 742, first_trade_30d: 487 },
       });
     } catch (err) { next(err); }
   });

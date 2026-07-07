@@ -23,6 +23,7 @@ function toNum(value) {
 }
 
 async function ensureDevFuturesSeed(userId, priceAggregator) {
+  if (config.env === 'production') return;
   const existing = await query('SELECT 1 FROM futures_positions WHERE user_id=$1 LIMIT 1', [userId]);
   if (existing.rowCount > 0) return;
   const btc = toNum(await priceAggregator.getPrice('BTC/USDT')) || 104218.4;

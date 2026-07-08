@@ -153,7 +153,12 @@ function gwShowTrustWcModal(uri) {
   qrBox.innerHTML = '<img src="' + qrImg + '" alt="Trust Wallet QR" width="260" height="260" decoding="async"/>';
   const openBtn = modal.querySelector('.gw-trust-wc-open');
   openBtn.href = link;
-  openBtn.style.display = isMobileUA() ? '' : 'none';
+  openBtn.textContent = isMobileUA() ? 'Open Trust Wallet app' : 'Open in Trust Wallet';
+  openBtn.onclick = function (e) {
+    e.preventDefault();
+    openTrustWcApp(uri);
+  };
+  openBtn.style.display = '';
   modal.style.display = 'flex';
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
 }
@@ -415,29 +420,51 @@ function gwKillReownModals() {
     });
   } catch (_) {}
 }
+function openTrustWcApp(uri) {
+  const link = trustWcDeepLink(uri);
+  try {
+    const a = document.createElement('a');
+    a.href = link;
+    a.rel = 'noopener noreferrer';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { try { a.remove(); } catch (_) {} }, 0);
+  } catch (_) {
+    window.open(link, '_blank', 'noopener,noreferrer');
+  }
+}
 function trustWcNamespaces() {
-  const chains = [...CHAINS.required, ...CHAINS.optional].map((id) => 'eip155:' + id);
-  const methods = ['eth_sendTransaction', 'personal_sign', 'eth_signTypedData', 'eth_signTypedData_v4', 'eth_sign'];
+  const methods = ['eth_sendTransaction', 'personal_sign', 'eth_signTypedData', 'eth_signTypedData_v4'];
   const events = ['chainChanged', 'accountsChanged'];
+  // Trust Wallet rejects sessions that REQUIRE Arbitrum/exotic chains.
+  // SIWE only needs Ethereum mainnet — other GROM chains stay optional.
   return {
     requiredNamespaces: {
-      eip155: { methods, chains: ['eip155:42161'], events },
+      eip155: { methods, chains: ['eip155:1'], events },
     },
     optionalNamespaces: {
-      eip155: { methods, chains: chains.filter((c) => c !== 'eip155:42161'), events },
+      eip155: {
+        methods,
+        chains: ['eip155:42161', 'eip155:56', 'eip155:137', 'eip155:8453', 'eip155:10', 'eip155:43114'],
+        events,
+      },
     },
   };
 }
+function primaryChainRef(session) {
+  const acc = session?.namespaces?.eip155?.accounts?.[0];
+  if (acc) return acc.split(':').slice(0, 2).join(':');
+  return 'eip155:1';
+}
 function chainIdFromWcSession(session) {
-  const first = session?.namespaces?.eip155?.accounts?.[0];
-  if (first) return parseInt(first.split(':')[1], 10) || 42161;
-  return 42161;
+  const ref = primaryChainRef(session);
+  return parseInt(ref.split(':')[1], 10) || 1;
 }
 function buildSignClientEip1193(signClient, session) {
   const accounts = (session?.namespaces?.eip155?.accounts || [])
     .map((a) => a.split(':')[2]).filter(Boolean);
   const chainId = chainIdFromWcSession(session);
-  const chainRef = 'eip155:' + chainId;
   currentChainId = chainId;
   return {
     accounts,
@@ -445,10 +472,10 @@ function buildSignClientEip1193(signClient, session) {
     signClient,
     request: async ({ method, params }) => {
       if (method === 'eth_accounts') return accounts;
-      if (method === 'eth_chainId') return '0x' + chainId.toString(16);
+      if (method === 'eth_chainId') return '0x' + chainIdFromWcSession(session).toString(16);
       return signClient.request({
         topic: session.topic,
-        chainId: chainRef,
+        chainId: primaryChainRef(session),
         request: { method, params },
       });
     },
@@ -461,6 +488,31 @@ function buildSignClientEip1193(signClient, session) {
       });
     },
   };
+}
+async function connectTrustViaEthereumProvider(uriHandler) {
+  const p = await ensureWC(true, {
+    walletKey: 'trust',
+    showQrModal: false,
+    requiredChains: [1],
+    optionalChains: [42161, 8453, 137, 56, 10, 43114],
+    recommendedWalletId: WC_WALLET_IDS.trust,
+    excludeWalletIds: [WC_WALLET_IDS.metamask],
+  });
+  if (uriHandler) p.on('display_uri', uriHandler);
+  try {
+    await p.connect();
+  } finally {
+    if (uriHandler) try { p.removeListener('display_uri', uriHandler); } catch (_) {}
+  }
+  const accs = await p.request({ method: 'eth_accounts' });
+  if (!accs?.length) throw new Error('No accounts returned');
+  return { provider: p, account: accs[0] };
+}
+async function finalizeTrustWcConnection(provider, account) {
+  updateChip(account);
+  try { await authenticateWithSIWE(account, provider); }
+  catch (err) { gwSiweFailToast(err); throw err; }
+  return account;
 }
 function isBinanceProvider(p) {
   return !!(p?.isBinance || p?.isBinanceWallet || p?.bbcSignTx);
@@ -608,8 +660,8 @@ async function ensureWC(forceNew, opts) {
   }
   const initOpts = {
     projectId: WC_PROJECT_ID,
-    chains: CHAINS.required,
-    optionalChains: CHAINS.optional,
+    chains: opts?.requiredChains || CHAINS.required,
+    optionalChains: opts?.optionalChains || CHAINS.optional,
     showQrModal,
     metadata: walletMetadata(),
   };
@@ -646,42 +698,60 @@ function gwPrefetchWc() {
   /* Skip prefetch — pre-initing EthereumProvider can resurrect Reown modal on PC. */
 }
 
-/* Trust WalletConnect — SignClient only (no Reown modal → no MetaMask hijack on PC). */
+/* Trust WalletConnect — SignClient (custom QR) with EthereumProvider fallback. */
 async function connectTrustWC() {
   setTrustWcDeepLinkChoice();
-  gwHideTrustWcModal();
   gwSetTrustFlowActive(true);
   gwKillReownModals();
   const killTimer = setInterval(gwKillReownModals, 250);
+  let uriHandled = false;
+  const onTrustUri = (uri) => {
+    if (uriHandled || !uri) return;
+    uriHandled = true;
+    gwShowTrustWcModal(uri);
+    if (isMobileUA()) {
+      openTrustWcApp(uri);
+      if (typeof window.toast === 'function') {
+        window.toast('Confirm in Trust Wallet, then return to this tab.', 'info');
+      }
+    }
+  };
   try {
     if (wcProvider) {
       try { await wcProvider.disconnect(); } catch (_) {}
       wcProvider = null;
       wcRecommendedForKey = null;
     }
-    const { default: SignClient } = await import('https://esm.sh/@walletconnect/sign-client@2.18.0');
-    const client = await SignClient.init({
-      projectId: WC_PROJECT_ID,
-      metadata: walletMetadata(),
-    });
-    const { uri, approval } = await client.connect(trustWcNamespaces());
-    if (!uri) throw new Error('Could not start Trust Wallet session');
-    if (isMobileUA()) {
-      window.location.assign(trustWcDeepLink(uri));
-    } else {
-      gwShowTrustWcModal(uri);
+    try {
+      const { default: SignClient } = await import('https://esm.sh/@walletconnect/sign-client@2.18.0');
+      const client = await SignClient.init({
+        projectId: WC_PROJECT_ID,
+        metadata: walletMetadata(),
+      });
+      const { uri, approval } = await client.connect(trustWcNamespaces());
+      if (!uri) throw new Error('Could not start Trust Wallet session');
+      onTrustUri(uri);
+      const session = await Promise.race([
+        approval(),
+        new Promise((_, reject) => setTimeout(
+          () => reject(new Error('Trust Wallet connection timed out — open Trust and approve')),
+          120000
+        )),
+      ]);
+      wcProvider = buildSignClientEip1193(client, session);
+      wcRecommendedForKey = 'trust';
+      wcProvider.on('accountsChanged', (accs) => updateChip(accs?.[0] || null));
+      wcProvider.on('disconnect', () => updateChip(null));
+      const accs = wcProvider.accounts;
+      if (!accs?.length) throw new Error('No accounts returned');
+      return await finalizeTrustWcConnection(wcProvider, accs[0]);
+    } catch (signErr) {
+      console.warn('[grom-wallet] SignClient Trust path failed, trying fallback:', signErr);
+      uriHandled = false;
+      const { provider, account } = await connectTrustViaEthereumProvider(onTrustUri);
+      wcRecommendedForKey = 'trust';
+      return await finalizeTrustWcConnection(provider, account);
     }
-    const session = await approval();
-    wcProvider = buildSignClientEip1193(client, session);
-    wcRecommendedForKey = 'trust';
-    wcProvider.on('accountsChanged', (accs) => updateChip(accs?.[0] || null));
-    wcProvider.on('disconnect', () => updateChip(null));
-    const accs = wcProvider.accounts;
-    if (!accs?.length) throw new Error('No accounts returned');
-    updateChip(accs[0]);
-    try { await authenticateWithSIWE(accs[0], wcProvider); }
-    catch (err) { gwSiweFailToast(err); throw err; }
-    return accs[0];
   } finally {
     clearInterval(killTimer);
     gwSetTrustFlowActive(false);

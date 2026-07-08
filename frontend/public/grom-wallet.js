@@ -15,6 +15,41 @@
 const WC_PROJECT_ID = '28302d1699a8833692b54f0454164625';
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+/* ---------------------------------------------------------------------------
+ * Suppress MetaMask's EIP-6963 hijack of Trust / Binance / OKX flows.
+ *
+ * User feedback (2026-07-07): even on Safari, clicking Trust surfaces a
+ * yellow "Відкрити у MetaMask" bar under the Reown QR. It's not the
+ * MM extension banner (Safari has none of that on iOS), and it's not
+ * our JS calling `window.open('wc:')` (a246e6a already intercepts and
+ * my [GROM] blocked logs never fired). The real source is MetaMask
+ * announcing itself as an EIP-6963 provider — Reown Web3Modal listens
+ * to `eip6963:announceProvider` and displays a shortcut / suggestion
+ * for every wallet that answers, INCLUDING the browser-injected one.
+ *
+ * We short-circuit that at capture phase: any announce whose
+ * detail.info.rdns is io.metamask gets stopImmediatePropagation before
+ * Reown's listener sees it. Our own connectMetaMask() still works —
+ * rdnsProvider('io.metamask') falls through to `window.ethereum.isMetaMask`
+ * (line ~332), which the extension always exposes regardless of EIP-6963.
+ * ------------------------------------------------------------------------- */
+(function gwBlockMmEip6963() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.addEventListener('eip6963:announceProvider', (e) => {
+      const rdns = e?.detail?.info?.rdns || '';
+      if (rdns === 'io.metamask') {
+        e.stopImmediatePropagation();
+        // Note: we do NOT preventDefault — the announce isn't cancelable.
+        // stopImmediatePropagation is enough because Reown attaches its
+        // own listener AFTER ours if this runs at top-of-file, and even
+        // when Reown attached first, capture-phase listeners fire before
+        // bubble-phase ones. We pass capture:true to be safe.
+      }
+    }, true);
+  } catch (_) {}
+})();
+
 import { EthereumProvider } from 'https://esm.sh/@walletconnect/ethereum-provider@2.18.0';
 
 /* ----- metadata для WalletConnect / Trust Wallet Verify API -----

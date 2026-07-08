@@ -262,6 +262,12 @@ function updateChip(addr) {
     if (addr) {
       document.dispatchEvent(new CustomEvent('grom:wallet-connected', { detail: { address: addr } }));
       try { localStorage.setItem('grom_wallet_label', addr); } catch (_) {}
+      try { gwInvalidateMpCache(); } catch (_) {}
+      setTimeout(() => {
+        try { gwRefreshCombinedPortfolioTotals(); } catch (_) {}
+        try { gwRenderMetaPortfolio(); } catch (_) {}
+        try { gwDsAutoPickFromToken(); } catch (_) {}
+      }, 50);
     } else {
       document.dispatchEvent(new CustomEvent('grom:wallet-disconnected'));
       try { localStorage.removeItem('grom_wallet_label'); } catch (_) {}
@@ -2228,6 +2234,7 @@ async function gwRenderOnchainCard() {
       ${list}
     `;
     document.getElementById('gwOcRefresh')?.addEventListener('click', gwRenderOnchainCard);
+    gwRefreshCombinedPortfolioTotals().catch(() => {});
   } catch (e) {
     card.querySelector('.gw-oc-loading')?.classList.remove('gw-oc-loading');
     const err = document.createElement('div');
@@ -2243,11 +2250,27 @@ function gwSetupOnchainCard() {
   window.addEventListener('hashchange', tryRender);
   window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt' || e.key === 'grom_wallet_label') tryRender(); });
   // Re-render on wallet-connect events fired by our own connectors.
-  document.addEventListener('grom:wallet-connected', tryRender);
+  document.addEventListener('grom:wallet-connected', () => {
+    gwInvalidateMpCache();
+    tryRender();
+    gwRefreshCombinedPortfolioTotals().catch(() => {});
+  });
   document.addEventListener('grom:wallet-disconnected', tryRender);
   // Also mount the card whenever page-wallet appears (Cursor's SPA router).
   const bodyObs = new MutationObserver(() => tryRender());
   bodyObs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+}
+
+function gwSetupCombinedBalance() {
+  const refresh = () => { gwRefreshCombinedPortfolioTotals().catch(() => {}); };
+  document.addEventListener('grom:wallet-connected', () => {
+    gwInvalidateMpCache();
+    refresh();
+  });
+  window.addEventListener('hashchange', () => {
+    if (document.getElementById('page-wallet') || document.getElementById('page-dashboard')) refresh();
+  });
+  refresh();
 }
 
 /* =============================================================================
@@ -2411,11 +2434,21 @@ async function _mpCustodialRaw() {
     return { usd: totalUsd, has: true, assetsN };
   } catch (_) { return { usd: 0, has: false }; }
 }
+function gwInvalidateMpCache() {
+  GW_MP_CACHE.onchain = null;
+  GW_MP_INFLIGHT.onchain = null;
+  try {
+    const raw = localStorage.getItem(GW_MP_LS_KEY);
+    if (!raw) return;
+    const obj = JSON.parse(raw);
+    delete obj.onchain;
+    localStorage.setItem(GW_MP_LS_KEY, JSON.stringify(obj));
+  } catch (_) {}
+}
+
 async function _mpOnchainRaw() {
   try {
-    const addr = (function () {
-      try { return window.gromWallet?.state?.().account; } catch (_) { return null; }
-    })();
+    const addr = gwOcConnectedAddress();
     if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) return { usd: 0, has: false };
     const [prices, chains] = await Promise.all([
       (typeof gwOcFetchPrices === 'function' ? gwOcFetchPrices() : Promise.resolve({ USDT: 1, USDC: 1 })),
@@ -2466,6 +2499,40 @@ async function _mpCached(kind) {
 }
 async function gwMpFetchCustodial() { return (await _mpCached('custodial')).val; }
 async function gwMpFetchOnchain()   { return (await _mpCached('onchain')).val; }
+
+/** Custodial + on-chain USD for wallet hero and dashboard total. */
+async function gwRefreshCombinedPortfolioTotals() {
+  const custodial = Number(window.__gromWalletOverview?.summary?.totalUsd) || 0;
+  let onchain = 0;
+  try {
+    const oc = await _mpOnchainRaw();
+    onchain = Number(oc.usd) || 0;
+    GW_MP_CACHE.onchain = { at: Date.now(), val: oc };
+    _gwMpPersist();
+  } catch (_) {}
+
+  const combined = custodial + onchain;
+  const fmt = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const show = combined > 0.005 ? combined : (onchain > 0.005 ? onchain : custodial);
+
+  const walletTotal = document.getElementById('walletTotalBalance');
+  if (walletTotal && show > 0.005) walletTotal.textContent = fmt(show);
+
+  const walletDelta = document.getElementById('walletTotalDelta');
+  if (walletDelta && (custodial > 0.005 || onchain > 0.005)) {
+    const parts = [];
+    if (custodial > 0.005) parts.push('Trading ' + fmt(custodial));
+    if (onchain > 0.005) parts.push('On-chain ' + fmt(onchain));
+    if (parts.length) {
+      walletDelta.textContent = parts.join(' · ');
+      walletDelta.style.color = 'var(--silver5)';
+    }
+  }
+
+  const dashVal = document.getElementById('dashPortfolioVal');
+  if (dashVal && combined > 0.005) dashVal.textContent = gwFmtUsd(combined);
+}
+window.gwRefreshCombinedPortfolioTotals = gwRefreshCombinedPortfolioTotals;
 async function gwMpFetchPredict() {
   // v1: check Cursor's global predict state. If none, return zero.
   try {
@@ -2631,7 +2698,10 @@ function gwSetupMetaPortfolio() {
   let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwMetaPortfolio') || n >= 20) clearInterval(id); else tryRender(); }, 500);
   window.addEventListener('hashchange', tryRender);
   window.addEventListener('storage', (e) => { if (e.key === 'grom_jwt' || e.key === 'grom_wallet_label') tryRender(); });
-  document.addEventListener('grom:wallet-connected', tryRender);
+  document.addEventListener('grom:wallet-connected', () => {
+    gwInvalidateMpCache();
+    tryRender();
+  });
   document.addEventListener('grom:wallet-disconnected', tryRender);
   const bodyObs = new MutationObserver(() => tryRender());
   bodyObs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
@@ -3162,7 +3232,7 @@ function gwDsBuildPanel() {
           </div>
           <div class="gw-ds-row-main">
             <div class="gw-ds-select">
-              <select id="gwDsFrom">${optionsFor('USDT')}</select>
+              <select id="gwDsFrom">${optionsFor(mode === 'onchain' ? 'ETH' : 'USDT')}</select>
             </div>
             <div class="gw-ds-amt">
               <input id="gwDsAmt" type="number" min="0" step="any" inputmode="decimal" placeholder="0.00" />
@@ -3237,9 +3307,7 @@ async function gwDsAvailableAmount(sym) {
   }
   // on-chain: sum across chains
   try {
-    const addr = (function () {
-      try { return window.gromWallet?.state?.().account; } catch (_) { return null; }
-    })();
+    const addr = gwOcConnectedAddress();
     if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) return 0;
     const chains = [1, 42161, 137, 8453, 56];
     let total = 0;
@@ -3252,6 +3320,26 @@ async function gwDsAvailableAmount(sym) {
     }
     return total;
   } catch (_) { return 0; }
+}
+
+/** On-chain mode: pick ETH/BNB/etc. the user actually holds instead of default USDT. */
+async function gwDsAutoPickFromToken() {
+  if (gwDsGetMode() !== 'onchain') return;
+  if (!gwOcConnectedAddress()) return;
+  const candidates = ['ETH', 'BNB', 'USDT', 'USDC', 'MATIC', 'ARB'];
+  let bestSym = null;
+  let bestBal = 0;
+  for (const sym of candidates) {
+    const bal = await gwDsAvailableAmount(sym);
+    if (bal > bestBal) { bestBal = bal; bestSym = sym; }
+  }
+  if (!bestSym || bestBal <= 0) return;
+  const fromEl = document.getElementById('gwDsFrom');
+  if (!fromEl) return;
+  if (fromEl.value === bestSym) return;
+  fromEl.value = bestSym;
+  gwDsRefreshBalances().catch(() => {});
+  gwDsRefreshRate();
 }
 
 let gwDsQuoteAbort = null;
@@ -3760,6 +3848,7 @@ function gwInjectDashSwapPanel() {
       const c = document.getElementById('gwDsCta');
       const t = gwDsLang();
       if (c) c.innerHTML = (m === 'onchain' ? t.ctaOc : t.cta) + ' →';
+      if (m === 'onchain') gwDsAutoPickFromToken().catch(() => {});
       gwDsRefreshRate();
     });
   });
@@ -3794,6 +3883,26 @@ function gwInjectDashSwapPanel() {
             }, 60);
           }
         } else {
+          const modeNow = gwDsGetMode();
+          if (modeNow === 'onchain') {
+            const alts = ['ETH', 'BNB', 'USDC', 'MATIC'];
+            let alt = null;
+            for (const s of alts) {
+              if (s === from) continue;
+              const b = await gwDsAvailableAmount(s);
+              if (b > 0) { alt = { sym: s, bal: b }; break; }
+            }
+            if (alt) {
+              const ok = confirm(`Нет ${from} на кошельке.\n\nПереключить на ${alt.sym}? (доступно ${Number(alt.bal).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')})`);
+              if (ok) {
+                const fromEl = document.getElementById('gwDsFrom');
+                if (fromEl) fromEl.value = alt.sym;
+                gwDsRefreshBalances().catch(() => {});
+                setTimeout(() => chip.click(), 80);
+                return;
+              }
+            }
+          }
           gwToast('No ' + from + ' balance anywhere yet — deposit first', 'warn');
         }
         return;
@@ -3817,6 +3926,10 @@ function gwInjectDashSwapPanel() {
   if (cta) cta.innerHTML = (mode0 === 'onchain' ? t0.ctaOc : t0.cta) + ' →';
   // Initial balance load
   gwDsRefreshBalances().catch(() => {});
+  if (mode0 === 'onchain') gwDsAutoPickFromToken().catch(() => {});
+  document.addEventListener('grom:wallet-connected', () => {
+    if (gwDsGetMode() === 'onchain') gwDsAutoPickFromToken().catch(() => {});
+  }, { once: false });
   return true;
 }
 
@@ -4384,6 +4497,7 @@ try {
       safe('dashSwap',         gwSetupDashSwap);
       safe('depositAutoCont',  gwSetupDepositAutoContinue);
       safe('onchainCard',      gwSetupOnchainCard);
+      safe('combinedBalance',  gwSetupCombinedBalance);
       safe('metaPortfolio',    gwSetupMetaPortfolio);
       safe('aiCoach',          gwSetupAiCoach);
       safe('yield',            gwSetupYield);

@@ -2932,6 +2932,12 @@ function gwInjectMiscOverridesCss() {
  *
  * Local DOM IDs are prefixed `gwds-` to never collide with the wallet
  * modal's `wmSwap*` inputs. */
+/* Base seed list — always available. Cursor's grom-instruments (365
+ * crypto pairs) is spliced on top at boot to give the user every asset
+ * their Markets page shows. Reason we keep a seed at all: instruments
+ * might load AFTER our swap panel is first drawn, and we don't want an
+ * empty dropdown. gwDsMergeInstruments() below extends this array
+ * in place and calls the panel's re-render. */
 const GW_DS_ASSETS = [
   { sym: 'USDT', name: 'Tether' },
   { sym: 'USDC', name: 'USD Coin' },
@@ -2966,6 +2972,40 @@ const GW_DS_ASSETS = [
   { sym: 'PEPE', name: 'Pepe' },
   { sym: 'FLOKI',name: 'Floki' },
 ];
+
+/* Merge Cursor's 365-crypto Markets instrument list into GW_DS_ASSETS
+ * so the swap dropdown offers every asset the user sees in Рынки.
+ * Runs once when window.gromInstrumentsByType is exposed (grom-instruments.js
+ * loads a bit after us). Kept idempotent — repeat calls are a no-op. */
+function gwDsMergeInstruments() {
+  try {
+    if (typeof window.gromInstrumentsByType !== 'function') return false;
+    if (gwDsMergeInstruments._done) return true;
+    const rows = window.gromInstrumentsByType('crypto') || [];
+    const have = new Set(GW_DS_ASSETS.map((a) => a.sym));
+    for (const r of rows) {
+      const sym = r.base;
+      if (!sym || have.has(sym)) continue;
+      GW_DS_ASSETS.push({ sym, name: r.name || sym });
+      have.add(sym);
+    }
+    gwDsMergeInstruments._done = true;
+    // Force a swap-panel re-render so the freshly expanded list shows up.
+    try {
+      const wrap = document.querySelector('.gw-ds-wrap');
+      if (wrap) { wrap.remove(); gwInjectDashSwapPanel(); }
+    } catch (_) {}
+    console.log('[GROM] swap tokens expanded to', GW_DS_ASSETS.length);
+    return true;
+  } catch (_) { return false; }
+}
+// Try immediately; then poll a few times because grom-instruments.js
+// loads slightly later. Stop after either success or ~10 s.
+if (typeof window !== 'undefined') {
+  let _mn = 0;
+  const _mid = setInterval(() => { _mn++; if (gwDsMergeInstruments() || _mn >= 20) clearInterval(_mid); }, 500);
+  gwDsMergeInstruments();
+}
 
 const GW_DS_TR = {
   ru: { h: 'Мгновенный своп', sub: 'Мгновенный обмен · лучшая ставка · без комиссий сети.', from: 'ОТДАЁШЬ', to: 'ПОЛУЧАЕШЬ', est: 'Введи сумму, чтобы увидеть курс.', cta: 'Сделать своп', ctaOc: 'Свап через кошелёк', ctaLogin: 'Войди чтобы свопать', getting: 'Запрос курса…', bal: 'Баланс', modeT: 'Торговый счёт', modeO: 'On-chain кошелёк', slip: 'Slippage', route: 'Маршрут', priceImpact: 'Влияние на цену', fee: 'Комиссия GROM', recent: 'Недавние свопы', success: 'Своп выполнен', flip: 'Поменять местами', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAX' },
@@ -3643,7 +3683,40 @@ const GW_OC_SWAP = {
     },
     decimals: { AVAX: 18, USDT: 6, USDC: 6, DAI: 18, WETH: 18, WBTC: 8 },
   },
+  59144: { // Linea · Lynex (Solidly-style; V2-ish for basic pairs)
+    router: '0x610D2f07b7EdC67565160F587F37636194C34E74',
+    native: 'ETH',
+    wrapped: '0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f',
+    dexName: 'Lynex',
+    tokens: {
+      USDC: '0x176211869cA2b568f2A7D4EE941E073a821EE1ff',
+      USDT: '0xA219439258ca9da29E9Cc4cE5596924745e12B93',
+      WETH: '0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f',
+    },
+    decimals: { ETH: 18, USDC: 6, USDT: 6, WETH: 18 },
+  },
+  250: { // Fantom · SpookySwap V2
+    router: '0xF491e7B69E4244ad4002BC14e878a34207E38c29',
+    native: 'FTM',
+    wrapped: '0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83',
+    dexName: 'SpookySwap',
+    tokens: {
+      USDC: '0x28a92dde19D9989F39A49905d7C9C2FAc7799bDf',
+      USDT: '0x049d68029688eAbF473097a2fC38ef61633A3C7A',
+      WETH: '0x74b23882a30290451A17c44f4F05243b6b58C76d',
+    },
+    decimals: { FTM: 18, USDC: 6, USDT: 6, WETH: 18 },
+  },
 };
+
+/* Note: Solana (`chainId 1151111081099710` in LiFi) is not in
+ * GW_OC_SWAP because we don't have an inline V2-router fallback for it
+ * (it isn't EVM). LiFi handles the swap end-to-end for Solana; when the
+ * user connects a Phantom wallet we route them straight to LiFi's tx
+ * signer. Bitcoin also goes fully through LiFi (via THORchain) — no
+ * inline path possible. Tron and TON are NOT supported by LiFi as of
+ * 2026-07; those need dedicated SDKs (TronWeb + SunSwap for TRX, and
+ * TonConnect + StonFi for TON) — tracked separately. */
 
 /* ----- minimal ABI encoders ----- */
 function gwHex(n) { return BigInt(n).toString(16); }

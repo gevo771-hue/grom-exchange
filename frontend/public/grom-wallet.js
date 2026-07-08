@@ -2995,6 +2995,56 @@ const GW_DS_ASSETS = [
  * so the swap dropdown offers every asset the user sees in Рынки.
  * Runs once when window.gromInstrumentsByType is exposed (grom-instruments.js
  * loads a bit after us). Kept idempotent — repeat calls are a no-op. */
+/**
+ * Bulk-fetch LiFi's token list — 10 000+ tokens across every chain
+ * LiFi supports. Cached in localStorage for 24 h so cold reload doesn't
+ * pay 200 kB every time. Runs in background so it doesn't slow boot.
+ */
+async function gwDsFetchLifiTokens() {
+  if (gwDsFetchLifiTokens._done) return;
+  gwDsFetchLifiTokens._done = true;
+  const CK = 'gw_lifi_tokens_v1';
+  try {
+    const raw = localStorage.getItem(CK);
+    if (raw) {
+      const obj = JSON.parse(raw);
+      if (obj && obj.at && Date.now() - obj.at < 86_400_000 && Array.isArray(obj.list)) {
+        gwDsMergeLifiTokens(obj.list);
+        return;
+      }
+    }
+  } catch (_) {}
+  try {
+    const r = await fetch(`${GW_LIFI_ENDPOINT}/tokens`);
+    if (!r.ok) return;
+    const j = await r.json();
+    const list = [];
+    for (const cid of Object.keys(j.tokens || {})) {
+      for (const t of j.tokens[cid]) {
+        if (t.symbol && t.name) list.push({ sym: t.symbol, name: t.name, logo: t.logoURI || '' });
+      }
+    }
+    try { localStorage.setItem(CK, JSON.stringify({ at: Date.now(), list })); } catch (_) {}
+    gwDsMergeLifiTokens(list);
+  } catch (_) {}
+}
+function gwDsMergeLifiTokens(list) {
+  const have = new Set(GW_DS_ASSETS.map((a) => a.sym));
+  let added = 0;
+  for (const t of list) {
+    if (!t.sym || have.has(t.sym)) continue;
+    GW_DS_ASSETS.push(t);
+    have.add(t.sym);
+    added++;
+  }
+  if (added > 0) {
+    console.log('[GROM] LiFi tokens merged +' + added + ' → total ' + GW_DS_ASSETS.length);
+    // If picker is open, re-render with new list.
+    try { if (document.getElementById('gw-tk-overlay')?.classList.contains('open')) gwTkRender(document.getElementById('gwTkSearch')?.value || ''); } catch (_) {}
+  }
+}
+if (typeof window !== 'undefined') { setTimeout(gwDsFetchLifiTokens, 2500); }
+
 function gwDsMergeInstruments() {
   try {
     if (typeof window.gromInstrumentsByType !== 'function') return false;
@@ -3398,7 +3448,11 @@ async function gwTronConnect() {
   const tw = window.tronWeb;
   const link = window.tronLink;
   if (!tw && !link) {
-    window.open('https://www.tronlink.org/', '_blank', 'noopener');
+    // Yes — opening tronlink.org is the expected install-prompt flow,
+    // same pattern Phantom / Tonkeeper / MetaMask use. Toast the user
+    // so it doesn't feel like an accidental redirect.
+    gwToast('TronLink is required for Tron swaps — opening install page…', 'info');
+    setTimeout(() => window.open('https://www.tronlink.org/', '_blank', 'noopener'), 400);
     throw new Error('TronLink not installed');
   }
   // Some TronLink builds require an explicit permission grant.
@@ -3838,6 +3892,59 @@ const GW_LIFI_BTC_CHAIN_ID = 20000000000001;
 
 function gwBtcAddrGet() { try { return localStorage.getItem('gw_btc_addr') || ''; } catch (_) { return ''; } }
 function gwBtcAddrSet(a) { try { localStorage.setItem('gw_btc_addr', a); } catch (_) {} }
+
+const GW_BTC_DIR_TR = {
+  ru: { h: 'Bitcoin своп — выбери направление', a: 'У меня EVM · получить BTC', aSub: 'Укажешь свой BTC-адрес, свап через одну EVM-подпись', b: 'У меня BTC · получить USDT/ETH на EVM', bSub: 'Дадим vault-адрес THORchain, вручную отправишь BTC', cancel: 'Отмена' },
+  en: { h: 'Bitcoin swap — pick a direction', a: 'I have EVM · get BTC', aSub: 'Enter your BTC address, swap in one EVM signature', b: 'I have BTC · get USDT/ETH on EVM', bSub: 'Get a THORchain vault address, send BTC from your wallet', cancel: 'Cancel' },
+  es: { h: 'Swap Bitcoin — elige dirección', a: 'Tengo EVM · quiero BTC', aSub: 'Indica tu dirección BTC, una firma EVM', b: 'Tengo BTC · quiero USDT/ETH en EVM', bSub: 'Recibirás una dirección vault de THORchain', cancel: 'Cancelar' },
+  ar: { h: 'مبادلة Bitcoin — اختر الاتجاه', a: 'لدي EVM · أريد BTC', aSub: 'أدخل عنوان BTC، توقيع EVM واحد', b: 'لدي BTC · أريد USDT/ETH على EVM', bSub: 'ستحصل على عنوان THORchain vault', cancel: 'إلغاء' },
+  zh: { h: 'Bitcoin 兑换 · 选择方向', a: '我持有 EVM · 想要 BTC', aSub: '输入 BTC 地址，一次 EVM 签名', b: '我持有 BTC · 想要 USDT/ETH', bSub: '获得 THORchain vault 地址，从钱包发送 BTC', cancel: '取消' },
+  hi: { h: 'Bitcoin स्वैप — दिशा चुनें', a: 'मेरे पास EVM · BTC चाहिए', aSub: 'BTC पता दें, एक EVM हस्ताक्षर', b: 'मेरे पास BTC · EVM पर USDT/ETH', bSub: 'THORchain vault पता मिलेगा', cancel: 'रद्द' },
+  tr: { h: 'Bitcoin swap — yönü seç', a: 'EVM\'im var · BTC istiyorum', aSub: 'BTC adresini gir, tek EVM imzası', b: 'BTC\'m var · EVM\'de USDT/ETH', bSub: 'THORchain vault adresi al', cancel: 'Vazgeç' },
+};
+function gwBtcDirLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'); if (s&&GW_BTC_DIR_TR[s]) l=s; } catch (_) {} return GW_BTC_DIR_TR[l]||GW_BTC_DIR_TR.en; }
+
+function gwBtcDirectionPick() {
+  return new Promise((resolve) => {
+    const t = gwBtcDirLang();
+    let ov = document.getElementById('gw-btcdir-overlay');
+    if (!ov) {
+      ov = document.createElement('div'); ov.id = 'gw-btcdir-overlay';
+      Object.assign(ov.style, {
+        position: 'fixed', inset: '0', zIndex: '955', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(4,8,16,0.55)', backdropFilter: 'blur(6px)',
+      });
+      document.body.appendChild(ov);
+    } else { ov.style.display = 'flex'; }
+    ov.innerHTML = `
+      <div style="width:min(460px,92vw);padding:22px;border-radius:20px;color:#e7eef8;
+                   background:linear-gradient(160deg,rgba(13,22,38,.98),rgba(8,14,26,.98));
+                   border:1px solid rgba(247,147,26,.28);box-shadow:0 20px 60px -12px rgba(0,0,0,.65)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <span style="width:32px;height:32px;border-radius:50%;background:#F7931A;color:#fff;font-weight:800;
+                        display:inline-flex;align-items:center;justify-content:center;font-size:14px">₿</span>
+          <h3 style="margin:0;font-size:15px;font-weight:800;flex:1">${t.h}</h3>
+          <button data-c="close" style="background:transparent;border:0;color:#98a8c0;font-size:20px;cursor:pointer">×</button>
+        </div>
+        <button data-c="evm-to-btc" style="display:block;width:100%;text-align:left;padding:14px 16px;margin-bottom:10px;
+                border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#e7eef8;
+                cursor:pointer;font-family:inherit">
+          <div style="font-weight:800;font-size:14px">→ ${t.a}</div>
+          <div style="font-size:12px;color:#98a8c0;margin-top:3px">${t.aSub}</div>
+        </button>
+        <button data-c="btc-to-evm" style="display:block;width:100%;text-align:left;padding:14px 16px;
+                border-radius:12px;background:linear-gradient(135deg,rgba(247,147,26,.12),rgba(255,180,80,.06));
+                border:1px solid rgba(247,147,26,.32);color:#e7eef8;cursor:pointer;font-family:inherit">
+          <div style="font-weight:800;font-size:14px">← ${t.b}</div>
+          <div style="font-size:12px;color:#cfdfee;margin-top:3px">${t.bSub}</div>
+        </button>
+      </div>`;
+    const done = (v) => { ov.style.display = 'none'; resolve(v); };
+    ov.querySelectorAll('button[data-c]').forEach((b) => { b.onclick = () => done(b.dataset.c === 'close' ? null : b.dataset.c); });
+    ov.onclick = (e) => { if (e.target === ov) done(null); };
+  });
+}
 
 /** Simple heuristic BTC-address validator (P2PKH / P2SH / bech32). */
 function gwBtcAddrValid(a) {
@@ -4313,9 +4420,16 @@ async function gwSpLoadChart() {
   // Poll a few times (2 s cap) then bail. Also cover the case where
   // #gwSpChart was rebuilt by a re-render and lost its previous chart.
   if (typeof window.LightweightCharts === 'undefined') {
-    if ((gwSpLoadChart._tries |= 0) >= 20) return;
+    // Wait up to 8 s in 200 ms ticks — lightweight-charts is a big
+    // sync script Cursor loads async, so on slow networks it can lag.
+    if ((gwSpLoadChart._tries |= 0) >= 40) return;
     gwSpLoadChart._tries += 1;
-    setTimeout(gwSpLoadChart, 100);
+    setTimeout(gwSpLoadChart, 200);
+    // Also hook window.load once — resolves the race even faster.
+    if (!gwSpLoadChart._hooked) {
+      gwSpLoadChart._hooked = true;
+      window.addEventListener('load', () => { gwSpLoadChart._tries = 0; gwSpLoadChart(); }, { once: true });
+    }
     return;
   }
   gwSpLoadChart._tries = 0;
@@ -4579,15 +4693,15 @@ function gwDsChainChipsWire(wrap) {
         // Two flows: (A) send EVM asset, receive BTC — save destination
         // BTC address so the swap panel routes there. (B) send BTC from
         // your own wallet, receive EVM asset — open the vault-deposit
-        // modal. User picks via native confirm().
-        const dir = confirm('OK = у меня EVM, хочу получить BTC (ты просто указываешь свой BTC-адрес).\n\nCancel = у меня BTC, хочу получить USDT/ETH на EVM (получаешь vault-адрес THORchain).');
-        if (dir) {
+        // modal. User picks via glass modal (i18n, replaces confirm()).
+        const dir = await gwBtcDirectionPick();
+        if (dir === 'evm-to-btc') {
           const addr = await gwBtcPromptAddress();
           if (addr) {
             window.__gwBtcAddr = addr;
-            gwToast(`BTC-адрес сохранён: ${addr.slice(0, 6)}…${addr.slice(-4)}. Выбери "BTC" как получаемый актив — свап пойдёт через THORchain.`, 'success');
+            gwToast(`BTC address saved: ${addr.slice(0, 6)}…${addr.slice(-4)}`, 'success');
           }
-        } else {
+        } else if (dir === 'btc-to-evm') {
           gwBtcRevOpenModal();
         }
       }
@@ -4670,10 +4784,15 @@ function gwTkSyncButton(which) {
   const btn = document.getElementById(which === 'from' ? 'gwDsFromBtn' : 'gwDsToBtn');
   if (!sel || !btn) return;
   const sym = sel.value;
-  const name = (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).name || sym;
-  btn.querySelector('.ico').textContent = sym.slice(0, 3);
+  const asset = GW_DS_ASSETS.find((a) => a.sym === sym) || {};
+  const ico = btn.querySelector('.ico');
+  if (asset.logo) {
+    ico.innerHTML = `<img src="${asset.logo}" alt="${sym}" onerror="this.outerHTML='${sym.slice(0,3)}'" style="width:100%;height:100%;object-fit:cover" />`;
+  } else {
+    ico.textContent = sym.slice(0, 3);
+  }
   btn.querySelector('.lbl').textContent = sym;
-  btn.title = `${sym} · ${name}`;
+  btn.title = `${sym} · ${asset.name || sym}`;
 }
 
 /** Parse LiFi quote's includedSteps to build a hop-string. */

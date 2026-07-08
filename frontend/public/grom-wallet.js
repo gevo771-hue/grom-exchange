@@ -3319,6 +3319,356 @@ function gwDsTimeAgo(ts) {
 }
 
 /* ==========================================================================
+ * PHASE 8 — DEX Spot Terminal (2026-07-08)
+ *
+ * Cursor's #page-spot has a paper-trading UI. We inject a full DEX terminal
+ * ABOVE that so users can (a) see a live TradingView-style candle chart
+ * for the pair, (b) see a real DEX depth ladder built by asking LiFi
+ * for quotes at 5 different sizes on each side, (c) execute the swap
+ * through our meta-aggregator with a single click.
+ *
+ *   ┌── Pair · BTC/USDT ▾ ──── Chart · 1h ─────────── Buy | Sell ─┐
+ *   │ ┌─────────────────────────────┐ ┌────────────────────────┐ │
+ *   │ │                             │ │ Amount  [___________]  │ │
+ *   │ │      🕯 lightweight-chart    │ │ Price   0.00 USDT (mkt)│ │
+ *   │ │                             │ │ Total ≈ $0             │ │
+ *   │ │                             │ │ [ Buy 0.05 BTC → ]     │ │
+ *   │ └─────────────────────────────┘ └────────────────────────┘ │
+ *   │                                                              │
+ *   │  DEPTH (live LiFi)                                           │
+ *   │  ─────────── Ask (0.05) 65 120 ← 0.05% ──                    │
+ *   │  ─────────── Ask (0.10) 65 090 ← 0.11% ──                    │
+ *   │  ─────────── Ask (0.50) 65 015 ← 0.22% ──                    │
+ *   │  ─────────── Mid       65 000                                │
+ *   │  ─────────── Bid (0.05) 64 985 → 0.03% ──                    │
+ *   │  ─────────── Bid (0.10) 64 950 → 0.08% ──                    │
+ *   │  ─────────── Bid (0.50) 64 890 → 0.17% ──                    │
+ *   └──────────────────────────────────────────────────────────────┘
+ *
+ * Data:
+ *   - Chart candles → https://api.binance.com/api/v3/klines
+ *   - Depth quotes  → gwMetaAggQuoteAll (already parallel-fetching 4 aggs)
+ *   - Order exec    → gwOnChainSwapExec (also meta-agg)
+ * ========================================================================== */
+const GW_SP_PAIRS = [
+  { sym: 'BTC/USDT', base: 'BTC', quote: 'USDT', bn: 'BTCUSDT' },
+  { sym: 'ETH/USDT', base: 'ETH', quote: 'USDT', bn: 'ETHUSDT' },
+  { sym: 'BNB/USDT', base: 'BNB', quote: 'USDT', bn: 'BNBUSDT' },
+  { sym: 'SOL/USDT', base: 'SOL', quote: 'USDT', bn: 'SOLUSDT' },
+  { sym: 'ARB/USDT', base: 'ARB', quote: 'USDT', bn: 'ARBUSDT' },
+  { sym: 'LINK/USDT',base: 'LINK',quote: 'USDT', bn: 'LINKUSDT' },
+  { sym: 'MATIC/USDT',base:'MATIC',quote: 'USDT', bn: 'MATICUSDT' },
+  { sym: 'DOGE/USDT',base: 'DOGE',quote: 'USDT', bn: 'DOGEUSDT' },
+];
+const GW_SP_INTERVALS = ['5m', '15m', '1h', '4h', '1d'];
+
+function gwInjectSpotDexCss() {
+  if (document.getElementById('gw-sp-css')) return;
+  const css = `
+    .gw-sp-wrap { margin: 12px 0 20px; }
+    .gw-sp-card { border-radius: 22px; padding: 18px; color: #e7eef8;
+      background: linear-gradient(160deg, rgba(13,22,38,0.78), rgba(8,14,26,0.94));
+      border: 1px solid rgba(0,194,255,0.20); box-shadow: 0 20px 60px -20px rgba(0,0,0,0.5); }
+    .gw-sp-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    .gw-sp-head h3 { margin: 0; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+    .gw-sp-head .badge { padding: 4px 8px; border-radius: 999px; background: rgba(34,193,124,0.14); color: #22c17c; font-size: 10px; font-weight: 800; letter-spacing: .14em; border: 1px solid rgba(34,193,124,0.28); }
+    .gw-sp-head select { padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #e7eef8; font-size: 13px; font-family: inherit; font-weight: 700; }
+    .gw-sp-head .ivs { display: flex; gap: 4px; }
+    .gw-sp-head .iv { padding: 4px 8px; border-radius: 8px; font-size: 11.5px; font-weight: 700; color: #98a8c0; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); cursor: pointer; }
+    .gw-sp-head .iv.on { color: #e7eef8; background: rgba(0,194,255,0.14); border-color: rgba(0,194,255,0.3); }
+    .gw-sp-head .last { margin-left: auto; font-variant-numeric: tabular-nums; }
+    .gw-sp-head .last .p { font-weight: 800; font-size: 16px; }
+    .gw-sp-head .last .c { font-size: 11.5px; }
+    .gw-sp-head .last .c.up { color: #22c17c; } .gw-sp-head .last .c.down { color: #f87171; }
+    .gw-sp-main { display: grid; grid-template-columns: 1fr 320px; gap: 14px; }
+    @media (max-width: 900px) { .gw-sp-main { grid-template-columns: 1fr; } }
+    .gw-sp-chart { position: relative; height: 380px; border-radius: 16px; overflow: hidden; background: rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.05); }
+    .gw-sp-form { padding: 14px; border-radius: 16px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 12px; }
+    .gw-sp-tabs { display: flex; gap: 6px; }
+    .gw-sp-tab { flex: 1; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.03); color: #98a8c0; border: 1px solid rgba(255,255,255,0.06); font-weight: 800; font-size: 13px; cursor: pointer; }
+    .gw-sp-tab.buy.on  { background: rgba(34,193,124,0.16); color: #22c17c; border-color: rgba(34,193,124,0.3); }
+    .gw-sp-tab.sell.on { background: rgba(232,87,107,0.16); color: #f87171; border-color: rgba(232,87,107,0.3); }
+    .gw-sp-modes { display: flex; gap: 4px; font-size: 11.5px; }
+    .gw-sp-mode { flex: 1; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.03); color: #98a8c0; border: 1px solid rgba(255,255,255,0.05); font-weight: 700; cursor: pointer; text-align: center; }
+    .gw-sp-mode.on { background: rgba(0,194,255,0.12); color: #5dd5ff; border-color: rgba(0,194,255,0.28); }
+    .gw-sp-inp { display: flex; flex-direction: column; gap: 4px; }
+    .gw-sp-inp label { font-size: 10.5px; letter-spacing: .12em; color: #98a8c0; font-weight: 800; }
+    .gw-sp-inp input { padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #e7eef8; font-size: 16px; outline: none; font-variant-numeric: tabular-nums; font-family: inherit; }
+    .gw-sp-inp input:focus { border-color: rgba(0,194,255,0.35); }
+    .gw-sp-inp .hint { font-size: 11px; color: #6b7a92; }
+    .gw-sp-cta { padding: 12px 14px; border-radius: 12px; border: 0; font-weight: 800; font-size: 14px; cursor: pointer; }
+    .gw-sp-cta.buy  { background: linear-gradient(135deg, #22c17c, #10a06a); color: #04160a; }
+    .gw-sp-cta.sell { background: linear-gradient(135deg, #f87171, #d94f4f); color: #200a0a; }
+    .gw-sp-cta[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+    .gw-sp-depth { margin-top: 14px; padding: 14px; border-radius: 14px; background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.05); }
+    .gw-sp-depth h4 { margin: 0 0 10px; font-size: 11.5px; letter-spacing: .16em; color: #98a8c0; font-weight: 800; text-transform: uppercase; }
+    .gw-sp-depth .row { display: grid; grid-template-columns: 90px 1fr auto auto; gap: 10px; padding: 4px 6px; font-size: 12.5px; font-variant-numeric: tabular-nums; align-items: center; }
+    .gw-sp-depth .row .lvl { color: #6b7a92; font-size: 11px; }
+    .gw-sp-depth .row.ask .px { color: #f87171; font-weight: 700; }
+    .gw-sp-depth .row.bid .px { color: #22c17c; font-weight: 700; }
+    .gw-sp-depth .row.mid { border-top: 1px dashed rgba(255,255,255,0.10); border-bottom: 1px dashed rgba(255,255,255,0.10); margin: 4px 0; padding-top: 6px; padding-bottom: 6px; color: #e7eef8; font-weight: 800; }
+    .gw-sp-depth .bar { height: 6px; border-radius: 3px; }
+    .gw-sp-depth .ask .bar { background: linear-gradient(90deg, rgba(232,87,107,0.28), rgba(232,87,107,0.08)); }
+    .gw-sp-depth .bid .bar { background: linear-gradient(90deg, rgba(34,193,124,0.28), rgba(34,193,124,0.08)); }
+    .gw-sp-depth .row .impact { color: #6b7a92; font-size: 10.5px; }
+  `;
+  const s = document.createElement('style'); s.id = 'gw-sp-css'; s.textContent = css; document.head.appendChild(s);
+}
+
+/** Fetch Binance klines. Returns array of {time, open, high, low, close, volume}. */
+async function gwSpFetchKlines(symbol, interval, limit) {
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit || 200}`;
+  const r = await fetch(url);
+  const j = await r.json();
+  return j.map((k) => ({ time: Math.floor(k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5] }));
+}
+async function gwSpFetchLastPrice(symbol) {
+  const r = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
+  const j = await r.json();
+  return { last: Number(j.lastPrice), change: Number(j.priceChangePercent) };
+}
+
+let gwSpState = { pair: 'BTC/USDT', iv: '1h', side: 'buy', mode: 'market' };
+
+async function gwRenderSpotDex() {
+  const page = document.getElementById('page-spot');
+  if (!page) return;
+  gwInjectSpotDexCss();
+  let wrap = document.getElementById('gwSpotDex');
+  if (!wrap) {
+    wrap = document.createElement('div'); wrap.id = 'gwSpotDex'; wrap.className = 'gw-sp-wrap';
+    page.prepend(wrap);
+  }
+  const st = gwSpState;
+  const pair = GW_SP_PAIRS.find((p) => p.sym === st.pair) || GW_SP_PAIRS[0];
+  wrap.innerHTML = `
+    <div class="gw-sp-card">
+      <div class="gw-sp-head">
+        <h3>⚡ DEX Terminal</h3>
+        <span class="badge">LIVE ON-CHAIN</span>
+        <select id="gwSpPair">${GW_SP_PAIRS.map((p) => `<option value="${p.sym}" ${p.sym === st.pair ? 'selected' : ''}>${p.sym}</option>`).join('')}</select>
+        <div class="ivs">${GW_SP_INTERVALS.map((iv) => `<button class="iv ${iv === st.iv ? 'on' : ''}" data-iv="${iv}">${iv}</button>`).join('')}</div>
+        <div class="last" id="gwSpLast"><div class="p">…</div><div class="c">—</div></div>
+      </div>
+      <div class="gw-sp-main">
+        <div class="gw-sp-chart" id="gwSpChart"></div>
+        <div class="gw-sp-form">
+          <div class="gw-sp-tabs">
+            <button class="gw-sp-tab buy ${st.side === 'buy' ? 'on' : ''}" data-side="buy">Buy ${pair.base}</button>
+            <button class="gw-sp-tab sell ${st.side === 'sell' ? 'on' : ''}" data-side="sell">Sell ${pair.base}</button>
+          </div>
+          <div class="gw-sp-modes">
+            <button class="gw-sp-mode ${st.mode === 'market' ? 'on' : ''}" data-mode="market">Market</button>
+            <button class="gw-sp-mode ${st.mode === 'limit'  ? 'on' : ''}" data-mode="limit">Limit</button>
+          </div>
+          <div class="gw-sp-inp">
+            <label>Amount (${pair.base})</label>
+            <input id="gwSpAmt" type="number" step="any" min="0" placeholder="0.00" />
+            <div class="hint" id="gwSpAmtUsd">≈ $0</div>
+          </div>
+          <div class="gw-sp-inp" id="gwSpLimitPriceWrap" style="${st.mode === 'limit' ? '' : 'display:none'}">
+            <label>Limit price (${pair.quote})</label>
+            <input id="gwSpLimitPx" type="number" step="any" min="0" placeholder="Target price" />
+          </div>
+          <div class="gw-sp-inp">
+            <label>You get / spend</label>
+            <input id="gwSpTotal" type="text" readonly placeholder="—" />
+            <div class="hint" id="gwSpTotalRoute">Route: LiFi meta-aggregator · 0.20% GROM fee</div>
+          </div>
+          <button class="gw-sp-cta ${st.side}" id="gwSpCta">${st.side === 'buy' ? 'Buy' : 'Sell'} ${pair.base} →</button>
+        </div>
+      </div>
+      <div class="gw-sp-depth">
+        <h4>Depth · live from meta-aggregator</h4>
+        <div id="gwSpDepth"><div style="color:#6b7a92;font-size:12px;padding:6px">Loading depth ladder…</div></div>
+      </div>
+    </div>
+  `;
+  // Wire pair change
+  document.getElementById('gwSpPair').onchange = (e) => { st.pair = e.target.value; gwRenderSpotDex(); };
+  // Interval buttons
+  wrap.querySelectorAll('.iv').forEach((b) => b.onclick = () => { st.iv = b.dataset.iv; gwSpLoadChart(); });
+  // Side / mode tabs
+  wrap.querySelectorAll('.gw-sp-tab').forEach((b) => b.onclick = () => { st.side = b.dataset.side; gwRenderSpotDex(); });
+  wrap.querySelectorAll('.gw-sp-mode').forEach((b) => b.onclick = () => { st.mode = b.dataset.mode; gwRenderSpotDex(); });
+  // Amount input → refresh quote
+  const amtEl = document.getElementById('gwSpAmt');
+  if (amtEl) amtEl.oninput = () => gwSpRefreshTotal();
+  // CTA — market goes via meta-agg swap; limit stores an intent.
+  document.getElementById('gwSpCta').onclick = () => gwSpSubmitOrder();
+
+  gwSpLoadChart();
+  gwSpRefreshLast();
+  gwSpRefreshDepth();
+}
+
+let gwSpChart = null, gwSpSeries = null;
+async function gwSpLoadChart() {
+  if (typeof window.LightweightCharts === 'undefined') return;
+  const container = document.getElementById('gwSpChart');
+  if (!container) return;
+  const pair = GW_SP_PAIRS.find((p) => p.sym === gwSpState.pair);
+  if (!pair) return;
+  if (!gwSpChart) {
+    gwSpChart = window.LightweightCharts.createChart(container, {
+      layout: { background: { color: 'transparent' }, textColor: '#98a8c0' },
+      grid: { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
+      rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
+      timeScale: { borderColor: 'rgba(255,255,255,0.08)', timeVisible: true, secondsVisible: false },
+      crosshair: { mode: window.LightweightCharts.CrosshairMode.Magnet },
+      height: container.clientHeight || 380,
+    });
+    gwSpSeries = gwSpChart.addCandlestickSeries({
+      upColor: '#22c17c', downColor: '#f87171', wickUpColor: '#22c17c', wickDownColor: '#f87171', borderVisible: false,
+    });
+    window.addEventListener('resize', () => { try { gwSpChart.resize(container.clientWidth, container.clientHeight); } catch (_) {} });
+  }
+  try {
+    const bars = await gwSpFetchKlines(pair.bn, gwSpState.iv, 200);
+    gwSpSeries.setData(bars);
+    gwSpChart.timeScale().fitContent();
+  } catch (e) { console.warn('[GROM] spot chart klines', e); }
+}
+async function gwSpRefreshLast() {
+  const pair = GW_SP_PAIRS.find((p) => p.sym === gwSpState.pair);
+  if (!pair) return;
+  try {
+    const { last, change } = await gwSpFetchLastPrice(pair.bn);
+    const box = document.getElementById('gwSpLast');
+    if (!box) return;
+    box.innerHTML = `<div class="p">${last.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${pair.quote}</div>
+      <div class="c ${change >= 0 ? 'up' : 'down'}">${change >= 0 ? '+' : ''}${change.toFixed(2)}% · 24h</div>`;
+  } catch (_) {}
+}
+async function gwSpRefreshDepth() {
+  const pair = GW_SP_PAIRS.find((p) => p.sym === gwSpState.pair);
+  const el = document.getElementById('gwSpDepth');
+  if (!pair || !el) return;
+  const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
+    ? window.gromWallet.wcProvider : window.ethereum;
+  let account = null, chainId = 1;
+  try {
+    if (provider) {
+      [account] = await provider.request({ method: 'eth_accounts' });
+      chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+    }
+  } catch (_) {}
+  if (!account) { el.innerHTML = `<div style="color:#6b7a92;font-size:12px;padding:6px">Connect a wallet to see live DEX depth</div>`; return; }
+  // Fetch quotes at 5 sizes on each side
+  const sizes = [0.01, 0.05, 0.25, 1, 5]; // in base asset
+  const asks = []; const bids = [];
+  await Promise.all(sizes.flatMap((size) => [
+    gwAggQuoteLifi({ chainId, fromSym: pair.quote, toSym: pair.base, amtNum: size * (asks._midHint || 65000), account })
+      .then((q) => { if (q?.toAmount) asks.push({ size, quote: q }); }).catch(() => {}),
+    gwAggQuoteLifi({ chainId, fromSym: pair.base,  toSym: pair.quote, amtNum: size, account })
+      .then((q) => { if (q?.toAmount) bids.push({ size, quote: q }); }).catch(() => {}),
+  ]));
+  const cfg = GW_OC_SWAP[chainId] || { decimals: {} };
+  const baseDec  = cfg.decimals[pair.base]  ?? 18;
+  const quoteDec = cfg.decimals[pair.quote] ?? 6;
+  // Compute mid-price from smallest bid+ask if available
+  let mid = null;
+  const midAsk = asks[0], midBid = bids[0];
+  if (midAsk && midBid) {
+    const askPx = (midAsk.size) / (Number(midAsk.quote.toAmount) / 10 ** baseDec);
+    const bidPx = (Number(midBid.quote.toAmount) / 10 ** quoteDec) / midBid.size;
+    void askPx; mid = (askPx + bidPx) / 2;
+  }
+  const rowsAsk = asks.sort((a, b) => b.size - a.size).map((r) => {
+    const gotBase = Number(r.quote.toAmount) / 10 ** baseDec;
+    const px = r.size / gotBase; // quote per base
+    const impact = mid ? ((px - mid) / mid) * 100 : 0;
+    return `<div class="row ask">
+      <span class="lvl">Ask ${r.size} ${pair.base}</span>
+      <span class="bar"></span>
+      <span class="px">${px.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+      <span class="impact">+${Math.abs(impact).toFixed(2)}%</span>
+    </div>`;
+  }).join('');
+  const rowsBid = bids.sort((a, b) => a.size - b.size).map((r) => {
+    const gotQuote = Number(r.quote.toAmount) / 10 ** quoteDec;
+    const px = gotQuote / r.size; // quote per base
+    const impact = mid ? ((mid - px) / mid) * 100 : 0;
+    return `<div class="row bid">
+      <span class="lvl">Bid ${r.size} ${pair.base}</span>
+      <span class="bar"></span>
+      <span class="px">${px.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+      <span class="impact">−${Math.abs(impact).toFixed(2)}%</span>
+    </div>`;
+  }).join('');
+  el.innerHTML = `${rowsAsk}
+    <div class="row mid"><span>MID</span><span></span><span>${mid ? mid.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</span><span></span></div>
+    ${rowsBid}`;
+}
+function gwSpRefreshTotal() {
+  const st = gwSpState;
+  const pair = GW_SP_PAIRS.find((p) => p.sym === st.pair);
+  const amt = Number(document.getElementById('gwSpAmt')?.value || 0);
+  const totalEl = document.getElementById('gwSpTotal');
+  if (!totalEl || !pair) return;
+  gwSpFetchLastPrice(pair.bn).then((p) => {
+    const px = st.mode === 'limit' ? Number(document.getElementById('gwSpLimitPx')?.value || p.last) : p.last;
+    const total = st.side === 'buy' ? amt * px : amt * px;
+    totalEl.value = `${total.toFixed(2)} ${pair.quote}`;
+    const usdEl = document.getElementById('gwSpAmtUsd');
+    if (usdEl) usdEl.textContent = `≈ $${(amt * px).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  }).catch(() => {});
+}
+async function gwSpSubmitOrder() {
+  const st = gwSpState;
+  const pair = GW_SP_PAIRS.find((p) => p.sym === st.pair);
+  const amt = Number(document.getElementById('gwSpAmt')?.value || 0);
+  if (!(amt > 0)) return gwToast('Enter amount', 'warn');
+  if (st.mode === 'limit') {
+    const px = Number(document.getElementById('gwSpLimitPx')?.value || 0);
+    if (!(px > 0)) return gwToast('Enter limit price', 'warn');
+    const list = gwOrdLoad();
+    list.push({ id: 'lim_' + Date.now().toString(36), type: 'limit',
+      from: st.side === 'buy' ? pair.quote : pair.base,
+      to:   st.side === 'buy' ? pair.base  : pair.quote,
+      price: px, amt: st.side === 'buy' ? amt * px : amt, createdAt: Date.now(), state: 'watching' });
+    gwOrdSave(list);
+    gwToast(`Limit ${st.side} ${amt} ${pair.base} at ${px} added — will fire when hit`, 'success');
+    return;
+  }
+  // Market — route through meta-agg swap
+  const from = st.side === 'buy' ? pair.quote : pair.base;
+  const to   = st.side === 'buy' ? pair.base  : pair.quote;
+  const swapAmt = st.side === 'buy'
+    ? amt * Number((await gwSpFetchLastPrice(pair.bn)).last)
+    : amt;
+  const cta = document.getElementById('gwSpCta');
+  if (cta) { cta.disabled = true; cta.textContent = 'Submitting…'; }
+  try {
+    await gwOnChainSwapExec(from, to, swapAmt);
+    gwToast(`${st.side.toUpperCase()} ${amt} ${pair.base} filled via meta-aggregator`, 'success');
+    document.getElementById('gwSpAmt').value = '';
+    gwSpRefreshDepth();
+  } catch (e) {
+    gwToast(`Swap failed: ${e?.message || e}`, 'error');
+  } finally {
+    if (cta) { cta.disabled = false; cta.textContent = `${st.side === 'buy' ? 'Buy' : 'Sell'} ${pair.base} →`; }
+  }
+}
+
+function gwSetupSpotDex() {
+  const tryRender = gwDebounce(() => {
+    if (document.getElementById('page-spot')) {
+      try { gwRenderSpotDex(); console.log('[GROM] spot DEX terminal rendered'); }
+      catch (e) { console.warn('[GROM] spot DEX', e); }
+    }
+  }, 250);
+  tryRender();
+  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwSpotDex') || n >= 20) clearInterval(id); else tryRender(); }, 500);
+  window.addEventListener('hashchange', tryRender);
+  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  window.addEventListener('grom:lang-change', tryRender);
+  // Refresh live last-price + depth every 30 s
+  setInterval(() => { if (document.getElementById('gwSpotDex') && document.getElementById('page-spot')?.offsetParent) { gwSpRefreshLast(); gwSpRefreshDepth(); } }, 30_000);
+}
+
+/* ==========================================================================
  * PHASE 7 — Premium swap panel
  *
  * The list below drives the chain-chip row inserted at the top of the
@@ -5723,6 +6073,7 @@ try {
       safe('killDemoNums',     gwSetupKillDemoNumbers);
       safe('landingPolish',    gwSetupLandingPolish);
       safe('advancedOrders',   gwSetupAdvancedPanel);
+      safe('spotDex',          gwSetupSpotDex);
     }, 0);
   }
 } catch (e) { console.error('[GROM] top-level init failed:', e); }

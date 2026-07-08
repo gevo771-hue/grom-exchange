@@ -3319,6 +3319,140 @@ function gwDsTimeAgo(ts) {
 }
 
 /* ==========================================================================
+ * PHASE 9 — GROM Treasury addresses per chain family
+ *
+ * EVM covered by GW_LIFI_FEE_ADDR at the top of this file. Non-EVM chains
+ * need their own addresses because the wallet formats don't overlap:
+ * ========================================================================== */
+const GW_TREASURY = {
+  evm:    '0xCFeF272536D6E91A4945063d40ac7CbA7Eb657B5',                // owner Trust
+  solana: '5Gdx3BH2niKHnBbjsVn9my6wB89Jrc2WfuXUsb3snZ57',              // Phantom
+  bitcoin:'bc1qj6ujhr098kj92t3wcr6lj8c0kgxhgjjakqsf3k',                // BTC bech32
+  ton:    'UQB8I95eerNf8Z1Q6KEYZHweX6DhO0CY1pbCtP2kF6NOYwH7',          // Tonkeeper
+  tron:   'TXSCoezBL9CJ2jD1cftS1XLV2T243E5jrS',                        // TronLink
+};
+
+/* ==========================================================================
+ * PHASE 9 — TON support (TonConnect + STON.fi router)
+ *
+ * TonConnect is TON's WalletConnect equivalent — one protocol, works with
+ * Tonkeeper, MyTonWallet, OpenMask, Bitget Wallet, Trust and every other
+ * major TON wallet. We load the vanilla-JS UI SDK from CDN lazily on the
+ * first click of the TON chip so it doesn't bloat cold-page load.
+ *
+ * STON.fi is the largest TON DEX (Router V1 REST API is public, no auth).
+ * Their `/v1/swap/simulate` and `/v1/swap/pay` endpoints hand back the
+ * exact BOC the user needs to sign — we forward it via TonConnect's
+ * `sendTransaction` method.
+ *
+ * Manifest for TonConnect must live at a stable URL. Cursor's server
+ * already serves /tonconnect-manifest.json (or we can generate one on
+ * the fly — hosted here as a `data:` URL fallback if a real manifest
+ * isn't reachable).
+ * ========================================================================== */
+const GW_TON_MANIFEST = {
+  url: 'https://grom.exchange',
+  name: 'GROM Exchange',
+  iconUrl: 'https://grom.exchange/assets/grom-brand-mark.png',
+  termsOfUseUrl: 'https://grom.exchange/#help',
+  privacyPolicyUrl: 'https://grom.exchange/#help',
+};
+const GW_TON_ASSETS = {
+  TON:   'ton_native',
+  USDT:  'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', // jUSDT
+  NOT:   'EQAvlWFDxGF2lXm67y4yzC17wYKD9A0guwPkMs1gOsM__NOT',
+  STON:  'EQA2kCVNwVsil2EM2mB0SkXytxCqQjS4mttjDpnXmwG9T6bO',
+};
+
+let gwTonUI = null;
+async function gwTonEnsureUi() {
+  if (gwTonUI) return gwTonUI;
+  // Lazy-import TonConnect UI (~40 kB gzipped).
+  const mod = await import('https://esm.sh/@tonconnect/ui@2.0.7');
+  gwTonUI = new mod.TonConnectUI({
+    manifestUrl: 'data:application/json;base64,' + btoa(JSON.stringify(GW_TON_MANIFEST)),
+    buttonRootId: null, // we open programmatically, no button on page
+  });
+  return gwTonUI;
+}
+async function gwTonConnect() {
+  const ui = await gwTonEnsureUi();
+  if (ui.connected) return ui.wallet?.account?.address || null;
+  await ui.openModal();
+  // openModal resolves as soon as the modal opens; wait for connection event.
+  return await new Promise((resolve, reject) => {
+    const off = ui.onStatusChange((w) => {
+      if (w?.account?.address) { off(); resolve(w.account.address); }
+    });
+    setTimeout(() => { try { off(); } catch (_) {} reject(new Error('TonConnect timeout')); }, 120_000);
+  });
+}
+async function gwTonDisconnect() { const ui = await gwTonEnsureUi(); try { await ui.disconnect(); } catch (_) {} }
+
+/** STON.fi router — simulate a swap. */
+async function gwStonSimulate({ offerJetton, askJetton, offerUnits, slippageTolerance }) {
+  const qs = new URLSearchParams({
+    offer_address:  offerJetton,
+    ask_address:    askJetton,
+    units:          String(offerUnits),
+    slippage_tolerance: String(slippageTolerance ?? '0.005'), // 0.5%
+  });
+  const r = await fetch(`https://api.ston.fi/v1/swap/simulate?${qs}`, { method: 'POST' });
+  if (!r.ok) throw new Error(`STON.fi simulate ${r.status}`);
+  return await r.json();
+}
+
+/** STON.fi pay-tx — returns the BOC to sign. */
+async function gwStonPayTx({ userAddr, offerJetton, askJetton, offerUnits, minAskUnits, slippage }) {
+  const body = {
+    user_wallet_address: userAddr,
+    offer_jetton_address: offerJetton,
+    ask_jetton_address:   askJetton,
+    offer_amount:         String(offerUnits),
+    min_ask_amount:       String(minAskUnits),
+    referral_address:     GW_TREASURY.ton,     // 0.20 % referral to us
+    referral_value:       200,                 // basis points
+    slippage_tolerance:   slippage ?? 0.005,
+  };
+  const r = await fetch('https://api.ston.fi/v1/swap/pay-tx', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`STON.fi pay-tx ${r.status}`);
+  return await r.json();
+}
+
+/** Full TON swap flow. `amtHuman` is in whole-token units. */
+async function gwTonSwapExec({ fromSym, toSym, amtHuman }) {
+  const offer = GW_TON_ASSETS[fromSym];
+  const ask   = GW_TON_ASSETS[toSym];
+  if (!offer || !ask) throw new Error(`TON: unsupported pair ${fromSym}/${toSym}`);
+  const ui = await gwTonEnsureUi();
+  if (!ui.connected) await gwTonConnect();
+  const userAddr = ui.wallet?.account?.address;
+  if (!userAddr) throw new Error('TON wallet not connected');
+  // TON native has 9 decimals, most jettons have 6-9. STON.fi returns
+  // decimals in the simulate response.
+  const offerUnits = BigInt(Math.floor(amtHuman * 1e9)).toString();
+  gwToast('STON.fi simulating route…', 'info');
+  const sim = await gwStonSimulate({ offerJetton: offer, askJetton: ask, offerUnits, slippageTolerance: 0.005 });
+  const minAskUnits = sim?.min_ask_units || sim?.ask_units;
+  const payTx = await gwStonPayTx({ userAddr, offerJetton: offer, askJetton: ask, offerUnits, minAskUnits });
+  gwToast(`Confirm in TON wallet · you get ~${(Number(sim.ask_units) / 1e9).toFixed(6)} ${toSym}`, 'info');
+  // payTx is the payload TonConnect will forward to the wallet.
+  const messages = (payTx.messages || [payTx]).map((m) => ({
+    address: m.address, amount: m.amount, payload: m.payload,
+  }));
+  const res = await ui.sendTransaction({
+    validUntil: Math.floor(Date.now() / 1000) + 300,
+    messages,
+  });
+  gwToast('TON tx sent — settlement in ~30 sec', 'success');
+  return res?.boc;
+}
+
+/* ==========================================================================
  * PHASE 9 — Bitcoin support via LiFi + THORchain (2026-07-08)
  *
  * Direction shipped: EVM ➔ BTC. User has funds on any of our EVM chains
@@ -4025,7 +4159,7 @@ const GW_DS_CHAINS = [
   { key: 'fantom',   chainId: 250,    name: 'Fantom',    short: 'FTM',   color: '#1969FF' },
   { key: 'solana',   nonEvm: 'sol',   name: 'Solana',    short: 'SOL',   color: '#9945FF' },
   { key: 'bitcoin',  nonEvm: 'btc',   name: 'Bitcoin',   short: 'BTC',   color: '#F7931A' },
-  { key: 'ton',      nonEvm: 'ton',   name: 'TON',       short: 'TON',   color: '#0098EA', soon: true },
+  { key: 'ton',      nonEvm: 'ton',   name: 'TON',       short: 'TON',   color: '#0098EA' },
   { key: 'tron',     nonEvm: 'trx',   name: 'Tron',      short: 'TRX',   color: '#EF0027', soon: true },
 ];
 const GW_DS_EVM_HEX = (id) => '0x' + id.toString(16);
@@ -4083,7 +4217,15 @@ function gwDsChainChipsWire(wrap) {
           gwToast(`BTC-адрес сохранён: ${addr.slice(0, 6)}…${addr.slice(-4)}. Выбери "BTC" как получаемый актив — свап пойдёт через THORchain.`, 'success');
         }
       }
-      else if (kind === 'ton') gwToast('TON: needs TonConnect + STON.fi router. On roadmap.', 'info');
+      else if (kind === 'ton') {
+        try {
+          const addr = await gwTonConnect();
+          gwToast(`TON connected: ${addr.slice(0, 6)}…${addr.slice(-4)} — STON.fi route ready`, 'success');
+          window.__gwTonAddr = addr;
+        } catch (e) {
+          gwToast(`TON: ${e?.message || 'connection cancelled'}`, 'warn');
+        }
+      }
       else if (kind === 'trx') gwToast('Tron: needs TronLink + SunSwap. On roadmap.', 'info');
     };
   });

@@ -83,20 +83,30 @@ function isMobileUA() {
 function gromPageUrl() {
   return walletAppOrigin() + (location.pathname || '/') + (location.search || '') + (location.hash || '');
 }
-function openInWalletBrowser(kind) {
-  const page = gromPageUrl();
-  if (kind === 'trust') {
-    window.location.href = 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(page);
-    return;
+function openInWalletBrowser(_kind) {
+  /* Deprecated — never redirect to wallet download / marketing pages. */
+}
+
+function isInsideWalletBrowser(walletKey) {
+  const ua = navigator.userAgent || '';
+  switch (walletKey) {
+    case 'trust':
+      return /TrustWallet/i.test(ua) || !!(window.trustwallet?.request);
+    case 'metamask':
+      return /MetaMask/i.test(ua);
+    case 'binance':
+      return /Binance/i.test(ua) || !!(window.BinanceChain);
+    case 'okx':
+      return /OKApp/i.test(ua) || !!(window.okxwallet);
+    case 'coinbase':
+      return /CoinbaseWallet/i.test(ua);
+    default:
+      return false;
   }
-  if (kind === 'mm') {
-    var hostPath = location.host + (location.pathname || '/') + (location.search || '') + (location.hash || '');
-    window.location.href = 'https://metamask.app.link/dapp/' + hostPath;
-    return;
-  }
-  if (kind === 'bnw3') {
-    window.location.href = 'https://www.bnbchain.org/en/wallet-download';
-  }
+}
+
+function wcExcludeIdsFor(walletKey) {
+  return (walletKey === 'metamask' || walletKey === 'generic') ? [] : [WC_WALLET_IDS.metamask];
 }
 function trustWcDeepLink(uri) {
   return 'trust://wc?uri=' + encodeURIComponent(uri);
@@ -203,9 +213,7 @@ function gwShowWcModal(walletKey, wcUri, opts) {
     ? 'Нажмите кнопку выше — откроется приложение кошелька.'
     : 'Сканируйте QR из <strong>' + cfg.label + '</strong> → WalletConnect. Не используйте камеру телефона.';
   if (cfg.installUrl && !mobile) {
-    installA.href = cfg.installUrl;
-    installA.textContent = 'Install ' + cfg.label + ' extension';
-    installA.style.display = '';
+    installA.style.display = 'none';
   } else {
     installA.style.display = 'none';
   }
@@ -735,6 +743,7 @@ async function ensureWC(forceNew, opts) {
   const showQrModal = opts?.showQrModal !== false;
   const excludeWalletIds = opts?.excludeWalletIds || [];
   const needReinit = forceNew
+    || (walletKey && walletKey !== wcRecommendedForKey)
     || (wantRecommend && walletKey !== wcRecommendedForKey)
     || (opts?.showQrModal === false && wcRecommendedForKey !== walletKey);
   if (wcProvider && !needReinit) return wcProvider;
@@ -785,12 +794,12 @@ function gwPrefetchWc() {
   /* Skip prefetch — pre-initing EthereumProvider can resurrect Reown modal on PC. */
 }
 
-/** Desktop: Reown / WalletConnect modal with wallet-specific QR (like SafePal screenshot). */
+/** Reown / WalletConnect modal — same UX on PC and mobile (QR, no site redirects). */
 async function connectViaReownExplorer(walletKey) {
   const cfg = GW_WALLET_WC[walletKey] || GW_WALLET_WC.generic;
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
   gwHideWcModal();
-  const excludeWalletIds = walletKey === 'trust' ? [WC_WALLET_IDS.metamask] : [];
+  gwSetWcFlowActive(false);
   try {
     const p = await ensureWC(true, {
       walletKey,
@@ -798,7 +807,7 @@ async function connectViaReownExplorer(walletKey) {
       requiredChains: [1],
       optionalChains: [42161, 8453, 137, 56, 10, 43114],
       recommendedWalletId: cfg.id || null,
-      excludeWalletIds,
+      excludeWalletIds: wcExcludeIdsFor(walletKey),
     });
     await p.connect();
     const accs = await p.request({ method: 'eth_accounts' });
@@ -810,75 +819,17 @@ async function connectViaReownExplorer(walletKey) {
   }
 }
 
-/* Unified WalletConnect — desktop → Reown QR; mobile → inject or app deeplink. */
+/* All wallets → Reown modal. In-app browser only → direct inject (no redirect). */
 async function connectWalletWC(walletKey) {
   const cfg = GW_WALLET_WC[walletKey];
   if (!cfg) throw new Error('Unknown wallet: ' + walletKey);
 
-  if (!isMobileUA()) {
-    return connectViaReownExplorer(walletKey);
+  if (isInsideWalletBrowser(walletKey)) {
+    const injected = typeof cfg.injectCheck === 'function' ? cfg.injectCheck() : null;
+    if (injected) return connectWithProvider(injected, cfg.label);
   }
 
-  const injected = typeof cfg.injectCheck === 'function' ? cfg.injectCheck() : null;
-  if (injected) return connectWithProvider(injected, cfg.label);
-
-  setWalletWcDeepLinkChoice(walletKey);
-  gwSetWcFlowActive(true);
-  gwKillReownModals();
-  const killTimer = setInterval(gwKillReownModals, 250);
-  let uriHandled = false;
-  const onUri = (uri) => {
-    if (uriHandled || !uri) return;
-    uriHandled = true;
-    if (isMobileUA() && cfg.mobileScheme(uri)) {
-      openWalletWcApp(walletKey, uri);
-      gwShowWcModal(walletKey, uri, { mobile: true });
-    } else {
-      gwShowWcModal(walletKey, uri, { mobile: false });
-    }
-  };
-  try {
-    if (wcProvider) {
-      try { await wcProvider.disconnect(); } catch (_) {}
-      wcProvider = null;
-      wcRecommendedForKey = null;
-    }
-    try {
-      const { default: SignClient } = await import('https://esm.sh/@walletconnect/sign-client@2.18.0');
-      const client = await SignClient.init({
-        projectId: WC_PROJECT_ID,
-        metadata: walletMetadata(),
-      });
-      const { uri, approval } = await client.connect(standardWcNamespaces());
-      if (!uri) throw new Error('Could not start ' + cfg.label + ' session');
-      onUri(uri);
-      const session = await Promise.race([
-        approval(),
-        new Promise((_, reject) => setTimeout(
-          () => reject(new Error(cfg.label + ' connection timed out — approve in the wallet app')),
-          120000
-        )),
-      ]);
-      wcProvider = buildSignClientEip1193(client, session);
-      wcRecommendedForKey = walletKey;
-      wcProvider.on('accountsChanged', (accs) => updateChip(accs?.[0] || null));
-      wcProvider.on('disconnect', () => updateChip(null));
-      const accs = wcProvider.accounts;
-      if (!accs?.length) throw new Error('No accounts returned');
-      return await finalizeWcConnection(wcProvider, accs[0]);
-    } catch (signErr) {
-      console.warn('[grom-wallet] SignClient path failed for', walletKey, signErr);
-      uriHandled = false;
-      const { provider, account } = await connectViaEthereumProvider(walletKey, onUri);
-      wcRecommendedForKey = walletKey;
-      return await finalizeWcConnection(provider, account);
-    }
-  } finally {
-    clearInterval(killTimer);
-    gwSetWcFlowActive(false);
-    gwHideWcModal();
-    gwKillReownModals();
-  }
+  return connectViaReownExplorer(walletKey);
 }
 
 async function connectTrustWC() { return connectWalletWC('trust'); }

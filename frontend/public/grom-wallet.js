@@ -3319,6 +3319,95 @@ function gwDsTimeAgo(ts) {
 }
 
 /* ==========================================================================
+ * PHASE 9 — Solana support (2026-07-08)
+ *
+ * User: "мне нужно чтобы человек мог в одном месте поменять". Solana
+ * needs its own wallet stack — Phantom / Solflare / Backpack. We route
+ * quotes through Jupiter Aggregator (jup.ag/swap), the de-facto meta-
+ * aggregator on Solana. Jupiter's API is keyless and public.
+ *
+ * Flow when a user picks the SOL chain chip:
+ *   1. `gwSolConnect()` opens Phantom's provider popup and gets pubkey.
+ *   2. `gwSolQuote(inMint, outMint, amt)` hits Jupiter's quote API.
+ *   3. `gwSolSwap(quote)` hits Jupiter's `/swap` endpoint to get an
+ *      unsigned transaction (base64), then asks Phantom to sign + send.
+ *
+ * Well-known SPL token mints — SPL uses 32-byte base58 addresses.
+ * ========================================================================== */
+const GW_SOL_TOKENS = {
+  SOL:  'So11111111111111111111111111111111111111112',
+  USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  BONK: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+  WIF:  'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
+  JUP:  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+  RAY:  '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
+};
+const GW_SOL_DECIMALS = { SOL: 9, USDC: 6, USDT: 6, BONK: 5, WIF: 6, JUP: 6, RAY: 6 };
+const GW_JUP_ENDPOINT = 'https://quote-api.jup.ag/v6';
+
+async function gwSolConnect() {
+  const p = window.solana || window.phantom?.solana;
+  if (!p) {
+    window.open('https://phantom.app/download', '_blank', 'noopener');
+    throw new Error('Phantom not installed');
+  }
+  if (!p.isConnected) await p.connect();
+  return p.publicKey?.toString?.() || p.publicKey || null;
+}
+
+/** Jupiter v6 quote — full route with best-of-Solana DEX split. */
+async function gwSolQuote({ inMint, outMint, amountBaseUnits }) {
+  const qs = new URLSearchParams({
+    inputMint:  inMint,
+    outputMint: outMint,
+    amount:     String(amountBaseUnits),
+    slippageBps: '50',              // 0.50 %
+    swapMode:   'ExactIn',
+    onlyDirectRoutes: 'false',
+    asLegacyTransaction: 'false',
+    // Jupiter also supports platform fee — 20 bps to our SPL fee account
+    // via `platformFeeBps` + `feeAccount` params. We add it once we
+    // pre-create the SPL fee-collection account off-chain.
+  });
+  const r = await fetch(`${GW_JUP_ENDPOINT}/quote?${qs}`);
+  if (!r.ok) throw new Error(`Jupiter quote ${r.status}`);
+  return await r.json();
+}
+
+/** Jupiter v6 swap — returns a base64 tx we hand to Phantom for signing. */
+async function gwSolSwap({ quoteResponse, userPubkey }) {
+  const r = await fetch(`${GW_JUP_ENDPOINT}/swap`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ quoteResponse, userPublicKey: userPubkey, wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true, prioritizationFeeLamports: 'auto' }),
+  });
+  if (!r.ok) throw new Error(`Jupiter swap ${r.status}`);
+  const j = await r.json();
+  return j.swapTransaction; // base64
+}
+
+async function gwSolExec({ fromSym, toSym, amtHuman }) {
+  const inMint  = GW_SOL_TOKENS[fromSym];
+  const outMint = GW_SOL_TOKENS[toSym];
+  if (!inMint || !outMint) throw new Error(`unsupported SPL token — ${fromSym} or ${toSym}`);
+  const inDec  = GW_SOL_DECIMALS[fromSym] ?? 6;
+  const amountBaseUnits = BigInt(Math.floor(amtHuman * 10 ** inDec)).toString();
+  const p = window.solana || window.phantom?.solana;
+  if (!p) throw new Error('Phantom not connected');
+  const pubkey = p.publicKey?.toString?.() || p.publicKey;
+  const quote = await gwSolQuote({ inMint, outMint, amountBaseUnits });
+  gwToast(`Jupiter route · ${quote.routePlan?.length || 1} hops · confirm in Phantom`, 'info');
+  const txB64 = await gwSolSwap({ quoteResponse: quote, userPubkey: pubkey });
+  // Phantom exposes signAndSendTransaction that accepts a serialized tx
+  // as a Uint8Array. Convert base64 → Uint8Array first.
+  const bin = Uint8Array.from(atob(txB64), (c) => c.charCodeAt(0));
+  const { signature } = await p.signAndSendTransaction({ serializedMessage: bin });
+  gwToast('Submitted to Solana — waiting for confirmation…', 'info');
+  return signature;
+}
+
+/* ==========================================================================
  * PHASE 8 — DEX Spot Terminal (2026-07-08)
  *
  * Cursor's #page-spot has a paper-trading UI. We inject a full DEX terminal
@@ -3350,16 +3439,40 @@ function gwDsTimeAgo(ts) {
  *   - Depth quotes  → gwMetaAggQuoteAll (already parallel-fetching 4 aggs)
  *   - Order exec    → gwOnChainSwapExec (also meta-agg)
  * ========================================================================== */
-const GW_SP_PAIRS = [
+/* Seed pair list — expanded at boot from Cursor's Markets instruments
+ * (365 crypto rows) so every user-visible symbol is tradeable here. */
+let GW_SP_PAIRS = [
   { sym: 'BTC/USDT', base: 'BTC', quote: 'USDT', bn: 'BTCUSDT' },
   { sym: 'ETH/USDT', base: 'ETH', quote: 'USDT', bn: 'ETHUSDT' },
   { sym: 'BNB/USDT', base: 'BNB', quote: 'USDT', bn: 'BNBUSDT' },
   { sym: 'SOL/USDT', base: 'SOL', quote: 'USDT', bn: 'SOLUSDT' },
-  { sym: 'ARB/USDT', base: 'ARB', quote: 'USDT', bn: 'ARBUSDT' },
-  { sym: 'LINK/USDT',base: 'LINK',quote: 'USDT', bn: 'LINKUSDT' },
-  { sym: 'MATIC/USDT',base:'MATIC',quote: 'USDT', bn: 'MATICUSDT' },
-  { sym: 'DOGE/USDT',base: 'DOGE',quote: 'USDT', bn: 'DOGEUSDT' },
 ];
+function gwSpMergePairs() {
+  try {
+    if (typeof window.gromInstrumentsByType !== 'function') return false;
+    if (gwSpMergePairs._done) return true;
+    const rows = window.gromInstrumentsByType('crypto') || [];
+    const have = new Set(GW_SP_PAIRS.map((p) => p.sym));
+    for (const r of rows) {
+      const base  = r.base;
+      const quote = r.quote || 'USDT';
+      const sym   = `${base}/${quote}`;
+      if (!base || have.has(sym)) continue;
+      GW_SP_PAIRS.push({ sym, base, quote, bn: (base + quote).toUpperCase() });
+      have.add(sym);
+    }
+    gwSpMergePairs._done = true;
+    console.log('[GROM] spot pairs expanded to', GW_SP_PAIRS.length);
+    // Force re-render if already mounted.
+    try { if (document.getElementById('gwSpotDex')) gwRenderSpotDex(); } catch (_) {}
+    return true;
+  } catch (_) { return false; }
+}
+if (typeof window !== 'undefined') {
+  let _spn = 0;
+  const _spid = setInterval(() => { _spn++; if (gwSpMergePairs() || _spn >= 20) clearInterval(_spid); }, 500);
+  gwSpMergePairs();
+}
 const GW_SP_INTERVALS = ['5m', '15m', '1h', '4h', '1d'];
 
 function gwInjectSpotDexCss() {
@@ -3463,7 +3576,7 @@ async function gwRenderSpotDex() {
             <button class="gw-sp-mode ${st.mode === 'limit'  ? 'on' : ''}" data-mode="limit">Limit</button>
           </div>
           <div class="gw-sp-inp">
-            <label>Amount (${pair.base})</label>
+            <label>Amount (${pair.base}) · <span id="gwSpBal" style="color:#98a8c0">Balance: —</span></label>
             <input id="gwSpAmt" type="number" step="any" min="0" placeholder="0.00" />
             <div class="hint" id="gwSpAmtUsd">≈ $0</div>
           </div>
@@ -3501,13 +3614,60 @@ async function gwRenderSpotDex() {
   gwSpLoadChart();
   gwSpRefreshLast();
   gwSpRefreshDepth();
+  gwSpRefreshBalance();
+}
+
+/** Read wallet balance for the current side's spent asset and show it. */
+async function gwSpRefreshBalance() {
+  const el = document.getElementById('gwSpBal');
+  if (!el) return;
+  const st = gwSpState;
+  const pair = GW_SP_PAIRS.find((p) => p.sym === st.pair);
+  const asset = st.side === 'buy' ? pair.quote : pair.base;
+  try {
+    const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
+      ? window.gromWallet.wcProvider : window.ethereum;
+    if (!provider) { el.textContent = 'Connect wallet'; return; }
+    const [account] = await provider.request({ method: 'eth_accounts' });
+    if (!account) { el.textContent = 'Connect wallet'; return; }
+    const chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+    const cfg = GW_OC_SWAP[chainId];
+    if (!cfg) { el.textContent = 'Switch to a supported chain'; return; }
+    if (asset === cfg.native) {
+      const hex = await provider.request({ method: 'eth_getBalance', params: [account, 'latest'] });
+      const wei = BigInt(hex);
+      const eth = Number(wei) / 1e18;
+      el.textContent = `Balance: ${eth.toFixed(4)} ${asset}`;
+    } else if (cfg.tokens[asset]) {
+      // erc20.balanceOf(account) → 0x70a08231 + 32-byte padded account
+      const data = '0x70a08231' + account.slice(2).toLowerCase().padStart(64, '0');
+      const hex = await provider.request({ method: 'eth_call', params: [{ to: cfg.tokens[asset], data }, 'latest'] });
+      const dec = cfg.decimals[asset] ?? 18;
+      const val = Number(BigInt(hex || '0x0')) / 10 ** dec;
+      el.textContent = `Balance: ${val.toFixed(4)} ${asset}`;
+    } else {
+      el.textContent = `${asset} not on this chain`;
+    }
+  } catch (_) { el.textContent = 'Balance —'; }
 }
 
 let gwSpChart = null, gwSpSeries = null;
 async function gwSpLoadChart() {
-  if (typeof window.LightweightCharts === 'undefined') return;
+  // The Cursor page loads `lightweight-charts.standalone.production.js`
+  // as an async <script> — it may still be parsing when we first render.
+  // Poll a few times (2 s cap) then bail. Also cover the case where
+  // #gwSpChart was rebuilt by a re-render and lost its previous chart.
+  if (typeof window.LightweightCharts === 'undefined') {
+    if ((gwSpLoadChart._tries |= 0) >= 20) return;
+    gwSpLoadChart._tries += 1;
+    setTimeout(gwSpLoadChart, 100);
+    return;
+  }
+  gwSpLoadChart._tries = 0;
   const container = document.getElementById('gwSpChart');
   if (!container) return;
+  // Reset chart if this is a new container (e.g. after re-render)
+  if (gwSpChart && gwSpChart.__container !== container) { try { gwSpChart.remove(); } catch (_) {} gwSpChart = null; gwSpSeries = null; }
   const pair = GW_SP_PAIRS.find((p) => p.sym === gwSpState.pair);
   if (!pair) return;
   if (!gwSpChart) {
@@ -3522,6 +3682,7 @@ async function gwSpLoadChart() {
     gwSpSeries = gwSpChart.addCandlestickSeries({
       upColor: '#22c17c', downColor: '#f87171', wickUpColor: '#22c17c', wickDownColor: '#f87171', borderVisible: false,
     });
+    gwSpChart.__container = container;
     window.addEventListener('resize', () => { try { gwSpChart.resize(container.clientWidth, container.clientHeight); } catch (_) {} });
   }
   try {
@@ -3554,7 +3715,24 @@ async function gwSpRefreshDepth() {
       chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
     }
   } catch (_) {}
-  if (!account) { el.innerHTML = `<div style="color:#6b7a92;font-size:12px;padding:6px">Connect a wallet to see live DEX depth</div>`; return; }
+  if (!account) {
+    // Fallback: fetch a real orderbook from Binance public API so the ladder
+    // isn't empty for anonymous users. Once wallet connects, LiFi takes over.
+    try {
+      const r = await fetch(`https://api.binance.com/api/v3/depth?symbol=${pair.bn}&limit=10`);
+      const j = await r.json();
+      const asks = (j.asks || []).slice(0, 5).reverse().map((a) => ({ px: Number(a[0]), sz: Number(a[1]) }));
+      const bids = (j.bids || []).slice(0, 5).map((b) => ({ px: Number(b[0]), sz: Number(b[1]) }));
+      const mid = asks.length && bids.length ? (asks[asks.length - 1].px + bids[0].px) / 2 : null;
+      const askHtml = asks.map((a) => `<div class="row ask"><span class="lvl">Ask ${a.sz.toFixed(4)}</span><span class="bar"></span><span class="px">${a.px.toLocaleString('en-US')}</span><span class="impact">${mid ? '+' + (((a.px - mid) / mid) * 100).toFixed(2) + '%' : ''}</span></div>`).join('');
+      const bidHtml = bids.map((b) => `<div class="row bid"><span class="lvl">Bid ${b.sz.toFixed(4)}</span><span class="bar"></span><span class="px">${b.px.toLocaleString('en-US')}</span><span class="impact">${mid ? '−' + (((mid - b.px) / mid) * 100).toFixed(2) + '%' : ''}</span></div>`).join('');
+      el.innerHTML = `${askHtml}<div class="row mid"><span>MID</span><span></span><span>${mid ? mid.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</span><span></span></div>${bidHtml}
+        <div style="color:#6b7a92;font-size:11px;margin-top:8px;text-align:center">Connect a wallet to see live DEX depth</div>`;
+    } catch (_) {
+      el.innerHTML = `<div style="color:#6b7a92;font-size:12px;padding:6px">Connect a wallet to see live DEX depth</div>`;
+    }
+    return;
+  }
   // Fetch quotes at 5 sizes on each side
   const sizes = [0.01, 0.05, 0.25, 1, 5]; // in base asset
   const asks = []; const bids = [];
@@ -3730,12 +3908,21 @@ function gwDsChainChipsWire(wrap) {
     };
   });
   wrap.querySelectorAll('.gw-ds-chain[data-nonevm]').forEach((b) => {
-    b.onclick = () => {
+    b.onclick = async () => {
       const kind = b.dataset.nonevm;
-      if (kind === 'sol') gwToast('Solana: connect Phantom wallet — LiFi will route directly. Coming next deploy.', 'info');
-      else if (kind === 'btc') gwToast('Bitcoin: BTC-address flow via THORchain (LiFi). Coming next deploy.', 'info');
-      else if (kind === 'ton') gwToast('TON: needs TonConnect + STON.fi router. On roadmap (Phase 9).', 'info');
-      else if (kind === 'trx') gwToast('Tron: needs TronLink + SunSwap. On roadmap (Phase 9).', 'info');
+      if (kind === 'sol') {
+        try {
+          const pk = await gwSolConnect();
+          gwToast(`Phantom connected: ${pk.slice(0, 4)}…${pk.slice(-4)} — Jupiter route ready`, 'success');
+          window.__gwSolPubkey = pk;
+          try { gwDsRefreshRate(); } catch (_) {}
+        } catch (e) {
+          gwToast(`Phantom: ${e?.message || 'not installed'}`, 'warn');
+        }
+      }
+      else if (kind === 'btc') gwToast('Bitcoin: BTC-address → THORchain route via LiFi. Enter your BTC receive address in Advanced (coming).', 'info');
+      else if (kind === 'ton') gwToast('TON: needs TonConnect + STON.fi router. On roadmap.', 'info');
+      else if (kind === 'trx') gwToast('Tron: needs TronLink + SunSwap. On roadmap.', 'info');
     };
   });
 }

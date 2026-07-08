@@ -74,7 +74,11 @@ function walletMetadata() {
 }
 
 function isMobileUA() {
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  const ua = navigator.userAgent || '';
+  if (/Android|iPhone|iPad|iPod/i.test(ua)) return true;
+  // iPadOS 13+ often reports as Mac — detect via touch points.
+  if ((navigator.maxTouchPoints || 0) > 1 && /Mac/i.test(navigator.platform || '')) return true;
+  return window.innerWidth < 900;
 }
 function gromPageUrl() {
   return walletAppOrigin() + (location.pathname || '/') + (location.search || '') + (location.hash || '');
@@ -105,6 +109,53 @@ function setTrustWcDeepLinkChoice() {
       href: 'trust://',
     }));
   } catch (_) {}
+}
+function gwHideTrustWcModal() {
+  const modal = document.getElementById('gwTrustWcModal');
+  if (modal) modal.style.display = 'none';
+}
+/** Custom Trust modal — QR encodes link.trustwallet.com/wc (NOT raw wc:) so iOS
+ * camera / OS won't hijack the link to MetaMask. Reown's built-in modal always
+ * renders wc: URIs which trigger "Open in MetaMask" on many phones. */
+function gwShowTrustWcModal(uri) {
+  gwInjectConnectModalCss();
+  const link = trustWcDeepLink(uri);
+  let modal = document.getElementById('gwTrustWcModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'gwTrustWcModal';
+    modal.innerHTML = [
+      '<div class="gw-trust-wc-backdrop">',
+      '  <div class="gw-trust-wc-panel" role="dialog" aria-label="Trust Wallet">',
+      '    <div class="gw-trust-wc-head">',
+      '      <img src="/assets/wallets/trust.svg" alt="" width="28" height="28" decoding="async"/>',
+      '      <span>Trust Wallet</span>',
+      '      <button type="button" class="gw-trust-wc-close" aria-label="Close">×</button>',
+      '    </div>',
+      '    <div class="gw-trust-wc-qr"></div>',
+      '    <p class="gw-trust-wc-hint">Open <strong>Trust Wallet</strong> → WalletConnect → Scan.<br/>',
+      '    Do <em>not</em> use the phone camera — it may open MetaMask instead.</p>',
+      '    <p class="gw-trust-wc-hint gw-trust-wc-hint--ru">Откройте <strong>Trust Wallet</strong> → WalletConnect → Сканировать.<br/>',
+      '    Не используйте камеру телефона — она может открыть MetaMask.</p>',
+      '    <a class="gw-trust-wc-open" target="_blank" rel="noopener noreferrer">Open in Trust Wallet</a>',
+      '  </div>',
+      '</div>',
+    ].join('');
+    document.body.appendChild(modal);
+    modal.querySelector('.gw-trust-wc-close').onclick = () => gwHideTrustWcModal();
+    modal.querySelector('.gw-trust-wc-backdrop').onclick = (e) => {
+      if (e.target.classList.contains('gw-trust-wc-backdrop')) gwHideTrustWcModal();
+    };
+  }
+  const qrBox = modal.querySelector('.gw-trust-wc-qr');
+  const qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data='
+    + encodeURIComponent(link);
+  qrBox.innerHTML = '<img src="' + qrImg + '" alt="Trust Wallet QR" width="260" height="260" decoding="async"/>';
+  const openBtn = modal.querySelector('.gw-trust-wc-open');
+  openBtn.href = link;
+  openBtn.style.display = isMobileUA() ? '' : 'none';
+  modal.style.display = 'flex';
+  if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
 }
 
 /* ----- chains (Arbitrum по умолчанию, остальные как optional) ----- */
@@ -402,16 +453,12 @@ async function connectTrust() {
   if (!provider) provider = findLegacy(isTrustProvider);
   if (!provider && window.trustwallet?.request) provider = window.trustwallet;
   if (provider) return connectWithProvider(provider, 'Trust Wallet');
-  if (isMobileUA()) {
-    if (typeof window.toast === 'function') {
-      window.toast('Opening Trust Wallet… confirm the connection in the app.', 'info');
-    }
-    return connectTrustMobileWC();
-  }
   if (typeof window.toast === 'function') {
-    window.toast('Trust is mobile-only — scan the QR with your phone', 'info');
+    window.toast(isMobileUA()
+      ? 'Opening Trust Wallet… confirm in the app.'
+      : 'Scan with Trust Wallet app (not phone camera)', 'info');
   }
-  return connectWCFor('trust');
+  return connectTrustWC();
 }
 
 /* ----- 3. Binance Web3 Wallet ----- */
@@ -534,36 +581,39 @@ async function ensureWC(forceNew, opts) {
 function gwPrefetchWc() {
   const kick = () => {
     setTimeout(() => {
-      try { ensureWC(false).catch(() => {}); } catch (_) {}
+      try { ensureWC(false, { showQrModal: false }).catch(() => {}); } catch (_) {}
     }, 2500);
   };
   if (document.readyState === 'complete') kick();
   else window.addEventListener('load', kick, { once: true });
 }
 
-/* Connect via WalletConnect with a specific wallet featured in the modal.
- * Falls through to authenticateWithSIWE just like connectWC. */
-async function connectTrustMobileWC() {
+/* Trust WalletConnect — never use Reown's QR modal (wc: links → MetaMask hijack). */
+async function connectTrustWC() {
   setTrustWcDeepLinkChoice();
+  gwHideTrustWcModal();
   const p = await ensureWC(true, {
     recommendedWalletId: WC_WALLET_IDS.trust,
     walletKey: 'trust',
     showQrModal: false,
     excludeWalletIds: [WC_WALLET_IDS.metamask],
   });
-  let deeplinkDone = false;
+  let uriHandled = false;
   const onDisplayUri = (uri) => {
-    if (deeplinkDone || !uri) return;
-    deeplinkDone = true;
-    // Direct Trust universal link — bypasses Reown QR modal and the OS-level
-    // "Open in MetaMask" bar that appears when wc: links are rendered on-page.
-    window.location.assign(trustWcDeepLink(uri));
+    if (uriHandled || !uri) return;
+    uriHandled = true;
+    if (isMobileUA()) {
+      window.location.assign(trustWcDeepLink(uri));
+    } else {
+      gwShowTrustWcModal(uri);
+    }
   };
   p.on('display_uri', onDisplayUri);
   try {
     await p.connect();
   } finally {
     try { p.removeListener('display_uri', onDisplayUri); } catch (_) {}
+    gwHideTrustWcModal();
   }
   const accs = await p.request({ method: 'eth_accounts' });
   if (!accs?.length) throw new Error('No accounts returned');
@@ -574,7 +624,7 @@ async function connectTrustMobileWC() {
 }
 
 async function connectWCFor(walletKey) {
-  if (isMobileUA() && walletKey === 'trust') return connectTrustMobileWC();
+  if (walletKey === 'trust') return connectTrustWC();
   const id = WC_WALLET_IDS[walletKey];
   const excludeWalletIds = walletKey === 'trust' ? [WC_WALLET_IDS.metamask] : [];
   const p = await ensureWC(true, { recommendedWalletId: id, walletKey, excludeWalletIds });
@@ -2399,6 +2449,41 @@ function gwInjectConnectModalCss() {
   if (document.getElementById('gw-connect-modal-fixups')) return;
   const css = `
     .cn-list button.cn-row[onclick*="Other wallet"] { display: none !important; }
+    #gwTrustWcModal {
+      display: none; position: fixed; inset: 0; z-index: 2500;
+      align-items: center; justify-content: center;
+    }
+    .gw-trust-wc-backdrop {
+      position: absolute; inset: 0; background: rgba(0,0,0,.72);
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .gw-trust-wc-panel {
+      position: relative; z-index: 1; width: min(360px, 100%);
+      background: #0b1220; border: 1px solid rgba(0,194,255,.25);
+      border-radius: 16px; padding: 20px; color: #e8eef7;
+      box-shadow: 0 24px 64px rgba(0,0,0,.55);
+    }
+    .gw-trust-wc-head {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 700; font-size: 1.05rem; margin-bottom: 14px;
+    }
+    .gw-trust-wc-close {
+      margin-left: auto; border: 0; background: transparent;
+      color: #9fb0c8; font-size: 1.5rem; line-height: 1; cursor: pointer;
+    }
+    .gw-trust-wc-qr {
+      display: flex; justify-content: center; margin: 8px 0 12px;
+      background: #fff; border-radius: 12px; padding: 10px;
+    }
+    .gw-trust-wc-hint {
+      font-size: .82rem; line-height: 1.45; color: #9fb0c8; margin: 0 0 8px;
+    }
+    .gw-trust-wc-hint em { color: #ffb347; font-style: normal; }
+    .gw-trust-wc-open {
+      display: block; text-align: center; margin-top: 10px; padding: 10px 14px;
+      border-radius: 10px; background: #3375bb; color: #fff;
+      text-decoration: none; font-weight: 600;
+    }
   `;
   const style = document.createElement('style');
   style.id = 'gw-connect-modal-fixups';

@@ -3898,6 +3898,64 @@ try {
         const a = e.target && e.target.closest && e.target.closest('a[href^="wc:"]');
         if (a) { e.preventDefault(); console.log('[GROM] blocked wc: link click'); }
       }, true);
+      // User feedback 2026-07-07: "на сафари тоже эта проблема".
+      // Safari on iOS shows the same "Відкрити у MetaMask" banner via
+      // its Universal-Link / App-Association scheme, so this is NOT
+      // Chrome-specific and it's NOT a MetaMask extension banner —
+      // it's the OS reacting to a visible `<a href="wc:...">` on the
+      // page. Reown's Web3Modal renders those inside CLOSED shadow
+      // DOMs (Copy / Deep-link buttons), so we can't reach them from
+      // ordinary querySelector.  Two moves:
+      //   (a) Monkey-patch Element.prototype.attachShadow so every
+      //       shadowRoot Reown creates from here on is `open` mode.
+      //       Must run before any Reown web-component is upgraded.
+      //   (b) Walk the light+shadow DOMs on every mutation and strip
+      //       the href attribute from any anchor whose href starts
+      //       with `wc:` (we keep the element so click/copy handlers
+      //       still work — we just neuter the URL scheme the OS scans
+      //       for). Debounced to avoid churn.
+      try {
+        const origAttach = Element.prototype.attachShadow;
+        Element.prototype.attachShadow = function (init) {
+          try { return origAttach.call(this, Object.assign({}, init || {}, { mode: 'open' })); }
+          catch (_) { return origAttach.call(this, init); }
+        };
+      } catch (_) {}
+      const walkStrip = (root) => {
+        if (!root) return;
+        try {
+          root.querySelectorAll && root.querySelectorAll('a[href^="wc:"]').forEach((a) => {
+            if (!a.dataset.gwWcHref) a.dataset.gwWcHref = a.getAttribute('href') || '';
+            a.removeAttribute('href');
+            a.setAttribute('role', 'button');
+          });
+          root.querySelectorAll && root.querySelectorAll('*').forEach((el) => {
+            if (el.shadowRoot) walkStrip(el.shadowRoot);
+          });
+        } catch (_) {}
+      };
+      // TARGETED watch — only react when Reown attaches its <wcm-modal>
+      // or <w3m-modal> to <body>. Then poll that subtree at 500 ms
+      // for 30 s (long enough for the QR to finish animating in) and
+      // stop. Avoids the observer-of-doom that broke the exchange
+      // during task #115 (broad subtree observer on document body).
+      const gwWatchWcModal = (node) => {
+        if (!node || !node.tagName) return;
+        const tag = node.tagName;
+        if (!tag.startsWith('WCM-') && !tag.startsWith('W3M-')) return;
+        walkStrip(node);
+        const id = setInterval(() => walkStrip(node), 500);
+        setTimeout(() => clearInterval(id), 30_000);
+      };
+      try {
+        const bodyObs = new MutationObserver((muts) => {
+          for (const m of muts) for (const n of m.addedNodes) gwWatchWcModal(n);
+        });
+        bodyObs.observe(document.body || document.documentElement, { childList: true, subtree: false });
+      } catch (_) {}
+      // Also strip anything already present at boot (in case a stale
+      // Reown modal was resurrected via bfcache).
+      walkStrip(document);
     })();
     // Central language reactor — dispatches window event 'grom:lang-change'
     // when any of these signals fire:

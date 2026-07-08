@@ -3319,6 +3319,162 @@ function gwDsTimeAgo(ts) {
 }
 
 /* ==========================================================================
+ * PHASE 9 — Bitcoin support via LiFi + THORchain (2026-07-08)
+ *
+ * Direction shipped: EVM ➔ BTC. User has funds on any of our EVM chains
+ * (Ethereum, BSC, Polygon, Arbitrum, …), wants clean BTC delivered to
+ * their own Bitcoin wallet. LiFi routes through THORchain internally:
+ * user signs ONE EVM transaction, THORchain does the atomic swap, BTC
+ * arrives at their BTC address in ~5–10 min.
+ *
+ * LiFi chain-id for Bitcoin: 20000000000001. toToken uses THORchain's
+ * BTC.BTC representation which LiFi accepts as the string "BTC" or via
+ * their explicit token address.
+ *
+ * Reverse (BTC → EVM) needs a THORchain-provided deposit vault address
+ * that the user manually sends BTC to. Different UX, ships in Phase 9b.
+ *
+ * Bitcoin destination address is entered once and stored in
+ * localStorage.gw_btc_addr (public data, safe to persist).
+ * ========================================================================== */
+const GW_LIFI_BTC_CHAIN_ID = 20000000000001;
+
+function gwBtcAddrGet() { try { return localStorage.getItem('gw_btc_addr') || ''; } catch (_) { return ''; } }
+function gwBtcAddrSet(a) { try { localStorage.setItem('gw_btc_addr', a); } catch (_) {} }
+
+/** Simple heuristic BTC-address validator (P2PKH / P2SH / bech32). */
+function gwBtcAddrValid(a) {
+  if (!a || typeof a !== 'string') return false;
+  const s = a.trim();
+  // Legacy 1…, P2SH 3…, bech32 bc1…
+  return /^(1|3)[a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(s) || /^bc1[a-z0-9]{25,90}$/i.test(s);
+}
+
+/** Ask the user for their BTC destination address (once) — glass modal. */
+async function gwBtcPromptAddress() {
+  return new Promise((resolve) => {
+    let ov = document.getElementById('gw-btc-overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'gw-btc-overlay';
+      Object.assign(ov.style, {
+        position: 'fixed', inset: '0', zIndex: '950', display: 'none',
+        alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(4,8,16,0.55)', backdropFilter: 'blur(6px)',
+      });
+      ov.innerHTML = `
+        <div style="width:min(440px,92vw);padding:22px;border-radius:20px;color:#e7eef8;
+                    background:linear-gradient(160deg,rgba(13,22,38,.98),rgba(8,14,26,.98));
+                    border:1px solid rgba(247,147,26,.28);box-shadow:0 20px 60px -12px rgba(0,0,0,.65)">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <span style="width:28px;height:28px;border-radius:50%;background:#F7931A;color:#fff;
+                          font-weight:800;display:inline-flex;align-items:center;justify-content:center">₿</span>
+            <h3 style="margin:0;font-size:15px;font-weight:800">Ваш Bitcoin-адрес получения</h3>
+          </div>
+          <p style="margin:0 0 12px;font-size:12.5px;color:#98a8c0;line-height:1.55">
+            LiFi отправит BTC на этот адрес через THORchain после того как ты подпишешь EVM-транзакцию.
+            Проверь дважды — вернуть нельзя.
+          </p>
+          <input id="gwBtcInp" type="text" placeholder="bc1q… или 1… / 3…"
+            style="width:100%;padding:10px 12px;background:rgba(255,255,255,.05);
+                   border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#e7eef8;
+                   font-size:14px;font-family:inherit;outline:none;margin-bottom:8px" />
+          <div id="gwBtcErr" style="font-size:11.5px;color:#f87171;min-height:16px;margin-bottom:10px"></div>
+          <div style="display:flex;gap:8px">
+            <button id="gwBtcCancel" style="flex:1;padding:10px 14px;border-radius:10px;border:0;
+                    background:rgba(255,255,255,.05);color:#cfdfee;font-weight:800;cursor:pointer">Отмена</button>
+            <button id="gwBtcSave" style="flex:2;padding:10px 14px;border-radius:10px;border:0;
+                    background:linear-gradient(135deg,#F7931A,#e07817);color:#0a0400;font-weight:800;
+                    cursor:pointer">Сохранить</button>
+          </div>
+        </div>`;
+      document.body.appendChild(ov);
+    }
+    const inp = ov.querySelector('#gwBtcInp');
+    const err = ov.querySelector('#gwBtcErr');
+    inp.value = gwBtcAddrGet();
+    err.textContent = '';
+    ov.style.display = 'flex';
+    setTimeout(() => inp.focus(), 40);
+    ov.querySelector('#gwBtcCancel').onclick = () => { ov.style.display = 'none'; resolve(null); };
+    ov.querySelector('#gwBtcSave').onclick = () => {
+      const v = (inp.value || '').trim();
+      if (!gwBtcAddrValid(v)) { err.textContent = 'Похоже это не валидный BTC-адрес'; return; }
+      gwBtcAddrSet(v);
+      ov.style.display = 'none';
+      resolve(v);
+    };
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') ov.querySelector('#gwBtcSave').click(); });
+    ov.onclick = (e) => { if (e.target === ov) { ov.style.display = 'none'; resolve(null); } };
+  });
+}
+
+/** LiFi quote for EVM → BTC via THORchain. `toBtcAddr` is user's BTC. */
+async function gwLifiQuoteToBtc({ fromChainId, fromSym, amtNum, evmAccount, toBtcAddr }) {
+  const cfg = GW_OC_SWAP[fromChainId];
+  if (!cfg) return null;
+  const inAddr = fromSym === cfg.native ? cfg.wrapped : cfg.tokens[fromSym];
+  if (!inAddr) return null;
+  const inDec = cfg.decimals[fromSym] ?? 18;
+  const fromAmount = BigInt(Math.floor(amtNum * 10 ** inDec)).toString();
+  const qs = new URLSearchParams({
+    fromChain:    String(fromChainId),
+    toChain:      String(GW_LIFI_BTC_CHAIN_ID),
+    fromToken:    inAddr,
+    toToken:      'bitcoin',
+    fromAmount,
+    fromAddress:  evmAccount,
+    toAddress:    toBtcAddr,
+    slippage:     '0.02',
+    integrator:   GW_LIFI_INTEGRATOR,
+    order:        'RECOMMENDED',
+    allowBridges: 'thorchain',
+    ...(GW_LIFI_FEE_ADDR !== '0x0000000000000000000000000000000000000000'
+      ? { fee: String(GW_LIFI_FEE_PCT), feeAddress: GW_LIFI_FEE_ADDR }
+      : {}),
+  });
+  const r = await fetch(`${GW_LIFI_ENDPOINT}/quote?${qs}`, { headers: { accept: 'application/json' } });
+  if (!r.ok) { console.warn('[GROM] lifi BTC quote', r.status, await r.text().catch(() => '')); return null; }
+  return await r.json();
+}
+
+/** Full EVM → BTC swap: quote → approve → sign → confirm. */
+async function gwBtcSwapExec({ fromChainId, fromSym, amtNum }) {
+  let btcAddr = gwBtcAddrGet();
+  if (!btcAddr) btcAddr = await gwBtcPromptAddress();
+  if (!btcAddr) throw new Error('BTC address required');
+  const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
+    ? window.gromWallet.wcProvider : window.ethereum;
+  if (!provider) throw new Error('No wallet provider');
+  const [account] = await provider.request({ method: 'eth_accounts' });
+  if (!account) throw new Error('Wallet not connected');
+  gwToast('Requesting THORchain route via LiFi…', 'info');
+  const quote = await gwLifiQuoteToBtc({ fromChainId, fromSym, amtNum, evmAccount: account, toBtcAddr: btcAddr });
+  if (!quote?.transactionRequest) throw new Error('No THORchain route for this size/pair');
+  const cfg = GW_OC_SWAP[fromChainId];
+  const inAddr = fromSym === cfg.native ? cfg.wrapped : cfg.tokens[fromSym];
+  const inDec = cfg.decimals[fromSym] ?? 18;
+  const amountIn = BigInt(Math.floor(amtNum * 10 ** inDec));
+  if (fromSym !== cfg.native) {
+    const spender = quote.estimate?.approvalAddress || quote.transactionRequest.to;
+    const allow = await gwErc20Allowance(provider, inAddr, account, spender);
+    if (allow < amountIn) {
+      gwToast('Approve token to THORchain router…', 'info');
+      await gwErc20ApproveMax(provider, inAddr, spender, account);
+    }
+  }
+  const outSat = Number(quote.estimate?.toAmount || 0) / 1e8;
+  gwToast(`Confirm in wallet · you'll receive ~${outSat.toFixed(8)} BTC · ETA ~10 min`, 'info');
+  const tx = quote.transactionRequest;
+  const hash = await provider.request({ method: 'eth_sendTransaction', params: [{
+    from: account, to: tx.to, data: tx.data, value: tx.value || '0x0',
+    ...(tx.gasLimit ? { gas: tx.gasLimit } : {}),
+  }] });
+  gwToast('Submitted · THORchain confirming, BTC in ~5-10 min…', 'info');
+  return hash;
+}
+
+/* ==========================================================================
  * PHASE 9 — Solana support (2026-07-08)
  *
  * User: "мне нужно чтобы человек мог в одном месте поменять". Solana
@@ -3920,7 +4076,13 @@ function gwDsChainChipsWire(wrap) {
           gwToast(`Phantom: ${e?.message || 'not installed'}`, 'warn');
         }
       }
-      else if (kind === 'btc') gwToast('Bitcoin: BTC-address → THORchain route via LiFi. Enter your BTC receive address in Advanced (coming).', 'info');
+      else if (kind === 'btc') {
+        const addr = await gwBtcPromptAddress();
+        if (addr) {
+          window.__gwBtcAddr = addr;
+          gwToast(`BTC-адрес сохранён: ${addr.slice(0, 6)}…${addr.slice(-4)}. Выбери "BTC" как получаемый актив — свап пойдёт через THORchain.`, 'success');
+        }
+      }
       else if (kind === 'ton') gwToast('TON: needs TonConnect + STON.fi router. On roadmap.', 'info');
       else if (kind === 'trx') gwToast('Tron: needs TronLink + SunSwap. On roadmap.', 'info');
     };
@@ -5344,6 +5506,13 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   const [account] = await provider.request({ method: 'eth_accounts' });
   if (!account) throw new Error('Wallet not connected');
   const chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+
+  // === Phase 9 hook — if `to` is BTC and user saved a BTC address,
+  //     bridge out to Bitcoin via THORchain instead of an EVM swap. ===
+  if (toSym === 'BTC' && gwBtcAddrGet()) {
+    try { return await gwBtcSwapExec({ fromChainId: chainId, fromSym, amtNum }); }
+    catch (e) { console.warn('[GROM] BTC route failed, falling back to EVM path:', e?.message || e); }
+  }
 
   // === 1. Meta-aggregator — parallel quotes, pick best, walk down list ===
   //

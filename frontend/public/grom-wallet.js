@@ -2983,10 +2983,14 @@ function gwDsMergeInstruments() {
     if (gwDsMergeInstruments._done) return true;
     const rows = window.gromInstrumentsByType('crypto') || [];
     const have = new Set(GW_DS_ASSETS.map((a) => a.sym));
+    // Build a base→logo index so seed items also pick up icons.
+    const logoBy = {};
+    for (const r of rows) if (r.base && r.logo) logoBy[r.base] = logoBy[r.base] || r.logo;
+    for (const a of GW_DS_ASSETS) if (!a.logo && logoBy[a.sym]) a.logo = logoBy[a.sym];
     for (const r of rows) {
       const sym = r.base;
       if (!sym || have.has(sym)) continue;
-      GW_DS_ASSETS.push({ sym, name: r.name || sym });
+      GW_DS_ASSETS.push({ sym, name: r.name || sym, logo: r.logo || logoBy[sym] || '' });
       have.add(sym);
     }
     gwDsMergeInstruments._done = true;
@@ -3143,8 +3147,14 @@ function gwInjectDashSwapCss() {
     .gw-ds-chains {
       display: flex; gap: 6px; margin: 8px 0 6px; overflow-x: auto;
       scrollbar-width: none; -ms-overflow-style: none; padding: 2px 0 6px;
+      -webkit-overflow-scrolling: touch;
     }
     .gw-ds-chains::-webkit-scrollbar { display: none; }
+    /* Ensure chip row is scrollable on mobile even when panel is narrow. */
+    @media (max-width: 640px) {
+      .gw-ds-chains { margin: 4px -14px 6px; padding: 2px 14px 6px; }
+      .gw-ds-chain { padding: 5px 8px 5px 7px; font-size: 11px; }
+    }
     .gw-ds-chain {
       flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
       padding: 6px 10px 6px 8px; border-radius: 999px;
@@ -3178,7 +3188,8 @@ function gwInjectDashSwapCss() {
     .gw-tk-row:hover { background: rgba(255,255,255,0.04); }
     .gw-tk-row .ico { width: 28px; height: 28px; border-radius: 50%;
       display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
-      background: linear-gradient(135deg, rgba(0,194,255,0.14), rgba(110,141,255,0.10)); border: 1px solid rgba(0,194,255,0.20); color: #5dd5ff; }
+      background: linear-gradient(135deg, rgba(0,194,255,0.14), rgba(110,141,255,0.10)); border: 1px solid rgba(0,194,255,0.20); color: #5dd5ff; overflow: hidden; }
+    .gw-tk-row img.ico { object-fit: cover; background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.10); }
     .gw-tk-row .body { flex: 1; }
     .gw-tk-row .sym { font-weight: 800; font-size: 13.5px; }
     .gw-tk-row .name { font-size: 11.5px; color: #98a8c0; }
@@ -3287,6 +3298,10 @@ function gwInjectDashSwapCss() {
  * (SIWE not completed) we default to 'onchain' — that's the only mode that
  * can actually spend their tokens. Otherwise use whatever they last picked. */
 function gwDsGetMode() {
+  // Paper mode (trading account) removed 2026-07-08 — the panel is
+  // DEX-only now via LiFi/Paraswap/KyberSwap/Odos meta-aggregator.
+  return 'onchain';
+  // eslint-disable-next-line no-unreachable
   try {
     const stored = localStorage.getItem('gw_ds_mode');
     if (stored === 'paper' || stored === 'onchain') return stored;
@@ -4098,6 +4113,8 @@ const GW_SP_INTERVALS = ['5m', '15m', '1h', '4h', '1d'];
 function gwInjectSpotDexCss() {
   if (document.getElementById('gw-sp-css')) return;
   const css = `
+    /* Hide Cursor's paper Spot-Trade UI — DEX terminal fully replaces it. */
+    #page-spot > *:not(#gwSpotDex):not(script):not(style):not(link) { display: none !important; }
     .gw-sp-wrap { margin: 12px 0 20px; }
     .gw-sp-card { border-radius: 22px; padding: 18px; color: #e7eef8;
       background: linear-gradient(160deg, rgba(13,22,38,0.78), rgba(8,14,26,0.94));
@@ -4612,12 +4629,15 @@ function gwTkRender(q) {
   const query = (q || '').toUpperCase();
   const items = GW_DS_ASSETS.filter((a) => !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query));
   if (items.length === 0) { list.innerHTML = `<div class="gw-tk-empty">Nothing matches «${q}»</div>`; return; }
-  list.innerHTML = items.slice(0, 120).map((a) => `
-    <div class="gw-tk-row" data-sym="${a.sym}">
-      <span class="ico">${a.sym.slice(0, 3)}</span>
+  list.innerHTML = items.slice(0, 120).map((a) => {
+    const ico = a.logo
+      ? `<img class="ico" src="${a.logo}" alt="${a.sym}" loading="lazy" onerror="this.outerHTML='<span class=&quot;ico&quot;>${a.sym.slice(0,3)}</span>' " />`
+      : `<span class="ico">${a.sym.slice(0, 3)}</span>`;
+    return `<div class="gw-tk-row" data-sym="${a.sym}">
+      ${ico}
       <div class="body"><div class="sym">${a.sym}</div><div class="name">${a.name || a.sym}</div></div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
   const which = document.getElementById('gw-tk-overlay').dataset.which;
   list.querySelectorAll('.gw-tk-row').forEach((r) => {
     r.onclick = () => {
@@ -4720,11 +4740,7 @@ function gwDsBuildPanel() {
         </div>
         <span class="gw-ds-badge">LIVE</span>
       </div>
-      <div class="gw-ds-modes" role="tablist">
-        <button type="button" class="gw-ds-mode ${mode === 'paper' ? 'on' : ''}" data-mode="paper">${t.modeT}</button>
-        <button type="button" class="gw-ds-mode ${mode === 'onchain' ? 'on' : ''}" data-mode="onchain">${t.modeO}</button>
-      </div>
-      ${mode === 'onchain' ? gwDsChainChipsHtml(null) : ''}
+      ${gwDsChainChipsHtml(null)}
       <div class="gw-ds-form">
         <div class="gw-ds-row">
           <div class="gw-ds-row-top">
@@ -5674,7 +5690,13 @@ function gwInjectAdvancedCss() {
     .gw-adv-tab { flex: 0 0 auto; padding: 7px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); color: #98a8c0; border: 1px solid rgba(255,255,255,0.06); font-size: 12px; font-weight: 700; cursor: pointer; }
     .gw-adv-tab.on { background: rgba(0,194,255,0.14); color: #5dd5ff; border-color: rgba(0,194,255,0.28); }
     .gw-adv-form { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 8px; margin-bottom: 10px; }
-    @media (max-width: 640px) { .gw-adv-form { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px) {
+      .gw-adv-form { grid-template-columns: 1fr 1fr; }
+      .gw-adv-form button { grid-column: 1 / -1; padding: 11px 14px; font-size: 14px; }
+      .gw-adv-form input, .gw-adv-form select { font-size: 16px; padding: 10px 12px; }
+      .gw-adv-row { grid-template-columns: 1fr auto !important; }
+      .gw-adv-row .state:not(:first-of-type) { grid-column: 1 / -1; }
+    }
     .gw-adv-form input, .gw-adv-form select {
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
       padding: 9px 10px; color: #e7eef8; font-size: 13px; font-family: inherit; font-variant-numeric: tabular-nums;

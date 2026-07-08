@@ -3333,6 +3333,124 @@ const GW_TREASURY = {
 };
 
 /* ==========================================================================
+ * PHASE 9 — Tron support (TronLink + SunSwap V2)
+ *
+ * TronLink is Tron's dominant wallet — browser extension that injects
+ * `window.tronWeb`. We detect it on first click of the TRX chip, prompt
+ * install if missing. SunSwap V2 is the largest Tron DEX (UniswapV2-style
+ * router). No aggregators exist for Tron with clean public APIs, so we
+ * hit the router directly for both quote (getAmountsOut) and swap.
+ *
+ * Fee collection: SunSwap has no built-in affiliate. We send 0.20 % of
+ * the INPUT amount to our Tron treasury as a separate TRC-20 transfer
+ * BEFORE the swap. Net user experience: two signatures for the first
+ * swap (fee + swap), one for subsequent swaps if we later batch.
+ *
+ * Well-known TRC-20 addresses (mainnet, base58):
+ * ========================================================================== */
+const GW_TRON_ROUTER = 'TXk8rQSAvPvBBNtqSoY6nCfsXWCSSpTVQF';   // SunSwap V2 Router
+const GW_TRON_WTRX   = 'TNUC9Qb1rRpS5CbWLmNMxXBjyFoydXjWFR';   // WTRX
+const GW_TRON_TOKENS = {
+  TRX:   null,   // native — use WTRX in the path
+  USDT:  'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+  USDC:  'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',
+  SUN:   'TSSMHYeV2uE9qYH95DqyoCuNCzEL1NvU3S',
+  BTT:   'TAFjULxiVgT4qWk6UZwjqwZXTSaGaqnVp4',
+  JST:   'TCFLL5dx5ZJdKnWuesXxi1VPwjLVmWZZy9',
+  WIN:   'TLa2f6VPqDgRE67v1736s7bJ8Ray5wYjU7',
+};
+const GW_TRON_DECIMALS = { TRX: 6, USDT: 6, USDC: 6, SUN: 18, BTT: 18, JST: 18, WIN: 6 };
+
+async function gwTronConnect() {
+  const tw = window.tronWeb;
+  const link = window.tronLink;
+  if (!tw && !link) {
+    window.open('https://www.tronlink.org/', '_blank', 'noopener');
+    throw new Error('TronLink not installed');
+  }
+  // Some TronLink builds require an explicit permission grant.
+  if (link?.request) {
+    try { await link.request({ method: 'tron_requestAccounts' }); } catch (_) {}
+  }
+  const addr = window.tronWeb?.defaultAddress?.base58;
+  if (!addr) throw new Error('TronLink locked or no account');
+  return addr;
+}
+
+/** SunSwap V2 quote — router.getAmountsOut(amountIn, path). */
+async function gwTronQuote({ fromSym, toSym, amtHuman }) {
+  const tw = window.tronWeb;
+  if (!tw) throw new Error('TronLink not connected');
+  const inTok  = fromSym === 'TRX' ? GW_TRON_WTRX : GW_TRON_TOKENS[fromSym];
+  const outTok = toSym   === 'TRX' ? GW_TRON_WTRX : GW_TRON_TOKENS[toSym];
+  if (!inTok || !outTok) throw new Error(`Tron: unsupported pair ${fromSym}/${toSym}`);
+  const inDec = GW_TRON_DECIMALS[fromSym] ?? 6;
+  const amtUnits = BigInt(Math.floor(amtHuman * 10 ** inDec)).toString();
+  const router = await tw.contract().at(GW_TRON_ROUTER);
+  const outs = await router.getAmountsOut(amtUnits, [inTok, outTok]).call();
+  return {
+    amountsOut: outs,
+    inTok, outTok,
+    inDec, outDec: GW_TRON_DECIMALS[toSym] ?? 6,
+  };
+}
+
+/** Send our 0.20 % fee to the Tron treasury as a separate TRC-20 transfer. */
+async function gwTronSendFee({ fromSym, amtHuman }) {
+  const tw = window.tronWeb;
+  if (fromSym === 'TRX') {
+    const feeSun = Math.floor(amtHuman * 0.002 * 1e6); // TRX has 6 decimals as "sun"
+    if (feeSun < 1_000_000) return; // <1 TRX — skip to avoid fee > swap
+    await tw.trx.sendTransaction(GW_TREASURY.tron, feeSun);
+    return;
+  }
+  const tok = GW_TRON_TOKENS[fromSym];
+  if (!tok) return;
+  const inDec = GW_TRON_DECIMALS[fromSym] ?? 6;
+  const feeUnits = BigInt(Math.floor(amtHuman * 0.002 * 10 ** inDec)).toString();
+  if (feeUnits === '0') return;
+  const contract = await tw.contract().at(tok);
+  await contract.transfer(GW_TREASURY.tron, feeUnits).send({ feeLimit: 100_000_000 });
+}
+
+async function gwTronSwapExec({ fromSym, toSym, amtHuman }) {
+  const tw = window.tronWeb;
+  if (!tw) await gwTronConnect();
+  const user = tw.defaultAddress.base58;
+  const q = await gwTronQuote({ fromSym, toSym, amtHuman });
+  const expected = Number(q.amountsOut[1]) / 10 ** q.outDec;
+  const minOut = BigInt(q.amountsOut[1]) * 995n / 1000n; // 0.5 % slippage
+  const deadline = Math.floor(Date.now() / 1000) + 20 * 60;
+  gwToast('Sending 0.20 % fee to GROM…', 'info');
+  try { await gwTronSendFee({ fromSym, amtHuman }); } catch (_) {}
+  gwToast(`SunSwap route · you get ~${expected.toFixed(6)} ${toSym} · confirm in TronLink`, 'info');
+  const router = await tw.contract().at(GW_TRON_ROUTER);
+  const path = [q.inTok, q.outTok];
+  const amountIn = BigInt(Math.floor(amtHuman * 10 ** q.inDec)).toString();
+  // For TRC-20 → TRC-20 the router requires prior approve.
+  if (fromSym !== 'TRX') {
+    const tokC = await tw.contract().at(q.inTok);
+    const allow = await tokC.allowance(user, GW_TRON_ROUTER).call();
+    if (BigInt(allow.toString()) < BigInt(amountIn)) {
+      gwToast('Approve token to SunSwap router…', 'info');
+      await tokC.approve(GW_TRON_ROUTER, (BigInt(2) ** 256n - 1n).toString()).send({ feeLimit: 100_000_000 });
+    }
+    const tx = await router
+      .swapExactTokensForTokens(amountIn, minOut.toString(), path, user, deadline)
+      .send({ feeLimit: 300_000_000 });
+    gwToast('Swap sent — Tron confirms in ~3 sec', 'success');
+    return tx;
+  } else {
+    // TRX → TRC-20 via swapExactETHForTokens equivalent
+    const tx = await router
+      .swapExactETHForTokens(minOut.toString(), path, user, deadline)
+      .send({ callValue: amountIn, feeLimit: 300_000_000 });
+    gwToast('Swap sent — Tron confirms in ~3 sec', 'success');
+    return tx;
+  }
+}
+
+/* ==========================================================================
  * PHASE 9 — TON support (TonConnect + STON.fi router)
  *
  * TonConnect is TON's WalletConnect equivalent — one protocol, works with
@@ -4160,7 +4278,7 @@ const GW_DS_CHAINS = [
   { key: 'solana',   nonEvm: 'sol',   name: 'Solana',    short: 'SOL',   color: '#9945FF' },
   { key: 'bitcoin',  nonEvm: 'btc',   name: 'Bitcoin',   short: 'BTC',   color: '#F7931A' },
   { key: 'ton',      nonEvm: 'ton',   name: 'TON',       short: 'TON',   color: '#0098EA' },
-  { key: 'tron',     nonEvm: 'trx',   name: 'Tron',      short: 'TRX',   color: '#EF0027', soon: true },
+  { key: 'tron',     nonEvm: 'trx',   name: 'Tron',      short: 'TRX',   color: '#EF0027' },
 ];
 const GW_DS_EVM_HEX = (id) => '0x' + id.toString(16);
 
@@ -4226,7 +4344,15 @@ function gwDsChainChipsWire(wrap) {
           gwToast(`TON: ${e?.message || 'connection cancelled'}`, 'warn');
         }
       }
-      else if (kind === 'trx') gwToast('Tron: needs TronLink + SunSwap. On roadmap.', 'info');
+      else if (kind === 'trx') {
+        try {
+          const addr = await gwTronConnect();
+          gwToast(`TronLink connected: ${addr.slice(0, 4)}…${addr.slice(-4)} — SunSwap route ready`, 'success');
+          window.__gwTronAddr = addr;
+        } catch (e) {
+          gwToast(`TronLink: ${e?.message || 'not installed'}`, 'warn');
+        }
+      }
     };
   });
 }

@@ -3157,6 +3157,56 @@ function gwInjectDashSwapCss() {
     .gw-ds-chain.on { background: rgba(0,194,255,0.14); border-color: rgba(0,194,255,0.35); color: #e7eef8; }
     .gw-ds-chain.soon { opacity: 0.65; }
     .gw-ds-chain .soon-tag { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: #98a8c0; margin-left: 4px; padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); }
+
+    /* Phase 7 v2 — token picker modal */
+    #gw-tk-overlay { position: fixed; inset: 0; z-index: 900; background: rgba(4,8,16,0.55); backdrop-filter: blur(6px);
+      display: none; align-items: center; justify-content: center; }
+    #gw-tk-overlay.open { display: flex; }
+    #gw-tk-panel { width: min(440px, 92vw); max-height: min(84vh, 720px); display: flex; flex-direction: column;
+      background: linear-gradient(160deg, rgba(13,22,38,0.98), rgba(8,14,26,0.98)); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px; overflow: hidden; box-shadow: 0 20px 60px -12px rgba(0,0,0,0.65); }
+    #gw-tk-panel .head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    #gw-tk-panel .head h4 { margin: 0; font-size: 14.5px; font-weight: 800; color: #e7eef8; flex: 1; }
+    #gw-tk-panel .head .close { padding: 4px 8px; border: 0; background: transparent; color: #98a8c0; font-size: 18px; cursor: pointer; }
+    #gw-tk-panel .search { padding: 12px 14px; }
+    #gw-tk-panel .search input { width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #e7eef8; font-size: 14.5px; outline: none; font-family: inherit; }
+    #gw-tk-panel .search input:focus { border-color: rgba(0,194,255,0.35); }
+    #gw-tk-list { flex: 1; overflow-y: auto; padding: 4px 8px 12px; }
+    .gw-tk-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer;
+      color: #e7eef8; font-size: 14px; }
+    .gw-tk-row:hover { background: rgba(255,255,255,0.04); }
+    .gw-tk-row .ico { width: 28px; height: 28px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
+      background: linear-gradient(135deg, rgba(0,194,255,0.14), rgba(110,141,255,0.10)); border: 1px solid rgba(0,194,255,0.20); color: #5dd5ff; }
+    .gw-tk-row .body { flex: 1; }
+    .gw-tk-row .sym { font-weight: 800; font-size: 13.5px; }
+    .gw-tk-row .name { font-size: 11.5px; color: #98a8c0; }
+    .gw-tk-empty { padding: 30px 16px; text-align: center; color: #6b7a92; font-size: 13px; }
+
+    /* Phase 7 v2 — token-picker BUTTON (replaces raw <select> visually) */
+    .gw-ds-tkbtn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px 8px 8px; border-radius: 12px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #e7eef8;
+      font-size: 13.5px; font-weight: 800; cursor: pointer; }
+    .gw-ds-tkbtn:hover { background: rgba(255,255,255,0.07); border-color: rgba(0,194,255,0.25); }
+    .gw-ds-tkbtn .ico { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #00c2ff, #6e8dff); color: #041624;
+      display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; }
+    .gw-ds-tkbtn .caret { color: #98a8c0; font-size: 10px; margin-left: 2px; }
+
+    /* Phase 7 v2 — price impact bar */
+    .gw-ds-pimp { margin-top: 6px; }
+    .gw-ds-pimp .lbl { display: flex; justify-content: space-between; font-size: 10.5px; color: #98a8c0; letter-spacing: .12em; text-transform: uppercase; font-weight: 800; margin-bottom: 4px; }
+    .gw-ds-pimp .bar { height: 6px; border-radius: 4px; background: rgba(255,255,255,0.05); overflow: hidden; }
+    .gw-ds-pimp .fill { height: 100%; width: 0; transition: width .3s, background .3s; background: #22c17c; }
+    .gw-ds-pimp.warn .fill { background: #f5b94d; }
+    .gw-ds-pimp.bad  .fill { background: #f87171; }
+    .gw-ds-pimp .val { font-weight: 800; }
+
+    /* Phase 7 v2 — route (hops) visualization */
+    .gw-ds-hops { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: rgba(0,194,255,0.05); border: 1px solid rgba(0,194,255,0.14); font-size: 11.5px; color: #cfdfee; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .gw-ds-hops .h { padding: 3px 6px; border-radius: 6px; background: rgba(255,255,255,0.05); font-weight: 700; }
+    .gw-ds-hops .arrow { color: #5dd5ff; font-weight: 800; margin: 0 2px; }
+    .gw-ds-hops .via { color: #98a8c0; font-size: 10.5px; }
     /* Meta-aggregator comparison strip (Phase 2) */
     .gw-ds-route .agg-cmp { color: #6b7a92; font-size: 10.5px; margin-top: 4px; letter-spacing: .01em;
       display: flex; flex-wrap: wrap; gap: 6px 10px; }
@@ -3340,6 +3390,114 @@ function gwDsChainChipsWire(wrap) {
   });
 }
 
+/* ==========================================================================
+ * PHASE 7 v2 — Token picker modal, route-viz, price impact, explorer links
+ * ========================================================================== */
+function gwTkOpen(which /* 'from' | 'to' */) {
+  let ov = document.getElementById('gw-tk-overlay');
+  if (!ov) {
+    ov = document.createElement('div'); ov.id = 'gw-tk-overlay';
+    ov.innerHTML = `
+      <div id="gw-tk-panel">
+        <div class="head">
+          <h4>Choose asset</h4>
+          <button class="close" id="gwTkClose" aria-label="Close">×</button>
+        </div>
+        <div class="search"><input id="gwTkSearch" type="text" placeholder="Search 365+ tokens…" autocomplete="off" /></div>
+        <div id="gw-tk-list"></div>
+      </div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('open'); });
+    ov.querySelector('#gwTkClose').onclick = () => ov.classList.remove('open');
+  }
+  ov.dataset.which = which;
+  ov.classList.add('open');
+  const search = ov.querySelector('#gwTkSearch');
+  search.value = '';
+  gwTkRender('');
+  setTimeout(() => search.focus(), 40);
+  search.oninput = () => gwTkRender(search.value.trim());
+}
+function gwTkRender(q) {
+  const list = document.getElementById('gw-tk-list');
+  if (!list) return;
+  const query = (q || '').toUpperCase();
+  const items = GW_DS_ASSETS.filter((a) => !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query));
+  if (items.length === 0) { list.innerHTML = `<div class="gw-tk-empty">Nothing matches «${q}»</div>`; return; }
+  list.innerHTML = items.slice(0, 120).map((a) => `
+    <div class="gw-tk-row" data-sym="${a.sym}">
+      <span class="ico">${a.sym.slice(0, 3)}</span>
+      <div class="body"><div class="sym">${a.sym}</div><div class="name">${a.name || a.sym}</div></div>
+    </div>
+  `).join('');
+  const which = document.getElementById('gw-tk-overlay').dataset.which;
+  list.querySelectorAll('.gw-tk-row').forEach((r) => {
+    r.onclick = () => {
+      const sel = document.getElementById(which === 'from' ? 'gwDsFrom' : 'gwDsTo');
+      if (sel) { sel.value = r.dataset.sym; gwTkSyncButton(which); try { gwDsRefreshRate(); } catch (_) {} }
+      document.getElementById('gw-tk-overlay').classList.remove('open');
+    };
+  });
+}
+function gwTkSyncButton(which) {
+  const sel = document.getElementById(which === 'from' ? 'gwDsFrom' : 'gwDsTo');
+  const btn = document.getElementById(which === 'from' ? 'gwDsFromBtn' : 'gwDsToBtn');
+  if (!sel || !btn) return;
+  const sym = sel.value;
+  const name = (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).name || sym;
+  btn.querySelector('.ico').textContent = sym.slice(0, 3);
+  btn.querySelector('.lbl').textContent = sym;
+  btn.title = `${sym} · ${name}`;
+}
+
+/** Parse LiFi quote's includedSteps to build a hop-string. */
+function gwDsRouteHopsHtml(winner) {
+  try {
+    if (winner.aggregator !== 'LiFi') {
+      return `<div class="gw-ds-hops"><span class="h">${winner.aggregator}</span><span class="via">optimal single-router path</span></div>`;
+    }
+    const steps = winner.raw?.includedSteps || [winner.raw];
+    if (!steps.length) return '';
+    const parts = [];
+    for (let i = 0; i < steps.length; i++) {
+      const s = steps[i];
+      const from = s.action?.fromToken?.symbol || '?';
+      const to   = s.action?.toToken?.symbol   || '?';
+      const via  = s.toolDetails?.name || s.tool || '';
+      if (i === 0) parts.push(`<span class="h">${from}</span>`);
+      parts.push(`<span class="arrow">→</span>`);
+      parts.push(`<span class="h">${to}</span>`);
+      if (via) parts.push(`<span class="via">via ${via}</span>`);
+    }
+    return `<div class="gw-ds-hops">${parts.join(' ')}</div>`;
+  } catch (_) { return ''; }
+}
+
+/** Compute % price impact from full-size quote vs implied small-size rate. */
+function gwDsPriceImpactHtml(pct) {
+  const v = Math.max(0, Math.min(20, Number(pct) || 0));
+  const wPct = Math.min(100, (v / 3) * 100); // 3% impact = full bar
+  const cls = v >= 2 ? 'gw-ds-pimp bad' : v >= 1 ? 'gw-ds-pimp warn' : 'gw-ds-pimp';
+  return `<div class="${cls}">
+    <div class="lbl"><span>Price impact</span><span class="val">${v.toFixed(2)}%</span></div>
+    <div class="bar"><div class="fill" style="width:${wPct}%"></div></div>
+  </div>`;
+}
+
+/** Explorer URL for a given chainId + tx hash. */
+const GW_DS_EXPLORER = {
+  1:     'https://etherscan.io/tx/',
+  56:    'https://bscscan.com/tx/',
+  42161: 'https://arbiscan.io/tx/',
+  137:   'https://polygonscan.com/tx/',
+  10:    'https://optimistic.etherscan.io/tx/',
+  8453:  'https://basescan.org/tx/',
+  43114: 'https://snowtrace.io/tx/',
+  59144: 'https://lineascan.build/tx/',
+  250:   'https://ftmscan.com/tx/',
+};
+function gwDsExplorerUrl(chainId, hash) { const base = GW_DS_EXPLORER[chainId]; return base ? base + hash : ''; }
+
 function gwDsBuildPanel() {
   const t = gwDsLang();
   const mode = gwDsGetMode();
@@ -3351,12 +3509,15 @@ function gwDsBuildPanel() {
     <div class="gw-ds-recent">
       <div class="gw-ds-recent-title">${t.recent}</div>
       <div class="gw-ds-recent-list">
-        ${recent.map((r) => `
-          <div class="gw-ds-recent-row">
+        ${recent.map((r) => {
+          const explorer = (r.hash && r.chainId) ? gwDsExplorerUrl(r.chainId, r.hash) : '';
+          const modeIco  = r.mode === 'onchain' ? '🔗' : '⚡';
+          const linkHtml = explorer ? ` · <a href="${explorer}" target="_blank" rel="noopener" style="color:#5dd5ff;text-decoration:none">tx ↗</a>` : '';
+          return `<div class="gw-ds-recent-row">
             <span class="r-pair">${r.amt} ${r.from} → ${r.out} ${r.to}</span>
-            <span class="r-time">${gwDsTimeAgo(r.ts)} · ${r.mode === 'onchain' ? '🔗' : '⚡'}</span>
-          </div>
-        `).join('')}
+            <span class="r-time">${gwDsTimeAgo(r.ts)} · ${modeIco}${linkHtml}</span>
+          </div>`;
+        }).join('')}
       </div>
     </div>
   ` : '';
@@ -3384,7 +3545,10 @@ function gwDsBuildPanel() {
           </div>
           <div class="gw-ds-row-main">
             <div class="gw-ds-select">
-              <select id="gwDsFrom">${optionsFor(mode === 'onchain' ? 'ETH' : 'USDT')}</select>
+              <select id="gwDsFrom" style="display:none">${optionsFor(mode === 'onchain' ? 'ETH' : 'USDT')}</select>
+              <button type="button" class="gw-ds-tkbtn" id="gwDsFromBtn">
+                <span class="ico">USD</span><span class="lbl">USDT</span><span class="caret">▾</span>
+              </button>
             </div>
             <div class="gw-ds-amt">
               <input id="gwDsAmt" type="number" min="0" step="any" inputmode="decimal" placeholder="0.00" />
@@ -3408,7 +3572,10 @@ function gwDsBuildPanel() {
           </div>
           <div class="gw-ds-row-main">
             <div class="gw-ds-select">
-              <select id="gwDsTo">${optionsFor('BTC')}</select>
+              <select id="gwDsTo" style="display:none">${optionsFor('BTC')}</select>
+              <button type="button" class="gw-ds-tkbtn" id="gwDsToBtn">
+                <span class="ico">BTC</span><span class="lbl">BTC</span><span class="caret">▾</span>
+              </button>
             </div>
             <div class="gw-ds-amt">
               <input id="gwDsOut" type="text" readonly placeholder="0.00" />
@@ -3561,10 +3728,12 @@ async function gwDsRefreshRate() {
             const outFmt = out.toLocaleString('en-US', { maximumFractionDigits: Math.min(outDec, 6) });
             return `<span class="agg${i === 0 ? ' win' : ''}">${winMark}${q.aggregator} ${outFmt}</span>`;
           }).join(' · ');
-          // Phase 3: AI split-recommend — fires asynchronously so it
-          // doesn't block the winner from rendering. If the tip is worth
-          // showing (>$50 saved), we append a banner below the route.
+          // Phase 3: AI split-recommend — fires asynchronously.
+          // Phase 7 v2: also compute a rough price-impact from
+          // (best rate at small size) vs (rate at requested size),
+          // and render hop-visualisation from LiFi's includedSteps.
           const aiTipHtml = '<span class="k full" id="gwDsAiTipSlot"></span>';
+          const hopsHtml  = gwDsRouteHopsHtml(winner);
           routeEl.innerHTML = `
             <span class="k">${t.route}</span><span class="v">${winner.aggregator} · ${winner.tool || 'best'}</span>
             <span class="k">${t.fee}</span><span class="v">${(GW_LIFI_FEE_PCT * 100).toFixed(2)}%</span>
@@ -3572,8 +3741,21 @@ async function gwDsRefreshRate() {
             <span class="k">Gas</span><span class="v">≈ $${gasUsd}</span>
             <span class="k full">1 ${from} ≈ ${rate} ${to}</span>
             <span class="k full agg-cmp">${cmp}</span>
+            <span class="k full" id="gwDsPimpSlot"></span>
+            <span class="k full">${hopsHtml}</span>
             ${aiTipHtml}
           `;
+          // Compute price impact by re-quoting the same pair at 1/10 size.
+          gwAggQuoteLifi({ chainId, fromSym: from, toSym: to, amtNum: amt / 10, account })
+            .then((smallQ) => {
+              if (!smallQ?.toAmount) return;
+              const smallRate = Number(smallQ.toAmount) * 10 / 10 ** outDec / amt;
+              const bigRate   = winnerOut / amt;
+              const impactPct = Math.max(0, ((smallRate - bigRate) / smallRate) * 100);
+              const slot = document.getElementById('gwDsPimpSlot');
+              if (slot) slot.outerHTML = gwDsPriceImpactHtml(impactPct);
+            })
+            .catch(() => {});
           if (outUsd) gwDsPriceUsd(to).then((p) => { outUsd.textContent = p ? '≈ $' + (winnerOut * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : ''; });
           // Fire the AI split-tip in the background; don't hold up the return.
           gwAiSplitTip({ chainId, fromSym: from, toSym: to, amtNum: amt, account, winnerQuote: winner })
@@ -4734,8 +4916,16 @@ async function gwDsSubmit() {
   if (mode === 'onchain') {
     if (cta) cta.classList.add('busy');
     try {
-      await gwOnChainSwapExec(from, to, amt);
-      gwDsPushRecent({ from, to, amt, out: '≈ market', mode: 'onchain' });
+      const hash = await gwOnChainSwapExec(from, to, amt);
+      // Grab current chainId so the Recent-Swaps row can render an
+      // explorer link (Phase 7 v2).
+      let chainId = null;
+      try {
+        const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
+          ? window.gromWallet.wcProvider : window.ethereum;
+        if (provider) chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+      } catch (_) {}
+      gwDsPushRecent({ from, to, amt, out: '≈ market', mode: 'onchain', hash, chainId });
       gwDsFlashSuccess(t.success);
       const amtEl = document.getElementById('gwDsAmt'); if (amtEl) amtEl.value = '';
       setTimeout(() => {
@@ -4832,6 +5022,12 @@ function gwInjectDashSwapPanel() {
       }
     })();
   } catch (_) {}
+  // Wire token-picker buttons (Phase 7 v2)
+  const fromBtn = document.getElementById('gwDsFromBtn');
+  const toBtn   = document.getElementById('gwDsToBtn');
+  if (fromBtn) fromBtn.onclick = () => gwTkOpen('from');
+  if (toBtn)   toBtn.onclick   = () => gwTkOpen('to');
+  gwTkSyncButton('from'); gwTkSyncButton('to');
   // Wire events
   const flipBtn = document.getElementById('gwDsFlip');
   if (flipBtn) flipBtn.addEventListener('click', () => {

@@ -94,6 +94,18 @@ function openInWalletBrowser(kind) {
     window.location.href = 'https://www.bnbchain.org/en/wallet-download';
   }
 }
+function trustWcDeepLink(uri) {
+  return 'https://link.trustwallet.com/wc?uri=' + encodeURIComponent(uri);
+}
+/** Force WalletConnect to prefer trust:// over https://link.trustwallet.com/wc on iOS. */
+function setTrustWcDeepLinkChoice() {
+  try {
+    localStorage.setItem('WALLETCONNECT_DEEPLINK_CHOICE', JSON.stringify({
+      name: 'Trust Wallet',
+      href: 'trust://',
+    }));
+  } catch (_) {}
+}
 
 /* ----- chains (Arbitrum по умолчанию, остальные как optional) ----- */
 const CHAINS = {
@@ -390,10 +402,14 @@ async function connectTrust() {
   if (!provider) provider = findLegacy(isTrustProvider);
   if (!provider && window.trustwallet?.request) provider = window.trustwallet;
   if (provider) return connectWithProvider(provider, 'Trust Wallet');
+  if (isMobileUA()) {
+    if (typeof window.toast === 'function') {
+      window.toast('Opening Trust Wallet… confirm the connection in the app.', 'info');
+    }
+    return connectTrustMobileWC();
+  }
   if (typeof window.toast === 'function') {
-    window.toast(isMobileUA()
-      ? 'Confirm the connection in Trust Wallet'
-      : 'Trust is mobile-only — scan the QR with your phone', 'info');
+    window.toast('Trust is mobile-only — scan the QR with your phone', 'info');
   }
   return connectWCFor('trust');
 }
@@ -466,7 +482,11 @@ let wcRecommendedForKey = null; // remembers which wallet the current provider w
 async function ensureWC(forceNew, opts) {
   const wantRecommend = opts?.recommendedWalletId || null;
   const walletKey = opts?.walletKey || null;
-  const needReinit = forceNew || (wantRecommend && walletKey !== wcRecommendedForKey);
+  const showQrModal = opts?.showQrModal !== false;
+  const excludeWalletIds = opts?.excludeWalletIds || [];
+  const needReinit = forceNew
+    || (wantRecommend && walletKey !== wcRecommendedForKey)
+    || (opts?.showQrModal === false && wcRecommendedForKey !== walletKey);
   if (wcProvider && !needReinit) return wcProvider;
   if (wcProvider) {
     try { await wcProvider.disconnect(); } catch (_) {}
@@ -475,22 +495,15 @@ async function ensureWC(forceNew, opts) {
   if (!WC_PROJECT_ID || WC_PROJECT_ID === 'YOUR_WC_PROJECT_ID_HERE') {
     throw new Error('Set WC_PROJECT_ID в grom-wallet.js');
   }
-  // NOTE (2026-07-05): Earlier commit 28d26b9 tried to exclude every
-  // other wallet from the modal via explorerExcludedWalletIds +
-  // enableExplorer:false so a Trust-tap wouldn't also show MetaMask.
-  // Reown v2 interpreted the flags too aggressively and made Trust
-  // itself vanish from the recommended list. Rolled back to just
-  // featuring the wallet at top — the "Open in MetaMask" bar the user
-  // occasionally sees is a browser-level `wc:` protocol handler
-  // suggestion (Chrome, not us), not part of the Reown modal, and
-  // cannot be suppressed from JS.
-  wcProvider = await EthereumProvider.init({
+  const initOpts = {
     projectId: WC_PROJECT_ID,
     chains: CHAINS.required,
     optionalChains: CHAINS.optional,
-    showQrModal: true,
+    showQrModal,
     metadata: walletMetadata(),
-    qrModalOptions: {
+  };
+  if (showQrModal) {
+    initOpts.qrModalOptions = {
       themeMode: 'dark',
       themeVariables: {
         '--wcm-z-index': '2000',
@@ -500,9 +513,11 @@ async function ensureWC(forceNew, opts) {
       ...(wantRecommend ? {
         explorerRecommendedWalletIds: [wantRecommend],
         featuredWalletIds: [wantRecommend],
+        ...(excludeWalletIds.length ? { explorerExcludedWalletIds: excludeWalletIds } : {}),
       } : {}),
-    },
-  });
+    };
+  }
+  wcProvider = await EthereumProvider.init(initOpts);
   wcRecommendedForKey = walletKey || null;
   wcProvider.on('accountsChanged', (accs) => updateChip(accs[0] || null));
   wcProvider.on('chainChanged', (hex) => { currentChainId = parseInt(hex, 16); });
@@ -528,9 +543,41 @@ function gwPrefetchWc() {
 
 /* Connect via WalletConnect with a specific wallet featured in the modal.
  * Falls through to authenticateWithSIWE just like connectWC. */
+async function connectTrustMobileWC() {
+  setTrustWcDeepLinkChoice();
+  const p = await ensureWC(true, {
+    recommendedWalletId: WC_WALLET_IDS.trust,
+    walletKey: 'trust',
+    showQrModal: false,
+    excludeWalletIds: [WC_WALLET_IDS.metamask],
+  });
+  let deeplinkDone = false;
+  const onDisplayUri = (uri) => {
+    if (deeplinkDone || !uri) return;
+    deeplinkDone = true;
+    // Direct Trust universal link — bypasses Reown QR modal and the OS-level
+    // "Open in MetaMask" bar that appears when wc: links are rendered on-page.
+    window.location.assign(trustWcDeepLink(uri));
+  };
+  p.on('display_uri', onDisplayUri);
+  try {
+    await p.connect();
+  } finally {
+    try { p.removeListener('display_uri', onDisplayUri); } catch (_) {}
+  }
+  const accs = await p.request({ method: 'eth_accounts' });
+  if (!accs?.length) throw new Error('No accounts returned');
+  updateChip(accs[0]);
+  try { await authenticateWithSIWE(accs[0], p); }
+  catch (err) { gwSiweFailToast(err); throw err; }
+  return accs[0];
+}
+
 async function connectWCFor(walletKey) {
+  if (isMobileUA() && walletKey === 'trust') return connectTrustMobileWC();
   const id = WC_WALLET_IDS[walletKey];
-  const p = await ensureWC(true, { recommendedWalletId: id, walletKey });
+  const excludeWalletIds = walletKey === 'trust' ? [WC_WALLET_IDS.metamask] : [];
+  const p = await ensureWC(true, { recommendedWalletId: id, walletKey, excludeWalletIds });
   await p.connect();
   const accs = await p.request({ method: 'eth_accounts' });
   if (!accs?.length) throw new Error('No accounts returned');

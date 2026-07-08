@@ -260,6 +260,10 @@ function hideMainRows() {
 function showMainRows() {
   document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(el => el.style.display = '');
   document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note').forEach(el => el.style.display = '');
+  document.querySelectorAll('#connectModal .cn-list button.cn-row').forEach(el => {
+    el.style.display = '';
+    el.hidden = false;
+  });
   const box = document.getElementById('privyInlineForm');
   if (box) box.style.display = 'none';
 }

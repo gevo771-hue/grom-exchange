@@ -1959,13 +1959,6 @@ function gwSetupKillDemoNumbers() {
  * sequence doesn't break; delete on the next round if still unused. */
 function gwZeroBinaryDemoBalance() { /* intentionally no-op — see comment above */ }
 
-/* Hide redundant "Other wallet" row in the Connect modal. WalletConnect v2
- * already covers any arbitrary wallet via its protocol (the QR/deep-link
- * route works for every wallet that isn't on the named list), so the ghost
- * "Other wallet" → cnConnect('Other wallet','ghost') row was a confusing
- * duplicate. Injected unconditionally (the cn-modal lives in Cursor's
- * index.html and is unaffected by his deposit-UI gating). Safe under
- * Cursor's parallel edits — this is a single CSS rule scoped to .cn-list. */
 /* Auto-advance Cursor's deposit flow on coin / network tap.
  *
  * The Binance-style 5-screen deposit UI (Cursor commit d19f86c) has explicit
@@ -2712,10 +2705,35 @@ function gwSetupMetaPortfolio() {
   }, 60000);
 }
 
+function gwEnsureConnectWalletRows() {
+  const list = document.querySelector('#connectModal .cn-list');
+  if (!list) return;
+  list.style.display = '';
+  list.querySelectorAll('button.cn-row').forEach((btn) => {
+    btn.style.display = '';
+    btn.hidden = false;
+    btn.removeAttribute('aria-hidden');
+  });
+}
+window.gwEnsureConnectWalletRows = gwEnsureConnectWalletRows;
+
 function gwInjectConnectModalCss() {
   if (document.getElementById('gw-connect-modal-fixups')) return;
   const css = `
-    .cn-list button.cn-row[onclick*="Other wallet"] { display: none !important; }
+    #connectModal .wm {
+      max-height: min(90dvh, 720px);
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    #connectModal .cn-list {
+      display: flex !important;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #connectModal .cn-list button.cn-row {
+      display: flex !important;
+    }
     html.gw-trust-flow w3m-modal,
     html.gw-trust-flow wcm-modal,
     html.gw-trust-flow w3m-container,
@@ -2774,6 +2792,26 @@ function gwInjectConnectModalCss() {
   style.id = 'gw-connect-modal-fixups';
   style.textContent = css;
   document.head.appendChild(style);
+}
+
+function gwSetupConnectModalRows() {
+  gwEnsureConnectWalletRows();
+  const orig = window.openConnectModal;
+  if (typeof orig === 'function' && !orig.__gwWalletRowsPatched) {
+    window.openConnectModal = function gwOpenConnectModalWithWallets() {
+      const out = orig.apply(this, arguments);
+      gwEnsureConnectWalletRows();
+      return out;
+    };
+    window.openConnectModal.__gwWalletRowsPatched = true;
+  }
+  const modal = document.getElementById('connectModal');
+  if (modal) {
+    const obs = new MutationObserver(() => {
+      if (modal.classList.contains('open')) gwEnsureConnectWalletRows();
+    });
+    obs.observe(modal, { attributes: true, attributeFilter: ['class'] });
+  }
 }
 
 /* =============================================================================
@@ -6702,6 +6740,7 @@ function gwInitWalletModalOps() {
   const newDepUi = !!document.getElementById('depCoinList');
   if (!newDepUi) gwInjectModalCss();
   gwInjectConnectModalCss();
+  gwSetupConnectModalRows();
   // dash-banners CSS handled by <link rel="stylesheet" href="/grom-banners.css">
   // in index.html <head> — gwInjectDashBannersCss is kept only as a fallback
   // and runs from the top-level guard if the <link> didn't load.

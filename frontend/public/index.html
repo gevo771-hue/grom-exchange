@@ -7543,7 +7543,7 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260708s';
+  walletModule.src = '/grom-wallet.js?v=20260709a';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
@@ -7943,6 +7943,11 @@ function openConnectModal() {
     document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note, #connectModal .wm-body > .cn-foot').forEach(function (el) {
       el.style.display = '';
     });
+    document.querySelectorAll('#connectModal .cn-list button.cn-row').forEach(function (el) {
+      el.style.display = '';
+      el.hidden = false;
+    });
+    if (typeof window.gwEnsureConnectWalletRows === 'function') window.gwEnsureConnectWalletRows();
     var pv = document.getElementById('privyInlineForm');
     if (pv) pv.style.display = 'none';
   } catch (_) {}

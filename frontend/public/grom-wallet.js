@@ -3571,6 +3571,218 @@ async function gwTonSwapExec({ fromSym, toSym, amtHuman }) {
 }
 
 /* ==========================================================================
+ * PHASE 9b — Bitcoin → EVM via THORchain vault deposit (2026-07-08)
+ *
+ * Reverse of Phase 9 BTC. User has BTC in their own Bitcoin wallet, wants
+ * USDT / USDC / ETH on any EVM chain we support. Flow:
+ *
+ *   1. gwBtcRevOpenModal() shows a form: destination EVM asset, amount
+ *      of BTC, destination EVM address (auto-filled from connected wallet).
+ *   2. gwBtcRevQuote() hits LiFi /quote with fromChain=Bitcoin and gets
+ *      back a THORchain vault BTC address + memo the user should include.
+ *   3. Modal displays: vault address (QR + copy), memo (copy), expected
+ *      EVM output, ETA (~10 min for BTC confirmation + THORchain swap).
+ *   4. gwBtcRevMonitor() polls LiFi /status every 30 s to catch the
+ *      settlement and toast the user when EVM asset lands.
+ *
+ * The user's own Bitcoin wallet (Sparrow / Electrum / mobile app) sends
+ * the BTC. We never touch their private keys — this is pure UI + vault
+ * lookup + status polling.
+ * ========================================================================== */
+async function gwBtcRevQuote({ toChainId, toSym, btcAmt, evmDestAddr, btcRefundAddr }) {
+  const cfg = GW_OC_SWAP[toChainId];
+  if (!cfg) throw new Error(`unsupported destination chain ${toChainId}`);
+  const outAddr = toSym === cfg.native ? cfg.wrapped : cfg.tokens[toSym];
+  if (!outAddr) throw new Error(`${toSym} not on chain ${toChainId}`);
+  const btcSatoshis = BigInt(Math.floor(btcAmt * 1e8)).toString();
+  const qs = new URLSearchParams({
+    fromChain:    String(GW_LIFI_BTC_CHAIN_ID),
+    toChain:      String(toChainId),
+    fromToken:    'bitcoin',
+    toToken:      outAddr,
+    fromAmount:   btcSatoshis,
+    fromAddress:  btcRefundAddr,     // where THORchain refunds if the swap fails
+    toAddress:    evmDestAddr,       // where EVM tokens land
+    slippage:     '0.02',
+    integrator:   GW_LIFI_INTEGRATOR,
+    order:        'RECOMMENDED',
+    allowBridges: 'thorchain',
+    ...(GW_LIFI_FEE_ADDR !== '0x0000000000000000000000000000000000000000'
+      ? { fee: String(GW_LIFI_FEE_PCT), feeAddress: GW_LIFI_FEE_ADDR }
+      : {}),
+  });
+  const r = await fetch(`${GW_LIFI_ENDPOINT}/quote?${qs}`);
+  if (!r.ok) throw new Error(`LiFi BTC→EVM quote ${r.status}: ${(await r.text()).slice(0, 120)}`);
+  return await r.json();
+}
+
+/** Poll LiFi /status every 30 s until the swap lands or user closes. */
+async function gwBtcRevMonitor(txHash, statusEl) {
+  const started = Date.now();
+  const tick = async () => {
+    if (!statusEl.isConnected) return;
+    if (Date.now() - started > 45 * 60_000) { statusEl.textContent = 'Timed out — check LiFi dashboard'; return; }
+    try {
+      const r = await fetch(`${GW_LIFI_ENDPOINT}/status?bridge=thorchain&txHash=${txHash}`);
+      const j = await r.json();
+      const status = j?.status || 'PENDING';
+      const substatus = j?.substatus || '';
+      statusEl.textContent = `${status}${substatus ? ' · ' + substatus : ''}`;
+      if (status === 'DONE') {
+        gwToast('BTC → EVM settled! Check your destination wallet.', 'success');
+        return;
+      }
+      if (status === 'FAILED' || status === 'INVALID') {
+        gwToast('Swap failed on THORchain — funds refunded to source BTC address', 'error');
+        return;
+      }
+    } catch (_) {}
+    setTimeout(tick, 30_000);
+  };
+  tick();
+}
+
+function gwBtcRevOpenModal() {
+  let ov = document.getElementById('gw-btcrev-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'gw-btcrev-overlay';
+    Object.assign(ov.style, {
+      position: 'fixed', inset: '0', zIndex: '950', display: 'flex',
+      alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(4,8,16,0.55)', backdropFilter: 'blur(6px)',
+    });
+    document.body.appendChild(ov);
+  } else { ov.style.display = 'flex'; }
+  ov.innerHTML = `
+    <div id="gwBtcRevPanel" style="width:min(500px,94vw);max-height:92vh;overflow-y:auto;padding:22px;
+         border-radius:20px;color:#e7eef8;
+         background:linear-gradient(160deg,rgba(13,22,38,.98),rgba(8,14,26,.98));
+         border:1px solid rgba(247,147,26,.28);box-shadow:0 20px 60px -12px rgba(0,0,0,.65)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="width:32px;height:32px;border-radius:50%;background:#F7931A;color:#fff;font-weight:800;
+                     display:inline-flex;align-items:center;justify-content:center;font-size:14px">₿</span>
+        <h3 style="margin:0;font-size:15.5px;font-weight:800">Bitcoin → EVM through THORchain</h3>
+        <button id="gwBtcRevClose" style="margin-left:auto;background:transparent;border:0;color:#98a8c0;
+                font-size:20px;cursor:pointer">×</button>
+      </div>
+      <p style="margin:0 0 14px;font-size:12.5px;color:#98a8c0;line-height:1.55">
+        Ты отправляешь BTC со своего Bitcoin-кошелька на выданный THORchain vault-адрес.
+        ETA ~10 мин (1 confirmation Bitcoin + свап THORchain).
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <label style="font-size:11px;letter-spacing:.14em;color:#98a8c0;font-weight:800">TO CHAIN
+          <select id="gwBtcRevChain" style="width:100%;padding:9px 10px;margin-top:4px;background:rgba(255,255,255,.05);
+                  border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#e7eef8;font-size:13px;font-family:inherit">
+            <option value="1">Ethereum</option>
+            <option value="56">BSC</option>
+            <option value="42161">Arbitrum</option>
+            <option value="137">Polygon</option>
+            <option value="10">Optimism</option>
+            <option value="8453">Base</option>
+            <option value="43114">Avalanche</option>
+          </select>
+        </label>
+        <label style="font-size:11px;letter-spacing:.14em;color:#98a8c0;font-weight:800">RECEIVE
+          <select id="gwBtcRevAsset" style="width:100%;padding:9px 10px;margin-top:4px;background:rgba(255,255,255,.05);
+                  border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#e7eef8;font-size:13px;font-family:inherit">
+            <option value="USDT">USDT</option>
+            <option value="USDC">USDC</option>
+            <option value="ETH">ETH / native</option>
+            <option value="DAI">DAI</option>
+          </select>
+        </label>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;letter-spacing:.14em;color:#98a8c0;font-weight:800">BTC AMOUNT (SEND)</label>
+        <input id="gwBtcRevAmt" type="number" step="0.0001" placeholder="0.01"
+          style="width:100%;padding:10px 12px;margin-top:4px;background:rgba(255,255,255,.05);
+                 border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#e7eef8;font-size:14px;
+                 font-family:inherit;outline:none" />
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;letter-spacing:.14em;color:#98a8c0;font-weight:800">DESTINATION EVM ADDRESS</label>
+        <input id="gwBtcRevEvm" type="text" placeholder="0x…"
+          style="width:100%;padding:10px 12px;margin-top:4px;background:rgba(255,255,255,.05);
+                 border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#e7eef8;font-size:12px;
+                 font-family:'JetBrains Mono',monospace;outline:none" />
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;letter-spacing:.14em;color:#98a8c0;font-weight:800">YOUR BTC ADDRESS (refund on failure)</label>
+        <input id="gwBtcRevSrc" type="text" placeholder="bc1q… или 1… / 3…"
+          style="width:100%;padding:10px 12px;margin-top:4px;background:rgba(255,255,255,.05);
+                 border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#e7eef8;font-size:12px;
+                 font-family:'JetBrains Mono',monospace;outline:none" />
+      </div>
+      <button id="gwBtcRevQuote" style="width:100%;padding:12px 16px;border-radius:12px;border:0;
+              background:linear-gradient(135deg,#F7931A,#e07817);color:#0a0400;font-weight:800;font-size:14px;
+              cursor:pointer">Получить vault-адрес →</button>
+      <div id="gwBtcRevResult" style="margin-top:14px"></div>
+    </div>
+  `;
+  // Autofill
+  document.getElementById('gwBtcRevSrc').value = gwBtcAddrGet();
+  (async () => {
+    try {
+      const provider = window.gromWallet?.wcProvider || window.ethereum;
+      if (provider) {
+        const [a] = await provider.request({ method: 'eth_accounts' });
+        if (a) document.getElementById('gwBtcRevEvm').value = a;
+      }
+    } catch (_) {}
+  })();
+  document.getElementById('gwBtcRevClose').onclick = () => { ov.style.display = 'none'; };
+  document.getElementById('gwBtcRevQuote').onclick = async () => {
+    const chainId = Number(document.getElementById('gwBtcRevChain').value);
+    const toSym   = document.getElementById('gwBtcRevAsset').value;
+    const btcAmt  = Number(document.getElementById('gwBtcRevAmt').value);
+    const evmDest = document.getElementById('gwBtcRevEvm').value.trim();
+    const btcSrc  = document.getElementById('gwBtcRevSrc').value.trim();
+    if (!(btcAmt > 0)) return gwToast('Введи сумму BTC', 'warn');
+    if (!/^0x[a-fA-F0-9]{40}$/.test(evmDest)) return gwToast('EVM-адрес некорректный', 'warn');
+    if (!gwBtcAddrValid(btcSrc)) return gwToast('BTC-refund адрес некорректный', 'warn');
+    gwBtcAddrSet(btcSrc);
+    const res = document.getElementById('gwBtcRevResult');
+    res.innerHTML = `<div style="color:#98a8c0;font-size:12.5px;padding:10px">Fetching THORchain vault…</div>`;
+    try {
+      const q = await gwBtcRevQuote({ toChainId: chainId, toSym, btcAmt, evmDestAddr: evmDest, btcRefundAddr: btcSrc });
+      const vault = q?.transactionRequest?.to;
+      const memo  = q?.transactionRequest?.data || q?.includedSteps?.[0]?.action?.slippage || '';
+      const outUnits = Number(q?.estimate?.toAmount || 0);
+      const outDec = (GW_OC_SWAP[chainId]?.decimals?.[toSym]) || 6;
+      const outHuman = outUnits / 10 ** outDec;
+      if (!vault) throw new Error('LiFi returned no vault address');
+      res.innerHTML = `
+        <div style="padding:14px;border-radius:14px;background:rgba(247,147,26,.06);border:1px solid rgba(247,147,26,.22)">
+          <div style="font-size:11.5px;color:#98a8c0;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px">Send exactly ${btcAmt} BTC to</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#e7eef8;word-break:break-all;margin-bottom:6px">${vault}</div>
+          <button data-copy="${vault}" style="padding:5px 10px;border:0;border-radius:7px;background:rgba(255,255,255,.06);color:#e7eef8;font-size:11px;font-weight:700;cursor:pointer">Copy address</button>
+          ${memo && memo !== '0x' ? `
+            <div style="margin-top:10px;font-size:11.5px;color:#98a8c0;letter-spacing:.12em;text-transform:uppercase">Memo (paste in wallet)</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e7eef8;word-break:break-all;margin-top:4px">${memo}</div>
+            <button data-copy="${memo}" style="padding:5px 10px;margin-top:4px;border:0;border-radius:7px;background:rgba(255,255,255,.06);color:#e7eef8;font-size:11px;font-weight:700;cursor:pointer">Copy memo</button>
+          ` : ''}
+          <div style="margin-top:12px;font-size:12.5px;color:#cfdfee">You get ≈ <b style="color:#22c17c">${outHuman.toFixed(4)} ${toSym}</b> on ${GW_DS_CHAINS.find((c) => c.chainId === chainId)?.name || 'chain'}</div>
+          <div id="gwBtcRevStatus" style="margin-top:8px;font-size:11.5px;color:#98a8c0">Status: waiting for BTC deposit…</div>
+        </div>
+      `;
+      res.querySelectorAll('button[data-copy]').forEach((b) => b.onclick = () => {
+        navigator.clipboard?.writeText(b.dataset.copy);
+        b.textContent = 'Copied ✓';
+        setTimeout(() => { b.textContent = b.textContent.replace('Copied ✓', 'Copy'); }, 1500);
+      });
+      // Start monitor if LiFi returned a monitor-able tx hash (it won't
+      // until user actually broadcasts BTC — but we still watch the pair).
+      const monitorTx = q?.id || q?.tool || '';
+      if (monitorTx) gwBtcRevMonitor(monitorTx, document.getElementById('gwBtcRevStatus'));
+    } catch (e) {
+      res.innerHTML = `<div style="color:#f87171;font-size:12.5px;padding:10px">Error: ${e?.message || 'failed'}</div>`;
+    }
+  };
+  ov.onclick = (e) => { if (e.target === ov) ov.style.display = 'none'; };
+}
+
+/* ==========================================================================
  * PHASE 9 — Bitcoin support via LiFi + THORchain (2026-07-08)
  *
  * Direction shipped: EVM ➔ BTC. User has funds on any of our EVM chains
@@ -4329,10 +4541,19 @@ function gwDsChainChipsWire(wrap) {
         }
       }
       else if (kind === 'btc') {
-        const addr = await gwBtcPromptAddress();
-        if (addr) {
-          window.__gwBtcAddr = addr;
-          gwToast(`BTC-адрес сохранён: ${addr.slice(0, 6)}…${addr.slice(-4)}. Выбери "BTC" как получаемый актив — свап пойдёт через THORchain.`, 'success');
+        // Two flows: (A) send EVM asset, receive BTC — save destination
+        // BTC address so the swap panel routes there. (B) send BTC from
+        // your own wallet, receive EVM asset — open the vault-deposit
+        // modal. User picks via native confirm().
+        const dir = confirm('OK = у меня EVM, хочу получить BTC (ты просто указываешь свой BTC-адрес).\n\nCancel = у меня BTC, хочу получить USDT/ETH на EVM (получаешь vault-адрес THORchain).');
+        if (dir) {
+          const addr = await gwBtcPromptAddress();
+          if (addr) {
+            window.__gwBtcAddr = addr;
+            gwToast(`BTC-адрес сохранён: ${addr.slice(0, 6)}…${addr.slice(-4)}. Выбери "BTC" как получаемый актив — свап пойдёт через THORchain.`, 'success');
+          }
+        } else {
+          gwBtcRevOpenModal();
         }
       }
       else if (kind === 'ton') {

@@ -785,10 +785,39 @@ function gwPrefetchWc() {
   /* Skip prefetch — pre-initing EthereumProvider can resurrect Reown modal on PC. */
 }
 
-/* Unified WalletConnect — Polymarket-style: inject → extension; mobile → app deeplink; desktop → QR. */
+/** Desktop: Reown / WalletConnect modal with wallet-specific QR (like SafePal screenshot). */
+async function connectViaReownExplorer(walletKey) {
+  const cfg = GW_WALLET_WC[walletKey] || GW_WALLET_WC.generic;
+  if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
+  gwHideWcModal();
+  const excludeWalletIds = walletKey === 'trust' ? [WC_WALLET_IDS.metamask] : [];
+  try {
+    const p = await ensureWC(true, {
+      walletKey,
+      showQrModal: true,
+      requiredChains: [1],
+      optionalChains: [42161, 8453, 137, 56, 10, 43114],
+      recommendedWalletId: cfg.id || null,
+      excludeWalletIds,
+    });
+    await p.connect();
+    const accs = await p.request({ method: 'eth_accounts' });
+    if (!accs?.length) throw new Error('No accounts returned');
+    return await finalizeWcConnection(p, accs[0]);
+  } catch (err) {
+    try { gwKillReownModals(); } catch (_) {}
+    throw err;
+  }
+}
+
+/* Unified WalletConnect — desktop → Reown QR; mobile → inject or app deeplink. */
 async function connectWalletWC(walletKey) {
   const cfg = GW_WALLET_WC[walletKey];
   if (!cfg) throw new Error('Unknown wallet: ' + walletKey);
+
+  if (!isMobileUA()) {
+    return connectViaReownExplorer(walletKey);
+  }
 
   const injected = typeof cfg.injectCheck === 'function' ? cfg.injectCheck() : null;
   if (injected) return connectWithProvider(injected, cfg.label);
@@ -860,27 +889,6 @@ async function connectWCFor(walletKey) {
 
 async function connectWC() {
   return connectWalletWC('generic');
-}
-
-/** Other wallet → full Reown / WalletConnect explorer (300+ wallets). */
-async function connectOtherWallet() {
-  if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
-  gwHideWcModal();
-  try {
-    const p = await ensureWC(true, {
-      walletKey: 'other',
-      showQrModal: true,
-      requiredChains: [1],
-      optionalChains: [42161, 8453, 137, 56, 10, 43114],
-    });
-    await p.connect();
-    const accs = await p.request({ method: 'eth_accounts' });
-    if (!accs?.length) throw new Error('No accounts returned');
-    return await finalizeWcConnection(p, accs[0]);
-  } catch (err) {
-    try { gwKillReownModals(); } catch (_) {}
-    throw err;
-  }
 }
 
 /* ----- disconnect ----- */
@@ -991,8 +999,7 @@ async function gromWalletConnect(kind, name) {
     else if (kind === 'bnw3') await connectBinanceWeb3();
     else if (kind === 'okx') await connectOkx();
     else if (kind === 'cb') await connectCoinbase();
-    else if (kind === 'ghost') await connectOtherWallet();
-    else if (kind === 'wc') await connectWC();
+    else if (kind === 'wc' || kind === 'ghost') await connectWC();
     else await connectWC();
   } catch (e) {
     failToast(e);

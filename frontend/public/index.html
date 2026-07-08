@@ -7186,7 +7186,7 @@
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('WalletConnect','wc')">
           <span class="ico wc"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#wallet-connect__a)"><path fill="#3B99FC" d="M24 0H0v24h24z"/><path fill="#fff" d="M7.276 9.076c2.609-2.501 6.84-2.501 9.449 0l.313.3a.31.31 0 0 1 0 .453l-1.074 1.03a.17.17 0 0 1-.236 0l-.432-.414c-1.82-1.745-4.772-1.745-6.592 0l-.463.444a.17.17 0 0 1-.236 0l-1.074-1.03a.31.31 0 0 1 0-.453zm11.67 2.129.956.916a.31.31 0 0 1 0 .453l-4.31 4.132a.344.344 0 0 1-.473 0l-3.06-2.932a.086.086 0 0 0-.118 0l-3.06 2.932a.344.344 0 0 1-.472 0l-4.311-4.132a.31.31 0 0 1 0-.453l.956-.916a.344.344 0 0 1 .472 0l3.06 2.933a.086.086 0 0 0 .118 0l3.06-2.933a.344.344 0 0 1 .472 0l3.06 2.933a.086.086 0 0 0 .118 0l3.06-2.933a.345.345 0 0 1 .472 0"/></g><defs><clipPath id="wallet-connect__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
-          <span class="lbl">WalletConnect</span>
+          <span class="lbl">WalletConnect · More wallets</span>
           <span class="chev">›</span>
         </button>
         <button type="button" class="cn-row" onclick="cnConnect('Binance Web3 Wallet','bnw3')">
@@ -7207,11 +7207,6 @@
         <button type="button" class="cn-row" onclick="cnConnect('Coinbase Wallet','cb')">
           <span class="ico cb"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#coinbase__a)"><path fill="#0E5BFF" d="M24 0H0v24h24z"/><path fill="#fff" d="M4 12a8 8 0 1 1 16 0 8 8 0 0 1-16 0"/><path fill="#0E5BFF" fill-rule="evenodd" d="M12 17.667a5.667 5.667 0 1 0 0-11.334 5.667 5.667 0 0 0 0 11.334m-.667-7.334a1 1 0 0 0-1 1v1.334a1 1 0 0 0 1 1h1.334a1 1 0 0 0 1-1v-1.334a1 1 0 0 0-1-1z" clip-rule="evenodd"/></g><defs><clipPath id="coinbase__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
           <span class="lbl">Coinbase Wallet</span>
-          <span class="chev">›</span>
-        </button>
-        <button type="button" class="cn-row" onclick="cnConnect('Other wallet','ghost')">
-          <span class="ico ghost">⋯</span>
-          <span class="lbl">Other wallet</span>
           <span class="chev">›</span>
         </button>
       </div>
@@ -7543,7 +7538,7 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260709c';
+  walletModule.src = '/grom-wallet.js?v=20260709d';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');

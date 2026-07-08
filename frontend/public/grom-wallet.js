@@ -99,69 +99,138 @@ function openInWalletBrowser(kind) {
   }
 }
 function trustWcDeepLink(uri) {
+  return 'trust://wc?uri=' + encodeURIComponent(uri);
+}
+function trustWcUniversalLink(uri) {
   return 'https://link.trustwallet.com/wc?uri=' + encodeURIComponent(uri);
 }
-/** Force WalletConnect to prefer trust:// over https://link.trustwallet.com/wc on iOS. */
-function setTrustWcDeepLinkChoice() {
+function setWalletWcDeepLinkChoice(walletKey) {
+  const href = GW_WALLET_WC[walletKey]?.nativeScheme || 'trust://';
   try {
     localStorage.setItem('WALLETCONNECT_DEEPLINK_CHOICE', JSON.stringify({
-      name: 'Trust Wallet',
-      href: 'trust://',
+      name: GW_WALLET_WC[walletKey]?.label || 'Wallet',
+      href,
     }));
   } catch (_) {}
 }
-function gwHideTrustWcModal() {
-  const modal = document.getElementById('gwTrustWcModal');
+function gwHideWcModal() {
+  const modal = document.getElementById('gwWcModal');
   if (modal) modal.style.display = 'none';
 }
-/** Custom Trust modal — QR encodes link.trustwallet.com/wc (NOT raw wc:) so iOS
- * camera / OS won't hijack the link to MetaMask. Reown's built-in modal always
- * renders wc: URIs which trigger "Open in MetaMask" on many phones. */
-function gwShowTrustWcModal(uri) {
+let _qrLib = null;
+async function gwRenderQr(el, text) {
+  if (!el || !text) return;
+  el.innerHTML = '';
+  try {
+    if (!_qrLib) _qrLib = await import('https://esm.sh/qrcode@1.5.4');
+    const canvas = document.createElement('canvas');
+    await _qrLib.toCanvas(canvas, text, {
+      width: 240, margin: 1, color: { dark: '#0b1220', light: '#ffffff' },
+    });
+    el.appendChild(canvas);
+  } catch (_) {
+    const img = document.createElement('img');
+    img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=' + encodeURIComponent(text);
+    img.alt = 'QR';
+    img.width = 240;
+    img.height = 240;
+    img.decoding = 'async';
+    el.appendChild(img);
+  }
+}
+/** Polymarket-style modal: mobile → open app; desktop → QR scan + install extension. */
+function gwShowWcModal(walletKey, wcUri, opts) {
   gwInjectConnectModalCss();
-  const link = trustWcDeepLink(uri);
-  let modal = document.getElementById('gwTrustWcModal');
+  const cfg = GW_WALLET_WC[walletKey] || GW_WALLET_WC.generic;
+  const mobile = opts?.mobile ?? isMobileUA();
+  const qrPayload = mobile ? null : cfg.desktopQrLink(wcUri);
+  let modal = document.getElementById('gwWcModal');
   if (!modal) {
     modal = document.createElement('div');
-    modal.id = 'gwTrustWcModal';
+    modal.id = 'gwWcModal';
     modal.innerHTML = [
-      '<div class="gw-trust-wc-backdrop">',
-      '  <div class="gw-trust-wc-panel" role="dialog" aria-label="Trust Wallet">',
-      '    <div class="gw-trust-wc-head">',
-      '      <img src="/assets/wallets/trust.svg" alt="" width="28" height="28" decoding="async"/>',
-      '      <span>Trust Wallet</span>',
-      '      <button type="button" class="gw-trust-wc-close" aria-label="Close">×</button>',
+      '<div class="gw-wc-backdrop">',
+      '  <div class="gw-wc-panel" role="dialog">',
+      '    <div class="gw-wc-head">',
+      '      <img class="gw-wc-icon" alt="" width="28" height="28" decoding="async"/>',
+      '      <span class="gw-wc-title"></span>',
+      '      <button type="button" class="gw-wc-close" aria-label="Close">×</button>',
       '    </div>',
-      '    <div class="gw-trust-wc-qr"></div>',
-      '    <p class="gw-trust-wc-hint">Open <strong>Trust Wallet</strong> → WalletConnect → Scan.<br/>',
-      '    Do <em>not</em> use the phone camera — it may open MetaMask instead.</p>',
-      '    <p class="gw-trust-wc-hint gw-trust-wc-hint--ru">Откройте <strong>Trust Wallet</strong> → WalletConnect → Сканировать.<br/>',
-      '    Не используйте камеру телефона — она может открыть MetaMask.</p>',
-      '    <a class="gw-trust-wc-open" target="_blank" rel="noopener noreferrer">Open in Trust Wallet</a>',
+      '    <p class="gw-wc-lead"></p>',
+      '    <div class="gw-wc-qr-wrap"><div class="gw-wc-qr"></div></div>',
+      '    <p class="gw-wc-hint gw-wc-hint--en"></p>',
+      '    <p class="gw-wc-hint gw-wc-hint--ru"></p>',
+      '    <button type="button" class="gw-wc-open">Open wallet app</button>',
+      '    <a class="gw-wc-install" target="_blank" rel="noopener noreferrer"></a>',
       '  </div>',
       '</div>',
     ].join('');
     document.body.appendChild(modal);
-    modal.querySelector('.gw-trust-wc-close').onclick = () => gwHideTrustWcModal();
-    modal.querySelector('.gw-trust-wc-backdrop').onclick = (e) => {
-      if (e.target.classList.contains('gw-trust-wc-backdrop')) gwHideTrustWcModal();
+    modal.querySelector('.gw-wc-close').onclick = () => gwHideWcModal();
+    modal.querySelector('.gw-wc-backdrop').onclick = (e) => {
+      if (e.target.classList.contains('gw-wc-backdrop')) gwHideWcModal();
+    };
+    modal.querySelector('.gw-wc-open').onclick = () => {
+      const u = modal.dataset.wcUri;
+      const k = modal.dataset.walletKey || walletKey;
+      if (u) openWalletWcApp(k, u);
     };
   }
-  const qrBox = modal.querySelector('.gw-trust-wc-qr');
-  const qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data='
-    + encodeURIComponent(link);
-  qrBox.innerHTML = '<img src="' + qrImg + '" alt="Trust Wallet QR" width="260" height="260" decoding="async"/>';
-  const openBtn = modal.querySelector('.gw-trust-wc-open');
-  openBtn.href = link;
-  openBtn.textContent = isMobileUA() ? 'Open Trust Wallet app' : 'Open in Trust Wallet';
-  openBtn.onclick = function (e) {
-    e.preventDefault();
-    openTrustWcApp(uri);
-  };
-  openBtn.style.display = '';
+  modal.dataset.walletKey = walletKey;
+  modal.dataset.wcUri = wcUri;
+  modal.querySelector('.gw-wc-icon').src = cfg.icon;
+  modal.querySelector('.gw-wc-title').textContent = cfg.label;
+  const lead = modal.querySelector('.gw-wc-lead');
+  const qrWrap = modal.querySelector('.gw-wc-qr-wrap');
+  const qrBox = modal.querySelector('.gw-wc-qr');
+  const openBtn = modal.querySelector('.gw-wc-open');
+  const installA = modal.querySelector('.gw-wc-install');
+  if (mobile) {
+    lead.textContent = 'Confirm the connection in ' + cfg.label + ', then return to this tab.';
+    qrWrap.style.display = 'none';
+    openBtn.textContent = 'Open ' + cfg.label;
+    openBtn.style.display = '';
+  } else {
+    lead.textContent = 'Scan with the ' + cfg.label + ' mobile app';
+    qrWrap.style.display = '';
+    openBtn.style.display = 'none';
+    if (qrPayload) gwRenderQr(qrBox, qrPayload);
+  }
+  modal.querySelector('.gw-wc-hint--en').innerHTML = mobile
+    ? 'Tap the button above — it opens the wallet app directly.'
+    : 'Scan the QR from inside <strong>' + cfg.label + '</strong> → WalletConnect. Do <em>not</em> use the phone camera.';
+  modal.querySelector('.gw-wc-hint--ru').innerHTML = mobile
+    ? 'Нажмите кнопку выше — откроется приложение кошелька.'
+    : 'Сканируйте QR из <strong>' + cfg.label + '</strong> → WalletConnect. Не используйте камеру телефона.';
+  if (cfg.installUrl && !mobile) {
+    installA.href = cfg.installUrl;
+    installA.textContent = 'Install ' + cfg.label + ' extension';
+    installA.style.display = '';
+  } else {
+    installA.style.display = 'none';
+  }
   modal.style.display = 'flex';
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
 }
+function openWalletWcApp(walletKey, wcUri) {
+  const cfg = GW_WALLET_WC[walletKey] || GW_WALLET_WC.generic;
+  const link = cfg.mobileScheme(wcUri);
+  if (!link) return;
+  try {
+    window.location.href = link;
+  } catch (_) {
+    try {
+      const a = document.createElement('a');
+      a.href = link;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { try { a.remove(); } catch (_) {} }, 0);
+    } catch (__) {}
+  }
+}
+/** @deprecated use gwHideWcModal */
+function gwHideTrustWcModal() { gwHideWcModal(); }
 
 /* ----- chains (Arbitrum по умолчанию, остальные как optional) ----- */
 const CHAINS = {
@@ -410,9 +479,11 @@ function resolveTrustProvider() {
   if (window.trustwallet?.request) picks.push(window.trustwallet);
   return picks.find((p) => isTrustProvider(p) && !isMetaMaskProvider(p)) || null;
 }
-function gwSetTrustFlowActive(on) {
+function gwSetWcFlowActive(on) {
+  document.documentElement.classList.toggle('gw-wc-flow', !!on);
   document.documentElement.classList.toggle('gw-trust-flow', !!on);
 }
+function gwSetTrustFlowActive(on) { gwSetWcFlowActive(on); }
 function gwKillReownModals() {
   try {
     document.querySelectorAll('w3m-modal, wcm-modal, w3m-container, wcm-container').forEach((el) => {
@@ -420,21 +491,8 @@ function gwKillReownModals() {
     });
   } catch (_) {}
 }
-function openTrustWcApp(uri) {
-  const link = trustWcDeepLink(uri);
-  try {
-    const a = document.createElement('a');
-    a.href = link;
-    a.rel = 'noopener noreferrer';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { try { a.remove(); } catch (_) {} }, 0);
-  } catch (_) {
-    window.open(link, '_blank', 'noopener,noreferrer');
-  }
-}
-function trustWcNamespaces() {
+function openTrustWcApp(uri) { openWalletWcApp('trust', uri); }
+function standardWcNamespaces() {
   const methods = ['eth_sendTransaction', 'personal_sign', 'eth_signTypedData', 'eth_signTypedData_v4'];
   const events = ['chainChanged', 'accountsChanged'];
   // Trust Wallet rejects sessions that REQUIRE Arbitrum/exotic chains.
@@ -489,14 +547,16 @@ function buildSignClientEip1193(signClient, session) {
     },
   };
 }
-async function connectTrustViaEthereumProvider(uriHandler) {
+function trustWcNamespaces() { return standardWcNamespaces(); }
+async function connectViaEthereumProvider(walletKey, uriHandler) {
+  const cfg = GW_WALLET_WC[walletKey];
   const p = await ensureWC(true, {
-    walletKey: 'trust',
+    walletKey,
     showQrModal: false,
     requiredChains: [1],
     optionalChains: [42161, 8453, 137, 56, 10, 43114],
-    recommendedWalletId: WC_WALLET_IDS.trust,
-    excludeWalletIds: [WC_WALLET_IDS.metamask],
+    recommendedWalletId: cfg?.id,
+    excludeWalletIds: walletKey === 'trust' ? [WC_WALLET_IDS.metamask] : [],
   });
   if (uriHandler) p.on('display_uri', uriHandler);
   try {
@@ -508,11 +568,18 @@ async function connectTrustViaEthereumProvider(uriHandler) {
   if (!accs?.length) throw new Error('No accounts returned');
   return { provider: p, account: accs[0] };
 }
-async function finalizeTrustWcConnection(provider, account) {
+async function finalizeWcConnection(provider, account) {
   updateChip(account);
   try { await authenticateWithSIWE(account, provider); }
   catch (err) { gwSiweFailToast(err); throw err; }
   return account;
+}
+/** @deprecated */
+async function connectTrustViaEthereumProvider(uriHandler) {
+  return connectViaEthereumProvider('trust', uriHandler);
+}
+async function finalizeTrustWcConnection(provider, account) {
+  return finalizeWcConnection(provider, account);
 }
 function isBinanceProvider(p) {
   return !!(p?.isBinance || p?.isBinanceWallet || p?.bbcSignTx);
@@ -554,76 +621,27 @@ function gwSiweFailToast(err) {
 
 /* ----- 1. MetaMask ----- */
 async function connectMetaMask() {
-  let provider = rdnsProvider('io.metamask', 'io.metamask.mobile');
-  if (!provider) provider = findLegacy(isMetaMaskProvider);
-  if (provider) return connectWithProvider(provider, 'MetaMask');
-  if (isMobileUA()) {
-    if (typeof window.toast === 'function') window.toast('Confirm in MetaMask via WalletConnect', 'info');
-    return connectWCFor('metamask');
-  }
-  window.open('https://metamask.io/download/', '_blank');
-  throw new Error('MetaMask not installed — opened download page');
+  return connectWalletWC('metamask');
 }
 
 /* ----- 2. Trust Wallet ----- */
 async function connectTrust() {
-  const provider = resolveTrustProvider();
-  if (provider) return connectWithProvider(provider, 'Trust Wallet');
-  if (typeof window.toast === 'function') {
-    window.toast(isMobileUA()
-      ? 'Opening Trust Wallet… confirm in the app.'
-      : 'Scan with Trust Wallet app (not phone camera)', 'info');
-  }
-  return connectTrustWC();
+  return connectWalletWC('trust');
 }
 
 /* ----- 3. Binance Web3 Wallet ----- */
 async function connectBinanceWeb3() {
-  let provider = rdnsProvider('com.binance.wallet');
-  if (!provider) provider = findLegacy(isBinanceProvider);
-  if (!provider && window.BinanceChain?.request) provider = window.BinanceChain;
-  if (provider) return connectWithProvider(provider, 'Binance Web3 Wallet');
-  if (typeof window.toast === 'function') {
-    window.toast(isMobileUA()
-      ? 'Confirm in Binance Web3 Wallet'
-      : 'Scan the QR with Binance Web3 Wallet on your phone', 'info');
-  }
-  return connectWCFor('binance');
+  return connectWalletWC('binance');
 }
 
 /* ----- 4. OKX Wallet ----- */
 async function connectOkx() {
-  let provider = rdnsProvider('com.okex.wallet', 'com.okx.wallet');
-  if (!provider) provider = window.okxwallet;
-  if (provider) return connectWithProvider(provider, 'OKX Wallet');
-  if (typeof window.toast === 'function') {
-    window.toast(isMobileUA()
-      ? 'Confirm in OKX Wallet'
-      : 'Scan QR with OKX Wallet on your phone', 'info');
-  }
-  return connectWCFor('okx');
+  return connectWalletWC('okx');
 }
 
-/* ----- 5. Coinbase Wallet (инъекция или SDK fallback) ----- */
+/* ----- 5. Coinbase Wallet ----- */
 async function connectCoinbase() {
-  let cb = rdnsProvider('com.coinbase.wallet');
-  if (!cb) cb = window.coinbaseWalletExtension || findLegacy(isCoinbaseProvider);
-  if (cb) {
-    return connectWithProvider(cb, 'Coinbase Wallet');
-  }
-  // Fallback — Coinbase Wallet SDK (QR / universal link)
-  const { CoinbaseWalletSDK } = await import('https://esm.sh/@coinbase/wallet-sdk@4.0.0');
-  const sdk = new CoinbaseWalletSDK({ appName: 'GROM Exchange', appLogoUrl: walletMetadata().icons[0] });
-  const provider = sdk.makeWeb3Provider({ options: 'all' });
-  const accounts = await provider.request({ method: 'eth_requestAccounts' });
-  provider.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-  try {
-    await authenticateWithSIWE(accounts[0], provider);
-  } catch (err) {
-    gwSiweFailToast(err);
-    throw err;
-  }
-  return accounts[0];
+  return connectWalletWC('coinbase');
 }
 
 /* ----- 4. WalletConnect (универсальный QR для любого мобильного кошелька) ----- */
@@ -640,7 +658,70 @@ const WC_WALLET_IDS = {
   coinbase: 'fd20dc426fb37566d803205b19bbc1d4096b248ac04548e3cfb6b3a38bd033aa',
   safepal:  '0b415a746fb9ee99cce155c2ceca0c6f6061b1dbca2d722b3ba16381d0562150',
 };
-let wcRecommendedForKey = null; // remembers which wallet the current provider was inited for
+let wcRecommendedForKey = null;
+
+const GW_WALLET_WC = {
+  metamask: {
+    id: WC_WALLET_IDS.metamask,
+    label: 'MetaMask',
+    icon: '/assets/wallets/metamask.svg',
+    nativeScheme: 'metamask://',
+    mobileScheme: (uri) => 'metamask://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://metamask.app.link/wc?uri=' + encodeURIComponent(uri),
+    installUrl: 'https://metamask.io/download/',
+    injectCheck: () => rdnsProvider('io.metamask', 'io.metamask.mobile') || findLegacy(isMetaMaskProvider),
+  },
+  trust: {
+    id: WC_WALLET_IDS.trust,
+    label: 'Trust Wallet',
+    icon: '/assets/wallets/trust.svg',
+    nativeScheme: 'trust://',
+    mobileScheme: (uri) => 'trust://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://link.trustwallet.com/wc?uri=' + encodeURIComponent(uri),
+    installUrl: 'https://trustwallet.com/download',
+    injectCheck: resolveTrustProvider,
+  },
+  binance: {
+    id: WC_WALLET_IDS.binance,
+    label: 'Binance Web3 Wallet',
+    icon: '/assets/wallets/binance.svg',
+    nativeScheme: 'bnc://',
+    mobileScheme: (uri) => 'bnc://app.binance.com/cedefi/wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://bnc.app.link/wc?uri=' + encodeURIComponent(uri),
+    installUrl: 'https://www.binance.com/en/web3wallet',
+    injectCheck: () => rdnsProvider('com.binance.wallet') || findLegacy(isBinanceProvider) || window.BinanceChain,
+  },
+  okx: {
+    id: WC_WALLET_IDS.okx,
+    label: 'OKX Wallet',
+    icon: '/assets/wallets/okx.svg',
+    nativeScheme: 'okex://',
+    mobileScheme: (uri) => 'okex://wallet/wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://www.okx.com/download?deeplink=' + encodeURIComponent('okex://wallet/wc?uri=' + encodeURIComponent(uri)),
+    installUrl: 'https://www.okx.com/web3',
+    injectCheck: () => rdnsProvider('com.okex.wallet', 'com.okx.wallet') || window.okxwallet,
+  },
+  coinbase: {
+    id: WC_WALLET_IDS.coinbase,
+    label: 'Coinbase Wallet',
+    icon: '/assets/wallets/coinbase.svg',
+    nativeScheme: 'cbwallet://',
+    mobileScheme: (uri) => 'cbwallet://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://go.cb-w.com/wc?uri=' + encodeURIComponent(uri),
+    installUrl: 'https://www.coinbase.com/wallet/downloads',
+    injectCheck: () => rdnsProvider('com.coinbase.wallet') || window.coinbaseWalletExtension || findLegacy(isCoinbaseProvider),
+  },
+  generic: {
+    id: null,
+    label: 'WalletConnect',
+    icon: '/assets/wallets/walletconnect.svg',
+    nativeScheme: '',
+    mobileScheme: () => null,
+    desktopQrLink: (uri) => uri,
+    installUrl: null,
+    injectCheck: () => null,
+  },
+};
 
 async function ensureWC(forceNew, opts) {
   const wantRecommend = opts?.recommendedWalletId || null;
@@ -698,22 +779,27 @@ function gwPrefetchWc() {
   /* Skip prefetch — pre-initing EthereumProvider can resurrect Reown modal on PC. */
 }
 
-/* Trust WalletConnect — SignClient (custom QR) with EthereumProvider fallback. */
-async function connectTrustWC() {
-  setTrustWcDeepLinkChoice();
-  gwSetTrustFlowActive(true);
+/* Unified WalletConnect — Polymarket-style: inject → extension; mobile → app deeplink; desktop → QR. */
+async function connectWalletWC(walletKey) {
+  const cfg = GW_WALLET_WC[walletKey];
+  if (!cfg) throw new Error('Unknown wallet: ' + walletKey);
+
+  const injected = typeof cfg.injectCheck === 'function' ? cfg.injectCheck() : null;
+  if (injected) return connectWithProvider(injected, cfg.label);
+
+  setWalletWcDeepLinkChoice(walletKey);
+  gwSetWcFlowActive(true);
   gwKillReownModals();
   const killTimer = setInterval(gwKillReownModals, 250);
   let uriHandled = false;
-  const onTrustUri = (uri) => {
+  const onUri = (uri) => {
     if (uriHandled || !uri) return;
     uriHandled = true;
-    gwShowTrustWcModal(uri);
-    if (isMobileUA()) {
-      openTrustWcApp(uri);
-      if (typeof window.toast === 'function') {
-        window.toast('Confirm in Trust Wallet, then return to this tab.', 'info');
-      }
+    if (isMobileUA() && cfg.mobileScheme(uri)) {
+      openWalletWcApp(walletKey, uri);
+      gwShowWcModal(walletKey, uri, { mobile: true });
+    } else {
+      gwShowWcModal(walletKey, uri, { mobile: false });
     }
   };
   try {
@@ -728,72 +814,46 @@ async function connectTrustWC() {
         projectId: WC_PROJECT_ID,
         metadata: walletMetadata(),
       });
-      const { uri, approval } = await client.connect(trustWcNamespaces());
-      if (!uri) throw new Error('Could not start Trust Wallet session');
-      onTrustUri(uri);
+      const { uri, approval } = await client.connect(standardWcNamespaces());
+      if (!uri) throw new Error('Could not start ' + cfg.label + ' session');
+      onUri(uri);
       const session = await Promise.race([
         approval(),
         new Promise((_, reject) => setTimeout(
-          () => reject(new Error('Trust Wallet connection timed out — open Trust and approve')),
+          () => reject(new Error(cfg.label + ' connection timed out — approve in the wallet app')),
           120000
         )),
       ]);
       wcProvider = buildSignClientEip1193(client, session);
-      wcRecommendedForKey = 'trust';
+      wcRecommendedForKey = walletKey;
       wcProvider.on('accountsChanged', (accs) => updateChip(accs?.[0] || null));
       wcProvider.on('disconnect', () => updateChip(null));
       const accs = wcProvider.accounts;
       if (!accs?.length) throw new Error('No accounts returned');
-      return await finalizeTrustWcConnection(wcProvider, accs[0]);
+      return await finalizeWcConnection(wcProvider, accs[0]);
     } catch (signErr) {
-      console.warn('[grom-wallet] SignClient Trust path failed, trying fallback:', signErr);
+      console.warn('[grom-wallet] SignClient path failed for', walletKey, signErr);
       uriHandled = false;
-      const { provider, account } = await connectTrustViaEthereumProvider(onTrustUri);
-      wcRecommendedForKey = 'trust';
-      return await finalizeTrustWcConnection(provider, account);
+      const { provider, account } = await connectViaEthereumProvider(walletKey, onUri);
+      wcRecommendedForKey = walletKey;
+      return await finalizeWcConnection(provider, account);
     }
   } finally {
     clearInterval(killTimer);
-    gwSetTrustFlowActive(false);
-    gwHideTrustWcModal();
+    gwSetWcFlowActive(false);
+    gwHideWcModal();
     gwKillReownModals();
   }
 }
 
+async function connectTrustWC() { return connectWalletWC('trust'); }
+
 async function connectWCFor(walletKey) {
-  if (walletKey === 'trust') return connectTrustWC();
-  const id = WC_WALLET_IDS[walletKey];
-  const excludeWalletIds = walletKey === 'trust' ? [WC_WALLET_IDS.metamask] : [];
-  const p = await ensureWC(true, { recommendedWalletId: id, walletKey, excludeWalletIds });
-  await p.connect();
-  const accs = await p.request({ method: 'eth_accounts' });
-  if (!accs?.length) throw new Error('No accounts returned');
-  updateChip(accs[0]);
-  try { await authenticateWithSIWE(accs[0], p); }
-  catch (err) { gwSiweFailToast(err); throw err; }
-  return accs[0];
+  return connectWalletWC(walletKey);
 }
 
 async function connectWC() {
-  const p = await ensureWC(true);
-  await p.connect();
-  const accs = await p.request({ method: 'eth_accounts' });
-  if (!accs?.length) throw new Error('No accounts returned');
-  // Sign in with backend so /api/wallet/* returns 200 instead of 401 and the
-  // balance + deposit address actually load. Required for Trust Wallet, Binance
-  // Web3 Wallet, MetaMask Mobile, and every other WalletConnect-compatible app.
-  //
-  // If SIWE fails (user rejects the signature prompt in the wallet, or the
-  // wallet returns before signing) we surface a visible toast rather than
-  // failing silently — otherwise users see "Sign in to view balance" on the
-  // wallet page and can't figure out why.
-  try {
-    await authenticateWithSIWE(accs[0], p);
-  } catch (err) {
-    gwSiweFailToast(err);
-    throw err;
-  }
-  return accs[0];
+  return connectWalletWC('generic');
 }
 
 /* ----- disconnect ----- */
@@ -2589,45 +2649,55 @@ function gwInjectConnectModalCss() {
     html.gw-trust-flow w3m-modal,
     html.gw-trust-flow wcm-modal,
     html.gw-trust-flow w3m-container,
-    html.gw-trust-flow wcm-container {
+    html.gw-trust-flow wcm-container,
+    html.gw-wc-flow w3m-modal,
+    html.gw-wc-flow wcm-modal,
+    html.gw-wc-flow w3m-container,
+    html.gw-wc-flow wcm-container {
       display: none !important;
       visibility: hidden !important;
       pointer-events: none !important;
     }
-    #gwTrustWcModal {
+    #gwWcModal, #gwTrustWcModal {
       display: none; position: fixed; inset: 0; z-index: 2500;
       align-items: center; justify-content: center;
     }
-    .gw-trust-wc-backdrop {
+    .gw-wc-backdrop, .gw-trust-wc-backdrop {
       position: absolute; inset: 0; background: rgba(0,0,0,.72);
       display: flex; align-items: center; justify-content: center; padding: 16px;
     }
-    .gw-trust-wc-panel {
-      position: relative; z-index: 1; width: min(360px, 100%);
+    .gw-wc-panel, .gw-trust-wc-panel {
+      position: relative; z-index: 1; width: min(380px, 100%);
       background: #0b1220; border: 1px solid rgba(0,194,255,.25);
       border-radius: 16px; padding: 20px; color: #e8eef7;
       box-shadow: 0 24px 64px rgba(0,0,0,.55);
     }
-    .gw-trust-wc-head {
+    .gw-wc-head, .gw-trust-wc-head {
       display: flex; align-items: center; gap: 10px;
-      font-weight: 700; font-size: 1.05rem; margin-bottom: 14px;
+      font-weight: 700; font-size: 1.05rem; margin-bottom: 10px;
     }
-    .gw-trust-wc-close {
+    .gw-wc-close, .gw-trust-wc-close {
       margin-left: auto; border: 0; background: transparent;
       color: #9fb0c8; font-size: 1.5rem; line-height: 1; cursor: pointer;
     }
-    .gw-trust-wc-qr {
+    .gw-wc-lead { font-size: .9rem; color: #c5d4e8; margin: 0 0 12px; }
+    .gw-wc-qr-wrap, .gw-trust-wc-qr {
       display: flex; justify-content: center; margin: 8px 0 12px;
       background: #fff; border-radius: 12px; padding: 10px;
     }
-    .gw-trust-wc-hint {
+    .gw-wc-hint, .gw-trust-wc-hint {
       font-size: .82rem; line-height: 1.45; color: #9fb0c8; margin: 0 0 8px;
     }
-    .gw-trust-wc-hint em { color: #ffb347; font-style: normal; }
-    .gw-trust-wc-open {
-      display: block; text-align: center; margin-top: 10px; padding: 10px 14px;
+    .gw-wc-hint em, .gw-trust-wc-hint em { color: #ffb347; font-style: normal; }
+    .gw-wc-open, .gw-trust-wc-open {
+      display: block; width: 100%; text-align: center; margin-top: 10px; padding: 12px 14px;
       border-radius: 10px; background: #3375bb; color: #fff;
-      text-decoration: none; font-weight: 600;
+      border: 0; font-weight: 600; cursor: pointer; font-size: .95rem;
+    }
+    .gw-wc-install {
+      display: block; text-align: center; margin-top: 12px; padding: 10px 14px;
+      border-radius: 10px; background: rgba(255,255,255,.08); color: #00c2ff;
+      text-decoration: none; font-weight: 600; font-size: .88rem;
     }
   `;
   const style = document.createElement('style');

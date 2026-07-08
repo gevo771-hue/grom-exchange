@@ -3250,6 +3250,78 @@ function gwDsTimeAgo(ts) {
   return Math.floor(h / 24) + 'd';
 }
 
+/* ==========================================================================
+ * PHASE 7 — Premium swap panel
+ *
+ * The list below drives the chain-chip row inserted at the top of the
+ * on-chain mode. Each entry is either EVM (has `chainId`) or non-EVM
+ * ("solana", "bitcoin", "ton", "tron"). Clicking an EVM chip triggers
+ * wallet_switchEthereumChain; clicking a non-EVM chip either activates
+ * the LiFi path for that chain (solana + bitcoin) or shows a "connect
+ * with X wallet" toast (ton + tron — Phase 9). The chip UI itself
+ * lives in gwDsChainChipsHtml + gwDsChainChipsWire.
+ * ========================================================================== */
+const GW_DS_CHAINS = [
+  { key: 'eth',      chainId: 1,      name: 'Ethereum',  short: 'ETH',   color: '#627EEA' },
+  { key: 'bsc',      chainId: 56,     name: 'BNB Chain', short: 'BSC',   color: '#F0B90B' },
+  { key: 'arb',      chainId: 42161,  name: 'Arbitrum',  short: 'ARB',   color: '#28A0F0' },
+  { key: 'polygon',  chainId: 137,    name: 'Polygon',   short: 'POL',   color: '#8247E5' },
+  { key: 'base',     chainId: 8453,   name: 'Base',      short: 'BASE',  color: '#0052FF' },
+  { key: 'op',       chainId: 10,     name: 'Optimism',  short: 'OP',    color: '#FF0420' },
+  { key: 'avax',     chainId: 43114,  name: 'Avalanche', short: 'AVAX',  color: '#E84142' },
+  { key: 'linea',    chainId: 59144,  name: 'Linea',     short: 'LINEA', color: '#61DFFF' },
+  { key: 'fantom',   chainId: 250,    name: 'Fantom',    short: 'FTM',   color: '#1969FF' },
+  { key: 'solana',   nonEvm: 'sol',   name: 'Solana',    short: 'SOL',   color: '#9945FF' },
+  { key: 'bitcoin',  nonEvm: 'btc',   name: 'Bitcoin',   short: 'BTC',   color: '#F7931A' },
+  { key: 'ton',      nonEvm: 'ton',   name: 'TON',       short: 'TON',   color: '#0098EA', soon: true },
+  { key: 'tron',     nonEvm: 'trx',   name: 'Tron',      short: 'TRX',   color: '#EF0027', soon: true },
+];
+const GW_DS_EVM_HEX = (id) => '0x' + id.toString(16);
+
+/** Insert / refresh the chain-chip row inside the swap panel. */
+function gwDsChainChipsHtml(activeChainId) {
+  return `
+    <div class="gw-ds-chains" role="tablist">
+      ${GW_DS_CHAINS.map((c) => {
+        const on = c.chainId === activeChainId ? ' on' : '';
+        const soon = c.soon ? ' soon' : '';
+        const dataAttr = c.chainId ? `data-cid="${c.chainId}"` : `data-nonevm="${c.nonEvm}"`;
+        return `<button type="button" class="gw-ds-chain${on}${soon}" ${dataAttr} title="${c.name}" style="--chColor:${c.color}">
+          <span class="dot"></span><span class="lbl">${c.short}</span>${c.soon ? '<span class="soon-tag">soon</span>' : ''}
+        </button>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function gwDsChainChipsWire(wrap) {
+  wrap.querySelectorAll('.gw-ds-chain[data-cid]').forEach((b) => {
+    b.onclick = async () => {
+      const cid = Number(b.dataset.cid);
+      const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
+        ? window.gromWallet.wcProvider
+        : window.ethereum;
+      if (!provider) { gwToast('Connect a wallet first', 'warn'); return; }
+      try {
+        await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: GW_DS_EVM_HEX(cid) }] });
+        gwToast(`Switched to ${GW_DS_CHAINS.find((c) => c.chainId === cid)?.name || 'chain'}`, 'success');
+        setTimeout(() => { try { gwDsRefreshRate(); } catch (_) {} }, 400);
+      } catch (e) {
+        gwToast('Chain switch cancelled or unsupported', 'warn');
+      }
+    };
+  });
+  wrap.querySelectorAll('.gw-ds-chain[data-nonevm]').forEach((b) => {
+    b.onclick = () => {
+      const kind = b.dataset.nonevm;
+      if (kind === 'sol') gwToast('Solana: connect Phantom wallet — LiFi will route directly. Coming next deploy.', 'info');
+      else if (kind === 'btc') gwToast('Bitcoin: BTC-address flow via THORchain (LiFi). Coming next deploy.', 'info');
+      else if (kind === 'ton') gwToast('TON: needs TonConnect + STON.fi router. On roadmap (Phase 9).', 'info');
+      else if (kind === 'trx') gwToast('Tron: needs TronLink + SunSwap. On roadmap (Phase 9).', 'info');
+    };
+  });
+}
+
 function gwDsBuildPanel() {
   const t = gwDsLang();
   const mode = gwDsGetMode();
@@ -3285,6 +3357,7 @@ function gwDsBuildPanel() {
         <button type="button" class="gw-ds-mode ${mode === 'paper' ? 'on' : ''}" data-mode="paper">${t.modeT}</button>
         <button type="button" class="gw-ds-mode ${mode === 'onchain' ? 'on' : ''}" data-mode="onchain">${t.modeO}</button>
       </div>
+      ${mode === 'onchain' ? gwDsChainChipsHtml(null) : ''}
       <div class="gw-ds-form">
         <div class="gw-ds-row">
           <div class="gw-ds-row-top">

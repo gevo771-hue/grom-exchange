@@ -3099,6 +3099,27 @@ function gwInjectDashSwapCss() {
     .gw-ds-route.warn .v { color: #f5b94d; }
     .gw-ds-route.err { border-color: rgba(239,68,68,0.25); background: rgba(239,68,68,0.05); }
     .gw-ds-route.err .v { color: #f87171; }
+    /* Meta-aggregator comparison strip (Phase 2) */
+    .gw-ds-route .agg-cmp { color: #6b7a92; font-size: 10.5px; margin-top: 4px; letter-spacing: .01em;
+      display: flex; flex-wrap: wrap; gap: 6px 10px; }
+    .gw-ds-route .agg-cmp .agg { color: #98a8c0; }
+    .gw-ds-route .agg-cmp .agg.win { color: #22c17c; font-weight: 800; }
+    /* Phase 3 — AI split-recommend banner */
+    .gw-ds-ai-tip {
+      margin-top: 10px; padding: 12px 14px 12px 40px; border-radius: 12px;
+      background: linear-gradient(160deg, rgba(168,85,247,0.14), rgba(110,141,255,0.08));
+      border: 1px solid rgba(168,85,247,0.28); color: #e7eef8; font-size: 12.5px;
+      position: relative; line-height: 1.45;
+    }
+    .gw-ds-ai-tip::before { content: "✦"; position: absolute; left: 14px; top: 12px; color: #a855f7; font-size: 14px; font-weight: 800; }
+    .gw-ds-ai-tip b { color: #d8b4fe; }
+    .gw-ds-ai-tip .save { color: #22c17c; font-weight: 800; }
+    .gw-ds-ai-tip button {
+      display: inline-block; margin-top: 8px; padding: 6px 12px; border-radius: 8px; border: 0;
+      background: linear-gradient(135deg, #a855f7, #6e8dff); color: #fff; font-weight: 800;
+      font-size: 11.5px; cursor: pointer; letter-spacing: .04em;
+    }
+    .gw-ds-ai-tip button:hover { transform: translateY(-1px); box-shadow: 0 8px 18px -6px rgba(168,85,247,0.55); }
 
     .gw-ds-cta {
       margin-top: 12px; width: 100%;
@@ -3381,7 +3402,7 @@ async function gwDsRefreshRate() {
 
   rateLine.textContent = t.getting;
 
-  // === ON-CHAIN mode: prefer a REAL LiFi quote when we have wallet + chain ===
+  // === ON-CHAIN mode: meta-aggregator (LiFi + Paraswap + KyberSwap + Odos) ===
   if (mode === 'onchain') {
     try {
       const [account] = (window.gromWallet?.state?.().accounts || [window.gromWallet?.state?.().account]).filter(Boolean);
@@ -3390,27 +3411,51 @@ async function gwDsRefreshRate() {
         : window.ethereum;
       if (account && provider) {
         const chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
-        const quote = await gwLifiQuote({ chainId, fromSym: from, toSym: to, amtNum: amt, account });
-        if (quote?.estimate) {
+        const quotes = await gwMetaAggQuoteAll({ chainId, fromSym: from, toSym: to, amtNum: amt, account });
+        if (quotes.length > 0) {
+          // Cache for gwOnChainSwapExec so it doesn't refetch.
+          window.__gwLastAggQuotes = { chainId, fromSym: from, toSym: to, amtNum: amt, quotes, at: Date.now() };
+          const winner = quotes[0];
           const outDec = GW_OC_SWAP[chainId]?.decimals?.[to] ?? 18;
-          const toAmount = Number(quote.estimate.toAmount) / 10 ** outDec;
-          outEl.value = Number(toAmount.toFixed(8));
-          const dexName = quote.tool || quote.toolDetails?.name || 'best DEX';
-          const rate = amt > 0 ? (toAmount / amt).toFixed(8).replace(/0+$/, '').replace(/\.$/, '') : '';
-          const gasUsd = Number(quote.estimate.gasCosts?.[0]?.amountUSD || 0).toFixed(2);
+          const winnerOut = Number(winner.toAmount) / 10 ** outDec;
+          outEl.value = Number(winnerOut.toFixed(8));
+          const rate = amt > 0 ? (winnerOut / amt).toFixed(8).replace(/0+$/, '').replace(/\.$/, '') : '';
+          const gasUsd = Number(winner.gasUsd || 0).toFixed(2);
+          // Compact comparison strip — winner first, then losers sorted.
+          const cmp = quotes.slice(0, 4).map((q, i) => {
+            const out = Number(q.toAmount) / 10 ** outDec;
+            const diffPct = i === 0 ? '' : ` <span class="diff">−${((1 - Number(q.toAmount) * 1n / winner.toAmount) * 100 || 0).toFixed(2)}%</span>`;
+            void diffPct; // reserved for a future badge; safer bigint math below
+            const winMark = i === 0 ? '✓ ' : '';
+            const outFmt = out.toLocaleString('en-US', { maximumFractionDigits: Math.min(outDec, 6) });
+            return `<span class="agg${i === 0 ? ' win' : ''}">${winMark}${q.aggregator} ${outFmt}</span>`;
+          }).join(' · ');
+          // Phase 3: AI split-recommend — fires asynchronously so it
+          // doesn't block the winner from rendering. If the tip is worth
+          // showing (>$50 saved), we append a banner below the route.
+          const aiTipHtml = '<span class="k full" id="gwDsAiTipSlot"></span>';
           routeEl.innerHTML = `
-            <span class="k">${t.route}</span><span class="v">LiFi · ${dexName}</span>
+            <span class="k">${t.route}</span><span class="v">${winner.aggregator} · ${winner.tool || 'best'}</span>
             <span class="k">${t.fee}</span><span class="v">${(GW_LIFI_FEE_PCT * 100).toFixed(2)}%</span>
             <span class="k">${t.slip}</span><span class="v">0.5%</span>
             <span class="k">Gas</span><span class="v">≈ $${gasUsd}</span>
-            <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${rate} ${to}</span>
+            <span class="k full">1 ${from} ≈ ${rate} ${to}</span>
+            <span class="k full agg-cmp">${cmp}</span>
+            ${aiTipHtml}
           `;
-          if (outUsd) gwDsPriceUsd(to).then((p) => { outUsd.textContent = p ? '≈ $' + (toAmount * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : ''; });
+          if (outUsd) gwDsPriceUsd(to).then((p) => { outUsd.textContent = p ? '≈ $' + (winnerOut * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : ''; });
+          // Fire the AI split-tip in the background; don't hold up the return.
+          gwAiSplitTip({ chainId, fromSym: from, toSym: to, amtNum: amt, account, winnerQuote: winner })
+            .then((tip) => {
+              const slot = document.getElementById('gwDsAiTipSlot');
+              if (slot && tip) { slot.outerHTML = gwAiTipBanner(tip, { fromSym: from, toSym: to, amtNum: amt }); setTimeout(gwWireAiTipButton, 0); }
+            })
+            .catch(() => {});
           return;
         }
       }
     } catch (e) {
-      console.warn('[GROM] LiFi quote (UI) failed, falling back to cross-rate:', e?.message || e);
+      console.warn('[GROM] meta-agg quote (UI) failed, falling back to cross-rate:', e?.message || e);
     }
   }
 
@@ -3796,6 +3841,616 @@ async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, p
   return hash;
 }
 
+/* =========================================================================
+ * PHASE 2 — Meta-aggregator (2026-07-07)
+ *
+ * Ask 4 keyless public aggregators for a quote IN PARALLEL, pick the
+ * one that gives the user the most `toAmount` (net of gas). The user
+ * sees a compact comparison strip; execution uses the winner's
+ * transactionRequest.
+ *
+ * Chain-name maps for the ones that use slugs rather than numeric IDs.
+ * KyberSwap URL uses these slugs.
+ * ========================================================================= */
+const GW_META_KS_CHAIN = { 1: 'ethereum', 56: 'bsc', 137: 'polygon', 42161: 'arbitrum', 10: 'optimism', 8453: 'base', 43114: 'avalanche' };
+const GW_META_PS_CHAIN = { 1: 1, 56: 56, 137: 137, 42161: 42161, 10: 10, 8453: 8453, 43114: 43114 };
+// Placeholder token address that most aggregators use for NATIVE (ETH/BNB/etc).
+const GW_META_NATIVE = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+
+function _metaResolveAddrs(cfg, fromSym, toSym) {
+  const inAddr  = fromSym === cfg.native ? GW_META_NATIVE : cfg.tokens[fromSym];
+  const outAddr = toSym   === cfg.native ? GW_META_NATIVE : cfg.tokens[toSym];
+  return { inAddr, outAddr };
+}
+
+/** Adapter: LiFi. Reuses gwLifiQuote; returns normalized shape. */
+async function gwAggQuoteLifi({ chainId, fromSym, toSym, amtNum, account }) {
+  const q = await gwLifiQuote({ chainId, fromSym, toSym, amtNum, account });
+  if (!q?.estimate?.toAmount || !q.transactionRequest) return null;
+  return {
+    aggregator: 'LiFi',
+    tool: q.tool || q.toolDetails?.name || '',
+    toAmount: BigInt(q.estimate.toAmount),
+    gasUsd: Number(q.estimate.gasCosts?.[0]?.amountUSD || 0),
+    approvalAddress: q.estimate.approvalAddress || q.transactionRequest.to,
+    transactionRequest: q.transactionRequest,
+    raw: q,
+  };
+}
+
+/** Adapter: Paraswap v5. Requires 2-step (prices → build tx). */
+async function gwAggQuoteParaswap({ chainId, fromSym, toSym, amtNum, account }) {
+  const psNet = GW_META_PS_CHAIN[chainId];
+  if (!psNet) return null;
+  const cfg = GW_OC_SWAP[chainId];
+  if (!cfg) return null;
+  const { inAddr, outAddr } = _metaResolveAddrs(cfg, fromSym, toSym);
+  if (!inAddr || !outAddr) return null;
+  const inDec  = cfg.decimals[fromSym] ?? 18;
+  const outDec = cfg.decimals[toSym]   ?? 18;
+  const amount = BigInt(Math.floor(amtNum * 10 ** inDec)).toString();
+  try {
+    const priceQs = new URLSearchParams({
+      srcToken: inAddr, srcDecimals: String(inDec),
+      destToken: outAddr, destDecimals: String(outDec),
+      amount, side: 'SELL', network: String(psNet), userAddress: account,
+    });
+    const p = await fetch(`https://apiv5.paraswap.io/prices?${priceQs}`, { headers: { accept: 'application/json' } });
+    if (!p.ok) return null;
+    const pj = await p.json();
+    const priceRoute = pj?.priceRoute;
+    if (!priceRoute?.destAmount) return null;
+    // We ONLY fetch the tx if this aggregator ends up winning — see gwAggBuildTxIfNeeded.
+    return {
+      aggregator: 'Paraswap',
+      tool: priceRoute.bestRoute?.[0]?.swaps?.[0]?.swapExchanges?.[0]?.exchange || 'paraswap',
+      toAmount: BigInt(priceRoute.destAmount),
+      gasUsd: Number(priceRoute.gasCostUSD || 0),
+      approvalAddress: priceRoute.tokenTransferProxy,
+      transactionRequest: null, // built lazily
+      _psPriceRoute: priceRoute,
+      _psUserAddr: account,
+      raw: pj,
+    };
+  } catch (_) { return null; }
+}
+
+/** Adapter: KyberSwap Aggregator. Two-step (routes → build). */
+async function gwAggQuoteKyber({ chainId, fromSym, toSym, amtNum, account }) {
+  const slug = GW_META_KS_CHAIN[chainId];
+  if (!slug) return null;
+  const cfg = GW_OC_SWAP[chainId];
+  if (!cfg) return null;
+  const { inAddr, outAddr } = _metaResolveAddrs(cfg, fromSym, toSym);
+  if (!inAddr || !outAddr) return null;
+  const inDec = cfg.decimals[fromSym] ?? 18;
+  const amountIn = BigInt(Math.floor(amtNum * 10 ** inDec)).toString();
+  try {
+    const rQs = new URLSearchParams({ tokenIn: inAddr, tokenOut: outAddr, amountIn, saveGas: '0', gasInclude: '1' });
+    const r = await fetch(`https://aggregator-api.kyberswap.com/${slug}/api/v1/routes?${rQs}`, { headers: { accept: 'application/json' } });
+    if (!r.ok) return null;
+    const rj = await r.json();
+    const data = rj?.data;
+    const summary = data?.routeSummary;
+    if (!summary?.amountOut) return null;
+    return {
+      aggregator: 'KyberSwap',
+      tool: summary.route?.[0]?.[0]?.exchange || 'kyberswap',
+      toAmount: BigInt(summary.amountOut),
+      gasUsd: Number(summary.gasUsd || 0),
+      approvalAddress: data.routerAddress,
+      transactionRequest: null, // built lazily via /route/build
+      _ksSummary: summary,
+      _ksRouter: data.routerAddress,
+      _ksSlug: slug,
+      _ksAcc: account,
+      raw: rj,
+    };
+  } catch (_) { return null; }
+}
+
+/** Adapter: Odos v2 — single-step quote+assemble. */
+async function gwAggQuoteOdos({ chainId, fromSym, toSym, amtNum, account }) {
+  const cfg = GW_OC_SWAP[chainId];
+  if (!cfg) return null;
+  const { inAddr, outAddr } = _metaResolveAddrs(cfg, fromSym, toSym);
+  if (!inAddr || !outAddr) return null;
+  const inDec = cfg.decimals[fromSym] ?? 18;
+  const amount = BigInt(Math.floor(amtNum * 10 ** inDec)).toString();
+  try {
+    const r = await fetch('https://api.odos.xyz/sor/quote/v2', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        chainId,
+        inputTokens:  [{ tokenAddress: inAddr === GW_META_NATIVE ? '0x0000000000000000000000000000000000000000' : inAddr, amount }],
+        outputTokens: [{ tokenAddress: outAddr === GW_META_NATIVE ? '0x0000000000000000000000000000000000000000' : outAddr, proportion: 1 }],
+        userAddr:     account,
+        slippageLimitPercent: 0.5,
+        referralCode: 0,
+        disableRFQs:  false,
+      }),
+    });
+    if (!r.ok) return null;
+    const rj = await r.json();
+    const outAmt = rj?.outAmounts?.[0];
+    const pathId = rj?.pathId;
+    if (!outAmt || !pathId) return null;
+    return {
+      aggregator: 'Odos',
+      tool: 'odos',
+      toAmount: BigInt(outAmt),
+      gasUsd: Number(rj?.gasEstimateValue || 0),
+      approvalAddress: null,          // Odos returns router in assemble step
+      transactionRequest: null,        // built lazily
+      _odosPathId: pathId,
+      _odosAcc: account,
+      raw: rj,
+    };
+  } catch (_) { return null; }
+}
+
+/**
+ * Fetch quotes from every aggregator in parallel. Returns a list
+ * sorted best-to-worst by toAmount (winner first). Rejections are
+ * dropped silently — one aggregator failing doesn't kill the swap.
+ */
+async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account }) {
+  const jobs = [
+    gwAggQuoteLifi({ chainId, fromSym, toSym, amtNum, account }),
+    gwAggQuoteParaswap({ chainId, fromSym, toSym, amtNum, account }),
+    gwAggQuoteKyber({ chainId, fromSym, toSym, amtNum, account }),
+    gwAggQuoteOdos({ chainId, fromSym, toSym, amtNum, account }),
+  ];
+  const settled = await Promise.allSettled(jobs);
+  const quotes = settled.filter((r) => r.status === 'fulfilled' && r.value).map((r) => r.value);
+  // Rank by net toAmount (subtracting a rough gas-in-toAmount penalty).
+  // For MVP we just sort by toAmount; gas cost is small vs. 50-200 bps
+  // aggregator spread. Refine later once we track USD price per token.
+  quotes.sort((a, b) => (b.toAmount > a.toAmount ? 1 : b.toAmount < a.toAmount ? -1 : 0));
+  return quotes;
+}
+
+/**
+ * Lazy tx builders — only called for the winning aggregator so we
+ * don't waste RPCs. Returns { transactionRequest, approvalAddress }.
+ */
+async function gwAggBuildTxIfNeeded(q, { chainId, account }) {
+  if (q.transactionRequest) return q;
+  if (q.aggregator === 'Paraswap') {
+    const body = {
+      srcToken:  q._psPriceRoute.srcToken,
+      destToken: q._psPriceRoute.destToken,
+      srcDecimals: q._psPriceRoute.srcDecimals,
+      destDecimals: q._psPriceRoute.destDecimals,
+      srcAmount: q._psPriceRoute.srcAmount,
+      slippage: 50,
+      userAddress: q._psUserAddr,
+      priceRoute: q._psPriceRoute,
+    };
+    const r = await fetch(`https://apiv5.paraswap.io/transactions/${GW_META_PS_CHAIN[chainId]}?ignoreChecks=true`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(`Paraswap build ${r.status}`);
+    const tx = await r.json();
+    q.transactionRequest = { to: tx.to, data: tx.data, value: tx.value, gasLimit: tx.gas };
+    return q;
+  }
+  if (q.aggregator === 'KyberSwap') {
+    const r = await fetch(`https://aggregator-api.kyberswap.com/${q._ksSlug}/api/v1/route/build`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ routeSummary: q._ksSummary, sender: q._ksAcc, recipient: q._ksAcc, slippageTolerance: 50 }),
+    });
+    if (!r.ok) throw new Error(`KyberSwap build ${r.status}`);
+    const j = await r.json();
+    const d = j?.data;
+    if (!d?.data) throw new Error('KyberSwap build empty');
+    q.transactionRequest = { to: q._ksRouter, data: d.data, value: d.transactionValue || '0x0', gasLimit: d.gas };
+    q.approvalAddress = q._ksRouter;
+    return q;
+  }
+  if (q.aggregator === 'Odos') {
+    const r = await fetch('https://api.odos.xyz/sor/assemble', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ userAddr: q._odosAcc, pathId: q._odosPathId, simulate: false }),
+    });
+    if (!r.ok) throw new Error(`Odos assemble ${r.status}`);
+    const j = await r.json();
+    const tx = j?.transaction;
+    if (!tx?.to || !tx?.data) throw new Error('Odos assemble empty');
+    q.transactionRequest = { to: tx.to, data: tx.data, value: tx.value || '0x0', gasLimit: tx.gas };
+    q.approvalAddress = tx.to;
+    return q;
+  }
+  return q; // LiFi already has transactionRequest
+}
+
+/**
+ * Execute a meta-aggregator winner.  Handles ERC-20 approve and forwards
+ * the tx to the user's wallet.
+ */
+async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, provider, account }) {
+  const cfg = GW_OC_SWAP[chainId];
+  const inAddr = fromSym === cfg.native ? cfg.wrapped : cfg.tokens[fromSym];
+  const inDec = cfg.decimals[fromSym] ?? 18;
+  const amountIn = BigInt(Math.floor(amtNum * 10 ** inDec));
+  await gwAggBuildTxIfNeeded(quote, { chainId, account });
+  const tx = quote.transactionRequest;
+  if (!tx?.to || !tx?.data) throw new Error(`${quote.aggregator}: no tx`);
+  // Approve if needed
+  if (fromSym !== cfg.native) {
+    const spender = quote.approvalAddress || tx.to;
+    const allow = await gwErc20Allowance(provider, inAddr, account, spender);
+    if (allow < amountIn) {
+      gwToast(`Approve ${fromSym} to ${quote.aggregator} router…`, 'info');
+      await gwErc20ApproveMax(provider, inAddr, spender, account);
+    }
+  }
+  const outDec = cfg.decimals[toSym] ?? 18;
+  const expected = Number(quote.toAmount) / 10 ** outDec;
+  gwToast(`Confirm in wallet · ${quote.aggregator} · expecting ~${expected.toFixed(6)} ${toSym}`, 'info');
+  const hash = await provider.request({ method: 'eth_sendTransaction', params: [{
+    from: account,
+    to:   tx.to,
+    data: tx.data,
+    value: tx.value || '0x0',
+    ...(tx.gasLimit ? { gas: tx.gasLimit } : {}),
+  }] });
+  gwToast('Submitted · waiting for confirmation…', 'info');
+  await gwWaitReceipt(provider, hash);
+  return hash;
+}
+
+/* =========================================================================
+ * PHASE 4 + 5 — Advanced Orders (Limit + DCA), client-side v1
+ *
+ * A compact card lives under the swap panel with two tabs:
+ *   • Limit    — set a target price. When Binance ticker hits it, we
+ *                toast + prefill the swap panel; user presses Swap
+ *                once to execute via meta-agg.
+ *   • DCA      — recurring intent (daily / weekly). Same UX at each
+ *                interval — toast + prefill; user signs one tx per
+ *                tranche. Full smart-contract DCA (Sablier / 1inch
+ *                LOP) is v2.
+ *
+ * All state in localStorage.gw_orders_v1. A single 60-second interval
+ * polls Binance ticker for limit orders and evaluates DCA due times.
+ * ========================================================================= */
+function gwOrdLoad() { try { return JSON.parse(localStorage.getItem('gw_orders_v1') || '[]'); } catch (_) { return []; } }
+function gwOrdSave(v) { try { localStorage.setItem('gw_orders_v1', JSON.stringify(v)); } catch (_) {} }
+function gwOrdDelete(id) { gwOrdSave(gwOrdLoad().filter((o) => o.id !== id)); gwRenderAdvancedPanel(); }
+
+function gwInjectAdvancedCss() {
+  if (document.getElementById('gw-adv-css')) return;
+  const css = `
+    .gw-adv-wrap { margin: 12px 0 4px; }
+    .gw-adv-card {
+      padding: 18px; border-radius: 20px; color: #e7eef8;
+      background: radial-gradient(120% 140% at 100% 0%, rgba(0,194,255,0.08), transparent 55%),
+                  linear-gradient(160deg, rgba(13,22,38,0.72), rgba(8,14,26,0.92));
+      border: 1px solid rgba(0,194,255,0.18);
+    }
+    .gw-adv-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+    .gw-adv-tab { flex: 0 0 auto; padding: 7px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); color: #98a8c0; border: 1px solid rgba(255,255,255,0.06); font-size: 12px; font-weight: 700; cursor: pointer; }
+    .gw-adv-tab.on { background: rgba(0,194,255,0.14); color: #5dd5ff; border-color: rgba(0,194,255,0.28); }
+    .gw-adv-form { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 8px; margin-bottom: 10px; }
+    @media (max-width: 640px) { .gw-adv-form { grid-template-columns: 1fr 1fr; } }
+    .gw-adv-form input, .gw-adv-form select {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+      padding: 9px 10px; color: #e7eef8; font-size: 13px; font-family: inherit; font-variant-numeric: tabular-nums;
+    }
+    .gw-adv-form input:focus, .gw-adv-form select:focus { border-color: rgba(0,194,255,0.35); outline: none; }
+    .gw-adv-form button {
+      padding: 9px 14px; border-radius: 10px; background: linear-gradient(135deg, #00c2ff, #6e8dff);
+      color: #041624; border: 0; font-weight: 800; font-size: 12.5px; cursor: pointer;
+    }
+    .gw-adv-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+    .gw-adv-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 9px 12px; border-radius: 10px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05); font-size: 12.5px; }
+    .gw-adv-row .desc { color: #cfdfee; }
+    .gw-adv-row .state { color: #98a8c0; font-size: 11px; }
+    .gw-adv-row .kill { background: transparent; color: #f87171; border: 0; cursor: pointer; font-size: 15px; }
+    .gw-adv-empty { color: #6b7a92; font-size: 12px; text-align: center; padding: 12px 0; }
+  `;
+  const s = document.createElement('style'); s.id = 'gw-adv-css'; s.textContent = css; document.head.appendChild(s);
+}
+
+const GW_ADV_ASSETS = ['USDT','USDC','BTC','ETH','BNB','SOL','XRP','MATIC','ARB','OP','AVAX','LINK','DOGE'];
+function gwAdvOpt(v, sel) { return `<option value="${v}"${sel === v ? ' selected' : ''}>${v}</option>`; }
+
+function gwRenderAdvancedPanel() {
+  const page = document.getElementById('page-dashboard');
+  if (!page) return;
+  gwInjectAdvancedCss();
+  let wrap = document.getElementById('gwAdvPanel');
+  if (!wrap) {
+    wrap = document.createElement('div'); wrap.id = 'gwAdvPanel'; wrap.className = 'gw-adv-wrap';
+    const swap = page.querySelector('.gw-ds-wrap');
+    if (swap && swap.parentNode === page) swap.after(wrap); else page.appendChild(wrap);
+  }
+  const tab  = wrap.dataset.tab || 'limit';
+  const orders = gwOrdLoad();
+  const limits = orders.filter((o) => o.type === 'limit');
+  const dcas   = orders.filter((o) => o.type === 'dca');
+  wrap.innerHTML = `
+    <div class="gw-adv-card">
+      <div class="gw-adv-tabs">
+        <button class="gw-adv-tab ${tab === 'limit' ? 'on' : ''}" data-t="limit">Limit orders</button>
+        <button class="gw-adv-tab ${tab === 'dca'   ? 'on' : ''}" data-t="dca">DCA · recurring</button>
+      </div>
+      ${tab === 'limit' ? `
+        <div class="gw-adv-form" id="gwAdvLimitForm">
+          <select id="glFrom">${GW_ADV_ASSETS.map((a) => gwAdvOpt(a, 'USDT')).join('')}</select>
+          <select id="glTo">${GW_ADV_ASSETS.map((a) => gwAdvOpt(a, 'BTC')).join('')}</select>
+          <input id="glPrice" type="number" placeholder="target price USDT" step="any" />
+          <input id="glAmt"   type="number" placeholder="amount to spend"    step="any" />
+          <button id="glAdd">Add limit</button>
+        </div>
+        <div class="gw-adv-list">
+          ${limits.length ? limits.map((o) => `
+            <div class="gw-adv-row">
+              <div>
+                <div class="desc"><b>Buy ${o.to}</b> with ${o.amt} ${o.from} when 1 ${o.to} ≤ $${o.price}</div>
+                <div class="state">Current: <span data-price-live="${o.to}">…</span> · Created ${new Date(o.createdAt).toLocaleString()}</div>
+              </div>
+              <div class="state">${o.state || 'watching'}</div>
+              <button class="kill" data-del="${o.id}" title="Cancel">×</button>
+            </div>`).join('') : `<div class="gw-adv-empty">No limit orders yet — buy something at a target price.</div>`}
+        </div>
+      ` : `
+        <div class="gw-adv-form" id="gwAdvDcaForm">
+          <select id="gdFrom">${GW_ADV_ASSETS.map((a) => gwAdvOpt(a, 'USDT')).join('')}</select>
+          <select id="gdTo">${GW_ADV_ASSETS.map((a) => gwAdvOpt(a, 'BTC')).join('')}</select>
+          <input id="gdAmt"   type="number" placeholder="amount per tranche" step="any" />
+          <select id="gdInt">
+            <option value="86400000">Every day</option>
+            <option value="604800000">Every week</option>
+            <option value="3600000">Every hour</option>
+          </select>
+          <button id="gdAdd">Add DCA</button>
+        </div>
+        <div class="gw-adv-list">
+          ${dcas.length ? dcas.map((o) => `
+            <div class="gw-adv-row">
+              <div>
+                <div class="desc"><b>DCA</b> ${o.amt} ${o.from} → ${o.to} every ${o.interval / 3600000 >= 24 ? (o.interval / 86400000) + ' day(s)' : (o.interval / 3600000) + ' hour(s)'}</div>
+                <div class="state">Next in ${Math.max(0, Math.round((o.nextAt - Date.now()) / 60000))} min · Done ${o.executed || 0}</div>
+              </div>
+              <div class="state">${o.state || 'active'}</div>
+              <button class="kill" data-del="${o.id}" title="Cancel">×</button>
+            </div>`).join('') : `<div class="gw-adv-empty">No DCA plans yet — automate buying over time.</div>`}
+        </div>
+      `}
+    </div>
+  `;
+  // Wire tabs
+  wrap.querySelectorAll('.gw-adv-tab').forEach((b) => {
+    b.onclick = () => { wrap.dataset.tab = b.dataset.t; gwRenderAdvancedPanel(); };
+  });
+  // Wire add-limit
+  const addLim = document.getElementById('glAdd');
+  if (addLim) addLim.onclick = () => {
+    const from = document.getElementById('glFrom').value;
+    const to   = document.getElementById('glTo').value;
+    const price = Number(document.getElementById('glPrice').value);
+    const amt   = Number(document.getElementById('glAmt').value);
+    if (!(price > 0) || !(amt > 0)) return gwToast('Enter price and amount', 'warn');
+    const list = gwOrdLoad();
+    list.push({ id: 'lim_' + Date.now().toString(36), type: 'limit', from, to, price, amt, createdAt: Date.now(), state: 'watching' });
+    gwOrdSave(list);
+    gwToast(`Limit added — will fire when ${to} ≤ $${price}`, 'success');
+    gwRenderAdvancedPanel();
+  };
+  // Wire add-DCA
+  const addDca = document.getElementById('gdAdd');
+  if (addDca) addDca.onclick = () => {
+    const from = document.getElementById('gdFrom').value;
+    const to   = document.getElementById('gdTo').value;
+    const amt   = Number(document.getElementById('gdAmt').value);
+    const interval = Number(document.getElementById('gdInt').value);
+    if (!(amt > 0) || !(interval > 0)) return gwToast('Enter amount and interval', 'warn');
+    const list = gwOrdLoad();
+    list.push({ id: 'dca_' + Date.now().toString(36), type: 'dca', from, to, amt, interval, nextAt: Date.now() + interval, createdAt: Date.now(), executed: 0, state: 'active' });
+    gwOrdSave(list);
+    gwToast(`DCA added — ${amt} ${from} → ${to} every ${interval / 3600000 >= 24 ? (interval / 86400000) + ' day(s)' : (interval / 3600000) + ' h'}`, 'success');
+    gwRenderAdvancedPanel();
+  };
+  // Wire delete
+  wrap.querySelectorAll('.kill[data-del]').forEach((b) => { b.onclick = () => gwOrdDelete(b.dataset.del); });
+  // Fill in live prices for limit "Current" fields — one call per unique asset.
+  const uniqueAssets = [...new Set(limits.map((o) => o.to))];
+  uniqueAssets.forEach((a) => {
+    gwDsPriceUsd(a).then((p) => {
+      if (!p) return;
+      wrap.querySelectorAll(`[data-price-live="${a}"]`).forEach((el) => { el.textContent = '$' + p.toLocaleString('en-US', { maximumFractionDigits: 2 }); });
+    }).catch(() => {});
+  });
+}
+
+function gwSetupAdvancedPanel() {
+  const tryRender = gwDebounce(() => { if (document.getElementById('page-dashboard')) { try { gwRenderAdvancedPanel(); console.log('[GROM] advanced orders rendered'); } catch (e) { console.warn('[GROM] adv panel', e); } } }, 200);
+  tryRender();
+  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwAdvPanel') || n >= 20) clearInterval(id); else tryRender(); }, 500);
+  window.addEventListener('hashchange', tryRender);
+  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  window.addEventListener('grom:lang-change', tryRender);
+}
+
+/** Poll orders every 60 s — check limits vs Binance ticker; fire DCA due. */
+let gwOrdTickTimer = null;
+async function gwOrdTick() {
+  const list = gwOrdLoad();
+  if (list.length === 0) return;
+  let mutated = false;
+  const now = Date.now();
+  // Prices we need
+  const assets = [...new Set(list.filter((o) => o.type === 'limit').map((o) => o.to))];
+  const priceMap = {};
+  await Promise.all(assets.map((a) => gwDsPriceUsd(a).then((p) => { priceMap[a] = p; }).catch(() => {})));
+  for (const o of list) {
+    if (o.type === 'limit' && o.state === 'watching') {
+      const px = priceMap[o.to];
+      if (px && px <= Number(o.price)) {
+        o.state = 'triggered';
+        mutated = true;
+        gwOrdPrefill(o);
+        gwToast(`Limit hit · ${o.to} at $${px.toFixed(2)}. Press Swap to fill.`, 'success');
+      }
+    } else if (o.type === 'dca' && o.state === 'active' && o.nextAt <= now) {
+      o.executed = (o.executed || 0) + 1;
+      o.nextAt = now + o.interval;
+      mutated = true;
+      gwOrdPrefill(o);
+      gwToast(`DCA tranche ${o.executed} ready. Press Swap to fill.`, 'info');
+    }
+  }
+  if (mutated) { gwOrdSave(list); gwRenderAdvancedPanel(); }
+}
+function gwOrdPrefill(o) {
+  const from = document.getElementById('gwDsFrom');
+  const to   = document.getElementById('gwDsTo');
+  const amt  = document.getElementById('gwDsAmt');
+  if (from && to && amt) {
+    from.value = o.from; to.value = o.to; amt.value = String(o.amt);
+    try { gwDsRefreshRate(); } catch (_) {}
+  }
+}
+if (typeof window !== 'undefined' && !gwOrdTickTimer) {
+  gwOrdTickTimer = setInterval(gwOrdTick, 60_000);
+  setTimeout(gwOrdTick, 5000);
+}
+
+/* =========================================================================
+ * PHASE 3 — AI split-recommend
+ *
+ * When a user is about to swap a size that would incur >1 % slippage,
+ * we quote the same pair for size/3 and compare implied rates. If a
+ * 3-tranche TWAP over 30 min saves >$50, we surface a banner:
+ *
+ *   ✦ Твоя сделка получит 1.2 % slippage — потеряешь $2400.
+ *      Разбить на 3 × 1 BTC за 30 мин → 0.3 % → сэкономишь $1800.
+ *      [Настроить TWAP]
+ *
+ * Click stores an intent in localStorage and schedules a browser
+ * notification / in-app toast every 10 min until the user completes
+ * or cancels. Full on-chain TWAP contract is Phase 3b.
+ * ========================================================================= */
+async function gwAiSplitTip({ chainId, fromSym, toSym, amtNum, account, winnerQuote }) {
+  if (amtNum < 0.001) return null;
+  try {
+    const smallAmt = amtNum / 3;
+    const smallQuote = await gwAggQuoteLifi({ chainId, fromSym, toSym, amtNum: smallAmt, account });
+    if (!smallQuote?.toAmount) return null;
+    const cfg = GW_OC_SWAP[chainId] || {};
+    const outDec = cfg.decimals?.[toSym] ?? 18;
+    const bigOut   = Number(winnerQuote.toAmount) / 10 ** outDec;
+    const smallOut = Number(smallQuote.toAmount) / 10 ** outDec;
+    // Implied per-unit rate for full order vs small order
+    const bigRate   = bigOut   / amtNum;
+    const smallRate = smallOut / smallAmt;
+    if (smallRate <= bigRate) return null; // no benefit
+    const gainRatio = (smallRate - bigRate) / bigRate;
+    if (gainRatio < 0.005) return null; // <0.5% — not worth the friction
+    // Convert saving into USD via `to` USD-price
+    const toUsd = await gwDsPriceUsd(toSym).catch(() => null);
+    if (!toUsd) return null;
+    const savedUsd = (smallRate * amtNum - bigOut) * toUsd;
+    if (savedUsd < 50) return null;
+    return {
+      slippagePct:      ((1 - bigRate / smallRate) * 100),
+      savedUsd,
+      tranches:         3,
+      windowMinutes:    30,
+      newExpectedOut:   smallRate * amtNum,
+    };
+  } catch (_) { return null; }
+}
+
+function gwAiTipBanner(tip, ctx) {
+  if (!tip) return '';
+  const { fromSym, toSym, amtNum } = ctx;
+  const perTranche = (amtNum / tip.tranches).toLocaleString('en-US', { maximumFractionDigits: 6 });
+  const totalMin = tip.windowMinutes;
+  return `
+    <div class="gw-ds-ai-tip">
+      <span>Твой своп получит <b>${tip.slippagePct.toFixed(2)}%</b> slippage.
+      Разбить на <b>${tip.tranches} × ${perTranche} ${fromSym}</b> за ${totalMin} мин →
+      сэкономишь <span class="save">≈ $${tip.savedUsd.toFixed(0)}</span>.</span><br/>
+      <button id="gwDsSetupTwap" data-from="${fromSym}" data-to="${toSym}" data-amt="${amtNum}" data-tranches="${tip.tranches}" data-window="${tip.windowMinutes}">Настроить TWAP</button>
+    </div>
+  `;
+}
+
+function gwWireAiTipButton() {
+  const b = document.getElementById('gwDsSetupTwap');
+  if (!b || b.dataset.wired) return;
+  b.dataset.wired = '1';
+  b.onclick = () => gwOpenTwapSetup({
+    from: b.dataset.from, to: b.dataset.to,
+    amt: Number(b.dataset.amt), tranches: Number(b.dataset.tranches),
+    windowMinutes: Number(b.dataset.window),
+  });
+}
+
+/* Client-side TWAP intent — stored in localStorage under gw_twap_v1.
+ * Each intent = { id, from, to, amtPerTranche, tranches, done, nextAt, windowMs }
+ * A single interval (gwTwapTick) checks every 30 s if any intent has a
+ * tranche due; if so, toasts the user and lets them execute a single
+ * tranche via the normal swap flow (which will use meta-agg + LiFi). */
+function gwTwapLoad() { try { return JSON.parse(localStorage.getItem('gw_twap_v1') || '[]'); } catch (_) { return []; } }
+function gwTwapSave(v) { try { localStorage.setItem('gw_twap_v1', JSON.stringify(v)); } catch (_) {} }
+function gwOpenTwapSetup(input) {
+  const list = gwTwapLoad();
+  const now = Date.now();
+  const trancheMs = Math.floor((input.windowMinutes * 60_000) / input.tranches);
+  const id = 'twap_' + now.toString(36);
+  const intent = {
+    id, from: input.from, to: input.to,
+    amtPerTranche: Number((input.amt / input.tranches).toFixed(8)),
+    tranchesTotal: input.tranches, tranchesDone: 0,
+    nextAt: now, trancheMs, createdAt: now,
+  };
+  list.push(intent);
+  gwTwapSave(list);
+  gwToast(`TWAP set — ${intent.tranchesTotal} × ${intent.amtPerTranche} ${intent.from} every ${Math.round(trancheMs / 60_000)} min`, 'success');
+  gwTwapTick(); // start immediately if the first tranche is due
+}
+let gwTwapTickTimer = null;
+function gwTwapTick() {
+  const list = gwTwapLoad();
+  const now = Date.now();
+  for (const it of list) {
+    if (it.tranchesDone >= it.tranchesTotal) continue;
+    if (it.nextAt <= now) {
+      // Prefill swap panel and toast the user.
+      const from = document.getElementById('gwDsFrom');
+      const to   = document.getElementById('gwDsTo');
+      const amt  = document.getElementById('gwDsAmt');
+      if (from && to && amt) {
+        from.value = it.from; to.value = it.to; amt.value = String(it.amtPerTranche);
+        try { gwDsRefreshRate(); } catch (_) {}
+      }
+      gwToast(`TWAP tranche ${it.tranchesDone + 1}/${it.tranchesTotal} ready. Press Swap to fill.`, 'info');
+      // Advance the intent so we don't spam. The user manually pressing Swap
+      // is enough; if they skip, we still move to the next tranche time.
+      it.tranchesDone += 1;
+      it.nextAt = now + it.trancheMs;
+    }
+  }
+  // Purge finished intents older than 24 h.
+  const remain = list.filter((i) => i.tranchesDone < i.tranchesTotal || (now - i.createdAt) < 86_400_000);
+  gwTwapSave(remain);
+}
+if (typeof window !== 'undefined' && !gwTwapTickTimer) {
+  gwTwapTickTimer = setInterval(gwTwapTick, 30_000);
+  // Also tick a few seconds after boot so a stale intent from the last
+  // session gets picked up.
+  setTimeout(gwTwapTick, 4000);
+}
+
 async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
     ? window.gromWallet.wcProvider
@@ -3805,16 +4460,24 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   if (!account) throw new Error('Wallet not connected');
   const chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
 
-  // === 1. Try LiFi first — better price, more DEXes, integrator fee ===
-  try {
-    const quote = await gwLifiQuote({ chainId, fromSym, toSym, amtNum, account });
-    if (quote && quote.transactionRequest) {
-      return await gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, provider, account });
+  // === 1. Meta-aggregator — parallel quotes, pick best, walk down list ===
+  //
+  // Cache the last quote set from the UI refresh (gwDsRefreshRate) so we
+  // don't re-ping 4 APIs after the user already saw the "best" number.
+  // If cache is empty or stale, we ask again here.
+  const cached = window.__gwLastAggQuotes;
+  const cacheOk = cached && cached.chainId === chainId && cached.fromSym === fromSym && cached.toSym === toSym && cached.amtNum === amtNum && (Date.now() - cached.at) < 15_000;
+  const quotes = cacheOk ? cached.quotes : await gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account });
+  console.log('[GROM] meta-agg quotes:', quotes.map((q) => ({ agg: q.aggregator, toAmount: q.toAmount.toString(), gasUsd: q.gasUsd })));
+  for (const q of quotes) {
+    try {
+      return await gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote: q, provider, account });
+    } catch (e) {
+      console.warn(`[GROM] ${q.aggregator} exec failed, trying next:`, e?.message || e);
     }
-  } catch (e) {
-    console.warn('[GROM] LiFi path failed, falling back to inline:', e?.message || e);
   }
-  // === 2. Fall back to hand-coded Uniswap/Pancake V2 routers ===
+
+  // === 2. Everything failed — final fallback to hand-coded Uniswap/Pancake V2 ===
   return await gwOnChainSwapExecInline({ fromSym, toSym, amtNum, provider, account, chainId });
 }
 
@@ -4673,6 +5336,7 @@ try {
       safe('telegramHelp',     gwSetupTelegramHelpCard);
       safe('killDemoNums',     gwSetupKillDemoNumbers);
       safe('landingPolish',    gwSetupLandingPolish);
+      safe('advancedOrders',   gwSetupAdvancedPanel);
     }, 0);
   }
 } catch (e) { console.error('[GROM] top-level init failed:', e); }

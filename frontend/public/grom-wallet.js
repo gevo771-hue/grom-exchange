@@ -3139,6 +3139,24 @@ function gwInjectDashSwapCss() {
     .gw-ds-route.warn .v { color: #f5b94d; }
     .gw-ds-route.err { border-color: rgba(239,68,68,0.25); background: rgba(239,68,68,0.05); }
     .gw-ds-route.err .v { color: #f87171; }
+    /* Phase 7 — chain-chip row inside swap panel */
+    .gw-ds-chains {
+      display: flex; gap: 6px; margin: 8px 0 6px; overflow-x: auto;
+      scrollbar-width: none; -ms-overflow-style: none; padding: 2px 0 6px;
+    }
+    .gw-ds-chains::-webkit-scrollbar { display: none; }
+    .gw-ds-chain {
+      flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px 6px 8px; border-radius: 999px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+      color: #cfdfee; font-size: 11.5px; font-weight: 700; cursor: pointer;
+      letter-spacing: .02em; transition: background .18s, border-color .18s;
+    }
+    .gw-ds-chain .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--chColor, #00c2ff); box-shadow: 0 0 0 2px rgba(255,255,255,0.04); }
+    .gw-ds-chain:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.12); }
+    .gw-ds-chain.on { background: rgba(0,194,255,0.14); border-color: rgba(0,194,255,0.35); color: #e7eef8; }
+    .gw-ds-chain.soon { opacity: 0.65; }
+    .gw-ds-chain .soon-tag { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: #98a8c0; margin-left: 4px; padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); }
     /* Meta-aggregator comparison strip (Phase 2) */
     .gw-ds-route .agg-cmp { color: #6b7a92; font-size: 10.5px; margin-top: 4px; letter-spacing: .01em;
       display: flex; flex-wrap: wrap; gap: 6px 10px; }
@@ -4790,6 +4808,30 @@ function gwInjectDashSwapPanel() {
   if (banners && banners.parentNode === page) banners.after(panel);
   else if (stats && stats.parentNode === page) stats.after(panel);
   else page.prepend(panel);
+  // Phase 7 — wire chain chips + mark the currently-connected chain as
+  // active so the user sees "you're on Arbitrum right now" at a glance.
+  try {
+    gwDsChainChipsWire(panel);
+    (async () => {
+      const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
+        ? window.gromWallet.wcProvider
+        : window.ethereum;
+      if (!provider) return;
+      const hex = await provider.request({ method: 'eth_chainId' }).catch(() => null);
+      if (!hex) return;
+      const cid = parseInt(hex, 16);
+      panel.querySelectorAll('.gw-ds-chain').forEach((b) => b.classList.toggle('on', Number(b.dataset.cid) === cid));
+      // Also react to future chain switches inside the wallet.
+      if (provider.on && !provider.__gwDsChainWired) {
+        provider.__gwDsChainWired = true;
+        provider.on('chainChanged', (h) => {
+          const newCid = typeof h === 'string' ? parseInt(h, 16) : Number(h);
+          document.querySelectorAll('.gw-ds-chain').forEach((b) => b.classList.toggle('on', Number(b.dataset.cid) === newCid));
+          try { gwDsRefreshRate(); } catch (_) {}
+        });
+      }
+    })();
+  } catch (_) {}
   // Wire events
   const flipBtn = document.getElementById('gwDsFlip');
   if (flipBtn) flipBtn.addEventListener('click', () => {

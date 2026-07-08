@@ -663,22 +663,8 @@ const WC_WALLET_IDS = {
   okx:      '971e689d0a5be527bac79629b4ee9b925e82208e5168b733496a09c0faed0709',
   coinbase: 'fd20dc426fb37566d803205b19bbc1d4096b248ac04548e3cfb6b3a38bd033aa',
   safepal:  '0b415a746fb9ee99cce155c2ceca0c6f6061b1dbca2d722b3ba16381d0562150',
-  rainbow:  '1ae92b26df02f0abca1304a2aab3d6694448969',
-  ledger:   '19177a98252e07ddfc9af2083ba8ec79b8c25259',
-  argent:   'c03dfee351b6fcc421b449ce0f7d294b42a89487',
-  tokenpocket: '20459438007b75f4f4acb98a0c55ce870b6cf47',
-  imtoken:  '1187943853d4b1da19faeb82d19dbb9e2f784d02',
-  zerion:   'acb83e5f9f8e3a62bd4bbb9010d85e953681c1d05',
 };
 let wcRecommendedForKey = null;
-
-function wcExplorerLogo(id) {
-  if (!id) return '/assets/wallets/walletconnect.svg';
-  return `https://explorer-api.walletconnect.com/v3/logo/md/${id}?projectId=${WC_PROJECT_ID}`;
-}
-
-/** Wallets shown when user taps "Other wallet" — beyond the main connect list. */
-const GW_OTHER_WALLET_KEYS = ['safepal', 'rainbow', 'ledger', 'argent', 'tokenpocket', 'imtoken', 'zerion', 'generic'];
 
 const GW_WALLET_WC = {
   metamask: {
@@ -730,76 +716,6 @@ const GW_WALLET_WC = {
     desktopQrLink: (uri) => 'https://go.cb-w.com/wc?uri=' + encodeURIComponent(uri),
     installUrl: 'https://www.coinbase.com/wallet/downloads',
     injectCheck: () => rdnsProvider('com.coinbase.wallet') || window.coinbaseWalletExtension || findLegacy(isCoinbaseProvider),
-  },
-  safepal: {
-    id: WC_WALLET_IDS.safepal,
-    label: 'SafePal',
-    icon: wcExplorerLogo(WC_WALLET_IDS.safepal),
-    nativeScheme: 'safepalwallet://',
-    mobileScheme: (uri) => 'safepalwallet://wc?uri=' + encodeURIComponent(uri),
-    desktopQrLink: (uri) => 'https://link.safepal.io/wc?uri=' + encodeURIComponent(uri),
-    installUrl: 'https://www.safepal.com/download',
-    injectCheck: () => null,
-  },
-  rainbow: {
-    id: WC_WALLET_IDS.rainbow,
-    label: 'Rainbow',
-    icon: wcExplorerLogo(WC_WALLET_IDS.rainbow),
-    nativeScheme: 'rainbow://',
-    mobileScheme: (uri) => 'rainbow://wc?uri=' + encodeURIComponent(uri),
-    desktopQrLink: (uri) => 'https://rnbwapp.com/wc?uri=' + encodeURIComponent(uri),
-    installUrl: 'https://rainbow.me/download',
-    injectCheck: () => null,
-  },
-  ledger: {
-    id: WC_WALLET_IDS.ledger,
-    label: 'Ledger Live',
-    icon: wcExplorerLogo(WC_WALLET_IDS.ledger),
-    nativeScheme: 'ledgerlive://',
-    mobileScheme: (uri) => 'ledgerlive://wc?uri=' + encodeURIComponent(uri),
-    desktopQrLink: (uri) => 'https://ledger.com/ledger-live/wc?uri=' + encodeURIComponent(uri),
-    installUrl: 'https://www.ledger.com/ledger-live',
-    injectCheck: () => null,
-  },
-  argent: {
-    id: WC_WALLET_IDS.argent,
-    label: 'Argent',
-    icon: wcExplorerLogo(WC_WALLET_IDS.argent),
-    nativeScheme: 'argent://',
-    mobileScheme: (uri) => 'argent://app/wc?uri=' + encodeURIComponent(uri),
-    desktopQrLink: (uri) => 'https://www.argent.xyz/wc?uri=' + encodeURIComponent(uri),
-    installUrl: 'https://www.argent.xyz/download',
-    injectCheck: () => null,
-  },
-  tokenpocket: {
-    id: WC_WALLET_IDS.tokenpocket,
-    label: 'TokenPocket',
-    icon: wcExplorerLogo(WC_WALLET_IDS.tokenpocket),
-    nativeScheme: 'tpoutside://',
-    mobileScheme: (uri) => 'tpoutside://wc?uri=' + encodeURIComponent(uri),
-    desktopQrLink: (uri) => 'https://tokenpocket.pro/wc?uri=' + encodeURIComponent(uri),
-    installUrl: 'https://www.tokenpocket.pro/en/download/pc',
-    injectCheck: () => null,
-  },
-  imtoken: {
-    id: WC_WALLET_IDS.imtoken,
-    label: 'imToken',
-    icon: wcExplorerLogo(WC_WALLET_IDS.imtoken),
-    nativeScheme: 'imtokenv2://',
-    mobileScheme: (uri) => 'imtokenv2://wc?uri=' + encodeURIComponent(uri),
-    desktopQrLink: (uri) => 'https://connect.token.im/wc?uri=' + encodeURIComponent(uri),
-    installUrl: 'https://token.im/download',
-    injectCheck: () => null,
-  },
-  zerion: {
-    id: WC_WALLET_IDS.zerion,
-    label: 'Zerion',
-    icon: wcExplorerLogo(WC_WALLET_IDS.zerion),
-    nativeScheme: 'zerion://',
-    mobileScheme: (uri) => 'zerion://wc?uri=' + encodeURIComponent(uri),
-    desktopQrLink: (uri) => 'https://wallet.zerion.io/wc?uri=' + encodeURIComponent(uri),
-    installUrl: 'https://zerion.io/download',
-    injectCheck: () => null,
   },
   generic: {
     id: null,
@@ -946,126 +862,25 @@ async function connectWC() {
   return connectWalletWC('generic');
 }
 
-function gwInjectOtherWalletsCss() {
-  if (document.getElementById('gw-other-wallets-css')) return;
-  const css = `
-    #gwOtherWalletsModal {
-      display: none; position: fixed; inset: 0; z-index: 2500;
-      align-items: center; justify-content: center;
-    }
-    .gw-ow-backdrop {
-      position: absolute; inset: 0; background: rgba(0,0,0,.72);
-      display: flex; align-items: center; justify-content: center; padding: 16px;
-    }
-    .gw-ow-panel {
-      position: relative; z-index: 1; width: min(420px, 100%);
-      max-height: min(88dvh, 640px); overflow-y: auto;
-      background: #0b1220; border: 1px solid rgba(0,194,255,.25);
-      border-radius: 16px; padding: 18px 16px 16px; color: #e8eef7;
-      box-shadow: 0 24px 64px rgba(0,0,0,.55);
-      -webkit-overflow-scrolling: touch;
-    }
-    .gw-ow-head {
-      display: flex; align-items: center; gap: 8px;
-      font-weight: 700; font-size: 1.05rem; margin-bottom: 4px;
-    }
-    .gw-ow-sub { font-size: .82rem; color: #9fb0c8; margin: 0 0 14px; line-height: 1.4; }
-    .gw-ow-close {
-      margin-left: auto; border: 0; background: transparent;
-      color: #9fb0c8; font-size: 1.5rem; line-height: 1; cursor: pointer;
-    }
-    .gw-ow-grid {
-      display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
-    }
-    .gw-ow-btn {
-      display: flex; align-items: center; gap: 10px;
-      padding: 11px 12px; border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.08);
-      background: rgba(255,255,255,.04); color: #e8eef7;
-      font: inherit; font-size: .88rem; font-weight: 600;
-      cursor: pointer; text-align: left; width: 100%;
-    }
-    .gw-ow-btn:hover { border-color: rgba(0,194,255,.35); background: rgba(0,194,255,.08); }
-    .gw-ow-btn img { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; }
-    .gw-ow-btn.wc-any { grid-column: 1 / -1; justify-content: center; margin-top: 4px; }
-  `;
-  const s = document.createElement('style');
-  s.id = 'gw-other-wallets-css';
-  s.textContent = css;
-  document.head.appendChild(s);
-}
-
-function gwHideOtherWalletsPicker() {
-  const m = document.getElementById('gwOtherWalletsModal');
-  if (m) m.style.display = 'none';
-}
-
-function gwShowOtherWalletsPicker(onPick) {
-  gwInjectOtherWalletsCss();
-  let modal = document.getElementById('gwOtherWalletsModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'gwOtherWalletsModal';
-    modal.innerHTML = [
-      '<div class="gw-ow-backdrop">',
-      '  <div class="gw-ow-panel" role="dialog" aria-labelledby="gwOwTitle">',
-      '    <div class="gw-ow-head">',
-      '      <span id="gwOwTitle">Choose a wallet</span>',
-      '      <button type="button" class="gw-ow-close" aria-label="Close">×</button>',
-      '    </div>',
-      '    <p class="gw-ow-sub" id="gwOwSub"></p>',
-      '    <div class="gw-ow-grid" id="gwOwGrid"></div>',
-      '  </div>',
-      '</div>',
-    ].join('');
-    document.body.appendChild(modal);
-    modal.querySelector('.gw-ow-close').onclick = () => gwHideOtherWalletsPicker();
-    modal.querySelector('.gw-ow-backdrop').onclick = (e) => {
-      if (e.target.classList.contains('gw-ow-backdrop')) gwHideOtherWalletsPicker();
-    };
-  }
-  const lang = (localStorage.getItem('grom_lang') || '').toLowerCase();
-  const ru = lang === 'ru' || (!lang && (navigator.language || '').toLowerCase().startsWith('ru'));
-  modal.querySelector('#gwOwTitle').textContent = ru ? 'Выберите кошелёк' : 'Choose a wallet';
-  modal.querySelector('#gwOwSub').textContent = ru
-    ? 'Дополнительные кошельки через WalletConnect. На ПК — QR, на телефоне — deeplink в приложение.'
-    : 'More wallets via WalletConnect. Desktop → QR scan, mobile → opens the app.';
-  const grid = modal.querySelector('#gwOwGrid');
-  grid.innerHTML = GW_OTHER_WALLET_KEYS.map((key) => {
-    const cfg = GW_WALLET_WC[key];
-    if (!cfg) return '';
-    const cls = key === 'generic' ? 'gw-ow-btn wc-any' : 'gw-ow-btn';
-    const lbl = key === 'generic'
-      ? (ru ? 'Любой WalletConnect-кошелёк' : 'Any WalletConnect app')
-      : cfg.label;
-    return `<button type="button" class="${cls}" data-key="${key}">` +
-      `<img src="${cfg.icon}" alt="" width="28" height="28" decoding="async"/>` +
-      `<span>${lbl}</span></button>`;
-  }).join('');
-  grid.querySelectorAll('.gw-ow-btn').forEach((btn) => {
-    btn.onclick = async () => {
-      const key = btn.dataset.key;
-      if (!key || typeof onPick !== 'function') return;
-      btn.disabled = true;
-      gwHideOtherWalletsPicker();
-      try { await onPick(key); } catch (_) {}
-    };
-  });
-  modal.style.display = 'flex';
-  if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
-}
-
+/** Other wallet → full Reown / WalletConnect explorer (300+ wallets). */
 async function connectOtherWallet() {
-  return new Promise((resolve, reject) => {
-    gwShowOtherWalletsPicker(async (key) => {
-      try {
-        resolve(await connectWalletWC(key));
-      } catch (e) {
-        reject(e);
-        throw e;
-      }
+  if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
+  gwHideWcModal();
+  try {
+    const p = await ensureWC(true, {
+      walletKey: 'other',
+      showQrModal: true,
+      requiredChains: [1],
+      optionalChains: [42161, 8453, 137, 56, 10, 43114],
     });
-  });
+    await p.connect();
+    const accs = await p.request({ method: 'eth_accounts' });
+    if (!accs?.length) throw new Error('No accounts returned');
+    return await finalizeWcConnection(p, accs[0]);
+  } catch (err) {
+    try { gwKillReownModals(); } catch (_) {}
+    throw err;
+  }
 }
 
 /* ----- disconnect ----- */

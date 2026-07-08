@@ -3756,10 +3756,12 @@ async function gwEnsureChain(provider, targetChainId) {
 const GW_LIFI_ENDPOINT   = 'https://li.quest/v1';
 const GW_LIFI_INTEGRATOR = 'grom-exchange';
 const GW_LIFI_FEE_PCT    = 0.002; // 0.20 % — ours
-// Treasury address that receives our integrator fee. Placeholder for
-// now; before opening real routes we swap this for a multisig you own.
-// Zero address means "no fee applied" — LiFi accepts that silently.
-const GW_LIFI_FEE_ADDR   = '0x0000000000000000000000000000000000000000';
+// GROM Treasury (Trust Wallet, dedicated account created 2026-07-07 by
+// the owner). Same 0x address works on every EVM chain LiFi supports;
+// fee arrives in whichever native / ERC-20 the swap was denominated in.
+// When we outgrow a single-sig hot wallet we swap this for a Gnosis
+// Safe multisig — LiFi accepts any EOA or contract address as fee sink.
+const GW_LIFI_FEE_ADDR   = '0xCFeF272536D6E91A4945063d40ac7CbA7Eb657B5';
 
 /**
  * Ask LiFi for a quote for a single-chain swap. Returns

@@ -253,13 +253,11 @@ function showEmailForm() {
 }
 
 function hideMainRows() {
-  document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(el => el.style.display = 'none');
-  document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('#connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note').forEach(el => el.style.display = 'none');
 }
 
 function showMainRows() {
-  document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(el => el.style.display = '');
-  document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note').forEach(el => el.style.display = '');
+  document.querySelectorAll('#connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note, #connectModal .wm-body > .cn-foot').forEach(el => el.style.display = '');
   document.querySelectorAll('#connectModal .cn-list button.cn-row').forEach(el => {
     el.style.display = '';
     el.hidden = false;
@@ -401,9 +399,11 @@ function hookChipDropdown() {
 
 window.privyLogin = async function privyLogin(method) {
   try {
+    // DEX pivot: email/social hidden from Connect modal. Keep email OTP as a
+    // programmatic fallback for returning Privy users (window.privyLogin('email')).
     if (method === 'email') return showEmailForm();
     if (method === 'google' || method === 'farcaster' || method === 'apple') return oauthLogin(method);
-    return showEmailForm();
+    window.toast?.('Connect with a wallet to sign in', 'info');
   } catch (e) {
     console.error('[grom-privy] login error', e);
     window.toast?.('Login error: ' + (e.message || e), 'error');

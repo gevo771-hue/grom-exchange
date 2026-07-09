@@ -1013,6 +1013,27 @@ window.gromFetchOnchainBalances = async function gromFetchOnchainBalances(addres
 };
 
 /* ----- Wallet connect router (used by index.html cnConnect) ----- */
+async function connectPhantomWallet() {
+  const pk = await gwSolConnect();
+  window.__gwSolAddr = pk;
+  if (window.GROM_CONN) window.GROM_CONN.method = 'solana';
+  updateChip(pk);
+  return pk;
+}
+async function connectTonWallet() {
+  const addr = await gwTonConnect();
+  window.__gwTonAddr = addr;
+  if (window.GROM_CONN) window.GROM_CONN.method = 'ton';
+  updateChip(addr);
+  return addr;
+}
+async function connectTronWallet() {
+  const addr = await gwTronConnect();
+  window.__gwTronAddr = addr;
+  if (window.GROM_CONN) window.GROM_CONN.method = 'tron';
+  updateChip(addr);
+  return addr;
+}
 async function gromWalletConnect(kind, name) {
   try {
     if (kind === 'mm') await connectMetaMask();
@@ -1020,6 +1041,9 @@ async function gromWalletConnect(kind, name) {
     else if (kind === 'bnw3') await connectBinanceWeb3();
     else if (kind === 'okx') await connectOkx();
     else if (kind === 'cb') await connectCoinbase();
+    else if (kind === 'phantom') await connectPhantomWallet();
+    else if (kind === 'ton') await connectTonWallet();
+    else if (kind === 'tron') await connectTronWallet();
     else if (kind === 'wc' || kind === 'ghost') await connectWC();
     else await connectWC();
   } catch (e) {
@@ -8859,6 +8883,55 @@ function gwLpLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'
 function gwInjectLpPolishCss() {
   if (document.getElementById('gw-lp-polish-css')) return;
   const css = `
+    /* DEX-focused hero strip (2026-07-09) */
+    .gw-lp-dex { max-width: 1240px; margin: 40px auto 0; padding: 0 24px; }
+    .gw-lp-dex-hi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    @media (max-width: 900px) { .gw-lp-dex-hi { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .gw-lp-dex-hi { grid-template-columns: 1fr 1fr; gap: 10px; } }
+    .gw-lp-hi-card {
+      padding: 20px 18px 18px; border-radius: 20px; color: #e7eef8;
+      background: linear-gradient(160deg, rgba(0,194,255,.06), rgba(110,141,255,.04) 60%, rgba(8,14,26,0)),
+                  linear-gradient(180deg, rgba(11,18,32,.75), rgba(8,12,20,.55));
+      border: 1px solid rgba(0,194,255,.18); position: relative; overflow: hidden;
+    }
+    .gw-lp-hi-card::after { content: ''; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
+      background: radial-gradient(90% 40% at 100% 0%, rgba(0,194,255,.22), transparent 55%); opacity: .6; }
+    .gw-lp-hi-icon { font-size: 22px; margin-bottom: 8px; }
+    .gw-lp-hi-h { margin: 0; font-size: 15px; font-weight: 800; color: #fff; letter-spacing: -0.01em; }
+    .gw-lp-hi-p { margin: 4px 0 0; font-size: 12.5px; color: #cfdfee; line-height: 1.5; }
+
+    /* Chain grid */
+    .gw-lp-chains { max-width: 1240px; margin: 40px auto 0; padding: 32px 24px; border-radius: 24px;
+      background: linear-gradient(180deg, rgba(11,18,32,.55), rgba(8,12,20,.35)); border: 1px solid rgba(122,162,199,.14); }
+    .gw-lp-chains-h { text-align: center; margin: 0 0 6px; font-size: 22px; font-weight: 900; color: #fff; letter-spacing: -0.01em; }
+    .gw-lp-chains-sub { text-align: center; margin: 0 0 22px; color: #98a8c0; font-size: 12.5px; letter-spacing: .04em; }
+    .gw-lp-chains-grid { display: grid; grid-template-columns: repeat(11, 1fr); gap: 12px; }
+    @media (max-width: 900px) { .gw-lp-chains-grid { grid-template-columns: repeat(6, 1fr); } }
+    @media (max-width: 480px) { .gw-lp-chains-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; } }
+    .gw-lp-chain-cell {
+      display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px;
+      border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.05);
+      transition: transform .18s, border-color .18s, background .18s;
+    }
+    .gw-lp-chain-cell:hover { transform: translateY(-2px); border-color: rgba(0,194,255,.32); background: rgba(255,255,255,.06); }
+    .gw-lp-chain-cell .logo { width: 38px; height: 38px; border-radius: 50%; overflow: hidden;
+      display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,.05);
+      font-weight: 800; font-size: 12px; color: #e7eef8; }
+    .gw-lp-chain-cell img { width: 100%; height: 100%; object-fit: cover; }
+    .gw-lp-chain-cell .lbl { font-size: 11px; color: #cfdfee; font-weight: 700; letter-spacing: .02em; text-align: center; }
+
+    /* Aggregator ribbon */
+    .gw-lp-agg { max-width: 1240px; margin: 32px auto 0; padding: 22px 24px; border-radius: 20px;
+      background: radial-gradient(120% 200% at 100% 0%, rgba(168,85,247,.10), transparent 55%),
+                  linear-gradient(180deg, rgba(11,18,32,.72), rgba(8,12,20,.55));
+      border: 1px solid rgba(168,85,247,.20); text-align: center; }
+    .gw-lp-agg-eyebrow { font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
+      font-weight: 800; color: #d8b4fe; margin-bottom: 8px; }
+    .gw-lp-agg-line { color: #e7eef8; font-size: 14.5px; font-weight: 700; letter-spacing: .01em;
+      display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 12px; }
+    .gw-lp-agg-tag { padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08); font-size: 12.5px; color: #cfdfee; font-weight: 800; }
+
     .gw-lp-cmp, .gw-lp-faq { max-width: 1240px; margin: 60px auto 0; padding: 40px 24px; }
     .gw-lp-cmp-card, .gw-lp-faq-card {
       padding: 32px; border-radius: 24px; color: #e7eef8;

@@ -7153,58 +7153,47 @@
 <div class="wm-overlay" id="connectModal" role="dialog" aria-modal="true" aria-labelledby="cnTitle" onclick="if(event.target===this) closeConnectModal()">
   <div class="wm" style="max-width:420px">
     <div class="wm-head">
-      <h3 id="cnTitle">Connect to GROM</h3>
+      <h3 id="cnTitle">Connect wallet</h3>
       <button type="button" class="wm-close" aria-label="Close" onclick="closeConnectModal()">✕</button>
     </div>
     <div class="wm-body">
-      <!-- Primary: Email + Google -->
-      <button type="button" class="cn-row primary" onclick="cnShowEmail(event)">
-        <span class="ico email"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></svg></span>
-        <span class="lbl">Log in with Email</span>
-        <span class="chev">›</span>
-      </button>
-      <div id="cnEmailForm" style="display:none; margin-top:8px">
-        <div class="cn-email">
-          <input type="email" id="cnEmail" placeholder="you@email.com" autocomplete="email"/>
-          <button type="button" onclick="cnSubmitEmail()">Continue</button>
-        </div>
-        <div class="wm-note" style="margin:8px 0 0">We'll create an embedded wallet for you — no seed phrase needed. Powered by Privy.</div>
-      </div>
-      <button type="button" class="cn-row" onclick="cnConnect('Google','gg', event)" style="margin-top:8px">
-        <span class="ico gg"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 48 48" role="img" aria-hidden="true"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.083 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.64 6.053 28.991 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.64 6.053 28.991 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.048 0-9.607-3.317-11.276-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C42.022 35.026 44 30.038 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg></span>
-        <span class="lbl">Continue with Google</span>
-        <span class="chev">›</span>
-      </button>
-
-      <div class="cn-div">Or connect a wallet</div>
-
       <div class="cn-list">
-        <button type="button" class="cn-row" onclick="cnConnect('MetaMask','mm')">
-          <span class="ico mm"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#metamask__a)"><path fill="#fff" d="M24 0H0v24h24z"/><path fill="#FF5C16" d="m18.9 18.925-3.434-.993-2.59 1.504h-1.807l-2.592-1.504-3.433.993L4 15.5l1.044-3.802L4 8.484 5.044 4.5l5.365 3.114h3.127L18.9 4.5l1.045 3.984-1.045 3.214 1.045 3.802z"/><path fill="#FF5C16" d="m5.045 4.5 5.364 3.116-.213 2.14zm3.433 11.001 2.36 1.747-2.36.684zm2.172-2.888-.454-2.856-2.904 1.942h-.001l.009 2 1.177-1.086zM18.9 4.5l-5.364 3.116.213 2.14zm-3.433 11.001-2.36 1.747 2.36.684zm1.187-3.801v-.002h-.001l-2.904-1.941-.453 2.856h2.171l1.178 1.086z"/><path fill="#E34807" d="m8.477 17.932-3.433.993L4 15.501h4.477zm2.172-5.32.656 4.13-.91-2.297-3.097-.746 1.178-1.087zm4.818 5.32 3.433.993 1.045-3.424h-4.478zm-2.171-5.32-.656 4.13.909-2.297 3.097-.746-1.179-1.087z"/><path fill="#FF8D5D" d="m4 15.5 1.044-3.802H7.29l.008 2 3.098.747.909 2.296-.468.505-2.36-1.747zm15.945 0L18.9 11.698h-2.245l-.009 2-3.097.747-.909 2.296.467.505 2.36-1.747zm-6.409-7.886h-3.127l-.213 2.139 1.109 6.985h1.335l1.11-6.985z"/><path fill="#661800" d="M5.044 4.5 4 8.484l1.044 3.214H7.29l2.905-1.943zM10 13.441H8.982l-.553.528 1.967.474zM18.9 4.5l1.045 3.984-1.045 3.214h-2.245l-2.906-1.943zm-4.954 8.941h1.02l.553.529-1.97.475zm-1.071 4.632.232-.825-.467-.506h-1.336l-.467.506.232.825"/><path fill="#C0C4CD" d="M12.875 18.073v1.364h-1.806v-1.364z"/><path fill="#E7EBF6" d="m8.478 17.93 2.592 1.506v-1.363l-.232-.826zm6.99 0-2.593 1.506v-1.363l.232-.826z"/></g><defs><clipPath id="metamask__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
-          <span class="lbl">MetaMask</span>
-          <span class="chev">›</span>
-        </button>
-        <button type="button" class="cn-row" onclick="cnConnect('WalletConnect','wc')">
-          <span class="ico wc"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#wallet-connect__a)"><path fill="#3B99FC" d="M24 0H0v24h24z"/><path fill="#fff" d="M7.276 9.076c2.609-2.501 6.84-2.501 9.449 0l.313.3a.31.31 0 0 1 0 .453l-1.074 1.03a.17.17 0 0 1-.236 0l-.432-.414c-1.82-1.745-4.772-1.745-6.592 0l-.463.444a.17.17 0 0 1-.236 0l-1.074-1.03a.31.31 0 0 1 0-.453zm11.67 2.129.956.916a.31.31 0 0 1 0 .453l-4.31 4.132a.344.344 0 0 1-.473 0l-3.06-2.932a.086.086 0 0 0-.118 0l-3.06 2.932a.344.344 0 0 1-.472 0l-4.311-4.132a.31.31 0 0 1 0-.453l.956-.916a.344.344 0 0 1 .472 0l3.06 2.933a.086.086 0 0 0 .118 0l3.06-2.933a.344.344 0 0 1 .472 0l3.06 2.933a.086.086 0 0 0 .118 0l3.06-2.933a.345.345 0 0 1 .472 0"/></g><defs><clipPath id="wallet-connect__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
-          <span class="lbl">WalletConnect · More wallets</span>
-          <span class="chev">›</span>
-        </button>
-        <button type="button" class="cn-row" onclick="cnConnect('Binance Web3 Wallet','bnw3')">
-          <span class="ico bn"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#binance__a)"><path fill="#000" d="M24 0H0v24h24z"/><path fill="#F0B90B" d="M7.616 12 5.81 13.805 4.002 12l1.805-1.805zm4.386-4.386 3.096 3.095 1.804-1.804L12.002 4 7.098 8.905l1.804 1.804zm6.191 2.581L16.39 12l1.804 1.805L19.998 12zm-6.19 6.191-3.096-3.095-1.805 1.804 4.9 4.905 4.9-4.905-1.804-1.804zm0-2.581L13.806 12l-1.805-1.805L10.193 12z"/></g><defs><clipPath id="binance__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
-          <span class="lbl">Binance Web3 Wallet</span>
-          <span class="chev">›</span>
-        </button>
-        <button type="button" class="cn-row" onclick="cnConnect('Trust Wallet','trust')">
+        <button type="button" class="cn-row" onclick="cnConnect('Trust Wallet','trust', event)">
           <span class="ico tw"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#trust__a)"><path fill="#0500FF" d="M24 0H0v24h24z"/><path fill="#fff" d="M4.8 6.311 12 4v16c-5.143-2.134-7.2-6.222-7.2-8.533zm14.4 0L12 4v16c5.143-2.134 7.2-6.222 7.2-8.533z"/></g><defs><clipPath id="trust__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
           <span class="lbl">Trust Wallet</span>
           <span class="chev">›</span>
         </button>
-        <button type="button" class="cn-row" onclick="cnConnect('OKX Wallet','okx')">
+        <button type="button" class="cn-row" onclick="cnConnect('WalletConnect','wc', event)">
+          <span class="ico wc"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#wallet-connect__a)"><path fill="#3B99FC" d="M24 0H0v24h24z"/><path fill="#fff" d="M7.276 9.076c2.609-2.501 6.84-2.501 9.449 0l.313.3a.31.31 0 0 1 0 .453l-1.074 1.03a.17.17 0 0 1-.236 0l-.432-.414c-1.82-1.745-4.772-1.745-6.592 0l-.463.444a.17.17 0 0 1-.236 0l-1.074-1.03a.31.31 0 0 1 0-.453zm11.67 2.129.956.916a.31.31 0 0 1 0 .453l-4.31 4.132a.344.344 0 0 1-.473 0l-3.06-2.932a.086.086 0 0 0-.118 0l-3.06 2.932a.344.344 0 0 1-.472 0l-4.311-4.132a.31.31 0 0 1 0-.453l.956-.916a.344.344 0 0 1 .472 0l3.06 2.933a.086.086 0 0 0 .118 0l3.06-2.933a.344.344 0 0 1 .472 0l3.06 2.933a.086.086 0 0 0 .118 0l3.06-2.933a.345.345 0 0 1 .472 0"/></g><defs><clipPath id="wallet-connect__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
+          <span class="lbl">WalletConnect · More wallets</span>
+          <span class="chev">›</span>
+        </button>
+        <button type="button" class="cn-row" onclick="cnConnect('MetaMask','mm', event)">
+          <span class="ico mm"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#metamask__a)"><path fill="#fff" d="M24 0H0v24h24z"/><path fill="#FF5C16" d="m18.9 18.925-3.434-.993-2.59 1.504h-1.807l-2.592-1.504-3.433.993L4 15.5l1.044-3.802L4 8.484 5.044 4.5l5.365 3.114h3.127L18.9 4.5l1.045 3.984-1.045 3.214 1.045 3.802z"/><path fill="#FF5C16" d="m5.045 4.5 5.364 3.116-.213 2.14zm3.433 11.001 2.36 1.747-2.36.684zm2.172-2.888-.454-2.856-2.904 1.942h-.001l.009 2 1.177-1.086zM18.9 4.5l-5.364 3.116.213 2.14zm-3.433 11.001-2.36 1.747 2.36.684zm1.187-3.801v-.002h-.001l-2.904-1.941-.453 2.856h2.171l1.178 1.086z"/><path fill="#E34807" d="m8.477 17.932-3.433.993L4 15.501h4.477zm2.172-5.32.656 4.13-.91-2.297-3.097-.746 1.178-1.087zm4.818 5.32 3.433.993 1.045-3.424h-4.478zm-2.171-5.32-.656 4.13.909-2.297 3.097-.746-1.179-1.087z"/><path fill="#FF8D5D" d="m4 15.5 1.044-3.802H7.29l.008 2 3.098.747.909 2.296-.468.505-2.36-1.747zm15.945 0L18.9 11.698h-2.245l-.009 2-3.097.747-.909 2.296.467.505 2.36-1.747zm-6.409-7.886h-3.127l-.213 2.139 1.109 6.985h1.335l1.11-6.985z"/><path fill="#661800" d="M5.044 4.5 4 8.484l1.044 3.214H7.29l2.905-1.943zM10 13.441H8.982l-.553.528 1.967.474zM18.9 4.5l1.045 3.984-1.045 3.214h-2.245l-2.906-1.943zm-4.954 8.941h1.02l.553.529-1.97.475zm-1.071 4.632.232-.825-.467-.506h-1.336l-.467.506.232.825"/><path fill="#C0C4CD" d="M12.875 18.073v1.364h-1.806v-1.364z"/><path fill="#E7EBF6" d="m8.478 17.93 2.592 1.506v-1.363l-.232-.826zm6.99 0-2.593 1.506v-1.363l.232-.826z"/></g><defs><clipPath id="metamask__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
+          <span class="lbl">MetaMask</span>
+          <span class="chev">›</span>
+        </button>
+        <button type="button" class="cn-row" onclick="cnConnect('Phantom','phantom', event)">
+          <span class="ico ph"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 128 128" role="img" aria-hidden="true"><rect width="128" height="128" rx="24" fill="#AB9FF2"/><path fill="#fff" d="M110.5 58.9c-2.9-14.2-14.8-24.8-29.2-26.1-1.2-.1-2.4-.2-3.6-.1-18.6 1.4-33.2 16.8-33.2 35.6 0 19.7 16 35.7 35.7 35.7 15.9 0 29.4-10.4 34-24.8.5-1.6.8-3.3 1-5 .3-2.5.4-5 .3-7.5-.1-2.6-.4-5.1-1-7.5-.2-.8-.4-1.5-.7-2.2z"/></svg></span>
+          <span class="lbl">Phantom</span>
+          <span class="chev">›</span>
+        </button>
+        <button type="button" class="cn-row" onclick="cnConnect('TON Wallet','ton', event)">
+          <span class="ico ton"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 56 56" role="img" aria-hidden="true"><rect width="56" height="56" rx="12" fill="#0098EA"/><path fill="#fff" d="M37.6 15H18.4L28 32.8z"/><path fill="#fff" fill-opacity=".65" d="M18.4 15 28 41l9.6-26z"/></svg></span>
+          <span class="lbl">TON Wallet</span>
+          <span class="chev">›</span>
+        </button>
+        <button type="button" class="cn-row" onclick="cnConnect('TronLink','tron', event)">
+          <span class="ico trx"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 64 64" role="img" aria-hidden="true"><rect width="64" height="64" rx="12" fill="#EF0027"/><path fill="#fff" d="M48 18 16 28l12 8 20-18zM28 38l20 8V28L28 38z"/></svg></span>
+          <span class="lbl">TronLink</span>
+          <span class="chev">›</span>
+        </button>
+        <button type="button" class="cn-row" onclick="cnConnect('OKX Wallet','okx', event)">
           <span class="ico okx"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#okx__a)"><path fill="#000" d="M24 0H0v24h24z"/><path fill="#fff" d="M4 4h5.333v5.333H4zm10.667 5.333H9.333v5.334H4V20h5.333v-5.333h5.334V20H20v-5.333h-5.333zm0 0V4H20v5.333z"/></g><defs><clipPath id="okx__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
           <span class="lbl">OKX Wallet</span>
           <span class="chev">›</span>
         </button>
-        <button type="button" class="cn-row" onclick="cnConnect('Coinbase Wallet','cb')">
+        <button type="button" class="cn-row" onclick="cnConnect('Coinbase Wallet','cb', event)">
           <span class="ico cb"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#coinbase__a)"><path fill="#0E5BFF" d="M24 0H0v24h24z"/><path fill="#fff" d="M4 12a8 8 0 1 1 16 0 8 8 0 0 1-16 0"/><path fill="#0E5BFF" fill-rule="evenodd" d="M12 17.667a5.667 5.667 0 1 0 0-11.334 5.667 5.667 0 0 0 0 11.334m-.667-7.334a1 1 0 0 0-1 1v1.334a1 1 0 0 0 1 1h1.334a1 1 0 0 0 1-1v-1.334a1 1 0 0 0-1-1z" clip-rule="evenodd"/></g><defs><clipPath id="coinbase__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
           <span class="lbl">Coinbase Wallet</span>
           <span class="chev">›</span>
@@ -7212,7 +7201,7 @@
       </div>
 
       <div class="cn-foot">
-        By connecting you agree to GROM's <a href="#help-terms" onclick="openHelpTopic('terms'); return false;">Terms</a> and <a href="#help-privacy" onclick="openHelpTopic('privacy'); return false;">Privacy</a>. Sign-in via wallet signature only — trading balances custodied, on-chain swaps stay self-signed.
+        By connecting you agree to GROM's <a href="#help-terms" onclick="openHelpTopic('terms'); return false;">Terms</a> and <a href="#help-privacy" onclick="openHelpTopic('privacy'); return false;">Privacy</a>. No email, no KYC — sign in with your wallet signature only.
       </div>
     </div>
   </div>
@@ -7538,12 +7527,12 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260709q';
+  walletModule.src = '/grom-wallet.js?v=20260709r';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = '/grom-privy.js?v=20260706b';
+  privyModule.src = '/grom-privy.js?v=20260709r';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -7925,17 +7914,11 @@ function openConnectModal() {
   } catch (_) {}
   var ov = document.getElementById('connectModal');
   if (ov) ov.classList.add('open');
-  var ef = document.getElementById('cnEmailForm');
-  if (ef) ef.style.display = 'none';
-
-  // Reset modal state: Privy's showEmailForm() hides main rows (Email/Google/wallets)
+  // Reset modal state: Privy's showEmailForm() hides main rows (wallets)
   // and shows its inline OTP form. If the user closed the modal mid-flow and reopens it,
   // we need to restore the main rows so they can pick a different provider.
   try {
-    document.querySelectorAll('#connectModal .wm-body > button.cn-row').forEach(function (el) {
-      el.style.display = '';
-    });
-    document.querySelectorAll('#connectModal .wm-body > .cn-div, #connectModal .wm-body > .cn-list, #connectModal .wm-body > .wm-note, #connectModal .wm-body > .cn-foot').forEach(function (el) {
+    document.querySelectorAll('#connectModal .wm-body > .cn-list, #connectModal .wm-body > .cn-foot').forEach(function (el) {
       el.style.display = '';
     });
     document.querySelectorAll('#connectModal .cn-list button.cn-row').forEach(function (el) {
@@ -8011,17 +7994,7 @@ function cnConnect(name, kind, ev) {
   // redirect; isTrusted=false means "not a real user interaction".
   if (ev && ev.isTrusted === false) return;
   // Real provider dispatch.
-  // Social logins (Google/Apple/Farcaster) go through Privy OAuth (PKCE redirect).
-  if (kind === 'gg' || kind === 'apple' || kind === 'farcaster') {
-    if (typeof window.privyLogin === 'function') {
-      var provider = kind === 'gg' ? 'google' : kind;
-      window.privyLogin(provider);
-      return;
-    }
-    toast('Sign-in client loading… try again in a moment.', 'info');
-    return;
-  }
-  // External wallets (MetaMask / WalletConnect / Binance Web3 / Trust / OKX / Coinbase)
+  // External wallets (MetaMask / WalletConnect / Trust / Phantom / TON / Tron / OKX / Coinbase)
   // are handled by grom-wallet.js (window.gromWalletConnect when present).
   if (typeof window.gromWalletConnect === 'function') {
     window.gromWalletConnect(kind, name);

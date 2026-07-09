@@ -4995,7 +4995,7 @@ function gwTkRender(q) {
   const query = (q || '').toUpperCase();
   const items = GW_DS_ASSETS.filter((a) => !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query));
   if (items.length === 0) { list.innerHTML = `<div class="gw-tk-empty">Nothing matches «${q}»</div>`; return; }
-  list.innerHTML = items.slice(0, 120).map((a) => {
+  list.innerHTML = items.slice(0, 500).map((a) => {
     const ico = a.logo
       ? `<img class="ico" src="${a.logo}" alt="${a.sym}" loading="lazy" onerror="this.outerHTML='<span class=&quot;ico&quot;>${a.sym.slice(0,3)}</span>' " />`
       : `<span class="ico">${a.sym.slice(0, 3)}</span>`;
@@ -6114,16 +6114,20 @@ function gwInjectAdvancedCss() {
                   linear-gradient(160deg, rgba(13,22,38,0.72), rgba(8,14,26,0.92));
       border: 1px solid rgba(0,194,255,0.18);
     }
-    .gw-adv-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
-    .gw-adv-tab { flex: 0 0 auto; padding: 7px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); color: #98a8c0; border: 1px solid rgba(255,255,255,0.06); font-size: 12px; font-weight: 700; cursor: pointer; }
+    .gw-adv-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+    .gw-adv-tab { flex: 0 0 auto; padding: 7px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); color: #98a8c0; border: 1px solid rgba(255,255,255,0.06); font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
     .gw-adv-tab.on { background: rgba(0,194,255,0.14); color: #5dd5ff; border-color: rgba(0,194,255,0.28); }
     .gw-adv-form { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 8px; margin-bottom: 10px; }
     @media (max-width: 640px) {
-      .gw-adv-form { grid-template-columns: 1fr 1fr; }
-      .gw-adv-form button { grid-column: 1 / -1; padding: 11px 14px; font-size: 14px; }
-      .gw-adv-form input, .gw-adv-form select { font-size: 16px; padding: 10px 12px; }
-      .gw-adv-row { grid-template-columns: 1fr auto !important; }
+      .gw-adv-tabs { gap: 8px; }
+      .gw-adv-tab { flex: 1 1 45%; text-align: center; padding: 10px 12px; font-size: 13px; }
+      .gw-adv-form { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .gw-adv-form select#gdInt { grid-column: 1 / -1; }
+      .gw-adv-form button { grid-column: 1 / -1; padding: 13px 14px; font-size: 15px; }
+      .gw-adv-form input, .gw-adv-form select { font-size: 16px; padding: 12px 12px; min-height: 44px; box-sizing: border-box; }
+      .gw-adv-row { grid-template-columns: 1fr auto !important; padding: 12px; }
       .gw-adv-row .state:not(:first-of-type) { grid-column: 1 / -1; }
+      .gw-adv-row .desc { font-size: 13px; }
     }
     .gw-adv-form input, .gw-adv-form select {
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
@@ -7892,7 +7896,7 @@ async function gwFetchTrending() {
     const b = await fetch('https://api.dexscreener.com/token-boosts/latest/v1').then((r) => r.json());
     if (!Array.isArray(b) || b.length === 0) return [];
     // Take top 10, resolve to pairs concurrently, keep top 5 by volume.
-    const top = b.slice(0, 10);
+    const top = b.slice(0, 30);
     const pairs = await Promise.all(top.map((t) => fetch(`https://api.dexscreener.com/latest/dex/tokens/${t.tokenAddress}`).then((r) => r.json()).catch(() => null)));
     const rows = [];
     for (let i = 0; i < pairs.length; i++) {
@@ -7910,7 +7914,7 @@ async function gwFetchTrending() {
         tokenAddress: top[i].tokenAddress,
       });
     }
-    return rows.sort((a, b) => b.volumeUsd - a.volumeUsd).slice(0, 5);
+    return rows.sort((a, b) => b.volumeUsd - a.volumeUsd).slice(0, 20);
   } catch (_) { return []; }
 }
 
@@ -7922,8 +7926,12 @@ async function gwRenderTrending() {
   let wrap = document.getElementById('gwTrendingCard');
   if (!wrap) {
     wrap = document.createElement('div'); wrap.id = 'gwTrendingCard'; wrap.className = 'gw-tr-wrap';
+    // Move Trending ABOVE Yield card per user request.
+    const mp = document.querySelector('.gw-mp-card');
     const yield_ = document.getElementById('gwYieldCard');
-    if (yield_) yield_.after(wrap); else page.appendChild(wrap);
+    if (mp?.parentElement) mp.parentElement.after(wrap);
+    else if (yield_) yield_.before(wrap);
+    else page.appendChild(wrap);
   }
   wrap.innerHTML = `
     <div class="gw-tr-card">
@@ -8057,8 +8065,8 @@ async function gwRenderNftHot() {
   gwInjectMegaCss();
   let wrap = document.getElementById('gwNftCard');
   if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwNftCard'; wrap.className = 'gw-mg-wrap';
-    const rebal = document.getElementById('gwRebalanceCard');
-    if (rebal) rebal.after(wrap); else page.appendChild(wrap);
+    const yield_ = document.getElementById('gwYieldCard');
+    if (yield_) yield_.after(wrap); else page.appendChild(wrap);
   }
   wrap.innerHTML = `<div class="gw-mg-card nft">
     <div class="gw-mg-head"><div>
@@ -8068,22 +8076,32 @@ async function gwRenderNftHot() {
     <div id="gwNftList"><div style="color:#6b7a92;font-size:12.5px">Loading collections…</div></div>
   </div>`;
   try {
-    const r = await fetch('https://api.reservoir.tools/collections/trending/v1?period=24h&limit=5');
-    const j = await r.json();
+    // CoinGecko public API — no key needed. Top NFTs by 24h volume.
+    const r = await fetch('https://api.coingecko.com/api/v3/nfts/markets?order=h24_volume_usd_desc&per_page=10&page=1');
+    if (!r.ok) throw 0;
+    const arr = await r.json();
     const list = document.getElementById('gwNftList'); if (!list) return;
-    if (!j?.collections?.length) { list.textContent = 'No data'; return; }
-    list.innerHTML = j.collections.map((c) => {
-      const px = Number(c.floorAsk?.price?.amount?.decimal || 0).toFixed(3);
-      const chg = Number(c.floorSaleChange?.['1day'] || 0) * 100;
+    if (!Array.isArray(arr) || !arr.length) { list.innerHTML = '<div style="color:#98a8c0;font-size:12.5px">No data — try again in a minute</div>'; return; }
+    list.innerHTML = arr.slice(0, 10).map((c) => {
+      const floor = c.floor_price?.native_currency;
+      const currency = (c.native_currency || 'eth').toUpperCase();
+      const chg = Number(c.floor_price_24h_percentage_change?.native_currency || 0);
       const chgCls = chg >= 0 ? 'up' : 'dn';
       const chgSign = chg >= 0 ? '+' : '';
+      const img = c.image?.small || '';
       return `<div class="gw-mg-row">
-        <span>${c.name || c.slug}</span>
-        <span>${px} ETH · <span class="${chgCls}">${chgSign}${chg.toFixed(1)}%</span></span>
-        <a href="https://opensea.io/collection/${c.slug}" target="_blank" rel="noopener" style="color:#a855f7;text-decoration:none;font-weight:800">Buy →</a>
+        <span style="display:inline-flex;align-items:center;gap:10px">
+          ${img ? `<img src="${img}" style="width:24px;height:24px;border-radius:6px" onerror="this.style.display='none'" />` : ''}
+          ${c.name || ''}
+        </span>
+        <span>${floor ? floor.toFixed(3) + ' ' + currency : '—'} · <span class="${chgCls}">${chgSign}${chg.toFixed(1)}%</span></span>
+        <a href="${c.links?.homepage || 'https://opensea.io/'}" target="_blank" rel="noopener" style="color:#a855f7;text-decoration:none;font-weight:800">View →</a>
       </div>`;
     }).join('');
-  } catch (_) {}
+  } catch (_) {
+    const list = document.getElementById('gwNftList');
+    if (list) list.innerHTML = '<div style="color:#98a8c0;font-size:12.5px">NFT feed temporarily unavailable</div>';
+  }
 }
 
 /* Item #11 — Hyperliquid Perp live */
@@ -8145,18 +8163,33 @@ function gwRenderReferral2() {
   gwInjectMegaCss();
   let wrap = document.getElementById('gwRef2Card');
   if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwRef2Card'; wrap.className = 'gw-mg-wrap';
-    const bot = document.getElementById('gwAiBotCard');
-    if (bot) bot.after(wrap); else page.appendChild(wrap);
+    const nft = document.getElementById('gwNftCard');
+    if (nft) nft.after(wrap); else page.appendChild(wrap);
   }
-  const code = (localStorage.getItem('grom_ref_code') || 'FRIEND').toUpperCase();
-  const link = `https://grom.exchange/?ref=${code}`;
+  const code = (localStorage.getItem('grom_ref_code') || '').toUpperCase();
+  const isAuth = !!code || !!localStorage.getItem('grom_jwt') || !!localStorage.getItem('gw_addr');
+  if (!isAuth) {
+    // Anonymous — teaser + connect CTA. No fake FRIEND code.
+    wrap.innerHTML = `<div class="gw-mg-card ref">
+      <div class="gw-mg-head"><div>
+        <h3 class="gw-mg-h">🎁 Referral 2.0 · 50/50 split forever</h3>
+        <p class="gw-mg-sub">Sign in — get your unique link and earn half of GROM's 0.20% swap fee from every friend, forever</p>
+      </div><span class="gw-mg-badge">50/50</span></div>
+      <button class="gw-mg-cta g" id="gwRef2SignIn">Sign in to unlock →</button>
+    </div>`;
+    document.getElementById('gwRef2SignIn').onclick = () => {
+      try { if (typeof openConnectModal === 'function') openConnectModal(); else if (typeof cnConnect === 'function') cnConnect(); } catch (_) {}
+    };
+    return;
+  }
+  const link = `https://grom.exchange/?ref=${code || 'you'}`;
   wrap.innerHTML = `<div class="gw-mg-card ref">
     <div class="gw-mg-head"><div>
-      <h3 class="gw-mg-h">🎁 Referral 2.0 · 50/50 split</h3>
-      <p class="gw-mg-sub">Приглашай друзей — забирай половину нашей 0.20% комиссии с их свапов навсегда</p>
-    </div><span class="gw-mg-badge">10% ↑</span></div>
-    <div class="gw-mg-grid" style="margin-bottom:12px">
-      <div class="gw-mg-item"><div class="k">Your link</div><div class="v" style="font-size:11.5px;font-family:'JetBrains Mono',monospace">${link}</div></div>
+      <h3 class="gw-mg-h">🎁 Referral 2.0 · 50/50 split forever</h3>
+      <p class="gw-mg-sub">Earn half of GROM's 0.20% swap fee from every friend you refer — paid daily, forever</p>
+    </div><span class="gw-mg-badge">50/50</span></div>
+    <div class="gw-mg-grid" style="margin-bottom:12px;grid-template-columns:2fr 1fr">
+      <div class="gw-mg-item"><div class="k">Your link</div><div class="v" style="font-size:11.5px;font-family:'JetBrains Mono',monospace;word-break:break-all">${link}</div></div>
       <div class="gw-mg-item"><div class="k">Earned</div><div class="v">0.00 USDT</div><div class="s">Paid daily</div></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -8168,20 +8201,23 @@ function gwRenderReferral2() {
   document.getElementById('gwRef2Copy').onclick = () => { navigator.clipboard?.writeText(link); gwToast('Referral link copied', 'success'); };
 }
 
+/* Trimmed 2026-07-09b — user said "не сильно мы много налепили".
+ * Kept: NFT (visual variety) + Referral 2.0 (revenue-driving).
+ * Removed: Perpetuals (out of scope), AI Bot (dup of AI Coach FAB),
+ * Rebalance (mostly stub). Removal is idempotent — safe to redeploy. */
 function gwSetupMegaCards() {
+  ['gwRebalanceCard','gwPerpCard','gwAiBotCard'].forEach(id => document.getElementById(id)?.remove());
   const run = gwDebounce(() => {
     if (!document.getElementById('page-dashboard')) return;
-    try { gwRenderRebalance(); } catch (_) {}
+    ['gwRebalanceCard','gwPerpCard','gwAiBotCard'].forEach(id => document.getElementById(id)?.remove());
     try { gwRenderNftHot(); } catch (_) {}
-    try { gwRenderPerp(); } catch (_) {}
-    try { gwRenderAiBot(); } catch (_) {}
     try { gwRenderReferral2(); } catch (_) {}
   }, 300);
   run();
   let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwRef2Card') || n >= 20) clearInterval(id); else run(); }, 500);
   window.addEventListener('hashchange', run);
   const obs = new MutationObserver(() => run()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
-  window.addEventListener('grom:lang-change', () => { ['gwRebalanceCard','gwNftCard','gwPerpCard','gwAiBotCard','gwRef2Card'].forEach(id => document.getElementById(id)?.remove()); run(); });
+  window.addEventListener('grom:lang-change', () => { ['gwNftCard','gwRef2Card'].forEach(id => document.getElementById(id)?.remove()); run(); });
 }
 
 function gwSetupYield() {

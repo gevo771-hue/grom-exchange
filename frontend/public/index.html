@@ -513,7 +513,7 @@
   @keyframes pulseTag { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
   .dash-banners-wrap {
     position: relative;
-    margin: 0 0 28px;
+    margin: 0 0 36px;
     width: 100%;
     max-width: 100%;
     overflow: hidden;
@@ -1438,7 +1438,7 @@
   .welcome p { margin: 6px 0 0; font-size: 13.5px; color: var(--silver3); max-width: 560px; }
   .welcome .actions { display: flex; gap: 10px; flex-shrink: 0; }
 
-  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 12px; margin-bottom: 22px; }
   .stat-card {
     padding: 16px;
     background: linear-gradient(180deg, rgba(16, 26, 44, 0.68), rgba(11, 18, 32, 0.5));
@@ -4655,7 +4655,7 @@
   ::-webkit-scrollbar-thumb:hover { background: rgba(200, 212, 232, 0.16); }
 
   @media (max-width: 900px) {
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); margin-top: 14px; gap: 14px; }
     .grid-2 { grid-template-columns: 1fr; }
     .ops-grid, .summary-grid, .wallet-grid, .support-grid { grid-template-columns: 1fr; }
     .welcome { flex-direction: column; align-items: flex-start; }
@@ -4994,7 +4994,7 @@
         #page-landing #gwLandingAggHost,
         #page-landing #gwLandingDexHiHost,
         #page-landing #gwLandingCmpHost,
-        #page-landing #gwLandingFaqHost{margin:0 0 40px;padding:0;width:100%;min-width:0}
+        #page-landing #gwLandingFaqHost{margin:0 0 48px;padding:0;width:100%;min-width:0}
         #page-landing #gwLandingAggHost{margin-bottom:36px}
         #page-landing #gwLandingDexHiHost{margin-bottom:44px}
         #page-landing #gwLandingCmpHost{margin-bottom:44px}
@@ -6035,8 +6035,8 @@
     <!-- WALLET -->
     <section class="page" id="page-wallet">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Wallet</span></div>
-      <h1 class="page-title"><span data-i18n="pg_wallet_title">Your wallet</span> <span class="tag">Hybrid · CEX + DEX</span></h1>
-      <p class="page-subtitle" data-i18n="pg_wallet_sub">Trading balances are custodied for fast Spot, Futures, and Binary execution. Direct on-chain swaps via 1inch — your keys, your transaction.</p>
+      <h1 class="page-title"><span data-i18n="pg_wallet_title">Your wallet</span> <span class="tag">Non-custodial · DEX</span></h1>
+      <p class="page-subtitle">On-chain portfolio across 20+ networks. Swap, send and bridge directly from your connected wallet — your keys, your signatures.</p>
 
       <div class="wallet-hero">
         <div>
@@ -6053,9 +6053,9 @@
 
       <div class="ops-grid">
         <div class="ops-mini">
-          <div class="k">Available to trade</div>
+          <div class="k">On-chain balance</div>
           <div class="v mono" id="walletAvailableValue">—</div>
-          <div class="s" id="walletAvailableMeta">Available after sign-in</div>
+          <div class="s" id="walletAvailableMeta">Connect wallet to view</div>
         </div>
         <div class="ops-mini">
           <div class="k">Pending transfers</div>
@@ -6439,7 +6439,7 @@
     <section class="page" id="page-referral">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Referral</span></div>
       <h1 class="page-title"><span data-i18n="ref_title">Referral program</span> <span class="tag" data-i18n="ref_tag">Up to 50%</span></h1>
-      <p class="page-subtitle" data-i18n="ref_sub">Invite friends to GROM and earn a share of every fee they generate — paid daily in USDT, forever.</p>
+      <p class="page-subtitle">Share your link — earn a share of swap fees your friends pay on GROM DEX. Payouts sent on-chain in USDT.</p>
 
       <div class="ref-hero">
         <div class="ref-code">
@@ -6901,7 +6901,7 @@
     <section class="page" id="page-settings">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now" data-i18n="pg_settings_bc">Settings</span></div>
       <h1 class="page-title" data-i18n="pg_settings_title">Settings</h1>
-      <p class="page-subtitle" data-i18n="pg_settings_sub">Account, security, notifications and regional preferences.</p>
+      <p class="page-subtitle">Connected wallet, networks, notifications and regional preferences.</p>
 
       <div class="card">
         <div class="card-head"><h3 data-i18n="set_profile_title">Profile</h3></div>
@@ -7522,7 +7522,7 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260710e';
+  walletModule.src = '/grom-wallet.js?v=20260710f';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
@@ -15201,7 +15201,7 @@ updateAuthUi = function updateAuthUiPatched() {
   var sbLogout = document.getElementById('sidebarLogout');
   if (sbLogout) sbLogout.style.display = connected ? '' : 'none';
   var topLogout = document.getElementById('topLogoutBtn');
-  if (topLogout) topLogout.style.display = connected && !window.GROM_MOBILE ? '' : 'none';
+  if (topLogout) topLogout.style.display = 'none';
   if (!connected) {
     setWalletLabel(gromSignInLabel());
     if (typeof window.gromResetWalletUi === 'function') window.gromResetWalletUi();

@@ -848,6 +848,97 @@ const GW_EXTRA_WALLETS = {
     desktopQrLink: (uri) => 'https://app.onekey.so/wc?uri=' + encodeURIComponent(uri),
     injectCheck: () => null,
   },
+  argent: {
+    label: 'Argent',
+    icon: '',
+    mobileScheme: (uri) => 'argent://app/wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://www.argent.xyz/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  xdefi: {
+    label: 'XDEFI',
+    icon: '',
+    mobileScheme: (uri) => 'xdefi://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://www.xdefi.io/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  uniswap: {
+    label: 'Uniswap Wallet',
+    icon: '',
+    mobileScheme: (uri) => 'uniswap://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://wallet.uniswap.org/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  brave: {
+    label: 'Brave Wallet',
+    icon: '',
+    mobileScheme: (uri) => null,
+    desktopQrLink: (uri) => uri,
+    injectCheck: () => window.brave?.ethereum || null,
+  },
+  gemini: {
+    label: 'Gemini',
+    icon: '',
+    mobileScheme: (uri) => 'gemini://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://exchange.gemini.com/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  safe: {
+    label: 'Safe',
+    icon: '',
+    mobileScheme: (uri) => 'safe://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://app.safe.global/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  hashpack: {
+    label: 'HashPack',
+    icon: '',
+    mobileScheme: (uri) => 'hashpack://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://link.hashpack.app/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  subwallet: {
+    label: 'SubWallet',
+    icon: '',
+    mobileScheme: (uri) => 'subwallet://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://app.subwallet.xyz/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  bitcoincom: {
+    label: 'Bitcoin.com Wallet',
+    icon: '',
+    mobileScheme: (uri) => 'bitcoincom://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://wallet.bitcoin.com/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  fireblocks: {
+    label: 'Fireblocks',
+    icon: '',
+    mobileScheme: (uri) => null,
+    desktopQrLink: (uri) => uri,
+    injectCheck: () => null,
+  },
+  haha: {
+    label: 'HaHa Wallet',
+    icon: '',
+    mobileScheme: (uri) => 'haha://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => uri,
+    injectCheck: () => null,
+  },
+  backpack: {
+    label: 'Backpack',
+    icon: '',
+    mobileScheme: (uri) => 'backpack://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://backpack.app/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  phantom: {
+    label: 'Phantom',
+    icon: '',
+    mobileScheme: (uri) => 'phantom://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://phantom.app/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => window.phantom?.ethereum || window.solana?.isPhantom || null,
+  },
 };
 
 function gwWalletCfg(walletKey) {
@@ -857,9 +948,95 @@ function gwWalletCfg(walletKey) {
 const GW_EXPLORER_WALLET_KEYS = [
   'binance', 'metamask', 'trust', 'okx', 'coinbase', 'safepal', 'tokenpocket',
   'imtoken', 'ledger', 'trezor', 'zerion', 'iopay', 'bitget', 'rabby', 'onekey',
+  'argent', 'xdefi', 'uniswap', 'brave', 'gemini', 'safe', 'hashpack', 'subwallet',
+  'bitcoincom', 'fireblocks', 'haha', 'backpack', 'phantom',
 ];
 
-function gwOpenMoreWalletsExplorer() {
+let _gwExplorerCatalogCache = null;
+
+function gwWcUriLink(tpl, uri) {
+  if (!tpl) return null;
+  const enc = encodeURIComponent(uri);
+  if (tpl.includes('{uri}')) return tpl.replace(/\{uri\}/g, enc);
+  if (tpl.includes('%s')) return tpl.replace('%s', enc);
+  if (/[?&]uri=$/i.test(tpl)) return tpl + enc;
+  if (tpl.includes('wc?uri=') || tpl.includes('/wc?')) return tpl + enc;
+  return tpl + (tpl.endsWith('/') ? '' : '') + enc;
+}
+
+function gwCfgFromWcListing(w) {
+  const mobile = w.mobile?.native || w.mobile?.universal || '';
+  const desktop = w.desktop?.universal || w.desktop?.native || w.mobile?.universal || mobile;
+  const icon = w.image_url?.md
+    || (w.image_id ? `https://explorer-api.walletconnect.com/v3/logo/md/${w.image_id}?projectId=${WC_PROJECT_ID}` : '');
+  return {
+    id: w.id,
+    label: w.metadata?.shortName || w.name,
+    icon,
+    mobileScheme: (uri) => gwWcUriLink(mobile, uri),
+    desktopQrLink: (uri) => gwWcUriLink(desktop, uri) || uri,
+    injectCheck: () => null,
+  };
+}
+
+async function gwLoadExplorerWalletItems() {
+  if (_gwExplorerCatalogCache) return _gwExplorerCatalogCache;
+  const seen = new Set();
+  const out = [];
+  const pushItem = (key, cfg) => {
+    const label = String(cfg.label || key).toLowerCase();
+    const id = cfg.id || key;
+    if (seen.has(id) || seen.has(label)) return;
+    seen.add(id);
+    seen.add(label);
+    out.push({ key, cfg });
+  };
+  for (const key of GW_EXPLORER_WALLET_KEYS) {
+    const cfg = gwWalletCfg(key);
+    if (cfg) pushItem(key, cfg);
+  }
+  try {
+    for (let page = 1; page <= 5; page++) {
+      const r = await fetch(
+        `https://explorer-api.walletconnect.com/v3/wallets?projectId=${WC_PROJECT_ID}&entries=40&page=${page}`
+      );
+      if (!r.ok) break;
+      const j = await r.json();
+      const list = Object.values(j.listings || {});
+      if (!list.length) break;
+      for (const w of list) {
+        const key = 'wcl_' + w.id.slice(0, 16);
+        if (GW_WALLET_WC[key] || GW_EXTRA_WALLETS[key]) continue;
+        const cfg = gwCfgFromWcListing(w);
+        GW_EXTRA_WALLETS[key] = cfg;
+        pushItem(key, cfg);
+      }
+      if (list.length < 40) break;
+    }
+  } catch (e) {
+    console.warn('[GROM] WC explorer catalog', e);
+  }
+  _gwExplorerCatalogCache = out;
+  return out;
+}
+
+function gwRenderExplorerGrid(grid, items, modal) {
+  grid.innerHTML = items.map(({ key, cfg }) => {
+    const initial = (cfg.label || key).slice(0, 2).toUpperCase();
+    const icon = cfg.icon
+      ? `<img src="${cfg.icon}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;gw-expl-fallback&quot;>${initial}</span>'"/>`
+      : `<span class="gw-expl-fallback">${initial}</span>`;
+    return `<button type="button" class="gw-expl-item" data-key="${key}" data-label="${cfg.label}">${icon}<span>${cfg.label}</span></button>`;
+  }).join('');
+  grid.querySelectorAll('.gw-expl-item').forEach((btn) => {
+    btn.onclick = () => {
+      modal.style.display = 'none';
+      connectViaSignClientCustomQr(btn.dataset.key, { fromExplorer: true }).catch(failToast);
+    };
+  });
+}
+
+async function gwOpenMoreWalletsExplorer() {
   gwInjectConnectModalCss();
   gwClearWcPending();
   gwSetWcFlowActive(false);
@@ -902,25 +1079,19 @@ function gwOpenMoreWalletsExplorer() {
   }
 
   const grid = modal.querySelector('.gw-expl-grid');
-  grid.innerHTML = GW_EXPLORER_WALLET_KEYS.map((key) => {
-    const cfg = gwWalletCfg(key);
-    if (!cfg) return '';
-    const initial = (cfg.label || key).slice(0, 2).toUpperCase();
-    const icon = cfg.icon
-      ? `<img src="${cfg.icon}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;gw-expl-fallback&quot;>${initial}</span>'"/>`
-      : `<span class="gw-expl-fallback">${initial}</span>`;
-    return `<button type="button" class="gw-expl-item" data-key="${key}" data-label="${cfg.label}">${icon}<span>${cfg.label}</span></button>`;
-  }).join('');
-
-  grid.querySelectorAll('.gw-expl-item').forEach((btn) => {
-    btn.onclick = () => {
-      modal.style.display = 'none';
-      connectViaSignClientCustomQr(btn.dataset.key, { fromExplorer: true }).catch(failToast);
-    };
-  });
-
+  grid.innerHTML = '<div class="gw-expl-loading" style="grid-column:1/-1;padding:28px;text-align:center;color:#98a8c0;font-size:13px">Loading wallets…</div>';
   modal.querySelector('.gw-expl-search').value = '';
   modal.style.display = 'flex';
+
+  try {
+    const items = await gwLoadExplorerWalletItems();
+    gwRenderExplorerGrid(grid, items, modal);
+  } catch (_) {
+    gwRenderExplorerGrid(grid, GW_EXPLORER_WALLET_KEYS.map((key) => {
+      const cfg = gwWalletCfg(key);
+      return cfg ? { key, cfg } : null;
+    }).filter(Boolean), modal);
+  }
 }
 window.gwOpenMoreWalletsExplorer = gwOpenMoreWalletsExplorer;
 
@@ -1139,6 +1310,13 @@ const ONCHAIN_TOKENS = {
 };
 const TOKEN_DECIMALS = { USDT: 6, USDC: 6 };
 
+/** BSC USDT/USDC use 18 decimals — global 6 would hide balances (e.g. 3 USDT → dust). */
+function gwTokenDecimals(chainId, sym) {
+  const id = Number(chainId);
+  if (id === 56 && (sym === 'USDT' || sym === 'USDC')) return 18;
+  return TOKEN_DECIMALS[sym] || 18;
+}
+
 async function rpcCall(url, method, params) {
   const res = await fetch(url, {
     method: 'POST',
@@ -1167,7 +1345,7 @@ window.gromFetchOnchainBalances = async function gromFetchOnchainBalances(addres
   for (const [sym, contract] of Object.entries(tokenMap)) {
     try {
       const raw = await rpcCall(rpc, 'eth_call', [{ to: contract, data: padAddressData(address) }, 'latest']);
-      const dec = TOKEN_DECIMALS[sym] || 6;
+      const dec = gwTokenDecimals(chainId, sym);
       tokens[sym] = Number(BigInt(raw || '0x0')) / (10 ** dec);
     } catch (_) {
       tokens[sym] = 0;
@@ -1250,6 +1428,27 @@ function hook() {
   // Do not prefetch WC — pre-init can leave Reown modal in a broken state.
 
   console.log('[grom-wallet] ready · project:', WC_PROJECT_ID.slice(0, 8) + '…');
+  try { gwInjectDexPagesCss(); } catch (_) {}
+}
+
+function gwInjectDexPagesCss() {
+  if (document.getElementById('gw-dex-pages-css')) return;
+  const s = document.createElement('style');
+  s.id = 'gw-dex-pages-css';
+  s.textContent = `
+    #topLogoutBtn { display: none !important; }
+    #page-wallet .page-title .tag { background: rgba(0,194,255,.14); border-color: rgba(0,194,255,.35); color: #5dd5ff; }
+    #page-wallet .grid-2 > .card:first-child { display: none !important; }
+    #page-wallet .grid-2 { grid-template-columns: 1fr !important; }
+    #page-referral .page-title .tag { background: rgba(34,193,124,.12); border-color: rgba(34,193,124,.35); color: #22c17c; }
+    #page-settings .set-row:has(#setEmail) { display: none; }
+    #page-settings .set-row:has(#set2fa) { display: none; }
+    @media (max-width: 768px) {
+      .stats-grid { margin-top: 14px !important; gap: 14px !important; }
+      .stat-card { padding: 16px !important; }
+    }
+  `;
+  document.head.appendChild(s);
 }
 
 /* -------------------------------------------------------------------------
@@ -2630,7 +2829,7 @@ function gwInjectMetaPortfolioCss() {
 const GW_MP_CACHE = { custodial: null, onchain: null }; // { at:ms, val }
 const GW_MP_TTL = 30_000;
 const GW_MP_LS_TTL = 10 * 60_000;
-const GW_MP_LS_KEY = 'gw_mp_cache_v1';
+const GW_MP_LS_KEY = 'gw_mp_cache_v2';
 const GW_MP_INFLIGHT = { custodial: null, onchain: null };
 // Hydrate the in-memory cache from localStorage at module load so the
 // very first render after a hard refresh sees the last known values.
@@ -3068,7 +3267,7 @@ function gwInjectConnectModalCss() {
     .gw-expl-search:focus { border-color: rgba(240,185,11,.45); }
     .gw-expl-grid {
       display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
-      padding: 8px 16px 16px; overflow-y: auto; max-height: min(52dvh, 420px);
+      padding: 8px 16px 16px; overflow-y: auto; max-height: min(62dvh, 520px);
     }
     @media (max-width: 480px) { .gw-expl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     .gw-expl-item {
@@ -8179,6 +8378,56 @@ function gwInjectTrendingCss() {
   const s = document.createElement('style'); s.id = 'gw-tr-css'; s.textContent = css; document.head.appendChild(s);
 }
 
+const GW_DX_CHAIN_TO_NUM = {
+  ethereum: 1, eth: 1, bsc: 56, binance: 56, arbitrum: 42161, arb: 42161,
+  polygon: 137, matic: 137, base: 8453, optimism: 10, op: 10,
+  avalanche: 43114, avax: 43114, fantom: 250, ftm: 250, linea: 59144,
+};
+
+function gwDsEnsureTokenOption(sym, meta) {
+  sym = String(sym || '').trim().toUpperCase();
+  if (!sym) return false;
+  meta = meta || {};
+  if (!GW_DS_ASSETS.find((a) => a.sym === sym)) {
+    GW_DS_ASSETS.unshift({
+      sym,
+      name: meta.name || sym,
+      logo: meta.img || meta.logo || '',
+      address: meta.tokenAddress || meta.address || '',
+      chainId: meta.chainId || GW_DX_CHAIN_TO_NUM[String(meta.chain || '').toLowerCase()] || null,
+      trending: true,
+    });
+  }
+  ['gwDsFrom', 'gwDsTo'].forEach((id) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    if (![...sel.options].some((o) => o.value === sym)) {
+      const opt = document.createElement('option');
+      opt.value = sym;
+      opt.textContent = `${sym} · ${meta.name || sym}`;
+      sel.appendChild(opt);
+    }
+  });
+  return true;
+}
+
+function gwDsPickToken(sym, which, meta) {
+  which = which || 'to';
+  gwDsEnsureTokenOption(sym, meta);
+  const sel = document.getElementById(which === 'from' ? 'gwDsFrom' : 'gwDsTo');
+  if (sel) sel.value = sym;
+  try { gwTkSyncButton(which); } catch (_) {}
+  try { gwDsRefreshRate(); } catch (_) {}
+  const chainKey = String(meta?.chain || '').toLowerCase();
+  const num = GW_DX_CHAIN_TO_NUM[chainKey];
+  if (num) {
+    document.querySelectorAll('.gw-ds-chain.on').forEach((el) => el.classList.remove('on'));
+    const chip = document.querySelector(`.gw-ds-chain[data-cid="${num}"]`);
+    if (chip) chip.classList.add('on');
+  }
+}
+window.gwDsPickToken = gwDsPickToken;
+
 async function gwFetchTrending() {
   // DexScreener token-boosts/latest returns tokens ordered by boost. We
   // pull their pair data so we get real price/change/volume.
@@ -8261,7 +8510,7 @@ async function gwRenderTrending() {
       : '$' + r.priceUsd.toFixed(Math.min(8, 4 + Math.max(0, -Math.log10(Math.max(r.priceUsd, 1e-9)) | 0)));
     const initial = (r.sym || '?').slice(0, 3).toUpperCase();
     const img = r.img ? `<img src="${r.img}" alt="" onerror="this.outerHTML='<span class=&quot;avatar&quot;>${initial}</span>'" />` : `<span class="avatar">${initial}</span>`;
-    return `<div class="gw-tr-row" data-sym="${r.sym}" data-chain="${r.chain}" role="button" tabindex="0" aria-label="Swap ${r.sym}">
+    return `<div class="gw-tr-row" data-sym="${r.sym}" data-chain="${r.chain}" data-addr="${r.tokenAddress || ''}" role="button" tabindex="0" aria-label="Swap ${r.sym}">
       ${img}
       <div class="meta"><div class="name">${r.sym}</div><div class="chain">${r.chain}</div></div>
       <div class="px">${priceFmt}</div>
@@ -8272,17 +8521,17 @@ async function gwRenderTrending() {
   list.querySelectorAll('.gw-tr-row').forEach((el) => {
     el.onclick = () => {
       const sym = el.dataset.sym;
-      // Prefill swap panel with this token as receive-asset.
-      const to = document.getElementById('gwDsTo');
-      if (to) {
-        to.value = sym;
-        try { gwTkSyncButton('to'); } catch (_) {}
-        try { gwDsRefreshRate(); } catch (_) {}
-      }
+      const meta = {
+        sym,
+        chain: el.dataset.chain,
+        tokenAddress: el.dataset.addr,
+        name: el.querySelector('.name')?.textContent || sym,
+        img: el.querySelector('img')?.src || '',
+      };
+      gwDsPickToken(sym, 'to', meta);
       const swap = document.querySelector('.gw-ds-wrap');
       if (swap) {
         swap.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Flash the panel border so user's eye locks on to it.
         swap.style.outline = '2px solid rgba(93,213,255,0.7)';
         swap.style.outlineOffset = '4px';
         swap.style.borderRadius = '20px';
@@ -9197,12 +9446,13 @@ function gwInjectLpPolishCss() {
 
     /* Chain grid + powered-by ribbon (replaces old BTC ticker) */
     .gw-lp-chains {
-      padding: 28px 22px 22px; border-radius: 20px; box-sizing: border-box;
+      padding: 28px 22px 30px; border-radius: 20px; box-sizing: border-box;
       background: linear-gradient(180deg, rgba(11,18,32,.55), rgba(8,12,20,.35));
       border: 1px solid rgba(122,162,199,.14);
+      margin-bottom: 6px;
     }
     @media (max-width: 768px) {
-      .gw-lp-chains { padding: 22px 16px 18px; border-radius: 16px; }
+      .gw-lp-chains { padding: 22px 16px 24px; border-radius: 16px; margin-bottom: 8px; }
     }
     .gw-lp-chains-h {
       text-align: center; margin: 0 0 4px; font-size: clamp(18px, 4.5vw, 22px);

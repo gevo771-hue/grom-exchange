@@ -7362,6 +7362,7 @@ try {
       safe('aiCoach',          gwSetupAiCoach);
       safe('yield',            gwSetupYield);
       safe('trending',         gwSetupTrending);
+      safe('mega-cards',       gwSetupMegaCards);
       safe('airdrop',          gwSetupAirdrop);
       safe('predictArb',       gwSetupPredictArb);
       safe('crossMargin',      gwSetupCrossMargin);

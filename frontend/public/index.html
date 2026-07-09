@@ -62,7 +62,7 @@
 <link rel="canonical" href="https://grom.exchange/" />
 <script>if(location.hostname==='www.grom.exchange')location.replace('https://grom.exchange'+location.pathname+location.search+location.hash);</script>
 <title>GROM</title>
-<meta name="description" content="GROM Exchange — hybrid CEX/DEX. Spot, Futures, Binary Options + on-chain swaps. One account, sub-millisecond fills, bank-grade security." />
+<meta name="description" content="GROM — non-custodial DEX. Swap 10 000+ tokens across 20+ chains. Meta-aggregator routes through LiFi, Jupiter, CoWSwap & more. Your keys, your signatures." />
 
 <!-- Open Graph / dApp metadata. WalletConnect-compatible wallets (Trust, MetaMask
      Mobile, Binance Web3) read these to display app name + logo + URL during the
@@ -70,20 +70,20 @@
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="GROM" />
 <meta property="og:title" content="GROM" />
-<meta property="og:description" content="Trade Spot, Futures, and Binary Options. On-chain swaps. Non-custodial wallet. Bank-grade security." />
+<meta property="og:description" content="Non-custodial cross-chain DEX. 10 000+ tokens · 20+ networks · best-route swaps from your wallet." />
 <meta property="og:url" content="https://grom.exchange/" />
 <meta property="og:image" content="https://grom.exchange/assets/og-card.png?v=20260614" />
 <meta property="og:image:secure_url" content="https://grom.exchange/assets/og-card.png?v=20260614" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="GROM — Spot, Futures, Binary Options, on-chain swaps, non-custodial wallet" />
+<meta property="og:image:alt" content="GROM — non-custodial cross-chain DEX, 10 000+ tokens, meta-aggregator swaps" />
 <meta property="og:locale" content="en_US" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="GROM" />
-<meta name="twitter:description" content="Trade Spot, Futures, and Binary Options. On-chain swaps. Non-custodial wallet." />
+<meta name="twitter:description" content="Non-custodial cross-chain DEX. 10 000+ tokens · 20+ networks · best-route swaps from your wallet." />
 <meta name="twitter:image" content="https://grom.exchange/assets/og-card.png?v=20260614" />
-<meta name="twitter:image:alt" content="GROM — Spot, Futures, Binary Options, on-chain swaps, non-custodial wallet" />
+<meta name="twitter:image:alt" content="GROM — non-custodial cross-chain DEX, 10 000+ tokens, meta-aggregator swaps" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -5171,18 +5171,12 @@
         <!-- HERO -->
         <div class="lp-hero">
           <div class="lp-hero-left">
-            <span class="lp-eyebrow" data-i18n="lp_hero_eyebrow">⚡ Hybrid Exchange · CEX Speed + DEX Freedom</span>
-            <h1 class="lp-h1" data-i18n-html="lp_hero_h1">Trade crypto at the speed of <span>thought</span>.</h1>
-            <p class="lp-h1-sub" data-i18n="lp_hero_sub">Spot · Futures · Binary Options · On-chain swaps. One account. Sub-millisecond fills. Your keys when you want them. Bank-grade security from day one.</p>
+            <span class="lp-eyebrow" data-i18n="lp_hero_eyebrow">⚡ Non-custodial DEX · 20+ chains · 10 000+ tokens</span>
+            <h1 class="lp-h1" data-i18n-html="lp_hero_h1">Swap any token. <span>Keep your keys.</span></h1>
+            <p class="lp-h1-sub" data-i18n="lp_hero_sub">Cross-chain meta-aggregator — LiFi, Jupiter, CoWSwap, Paraswap, Kyber, Odos & more. One wallet, every chain, best route every time. No email. No custody. You sign every transaction.</p>
             <div class="lp-cta-row">
-              <button class="lp-btn-primary" onclick="show('binary')" data-i18n="lp_hero_cta1">Start trading →</button>
+              <button class="lp-btn-primary" onclick="openConnectModal()" data-i18n="lp_hero_cta1">Connect wallet →</button>
               <button class="lp-btn-secondary" onclick="show('dashboard')" data-i18n="lp_hero_cta2">Explore dashboard</button>
-            </div>
-            <div class="lp-trust-strip">
-              <span data-i18n-html="lp_hero_trust1"><b>8</b> chains</span>
-              <span data-i18n-html="lp_hero_trust2"><b>365+</b> pairs</span>
-              <span data-i18n-html="lp_hero_trust3"><b>87%</b> binary payout</span>
-              <span data-i18n-html="lp_hero_trust4"><b>100×</b> max leverage</span>
             </div>
           </div>
           <div class="lp-hero-right">
@@ -5203,29 +5197,35 @@
           </div>
         </div>
 
-        <div id="landingTicker" class="lp-live-ticker" aria-label="Live market prices"></div>
+        <div id="gwLandingChainsHost" aria-label="Supported chains"></div>
+        <div id="gwLandingDexHiHost" aria-label="DEX highlights"></div>
 
         <!-- 3 PRODUCT CARDS -->
         <div class="lp-products">
-          <div class="lp-product-card" onclick="show('spot')">
+          <div class="lp-product-card" onclick="openConnectModal()">
             <div class="lp-p-icon">⚡</div>
-            <h3 data-i18n="lp_prod_spot_h">Spot</h3>
-            <p data-i18n="lp_prod_spot_p">FIFO matching engine. Liquidity aggregated from Binance · Kraken · Coinbase. Maker 5 bps · Taker 10 bps. Real-time orderbook depth.</p>
-            <div class="lp-p-cta" data-i18n="lp_prod_spot_cta">Open Spot desk →</div>
+            <h3 data-i18n="lp_prod_spot_h">Instant Swap</h3>
+            <p data-i18n="lp_prod_spot_p">Meta-aggregator scans LiFi · Jupiter · CoWSwap · Paraswap · Kyber · Odos in parallel. You always get the tightest on-chain quote — signed in your wallet, settled on-chain.</p>
+            <div class="lp-p-cta" data-i18n="lp_prod_spot_cta">Swap now →</div>
           </div>
-          <div class="lp-product-card lp-p-hot" onclick="show('futures')">
-            <div class="lp-p-icon">🔥</div>
-            <h3 data-i18n="lp_prod_fut_h">Futures</h3>
-            <p data-i18n="lp_prod_fut_p">Perpetuals up to 100× leverage. Cross or isolated margin. Mark price · funding · liquidation · TP/SL — full risk engine on every position.</p>
-            <div class="lp-p-cta" data-i18n="lp_prod_fut_cta">Open Futures desk →</div>
+          <div class="lp-product-card lp-p-hot" onclick="openConnectModal()">
+            <div class="lp-p-icon">🌐</div>
+            <h3 data-i18n="lp_prod_fut_h">Cross-Chain</h3>
+            <p data-i18n="lp_prod_fut_p">Bridge and swap across Ethereum, Solana, BSC, Arbitrum, Base, Polygon, Avalanche, Bitcoin, TON & Tron — one interface, native transactions on each chain.</p>
+            <div class="lp-p-cta" data-i18n="lp_prod_fut_cta">Bridge assets →</div>
           </div>
-          <div class="lp-product-card lp-p-glow" onclick="show('binary')">
-            <div class="lp-p-icon">⏱</div>
-            <h3 data-i18n="lp_prod_bo_h">Binary Options</h3>
-            <p data-i18n="lp_prod_bo_p">5s · 15s · 30s · 1m · 5m · 15m expiries. 87% payout on win. $50K demo balance to practice — no deposit, no KYC.</p>
-            <div class="lp-p-cta" data-i18n="lp_prod_bo_cta">Try Binary now →</div>
+          <div class="lp-product-card lp-p-glow" onclick="show('predict')">
+            <div class="lp-p-icon">🎯</div>
+            <h3 data-i18n="lp_prod_bo_h">Prediction Markets</h3>
+            <p data-i18n="lp_prod_bo_p">Live probabilities on crypto, politics & sports. Non-custodial wallet sign-in. Demo balance to explore — no deposit required.</p>
+            <div class="lp-p-cta" data-i18n="lp_prod_bo_cta">Open predictions →</div>
           </div>
         </div>
+
+        <div id="gwLandingCmpHost" aria-label="GROM vs other DEXes"></div>
+        <div id="gwLandingFaqHost" aria-label="FAQ"></div>
+
+        <div id="landingTicker" class="lp-live-ticker" aria-label="Live market prices" hidden></div>
 
         <!-- PREDICTION MARKETS SPOTLIGHT -->
         <section class="lp-predict" id="lpPredictSec" aria-label="Prediction markets">
@@ -5239,90 +5239,92 @@
           </div>
         </section>
 
-        <!-- WHY GROM -->
+        <!-- WHY GROM DEX -->
         <div class="lp-why">
-          <h2 class="lp-h2" data-i18n="lp_why_h2">The next-generation exchange</h2>
-          <p data-i18n-html="lp_why_intro" style="text-align:center;color:#9bb3c7;max-width:640px;margin:0 auto 16px;font-size:16px">Most exchanges force you to choose: <b style="color:#e8f1fa">CEX</b> for speed but you give up your keys, or <b style="color:#e8f1fa">DEX</b> for self-custody but high fees and slow swaps. GROM gives you both.</p>
+          <h2 class="lp-h2" data-i18n="lp_why_h2">The sharpest DEX in the world</h2>
+          <p data-i18n-html="lp_why_intro" style="text-align:center;color:#9bb3c7;max-width:680px;margin:0 auto 16px;font-size:16px">Most DEXes route through <b style="color:#e8f1fa">one aggregator</b> and pray for a good price. GROM queries <b style="color:#e8f1fa">seven sources in parallel</b>, picks the best route, and you sign once — funds never touch our servers.</p>
           <div class="lp-why-grid">
             <div class="lp-why-cell">
               <div class="lp-why-emoji">🔐</div>
-              <h4 data-i18n="lp_why_c1_h">Hybrid Custody</h4>
-              <p data-i18n="lp_why_c1_p">Trading balances custodied for instant fills. On-chain swaps via 1inch — your keys, your transaction. Switch between modes in one click.</p>
+              <h4 data-i18n="lp_why_c1_h">100% non-custodial</h4>
+              <p data-i18n="lp_why_c1_p">GROM never holds your tokens. Every swap is a wallet signature → on-chain settlement. We cannot freeze, seize, or rehypothecate your assets.</p>
             </div>
             <div class="lp-why-cell">
-              <div class="lp-why-emoji">🛡</div>
-              <h4 data-i18n="lp_why_c2_h">Maximum Security</h4>
-              <p data-i18n="lp_why_c2_p">MPC hot-wallet · Email OTP + TOTP 2FA · 24h address whitelist · Manual review &gt; $10k · 90%+ in cold storage · Insurance fund for liquidations.</p>
-            </div>
-            <div class="lp-why-cell">
-              <div class="lp-why-emoji">💧</div>
-              <h4 data-i18n="lp_why_c3_h">Real Liquidity</h4>
-              <p data-i18n="lp_why_c3_p">Aggregated price feed from top-3 CEX (Binance · Kraken · Coinbase). Market-maker bot keeps spreads 5–30 bps. No empty order books on day one.</p>
+              <div class="lp-why-emoji">⚡</div>
+              <h4 data-i18n="lp_why_c2_h">Meta-aggregator routing</h4>
+              <p data-i18n="lp_why_c2_p">LiFi · CoWSwap · Squid · Paraswap · Kyber · Odos · Jupiter queried simultaneously. You see the best price, not the first quote.</p>
             </div>
             <div class="lp-why-cell">
               <div class="lp-why-emoji">🌐</div>
-              <h4 data-i18n="lp_why_c4_h">Multi-Chain Native</h4>
-              <p data-i18n="lp_why_c4_p">Ethereum · Arbitrum · Polygon · Base · BNB Chain · TRON · Bitcoin · Solana. Deposit USDT on Tron for $1 fee. Withdraw to any address.</p>
+              <h4 data-i18n="lp_why_c3_h">20+ chains, one tab</h4>
+              <p data-i18n="lp_why_c3_p">Ethereum · Solana · BSC · Arbitrum · Base · Polygon · Optimism · Avalanche · Bitcoin · TON · Tron. Dynamic token list — 10 000+ assets, updated live via LiFi.</p>
+            </div>
+            <div class="lp-why-cell">
+              <div class="lp-why-emoji">🕶</div>
+              <h4 data-i18n="lp_why_c4_h">No email, no KYC</h4>
+              <p data-i18n="lp_why_c4_p">Connect Trust, MetaMask, Phantom, TON, TronLink or WalletConnect — sign a message, start swapping. Fiat on-ramp via Ramp / Transak when you need it.</p>
             </div>
             <div class="lp-why-cell">
               <div class="lp-why-emoji">📊</div>
-              <h4 data-i18n="lp_why_c5_h">Pro Tools</h4>
-              <p data-i18n="lp_why_c5_p">Real-time orderbook depth · Candle/line charts · RSI · MACD · order-flow signals · WebSocket push · API keys for algo traders.</p>
+              <h4 data-i18n="lp_why_c5_h">Pro-grade terminal</h4>
+              <p data-i18n="lp_why_c5_p">Live charts · depth from real DEX quotes · AI route coach · portfolio across all chains · prediction markets — all from one wallet connection.</p>
             </div>
             <div class="lp-why-cell">
-              <div class="lp-why-emoji">💎</div>
-              <h4 data-i18n="lp_why_c6_h">Easy Onboarding</h4>
-              <p data-i18n="lp_why_c6_p">Trade up to $500/day without KYC. Connect with Privy, MetaMask, Trust, Binance Web3 Wallet, or just email + Google. 30 seconds to start.</p>
+              <div class="lp-why-emoji">💳</div>
+              <h4 data-i18n="lp_why_c6_h">Fiat on-ramp built in</h4>
+              <p data-i18n="lp_why_c6_p">Buy crypto with card, Apple Pay, SEPA via Ramp & Transak — lands directly in your connected wallet. No exchange account, no withdrawal queue.</p>
             </div>
           </div>
         </div>
 
         <!-- HOW IT WORKS -->
         <div class="lp-how">
-          <h2 class="lp-h2" data-i18n="lp_how_h2">Start trading in under 60 seconds</h2>
+          <h2 class="lp-h2" data-i18n="lp_how_h2">How GROM DEX works</h2>
           <div class="lp-how-grid">
             <div class="lp-how-step">
               <div class="lp-how-num">1</div>
-              <h4 data-i18n="lp_how_s1_h">Connect wallet or sign up</h4>
-              <p data-i18n="lp_how_s1_p">Privy embedded wallet, MetaMask, Trust, Binance Web3 Wallet, or email + Google login. No password needed.</p>
+              <h4 data-i18n="lp_how_s1_h">Connect your wallet</h4>
+              <p data-i18n="lp_how_s1_p">Trust, MetaMask, Phantom, TON, TronLink, OKX, Coinbase or WalletConnect. One SIWE signature — no email, no password, no seed phrase on our servers.</p>
             </div>
             <div class="lp-how-step">
               <div class="lp-how-num">2</div>
-              <h4 data-i18n="lp_how_s2_h">Deposit or swap</h4>
-              <p data-i18n="lp_how_s2_p">USDT on Tron for $1 fee. Or skip deposit — swap on-chain via 1inch directly from your own wallet.</p>
+              <h4 data-i18n="lp_how_s2_h">Pick token &amp; chain</h4>
+              <p data-i18n="lp_how_s2_p">Search 10 000+ tokens across 20+ networks. GROM shows your on-chain balance per chain and finds the best swap route automatically.</p>
             </div>
             <div class="lp-how-step">
               <div class="lp-how-num">3</div>
-              <h4 data-i18n="lp_how_s3_h">Trade anything</h4>
-              <p data-i18n="lp_how_s3_p">BTC, ETH, SOL, BNB and more. Try Binary Options first with $50K demo balance — zero risk.</p>
+              <h4 data-i18n="lp_how_s3_h">Sign &amp; settle on-chain</h4>
+              <p data-i18n="lp_how_s3_p">Review the aggregated quote, sign in your wallet, done. Tokens arrive in your wallet — GROM never touches them. Need fiat? Use Cash tab → Ramp / Transak.</p>
             </div>
           </div>
         </div>
 
-        <!-- SECURITY DEEP -->
+        <div id="gwLandingAggHost" aria-label="Aggregators"></div>
+
+        <!-- SECURITY -->
         <div class="lp-security">
-          <div style="text-align:center"><div class="lp-sec-badge" data-i18n="lp_sec_badge">🛡 Security-first exchange</div></div>
-          <h2 class="lp-h2" data-i18n="lp_sec_h2">Built like a bank, fast like a DEX</h2>
-          <p data-i18n="lp_sec_sub" style="text-align:center;color:#9bb3c7;max-width:640px;margin:0 auto;font-size:16px">Most new exchanges launch with a "we'll add 2FA later" promise. We launched with everything on.</p>
+          <div style="text-align:center"><div class="lp-sec-badge" data-i18n="lp_sec_badge">🛡 Non-custodial by architecture</div></div>
+          <h2 class="lp-h2" data-i18n="lp_sec_h2">We can't touch your funds — by design</h2>
+          <p data-i18n="lp_sec_sub" style="text-align:center;color:#9bb3c7;max-width:640px;margin:0 auto;font-size:16px">GROM is a routing layer, not a custodian. No hot wallets holding user deposits. No withdrawal queues. No "trust us" — verify on-chain.</p>
           <div class="lp-sec-grid">
-            <div class="lp-sec-item" data-i18n-html="lp_sec_i1"><b>🔑 MPC hot-wallet</b>No single private key sitting on a server. Compromise requires multiple key shards from independent parties.</div>
-            <div class="lp-sec-item" data-i18n-html="lp_sec_i2"><b>📧 3-step withdrawal</b>Email OTP + TOTP 2FA + whitelisted address with 24-hour cooldown after adding. Brute-force impossible.</div>
-            <div class="lp-sec-item" data-i18n-html="lp_sec_i3"><b>👁 Manual review</b>Withdrawals over $10,000 require admin approval with reason logged to immutable audit trail.</div>
-            <div class="lp-sec-item" data-i18n-html="lp_sec_i4"><b>❄ Cold storage 90%+</b>Auto-sweep moves excess out of hot wallet every hour. Multi-sig Gnosis Safe holds the rest, offline.</div>
-            <div class="lp-sec-item" data-i18n-html="lp_sec_i5"><b>💰 Insurance fund</b>USDT pool covers negative-equity liquidations on Futures. No socialized losses across users.</div>
-            <div class="lp-sec-item" data-i18n-html="lp_sec_i6"><b>🔍 SOC 2 in progress</b>External penetration tests planned with Trail of Bits Q3 2026. Bug bounty program live on launch.</div>
+            <div class="lp-sec-item" data-i18n-html="lp_sec_i1"><b>🔑 Wallet-only auth</b>SIWE signature proves ownership — we never see your private key or seed phrase.</div>
+            <div class="lp-sec-item" data-i18n-html="lp_sec_i2"><b>⛓ On-chain settlement</b>Every swap settles in your wallet on the target chain. GROM routes; blockchains execute.</div>
+            <div class="lp-sec-item" data-i18n-html="lp_sec_i3"><b>🔍 Open routing</b>See exactly which DEXes and bridges your quote uses before you sign. No hidden routing.</div>
+            <div class="lp-sec-item" data-i18n-html="lp_sec_i4"><b>🌐 Multi-chain native</b>Each chain uses its native wallet stack — Phantom for Solana, TonConnect for TON, TronLink for Tron, EIP-1193 for EVM.</div>
+            <div class="lp-sec-item" data-i18n-html="lp_sec_i5"><b>💳 Fiat without custody</b>Ramp & Transak send crypto directly to your connected wallet — GROM is never in the flow.</div>
+            <div class="lp-sec-item" data-i18n-html="lp_sec_i6"><b>🔍 Bug bounty live</b>Responsible disclosure program active from launch. External audit planned Q3 2026.</div>
           </div>
         </div>
 
         <!-- FINAL CTA -->
         <div class="lp-final-cta" style="margin-top:60px">
-          <h2 class="lp-final-h" data-i18n="lp_final_h">Ready to trade smarter?</h2>
-          <p class="lp-final-sub" data-i18n="lp_final_sub">Hybrid CEX/DEX. Real liquidity. Bank-grade security. Open your account in 30 seconds — first trade in 60.</p>
+          <h2 class="lp-final-h" data-i18n="lp_final_h">Ready to swap smarter?</h2>
+          <p class="lp-final-sub" data-i18n="lp_final_sub">Non-custodial. Cross-chain. Best price every time. Connect your wallet — first swap in 60 seconds.</p>
           <div class="lp-cta-row">
-            <button class="lp-btn-primary" onclick="show('binary')" data-i18n="lp_final_cta1">Start trading →</button>
-            <button class="lp-btn-secondary" onclick="openConnectModal()" data-i18n="lp_final_cta2">Sign in / Sign up</button>
+            <button class="lp-btn-primary" onclick="openConnectModal()" data-i18n="lp_final_cta1">Connect wallet →</button>
+            <button class="lp-btn-secondary" onclick="show('dashboard')" data-i18n="lp_final_cta2">Explore dashboard</button>
           </div>
-          <p class="lp-final-tiny" data-i18n="lp_final_tiny">No deposit required for Binary demo · 8 chains · Hybrid custody · Sub-millisecond fills · 24/7 support</p>
+          <p class="lp-final-tiny" data-i18n="lp_final_tiny">20+ chains · 10 000+ tokens · 7 aggregators · No email · No KYC for swaps · Fiat via Ramp / Transak</p>
         </div>
 
       </div>
@@ -5474,16 +5476,16 @@
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now" data-i18n="dash_bc">Dashboard</span></div>
       <div class="dash-banners-wrap" id="dashBannersWrap" hidden>
       <div class="dash-banners" id="dashBanners">
-        <a class="dash-banner banner-spot" onclick="show('spot')">
+        <a class="dash-banner banner-spot" onclick="openConnectModal()">
           <div class="banner-mesh"></div>
           <div class="banner-shine"></div>
           <div class="banner-content">
-            <div class="banner-ico">📈</div>
+            <div class="banner-ico">⚡</div>
             <div class="banner-copy">
-            <div class="banner-eyebrow" data-i18n="dash_banner_spot_eyebrow">SPOT TRADING</div>
-            <h3 data-i18n="dash_banner_spot_h">365 crypto pairs · 0.10% fee</h3>
-            <p data-i18n="dash_banner_spot_p">Aggregated liquidity from Binance · Kraken · Coinbase. Direct on-chain swaps available.</p>
-            <div class="banner-cta" data-i18n="dash_banner_spot_cta">Open Spot →</div>
+            <div class="banner-eyebrow" data-i18n="dash_banner_spot_eyebrow">INSTANT SWAP</div>
+            <h3 data-i18n="dash_banner_spot_h">10 000+ tokens · best-route DEX</h3>
+            <p data-i18n="dash_banner_spot_p">Meta-aggregator across LiFi, Jupiter, CoWSwap & more. Sign in wallet — settle on-chain.</p>
+            <div class="banner-cta" data-i18n="dash_banner_spot_cta">Swap now →</div>
             </div>
           </div>
         </a>
@@ -7521,13 +7523,13 @@
 </div>
 
 <script src="/grom-instruments.js?v=20260424x"></script>
-<script src="/grom-i18n.js?v=20260616e"></script>
+<script src="/grom-i18n.js?v=20260710a"></script>
 <script src="/grom-i18n-extra.js?v=20260616e"></script>
 <script>
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260709r';
+  walletModule.src = '/grom-wallet.js?v=20260710a';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');

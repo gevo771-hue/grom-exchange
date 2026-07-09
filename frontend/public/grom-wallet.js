@@ -8709,57 +8709,57 @@ function gwSetupCrossMargin() {
  * ============================================================================ */
 const GW_LP_TR = {
   ru: {
-    cmpEyebrow: 'GROM vs остальные',
-    cmpH: 'Почему пользователи переходят на GROM',
+    cmpEyebrow: 'GROM vs другие DEX',
+    cmpH: 'Почему GROM — самый острый DEX',
     cmpCol0: 'Возможность',
     cmpColG: 'GROM',
-    cmpColCex: 'Традиционный CEX',
-    cmpColDex: 'DEX',
+    cmpColCex: 'Обычный DEX',
+    cmpColDex: 'CEX',
     cmpRows: [
-      ['Свои ключи', 'Да (гибрид)', 'Нет', 'Да'],
-      ['Скорость исполнения', '<1 мс', '<1 мс', '5-30 сек'],
-      ['Комиссия', '0,10 %', '0,10-0,20 %', '0,3-1 %'],
-      ['Депозит без KYC', 'до $2 000/день', 'Нет', 'Не нужен'],
-      ['Ликвидность', 'Binance+Kraken+Coinbase', '1 источник', 'Фрагментированная'],
-      ['AI-коуч в интерфейсе', 'Есть', 'Нет', 'Нет'],
-      ['Prediction markets', 'Есть', 'Нет', 'Отдельные dApps'],
+      ['Свои ключи', 'Всегда', 'Да', 'Нет'],
+      ['Агрегаторов в параллель', '7 (LiFi, Jupiter…)', '1', '0'],
+      ['Кросс-чейн своп', '20+ сетей', '1–3 сети', 'Только внутренний баланс'],
+      ['Токенов', '10 000+ динамически', 'Сотни', 'Сотни'],
+      ['Email / KYC для свопа', 'Не нужен', 'Не нужен', 'Обязателен'],
+      ['Фиат on-ramp', 'Ramp / Transak → кошелёк', 'Редко', 'Да, но кастодиально'],
+      ['Prediction markets', 'Встроены', 'Нет', 'Нет'],
     ],
     faqEyebrow: 'FAQ',
-    faqH: 'Частые вопросы',
+    faqH: 'Как работает GROM DEX',
     faqItems: [
-      ['Нужен ли KYC?', 'До $2 000/день торговли и вывода — нет. Выше — потребуется верификация через Sumsub (5-10 минут). Binary Options с демо-балансом $50 000 — вообще без регистрации.'],
-      ['У кого мои ключи?', 'На вкладке On-chain — только у тебя, GROM никогда не видит приватный ключ. На торговом счёте (Spot/Futures/Binary) баланс держится на нашей стороне для мгновенного исполнения — это гибрид, а не полный CEX.'],
-      ['Как быстро приходит депозит?', 'USDT на Tron — 3 минуты. USDT на Arbitrum/Base — 3 минуты. BTC — 30 минут. Как только Binance master-адрес получает 1 подтверждение, баланс появляется у тебя.'],
-      ['А если случится ликвидация с отрицательным equity?', 'Есть страховой USDT-пул, покрывающий такие ситуации — социализации убытков между пользователями нет.'],
-      ['Сколько времени занимает регистрация?', '30 секунд. Email + Google → сразу торгуешь. MetaMask/Trust/OKX → SIWE-подпись → готово.'],
-      ['Можно ли ввести/вывести фиатом?', 'Прямой rail с картой через MoonPay / Simplex (появляется во вкладке Cash). Гибкий вариант — купить USDT на Binance/CEX и перевести к нам, тогда ты платишь только сетевые комиссии.'],
+      ['GROM хранит мои деньги?', 'Нет. GROM — маршрутизатор свопов. Ты подписываешь транзакцию в своём кошельке, токены приходят на твой адрес. Мы физически не можем заморозить или забрать средства.'],
+      ['Откуда ликвидность?', 'Мета-агрегатор опрашивает LiFi, CoWSwap, Squid, Paraswap, Kyber, Odos и Jupiter параллельно и показывает лучшую цену. Ты видишь маршрут до подписи.'],
+      ['Нужен ли KYC?', 'Для on-chain свопов — нет. Подключил кошелёк и торгуешь. Фиат через Ramp/Transak — по правилам провайдера, но крипта идёт сразу в твой кошелёк.'],
+      ['Чем отличаемся от Uniswap?', 'Uniswap — один DEX на EVM. GROM — мета-агрегатор: 20+ сетей, Solana/TON/Tron нативно, 7 источников ликвидности, prediction markets и фиат on-ramp в одном интерфейсе.'],
+      ['Какие кошельки?', 'Trust, MetaMask, Phantom, TON Wallet, TronLink, OKX, Coinbase, WalletConnect. Без email.'],
+      ['Как купить крипту картой?', 'Вкладка Cash → Ramp или Transak. Крипта приходит в подключённый кошелёк, GROM не в цепочке custody.'],
     ],
   },
   en: {
-    cmpEyebrow: 'GROM vs the rest',
-    cmpH: 'Why traders switch to GROM',
+    cmpEyebrow: 'GROM vs other DEXes',
+    cmpH: 'Why GROM is the sharpest DEX',
     cmpCol0: 'Capability',
     cmpColG: 'GROM',
-    cmpColCex: 'Traditional CEX',
-    cmpColDex: 'DEX',
+    cmpColCex: 'Typical DEX',
+    cmpColDex: 'CEX',
     cmpRows: [
-      ['Your keys', 'Yes (hybrid)', 'No', 'Yes'],
-      ['Fill latency', '<1 ms', '<1 ms', '5-30 s'],
-      ['Trading fee', '0.10 %', '0.10-0.20 %', '0.3-1 %'],
-      ['Deposit without KYC', 'up to $2,000/day', 'No', 'Not required'],
-      ['Liquidity source', 'Binance+Kraken+Coinbase', 'Single venue', 'Fragmented'],
-      ['AI coach inline', 'Yes', 'No', 'No'],
-      ['Prediction markets', 'Yes', 'No', 'Separate dApps'],
+      ['Your keys', 'Always', 'Yes', 'No'],
+      ['Parallel aggregators', '7 (LiFi, Jupiter…)', '1', '0'],
+      ['Cross-chain swap', '20+ networks', '1–3 chains', 'Internal balance only'],
+      ['Tokens', '10 000+ dynamic', 'Hundreds', 'Hundreds'],
+      ['Email / KYC to swap', 'Not required', 'Not required', 'Required'],
+      ['Fiat on-ramp', 'Ramp / Transak → wallet', 'Rare', 'Yes, custodial'],
+      ['Prediction markets', 'Built-in', 'No', 'No'],
     ],
     faqEyebrow: 'FAQ',
-    faqH: 'Frequently asked',
+    faqH: 'How GROM DEX works',
     faqItems: [
-      ['Do I need KYC?', 'Up to $2,000/day of trading and withdrawal — no. Above that we run Sumsub (5-10 min). Binary Options with the $50K demo balance requires no signup at all.'],
-      ['Who holds my keys?', "On-chain tab — only you; GROM never sees your private key. Trading balance (Spot/Futures/Binary) is custodied for sub-millisecond fills — that's the hybrid, not a full CEX."],
-      ['How fast are deposits?', 'USDT on Tron — 3 min. USDT on Arbitrum/Base — 3 min. BTC — 30 min. Once the Binance master address gets 1 confirmation, your balance shows up.'],
-      ['What if a negative-equity liquidation happens?', "There's a USDT insurance pool that covers those events — no socialized losses across users."],
-      ['How long is sign-up?', '30 seconds. Email + Google — trade immediately. MetaMask/Trust/OKX — SIWE signature — done.'],
-      ['Can I use fiat?', 'Direct card rail via MoonPay / Simplex on the Cash tab. Or buy USDT on Binance/any CEX and transfer to GROM — you only pay network fees.'],
+      ['Does GROM hold my funds?', 'No. GROM is a swap router. You sign in your wallet, tokens land in your address. We cannot freeze, seize, or rehypothecate your assets.'],
+      ['Where does liquidity come from?', 'The meta-aggregator queries LiFi, CoWSwap, Squid, Paraswap, Kyber, Odos and Jupiter in parallel and shows the best quote. You see the full route before signing.'],
+      ['Do I need KYC?', 'Not for on-chain swaps — connect a wallet and go. Fiat via Ramp/Transak follows the provider\'s rules, but crypto lands in your wallet directly.'],
+      ['How is this different from Uniswap?', 'Uniswap is one DEX on EVM. GROM is a meta-aggregator: 20+ chains, native Solana/TON/Tron, 7 liquidity sources, prediction markets and fiat on-ramp in one interface.'],
+      ['Which wallets?', 'Trust, MetaMask, Phantom, TON, TronLink, OKX, Coinbase, WalletConnect. No email.'],
+      ['How do I buy crypto with a card?', 'Cash tab → Ramp or Transak. Crypto goes to your connected wallet — GROM is never in the custody chain.'],
     ],
   },
   es: {
@@ -8883,7 +8883,10 @@ function gwLpLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'
 function gwInjectLpPolishCss() {
   if (document.getElementById('gw-lp-polish-css')) return;
   const css = `
-    /* DEX-focused hero strip (2026-07-09) */
+    .gw-lp-chains-slot { max-width: 1240px; margin: 28px auto 0; padding: 0 24px; }
+    .gw-lp-chains-slot .gw-lp-chains { margin: 0; }
+    .gw-lp-dex-slot { max-width: 1240px; margin: 20px auto 0; padding: 0 24px; }
+    .gw-lp-dex-slot .gw-lp-dex { margin: 0; max-width: none; padding: 0; }
     .gw-lp-dex { max-width: 1240px; margin: 40px auto 0; padding: 0 24px; }
     .gw-lp-dex-hi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
     @media (max-width: 900px) { .gw-lp-dex-hi { grid-template-columns: repeat(2, 1fr); } }
@@ -9111,22 +9114,41 @@ function gwRenderLandingPolish() {
     </div>
   `;
 
-  // Insert BEFORE the final CTA (last .lp-final-cta or before the closing lp-wrap)
-  const finalCta = page.querySelector('.lp-final-cta');
-  const wrap = page.querySelector('.lp-wrap') || page;
-  if (finalCta && finalCta.parentNode === wrap) {
-    // Order: dex highlights → chain grid → aggregator ribbon → cmp table → faq
-    wrap.insertBefore(dex, finalCta);
-    wrap.insertBefore(chains, finalCta);
-    wrap.insertBefore(agg, finalCta);
-    wrap.insertBefore(cmp, finalCta);
-    wrap.insertBefore(faq, finalCta);
-  } else {
-    wrap.appendChild(dex);
-    wrap.appendChild(chains);
-    wrap.appendChild(agg);
-    wrap.appendChild(cmp);
-    wrap.appendChild(faq);
+  // Insert into dedicated landing slots (2026-07-10 DEX pivot)
+  const chainsHost = page.querySelector('#gwLandingChainsHost');
+  const dexHiHost = page.querySelector('#gwLandingDexHiHost');
+  const cmpHost = page.querySelector('#gwLandingCmpHost');
+  const faqHost = page.querySelector('#gwLandingFaqHost');
+  const aggHost = page.querySelector('#gwLandingAggHost');
+
+  if (chainsHost) {
+    chains.classList.add('gw-lp-chains-slot-inner');
+    chainsHost.replaceChildren(chains);
+  }
+  if (dexHiHost) {
+    dexHiHost.replaceChildren(dex);
+  }
+  if (cmpHost) {
+    cmpHost.replaceChildren(cmp);
+  }
+  if (faqHost) {
+    faqHost.replaceChildren(faq);
+  }
+  if (aggHost) {
+    aggHost.replaceChildren(agg);
+  }
+
+  // Fallback: append before final CTA if slots missing
+  if (!chainsHost || !cmpHost) {
+    const finalCta = page.querySelector('.lp-final-cta');
+    const wrap = page.querySelector('.lp-wrap') || page;
+    if (finalCta && finalCta.parentNode === wrap) {
+      if (!chainsHost) wrap.insertBefore(chains, finalCta);
+      if (!dexHiHost) wrap.insertBefore(dex, finalCta);
+      if (!aggHost) wrap.insertBefore(agg, finalCta);
+      if (!cmpHost) wrap.insertBefore(cmp, finalCta);
+      if (!faqHost) wrap.insertBefore(faq, finalCta);
+    }
   }
 
   // Wire FAQ open/close.

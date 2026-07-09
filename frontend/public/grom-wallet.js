@@ -36,17 +36,27 @@ const WC_PROJECT_ID = '28302d1699a8833692b54f0454164625';
 (function gwBlockMmEip6963() {
   if (typeof window === 'undefined') return;
   try {
+    // Layer 1: capture-phase listener stops MM announces at the event
+    // system level. Fires before any wallet-modal listener (Reown, etc).
     window.addEventListener('eip6963:announceProvider', (e) => {
       const rdns = e?.detail?.info?.rdns || '';
-      if (rdns === 'io.metamask') {
-        e.stopImmediatePropagation();
-        // Note: we do NOT preventDefault — the announce isn't cancelable.
-        // stopImmediatePropagation is enough because Reown attaches its
-        // own listener AFTER ours if this runs at top-of-file, and even
-        // when Reown attached first, capture-phase listeners fire before
-        // bubble-phase ones. We pass capture:true to be safe.
-      }
+      if (rdns === 'io.metamask') e.stopImmediatePropagation();
     }, true);
+    // Layer 2 (2026-07-09 reinforce): monkeypatch EventTarget.dispatchEvent
+    // to DROP MM announces entirely — even if MetaMask fires them via a
+    // sub-frame or through a different mechanism. Nothing downstream sees
+    // them. Our own connectMetaMask still works because it falls through
+    // to window.ethereum.isMetaMask directly.
+    const origDispatch = EventTarget.prototype.dispatchEvent;
+    EventTarget.prototype.dispatchEvent = function (evt) {
+      try {
+        if (evt && evt.type === 'eip6963:announceProvider'
+            && evt.detail?.info?.rdns === 'io.metamask') {
+          return false;
+        }
+      } catch (_) {}
+      return origDispatch.call(this, evt);
+    };
   } catch (_) {}
 })();
 
@@ -7172,6 +7182,7 @@ try {
       safe('metaPortfolio',    gwSetupMetaPortfolio);
       safe('aiCoach',          gwSetupAiCoach);
       safe('yield',            gwSetupYield);
+      safe('trending',         gwSetupTrending);
       safe('airdrop',          gwSetupAirdrop);
       safe('predictArb',       gwSetupPredictArb);
       safe('crossMargin',      gwSetupCrossMargin);
@@ -7648,6 +7659,146 @@ async function gwRenderYield() {
     render(b.dataset.asset);
   });
 }
+/* ==========================================================================
+ * ITEM #2 (2026-07-09) — Trending on DEXs
+ *
+ * DexScreener public API returns "boosted" (paid-to-highlight) tokens plus
+ * live pair data. We surface a top-5 heat-map on the dashboard so users
+ * can click straight into a hot swap. Auto-refresh every 5 min.
+ * ========================================================================== */
+const GW_TR_TR = {
+  ru: { h: '🔥 Trending на DEX', sub: 'Топ-5 движущихся токенов на всех DEX за 24ч', empty: 'Загружаем свежие данные…', cta: 'Свап →' },
+  en: { h: '🔥 Trending on DEXs', sub: 'Top-5 hot tokens across every DEX (24h)', empty: 'Fetching fresh data…', cta: 'Swap →' },
+  es: { h: '🔥 Trending en DEX', sub: 'Top-5 tokens calientes 24h', empty: 'Cargando…', cta: 'Swap →' },
+  ar: { h: '🔥 الأكثر رواجاً على DEX', sub: 'أفضل 5 توكنات ساخنة على مدار 24 ساعة', empty: 'جارٍ التحميل…', cta: 'مبادلة ←' },
+  zh: { h: '🔥 DEX 热门', sub: '24 小时全 DEX 热门 top-5', empty: '加载中…', cta: '兑换 →' },
+  hi: { h: '🔥 DEX पर ट्रेंडिंग', sub: '24h में सबसे हॉट टॉप-5', empty: 'लोड हो रहा…', cta: 'स्वैप →' },
+  tr: { h: '🔥 DEX\'te trend', sub: '24s en sıcak 5 token', empty: 'Yükleniyor…', cta: 'Swap →' },
+};
+function gwTrLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'); if (s&&GW_TR_TR[s]) l=s; } catch (_) {} return GW_TR_TR[l]||GW_TR_TR.en; }
+
+function gwInjectTrendingCss() {
+  if (document.getElementById('gw-tr-css')) return;
+  const css = `
+    .gw-tr-wrap { margin: 16px 0 4px; }
+    .gw-tr-card { padding: 20px; border-radius: 22px; color: #e7eef8; position: relative; overflow: hidden;
+      background: radial-gradient(120% 140% at 100% 0%, rgba(232,87,107,0.10), transparent 55%),
+                  linear-gradient(160deg, rgba(13,22,38,0.72), rgba(8,14,26,0.92));
+      border: 1px solid rgba(232,87,107,0.20); }
+    .gw-tr-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+    .gw-tr-title { margin: 0; font-size: 17px; font-weight: 800; }
+    .gw-tr-sub { margin: 4px 0 0; font-size: 12px; color: #98a8c0; }
+    .gw-tr-badge { padding: 4px 8px; border-radius: 999px; background: rgba(232,87,107,0.14); color: #f87171; font-size: 10px; font-weight: 800; letter-spacing: .12em; border: 1px solid rgba(232,87,107,0.28); }
+    .gw-tr-list { display: flex; flex-direction: column; gap: 6px; }
+    .gw-tr-row { display: grid; grid-template-columns: 32px 1fr auto auto auto; gap: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05); align-items: center; cursor: pointer; transition: background .18s, border-color .18s; }
+    .gw-tr-row:hover { background: rgba(255,255,255,0.05); border-color: rgba(232,87,107,0.22); }
+    .gw-tr-row img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,0.05); }
+    .gw-tr-row .name { font-weight: 800; font-size: 13.5px; }
+    .gw-tr-row .chain { font-size: 10.5px; letter-spacing: .1em; color: #6b7a92; text-transform: uppercase; margin-top: 2px; }
+    .gw-tr-row .px { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: #e7eef8; text-align: right; }
+    .gw-tr-row .chg { padding: 3px 7px; border-radius: 6px; font-size: 11.5px; font-weight: 800; text-align: right; min-width: 62px; }
+    .gw-tr-row .chg.up { color: #22c17c; background: rgba(34,193,124,0.14); border: 1px solid rgba(34,193,124,0.28); }
+    .gw-tr-row .chg.dn { color: #f87171; background: rgba(232,87,107,0.14); border: 1px solid rgba(232,87,107,0.28); }
+    .gw-tr-row .cta { color: #5dd5ff; font-size: 12px; font-weight: 800; }
+    .gw-tr-empty { color: #6b7a92; font-size: 13px; text-align: center; padding: 20px 0; }
+  `;
+  const s = document.createElement('style'); s.id = 'gw-tr-css'; s.textContent = css; document.head.appendChild(s);
+}
+
+async function gwFetchTrending() {
+  // DexScreener token-boosts/latest returns tokens ordered by boost. We
+  // pull their pair data so we get real price/change/volume.
+  try {
+    const b = await fetch('https://api.dexscreener.com/token-boosts/latest/v1').then((r) => r.json());
+    if (!Array.isArray(b) || b.length === 0) return [];
+    // Take top 10, resolve to pairs concurrently, keep top 5 by volume.
+    const top = b.slice(0, 10);
+    const pairs = await Promise.all(top.map((t) => fetch(`https://api.dexscreener.com/latest/dex/tokens/${t.tokenAddress}`).then((r) => r.json()).catch(() => null)));
+    const rows = [];
+    for (let i = 0; i < pairs.length; i++) {
+      const j = pairs[i];
+      const p = j?.pairs?.[0];
+      if (!p) continue;
+      rows.push({
+        sym: p.baseToken?.symbol || '?',
+        name: p.baseToken?.name || '',
+        chain: p.chainId || '',
+        priceUsd: Number(p.priceUsd) || 0,
+        change24h: Number(p.priceChange?.h24) || 0,
+        volumeUsd: Number(p.volume?.h24) || 0,
+        img: top[i]?.icon || p.info?.imageUrl || '',
+        tokenAddress: top[i].tokenAddress,
+      });
+    }
+    return rows.sort((a, b) => b.volumeUsd - a.volumeUsd).slice(0, 5);
+  } catch (_) { return []; }
+}
+
+async function gwRenderTrending() {
+  const page = document.getElementById('page-dashboard');
+  if (!page) return;
+  gwInjectTrendingCss();
+  const t = gwTrLang();
+  let wrap = document.getElementById('gwTrendingCard');
+  if (!wrap) {
+    wrap = document.createElement('div'); wrap.id = 'gwTrendingCard'; wrap.className = 'gw-tr-wrap';
+    const yield_ = document.getElementById('gwYieldCard');
+    if (yield_) yield_.after(wrap); else page.appendChild(wrap);
+  }
+  wrap.innerHTML = `
+    <div class="gw-tr-card">
+      <div class="gw-tr-head"><div>
+        <h3 class="gw-tr-title">${t.h}</h3><p class="gw-tr-sub">${t.sub}</p>
+      </div><span class="gw-tr-badge">HOT</span></div>
+      <div class="gw-tr-list" id="gwTrList">
+        <div class="gw-tr-empty">${t.empty}</div>
+      </div>
+    </div>
+  `;
+  const rows = await gwFetchTrending();
+  const list = document.getElementById('gwTrList');
+  if (!list) return;
+  if (rows.length === 0) return;
+  list.innerHTML = rows.map((r) => {
+    const chgCls = r.change24h >= 0 ? 'up' : 'dn';
+    const chgTxt = (r.change24h >= 0 ? '+' : '') + r.change24h.toFixed(2) + '%';
+    const priceFmt = r.priceUsd > 1
+      ? '$' + r.priceUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })
+      : '$' + r.priceUsd.toFixed(Math.min(8, 4 + Math.max(0, -Math.log10(Math.max(r.priceUsd, 1e-9)) | 0)));
+    const img = r.img ? `<img src="${r.img}" alt="" onerror="this.style.background='rgba(255,255,255,.05)'" />` : `<div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.05)"></div>`;
+    return `<div class="gw-tr-row" data-sym="${r.sym}" data-chain="${r.chain}">
+      ${img}
+      <div><div class="name">${r.sym}</div><div class="chain">${r.chain}</div></div>
+      <div class="px">${priceFmt}</div>
+      <div class="chg ${chgCls}">${chgTxt}</div>
+      <div class="cta">${t.cta}</div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.gw-tr-row').forEach((el) => {
+    el.onclick = () => {
+      // Prefill swap panel with this token as receive-asset.
+      const to = document.getElementById('gwDsTo');
+      if (to) {
+        to.value = el.dataset.sym;
+        try { gwTkSyncButton('to'); } catch (_) {}
+        try { gwDsRefreshRate(); } catch (_) {}
+      }
+      document.querySelector('.gw-ds-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+  });
+}
+
+function gwSetupTrending() {
+  const tryRender = gwDebounce(() => { if (document.getElementById('page-dashboard')) { try { gwRenderTrending(); console.log('[GROM] trending rendered'); } catch (e) { console.warn('[GROM] trending', e); } } }, 250);
+  tryRender();
+  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwTrendingCard') || n >= 20) clearInterval(id); else tryRender(); }, 500);
+  window.addEventListener('hashchange', tryRender);
+  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  window.addEventListener('grom:lang-change', () => { const el = document.getElementById('gwTrendingCard'); if (el) el.remove(); tryRender(); });
+  // Auto-refresh every 5 min while dashboard is visible.
+  setInterval(() => { if (document.getElementById('gwTrendingCard') && document.getElementById('page-dashboard')?.offsetParent) gwRenderTrending(); }, 5 * 60_000);
+}
+
 function gwSetupYield() {
   const tryRender = gwDebounce(() => { if (document.getElementById('page-dashboard')) { try { gwRenderYield(); console.log('[GROM] yield rendered'); } catch (e) { console.warn('[GROM] yield', e); } } }, 200);
   tryRender();

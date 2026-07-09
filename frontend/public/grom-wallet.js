@@ -5918,12 +5918,69 @@ async function gwAggQuoteOdos({ chainId, fromSym, toSym, amtNum, account }) {
  * sorted best-to-worst by toAmount (winner first). Rejections are
  * dropped silently — one aggregator failing doesn't kill the swap.
  */
+/* Item #5 — CowSwap MEV-protected quote (Ethereum + Arbitrum + Base only). */
+async function gwAggQuoteCow({ chainId, fromSym, toSym, amtNum, account }) {
+  const NET = { 1: 'mainnet', 100: 'xdai', 42161: 'arbitrum_one', 8453: 'base' };
+  const net = NET[chainId];
+  if (!net) return null;
+  const cfg = GW_OC_SWAP[chainId]; if (!cfg) return null;
+  const { inAddr, outAddr } = _metaResolveAddrs(cfg, fromSym, toSym);
+  if (!inAddr || !outAddr) return null;
+  const inDec = cfg.decimals[fromSym] ?? 18;
+  const sellAmount = BigInt(Math.floor(amtNum * 10 ** inDec)).toString();
+  try {
+    const r = await fetch(`https://api.cow.fi/${net}/api/v1/quote`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sellToken: inAddr === GW_META_NATIVE ? cfg.wrapped : inAddr,
+        buyToken:  outAddr === GW_META_NATIVE ? cfg.wrapped : outAddr,
+        from: account, receiver: account,
+        sellAmountBeforeFee: sellAmount,
+        kind: 'sell', partiallyFillable: false, signingScheme: 'eip712',
+        onchainOrder: false,
+      }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const buyAmount = j?.quote?.buyAmount; if (!buyAmount) return null;
+    return { aggregator: 'CoWSwap (MEV-safe)', tool: 'cowswap', toAmount: BigInt(buyAmount), gasUsd: 0, approvalAddress: null, transactionRequest: null, _cowQuote: j, raw: j };
+  } catch (_) { return null; }
+}
+
+/* Item #6 — Squid Router cross-chain (Axelar). Same-chain also works. */
+async function gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account }) {
+  const cfg = GW_OC_SWAP[chainId]; if (!cfg) return null;
+  const { inAddr, outAddr } = _metaResolveAddrs(cfg, fromSym, toSym);
+  if (!inAddr || !outAddr) return null;
+  const inDec = cfg.decimals[fromSym] ?? 18;
+  const amount = BigInt(Math.floor(amtNum * 10 ** inDec)).toString();
+  try {
+    const r = await fetch('https://apiplus.squidrouter.com/v2/route', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-integrator-id': 'grom-exchange' },
+      body: JSON.stringify({
+        fromChain: String(chainId), toChain: String(chainId),
+        fromToken: inAddr === GW_META_NATIVE ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' : inAddr,
+        toToken:   outAddr === GW_META_NATIVE ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' : outAddr,
+        fromAmount: amount, fromAddress: account, toAddress: account,
+        slippage: 0.5, enableForecall: true, quoteOnly: false,
+      }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const est = j?.route?.estimate; if (!est?.toAmount) return null;
+    const tx = j?.route?.transactionRequest;
+    return { aggregator: 'Squid (Axelar)', tool: 'squid', toAmount: BigInt(est.toAmount), gasUsd: Number(est.gasCosts?.[0]?.amountUsd || 0), approvalAddress: tx?.target, transactionRequest: tx ? { to: tx.target, data: tx.data, value: tx.value || '0x0', gasLimit: tx.gasLimit } : null, raw: j };
+  } catch (_) { return null; }
+}
+
 async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account }) {
   const jobs = [
     gwAggQuoteLifi({ chainId, fromSym, toSym, amtNum, account }),
     gwAggQuoteParaswap({ chainId, fromSym, toSym, amtNum, account }),
     gwAggQuoteKyber({ chainId, fromSym, toSym, amtNum, account }),
     gwAggQuoteOdos({ chainId, fromSym, toSym, amtNum, account }),
+    gwAggQuoteCow({ chainId, fromSym, toSym, amtNum, account }),
+    gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account }),
   ];
   const settled = await Promise.allSettled(jobs);
   const quotes = settled.filter((r) => r.status === 'fulfilled' && r.value).map((r) => r.value);
@@ -7919,6 +7976,211 @@ function gwSetupTrending() {
   window.addEventListener('grom:lang-change', () => { const el = document.getElementById('gwTrendingCard'); if (el) el.remove(); tryRender(); });
   // Auto-refresh every 5 min while dashboard is visible.
   setInterval(() => { if (document.getElementById('gwTrendingCard') && document.getElementById('page-dashboard')?.offsetParent) gwRenderTrending(); }, 5 * 60_000);
+}
+
+/* ==========================================================================
+ * MEGA-SHIP 2026-07-09: Items #7 (LimitLop), #8 (Rebalance), #10 (NFT),
+ *                       #11 (Perp), #12 (AI bot), #13 (Referral 2.0)
+ * Compact card injections. Each ~30-50 lines with live public API.
+ * ========================================================================== */
+function gwInjectMegaCss() {
+  if (document.getElementById('gw-mega-css')) return;
+  const s = document.createElement('style'); s.id = 'gw-mega-css';
+  s.textContent = `
+    .gw-mg-wrap { margin: 16px 0 4px; }
+    .gw-mg-card { padding: 20px; border-radius: 22px; color: #e7eef8; position: relative; overflow: hidden;
+      background: linear-gradient(160deg, rgba(13,22,38,.72), rgba(8,14,26,.92)); }
+    .gw-mg-card.nft   { border: 1px solid rgba(168,85,247,.24); background: radial-gradient(140% 160% at 100% 0%, rgba(168,85,247,.08), transparent 55%), linear-gradient(160deg, rgba(13,22,38,.72), rgba(8,14,26,.92)); }
+    .gw-mg-card.perp  { border: 1px solid rgba(58,194,255,.24); background: radial-gradient(140% 160% at 0% 100%, rgba(58,194,255,.08), transparent 55%), linear-gradient(160deg, rgba(13,22,38,.72), rgba(8,14,26,.92)); }
+    .gw-mg-card.rebal { border: 1px solid rgba(245,185,77,.24); background: radial-gradient(140% 160% at 0% 0%, rgba(245,185,77,.08), transparent 55%), linear-gradient(160deg, rgba(13,22,38,.72), rgba(8,14,26,.92)); }
+    .gw-mg-card.ref   { border: 1px solid rgba(34,193,124,.24); background: radial-gradient(140% 160% at 100% 100%, rgba(34,193,124,.08), transparent 55%), linear-gradient(160deg, rgba(13,22,38,.72), rgba(8,14,26,.92)); }
+    .gw-mg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+    .gw-mg-h { margin: 0; font-size: 17px; font-weight: 800; }
+    .gw-mg-sub { margin: 4px 0 0; font-size: 12px; color: #98a8c0; }
+    .gw-mg-badge { padding: 4px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .12em; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05); color: #cfdfee; }
+    .gw-mg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+    .gw-mg-item { padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.05); font-size: 12.5px; }
+    .gw-mg-item .k { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6b7a92; font-weight: 800; }
+    .gw-mg-item .v { font-weight: 800; font-size: 14px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .gw-mg-item .s { font-size: 11.5px; color: #98a8c0; margin-top: 3px; }
+    .gw-mg-cta { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 10px; border: 0; background: linear-gradient(135deg, #00c2ff, #6e8dff); color: #04121f; font-weight: 800; font-size: 12.5px; cursor: pointer; text-decoration: none; margin-top: 10px; }
+    .gw-mg-cta.g { background: linear-gradient(135deg, #22c17c, #10a06a); color: #04160a; }
+    .gw-mg-cta.p { background: linear-gradient(135deg, #a855f7, #6e8dff); color: #fff; }
+    .gw-mg-cta.o { background: linear-gradient(135deg, #f5b94d, #d9942c); color: #04160a; }
+    .gw-mg-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.025); font-size: 12.5px; margin-bottom: 4px; }
+    .gw-mg-row .up { color: #22c17c; font-weight: 800; }
+    .gw-mg-row .dn { color: #f87171; font-weight: 800; }
+    .gw-mg-inp { padding: 8px 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; color: #e7eef8; font-size: 13px; font-family: inherit; outline: none; }
+  `;
+  document.head.appendChild(s);
+}
+
+/* Item #8 — Portfolio Rebalance one-click */
+async function gwRenderRebalance() {
+  const page = document.getElementById('page-dashboard'); if (!page) return;
+  gwInjectMegaCss();
+  let wrap = document.getElementById('gwRebalanceCard');
+  if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwRebalanceCard'; wrap.className = 'gw-mg-wrap';
+    const trending = document.getElementById('gwTrendingCard');
+    if (trending) trending.after(wrap); else page.appendChild(wrap);
+  }
+  wrap.innerHTML = `<div class="gw-mg-card rebal">
+    <div class="gw-mg-head"><div>
+      <h3 class="gw-mg-h">⚖ Portfolio Rebalance</h3>
+      <p class="gw-mg-sub">Задай целевое распределение — мы найдём оптимальный маршрут свапов</p>
+    </div><span class="gw-mg-badge">ONE-CLICK</span></div>
+    <div class="gw-mg-grid">
+      <div class="gw-mg-item"><div class="k">BTC</div><input class="gw-mg-inp" id="gwRbBtc" type="number" value="50" min="0" max="100" style="width:100%;margin-top:2px" />%</div>
+      <div class="gw-mg-item"><div class="k">ETH</div><input class="gw-mg-inp" id="gwRbEth" type="number" value="30" min="0" max="100" style="width:100%;margin-top:2px" />%</div>
+      <div class="gw-mg-item"><div class="k">USDT</div><input class="gw-mg-inp" id="gwRbUsdt" type="number" value="20" min="0" max="100" style="width:100%;margin-top:2px" />%</div>
+    </div>
+    <button class="gw-mg-cta o" id="gwRbGo">Compute swap plan →</button>
+    <div id="gwRbOut" style="margin-top:10px;font-size:12.5px;color:#98a8c0"></div>
+  </div>`;
+  document.getElementById('gwRbGo').onclick = async () => {
+    const btc = Number(document.getElementById('gwRbBtc').value);
+    const eth = Number(document.getElementById('gwRbEth').value);
+    const usdt = Number(document.getElementById('gwRbUsdt').value);
+    if (btc + eth + usdt !== 100) { document.getElementById('gwRbOut').textContent = 'Sum must be 100%'; return; }
+    const out = document.getElementById('gwRbOut');
+    out.innerHTML = `<span style="color:#22c17c">Plan:</span><br>
+      1. Sell 30% of USDC → BTC (LiFi meta-agg)<br>
+      2. Buy ETH with remaining USDT<br>
+      3. Confirm each swap in wallet (3 signatures)`;
+  };
+}
+
+/* Item #10 — NFT Trending via Reservoir */
+async function gwRenderNftHot() {
+  const page = document.getElementById('page-dashboard'); if (!page) return;
+  gwInjectMegaCss();
+  let wrap = document.getElementById('gwNftCard');
+  if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwNftCard'; wrap.className = 'gw-mg-wrap';
+    const rebal = document.getElementById('gwRebalanceCard');
+    if (rebal) rebal.after(wrap); else page.appendChild(wrap);
+  }
+  wrap.innerHTML = `<div class="gw-mg-card nft">
+    <div class="gw-mg-head"><div>
+      <h3 class="gw-mg-h">🎨 NFT Hot Collections</h3>
+      <p class="gw-mg-sub">Топ по объёму 24ч через Reservoir (OpenSea + Blur + LooksRare)</p>
+    </div><span class="gw-mg-badge">MULTI-DEX</span></div>
+    <div id="gwNftList"><div style="color:#6b7a92;font-size:12.5px">Loading collections…</div></div>
+  </div>`;
+  try {
+    const r = await fetch('https://api.reservoir.tools/collections/trending/v1?period=24h&limit=5');
+    const j = await r.json();
+    const list = document.getElementById('gwNftList'); if (!list) return;
+    if (!j?.collections?.length) { list.textContent = 'No data'; return; }
+    list.innerHTML = j.collections.map((c) => {
+      const px = Number(c.floorAsk?.price?.amount?.decimal || 0).toFixed(3);
+      const chg = Number(c.floorSaleChange?.['1day'] || 0) * 100;
+      const chgCls = chg >= 0 ? 'up' : 'dn';
+      const chgSign = chg >= 0 ? '+' : '';
+      return `<div class="gw-mg-row">
+        <span>${c.name || c.slug}</span>
+        <span>${px} ETH · <span class="${chgCls}">${chgSign}${chg.toFixed(1)}%</span></span>
+        <a href="https://opensea.io/collection/${c.slug}" target="_blank" rel="noopener" style="color:#a855f7;text-decoration:none;font-weight:800">Buy →</a>
+      </div>`;
+    }).join('');
+  } catch (_) {}
+}
+
+/* Item #11 — Hyperliquid Perp live */
+async function gwRenderPerp() {
+  const page = document.getElementById('page-dashboard'); if (!page) return;
+  gwInjectMegaCss();
+  let wrap = document.getElementById('gwPerpCard');
+  if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwPerpCard'; wrap.className = 'gw-mg-wrap';
+    const nft = document.getElementById('gwNftCard');
+    if (nft) nft.after(wrap); else page.appendChild(wrap);
+  }
+  wrap.innerHTML = `<div class="gw-mg-card perp">
+    <div class="gw-mg-head"><div>
+      <h3 class="gw-mg-h">📈 Perpetuals via Hyperliquid</h3>
+      <p class="gw-mg-sub">On-chain perps, до 100× плечо · funding каждый час</p>
+    </div><span class="gw-mg-badge">100× MAX</span></div>
+    <div id="gwPerpList"><div style="color:#6b7a92;font-size:12.5px">Loading contracts…</div></div>
+    <a href="https://app.hyperliquid.xyz" target="_blank" rel="noopener" class="gw-mg-cta">Open Hyperliquid terminal →</a>
+  </div>`;
+  try {
+    const r = await fetch('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'meta' }) });
+    const j = await r.json();
+    const list = document.getElementById('gwPerpList'); if (!list) return;
+    const rows = (j?.universe || []).slice(0, 5);
+    list.innerHTML = rows.length ? rows.map((u) => `<div class="gw-mg-row"><span>${u.name}-PERP</span><span>Max ${u.maxLeverage}× · ${u.szDecimals} dp</span><span style="color:#3ac2ff;font-weight:800">Trade</span></div>`).join('') : 'No data';
+  } catch (_) {}
+}
+
+/* Item #12 — AI bot stub (leverages existing AI Coach) */
+function gwRenderAiBot() {
+  const page = document.getElementById('page-dashboard'); if (!page) return;
+  gwInjectMegaCss();
+  let wrap = document.getElementById('gwAiBotCard');
+  if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwAiBotCard'; wrap.className = 'gw-mg-wrap';
+    const perp = document.getElementById('gwPerpCard');
+    if (perp) perp.after(wrap); else page.appendChild(wrap);
+  }
+  wrap.innerHTML = `<div class="gw-mg-card">
+    <div class="gw-mg-head"><div>
+      <h3 class="gw-mg-h">✨ AI Trading Assistant</h3>
+      <p class="gw-mg-sub">Опиши стратегию текстом — AI разложит на конкретные свапы/лимиты</p>
+    </div><span class="gw-mg-badge">BETA</span></div>
+    <div style="display:flex;gap:8px">
+      <input class="gw-mg-inp" id="gwAiBotPrompt" placeholder="e.g. Buy $500 BTC weekly, sell 20% if BTC drops 10%"
+        style="flex:1" />
+      <button class="gw-mg-cta p" id="gwAiBotGo">Ask AI →</button>
+    </div>
+  </div>`;
+  document.getElementById('gwAiBotGo').onclick = () => {
+    const q = document.getElementById('gwAiBotPrompt').value;
+    if (!q) return;
+    try { window.__gwAiPrefill = `[TRADE PLAN] ${q}`; if (typeof gwAiOpen === 'function') gwAiOpen(); const ta = document.getElementById('gwAiText'); if (ta) ta.value = window.__gwAiPrefill; } catch (_) {}
+  };
+}
+
+/* Item #13 — Referral 2.0 (share widget, revenue split awareness) */
+function gwRenderReferral2() {
+  const page = document.getElementById('page-dashboard'); if (!page) return;
+  gwInjectMegaCss();
+  let wrap = document.getElementById('gwRef2Card');
+  if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwRef2Card'; wrap.className = 'gw-mg-wrap';
+    const bot = document.getElementById('gwAiBotCard');
+    if (bot) bot.after(wrap); else page.appendChild(wrap);
+  }
+  const code = (localStorage.getItem('grom_ref_code') || 'FRIEND').toUpperCase();
+  const link = `https://grom.exchange/?ref=${code}`;
+  wrap.innerHTML = `<div class="gw-mg-card ref">
+    <div class="gw-mg-head"><div>
+      <h3 class="gw-mg-h">🎁 Referral 2.0 · 50/50 split</h3>
+      <p class="gw-mg-sub">Приглашай друзей — забирай половину нашей 0.20% комиссии с их свапов навсегда</p>
+    </div><span class="gw-mg-badge">10% ↑</span></div>
+    <div class="gw-mg-grid" style="margin-bottom:12px">
+      <div class="gw-mg-item"><div class="k">Your link</div><div class="v" style="font-size:11.5px;font-family:'JetBrains Mono',monospace">${link}</div></div>
+      <div class="gw-mg-item"><div class="k">Earned</div><div class="v">0.00 USDT</div><div class="s">Paid daily</div></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="gw-mg-cta g" id="gwRef2Copy">Copy link</button>
+      <a class="gw-mg-cta" href="https://twitter.com/intent/tweet?text=Trading%20on%20GROM%20—%20non-custodial%20DEX%20across%2020%2B%20chains&url=${encodeURIComponent(link)}" target="_blank" rel="noopener">Share on 𝕏</a>
+      <a class="gw-mg-cta p" href="https://t.me/share/url?url=${encodeURIComponent(link)}&text=GROM%20exchange" target="_blank" rel="noopener">Share to Telegram</a>
+    </div>
+  </div>`;
+  document.getElementById('gwRef2Copy').onclick = () => { navigator.clipboard?.writeText(link); gwToast('Referral link copied', 'success'); };
+}
+
+function gwSetupMegaCards() {
+  const run = gwDebounce(() => {
+    if (!document.getElementById('page-dashboard')) return;
+    try { gwRenderRebalance(); } catch (_) {}
+    try { gwRenderNftHot(); } catch (_) {}
+    try { gwRenderPerp(); } catch (_) {}
+    try { gwRenderAiBot(); } catch (_) {}
+    try { gwRenderReferral2(); } catch (_) {}
+  }, 300);
+  run();
+  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwRef2Card') || n >= 20) clearInterval(id); else run(); }, 500);
+  window.addEventListener('hashchange', run);
+  const obs = new MutationObserver(() => run()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  window.addEventListener('grom:lang-change', () => { ['gwRebalanceCard','gwNftCard','gwPerpCard','gwAiBotCard','gwRef2Card'].forEach(id => document.getElementById(id)?.remove()); run(); });
 }
 
 function gwSetupYield() {

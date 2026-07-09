@@ -8966,15 +8966,106 @@ function gwInjectLpPolishCss() {
   const s = document.createElement('style'); s.id = 'gw-lp-polish-css'; s.textContent = css; document.head.appendChild(s);
 }
 
+/* DEX-focused landing extras (2026-07-09) — small i18n bundle covers 3 blocks. */
+const GW_LP_DEX_TR = {
+  ru: {
+    hiEyebrow: 'DEX', hiH: 'Non-custodial. Cross-chain. Aggregated.',
+    highlights: [
+      ['🔐', 'Свои ключи', 'Ты подписываешь каждую сделку — GROM не хранит твои средства.'],
+      ['🌐', '20+ сетей', 'Ethereum, Solana, BSC, Arbitrum, Polygon, Base, Optimism, Avalanche, Bitcoin, TON, Tron.'],
+      ['⚡', 'Лучшая цена', 'Meta-aggregator ищет маршрут по 7 источникам ликвидности одновременно.'],
+      ['🕶', 'Без email', 'Подключил кошелёк — уже торгуешь. Никакого KYC для swap\'ов.'],
+    ],
+    chainsH: 'Все главные цепи в одной вкладке',
+    chainsSub: '10 000+ токенов · динамический листинг · нативные транзакции',
+    aggEyebrow: 'Работает поверх',
+    aggLine: 'LiFi · CoWSwap · Squid · Paraswap · Kyber · Odos · Jupiter · THORchain',
+  },
+  en: {
+    hiEyebrow: 'DEX', hiH: 'Non-custodial. Cross-chain. Aggregated.',
+    highlights: [
+      ['🔐', 'Your keys', 'You sign every trade — GROM never holds your funds.'],
+      ['🌐', '20+ networks', 'Ethereum, Solana, BSC, Arbitrum, Polygon, Base, Optimism, Avalanche, Bitcoin, TON, Tron.'],
+      ['⚡', 'Best price always', 'Meta-aggregator queries 7 liquidity sources in parallel — you pay the tightest quote.'],
+      ['🕶', 'No email needed', 'Connect a wallet and trade. Zero KYC for on-chain swaps.'],
+    ],
+    chainsH: 'All the major chains in one tab',
+    chainsSub: '10 000+ tokens · dynamic listing · native transactions',
+    aggEyebrow: 'Powered by',
+    aggLine: 'LiFi · CoWSwap · Squid · Paraswap · Kyber · Odos · Jupiter · THORchain',
+  },
+};
+function gwLpDexLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'); if (s&&GW_LP_DEX_TR[s]) l=s; } catch (_) {} return GW_LP_DEX_TR[l]||GW_LP_DEX_TR.en; }
+
+const GW_LP_CHAINS = [
+  { sym: 'ETH',  name: 'Ethereum', logo: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png' },
+  { sym: 'SOL',  name: 'Solana',   logo: 'https://assets.coingecko.com/coins/images/4128/small/solana.png' },
+  { sym: 'BNB',  name: 'BSC',      logo: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png' },
+  { sym: 'ARB',  name: 'Arbitrum', logo: 'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg' },
+  { sym: 'MATIC',name: 'Polygon',  logo: 'https://assets.coingecko.com/coins/images/4713/small/polygon.png' },
+  { sym: 'BASE', name: 'Base',     logo: 'https://raw.githubusercontent.com/base-org/brand-kit/main/logo/symbol/Base_Symbol_Blue.png' },
+  { sym: 'OP',   name: 'Optimism', logo: 'https://assets.coingecko.com/coins/images/25244/small/Optimism.png' },
+  { sym: 'AVAX', name: 'Avalanche',logo: 'https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png' },
+  { sym: 'BTC',  name: 'Bitcoin',  logo: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png' },
+  { sym: 'TON',  name: 'TON',      logo: 'https://assets.coingecko.com/coins/images/17980/small/ton_symbol.png' },
+  { sym: 'TRX',  name: 'Tron',     logo: 'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png' },
+];
+
 function gwRenderLandingPolish() {
   const page = document.getElementById('page-landing');
   if (!page) return;
   gwInjectLpPolishCss();
   // remove old (for lang change)
+  page.querySelector('.gw-lp-dex')?.remove();
+  page.querySelector('.gw-lp-chains')?.remove();
+  page.querySelector('.gw-lp-agg')?.remove();
   page.querySelector('.gw-lp-cmp')?.remove();
   page.querySelector('.gw-lp-faq')?.remove();
 
   const t = gwLpLang();
+  const d = gwLpDexLang();
+
+  // 1) DEX highlights row
+  const dex = document.createElement('section');
+  dex.className = 'gw-lp-dex';
+  dex.innerHTML = `
+    <div class="gw-lp-dex-hi">
+      ${d.highlights.map(([ic, h, p]) => `
+        <div class="gw-lp-hi-card">
+          <div class="gw-lp-hi-icon">${ic}</div>
+          <h3 class="gw-lp-hi-h">${h}</h3>
+          <p class="gw-lp-hi-p">${p}</p>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // 2) Chain grid
+  const chains = document.createElement('section');
+  chains.className = 'gw-lp-chains';
+  chains.innerHTML = `
+    <h2 class="gw-lp-chains-h">${d.chainsH}</h2>
+    <p class="gw-lp-chains-sub">${d.chainsSub}</p>
+    <div class="gw-lp-chains-grid">
+      ${GW_LP_CHAINS.map((c) => `
+        <div class="gw-lp-chain-cell" title="${c.name}">
+          <div class="logo"><img src="${c.logo}" alt="${c.name}" onerror="this.outerHTML='<span>${c.sym.slice(0,3)}</span>'"/></div>
+          <div class="lbl">${c.name}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // 3) Aggregator ribbon
+  const agg = document.createElement('section');
+  agg.className = 'gw-lp-agg';
+  agg.innerHTML = `
+    <div class="gw-lp-agg-eyebrow">${d.aggEyebrow}</div>
+    <div class="gw-lp-agg-line">
+      ${d.aggLine.split('·').map(s => `<span class="gw-lp-agg-tag">${s.trim()}</span>`).join('')}
+    </div>
+  `;
+
 
   const cmp = document.createElement('section');
   cmp.className = 'gw-lp-cmp';
@@ -9024,9 +9115,16 @@ function gwRenderLandingPolish() {
   const finalCta = page.querySelector('.lp-final-cta');
   const wrap = page.querySelector('.lp-wrap') || page;
   if (finalCta && finalCta.parentNode === wrap) {
+    // Order: dex highlights → chain grid → aggregator ribbon → cmp table → faq
+    wrap.insertBefore(dex, finalCta);
+    wrap.insertBefore(chains, finalCta);
+    wrap.insertBefore(agg, finalCta);
     wrap.insertBefore(cmp, finalCta);
     wrap.insertBefore(faq, finalCta);
   } else {
+    wrap.appendChild(dex);
+    wrap.appendChild(chains);
+    wrap.appendChild(agg);
     wrap.appendChild(cmp);
     wrap.appendChild(faq);
   }

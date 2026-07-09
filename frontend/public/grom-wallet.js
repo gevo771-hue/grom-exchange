@@ -3039,8 +3039,12 @@ function gwDsMergeLifiTokens(list) {
   }
   if (added > 0) {
     console.log('[GROM] LiFi tokens merged +' + added + ' → total ' + GW_DS_ASSETS.length);
-    // If picker is open, re-render with new list.
-    try { if (document.getElementById('gw-tk-overlay')?.classList.contains('open')) gwTkRender(document.getElementById('gwTkSearch')?.value || ''); } catch (_) {}
+    // If picker is open, re-render with new list + refresh count.
+    try {
+      const inp = document.getElementById('gwTkSearch');
+      if (inp) inp.placeholder = `Search ${GW_DS_ASSETS.length}+ tokens…`;
+      if (document.getElementById('gw-tk-overlay')?.classList.contains('open')) gwTkRender(inp?.value || '');
+    } catch (_) {}
   }
 }
 if (typeof window !== 'undefined') { setTimeout(gwDsFetchLifiTokens, 2500); }
@@ -4258,6 +4262,10 @@ function gwInjectSpotDexCss() {
     .gw-sp-main { display: grid; grid-template-columns: 1fr 320px; gap: 14px; }
     @media (max-width: 900px) { .gw-sp-main { grid-template-columns: 1fr; } }
     .gw-sp-chart { position: relative; height: 380px; border-radius: 16px; overflow: hidden; background: rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.05); }
+    .gw-sp-chart .skl { position: absolute; inset: 20px; display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; align-items: end; opacity: .4; pointer-events: none; }
+    .gw-sp-chart .skl span { display: block; background: linear-gradient(180deg, rgba(0,194,255,.14), rgba(0,194,255,.04)); border-radius: 2px; animation: gw-sp-pulse 1.4s ease-in-out infinite; }
+    @keyframes gw-sp-pulse { 0%,100% { opacity: .35 } 50% { opacity: .85 } }
+    .gw-sp-chart .skl-hidden { display: none; }
     .gw-sp-form { padding: 14px; border-radius: 16px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 12px; }
     .gw-sp-tabs { display: flex; gap: 6px; }
     .gw-sp-tab { flex: 1; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.03); color: #98a8c0; border: 1px solid rgba(255,255,255,0.06); font-weight: 800; font-size: 13px; cursor: pointer; }
@@ -4327,7 +4335,9 @@ async function gwRenderSpotDex() {
         <div class="last" id="gwSpLast"><div class="p">…</div><div class="c">—</div></div>
       </div>
       <div class="gw-sp-main">
-        <div class="gw-sp-chart" id="gwSpChart"></div>
+        <div class="gw-sp-chart" id="gwSpChart">
+          <div class="skl" id="gwSpSkl">${Array.from({ length: 20 }, (_, i) => `<span style="height:${20 + Math.random() * 60}%"></span>`).join('')}</div>
+        </div>
         <div class="gw-sp-form">
           <div class="gw-sp-tabs">
             <button class="gw-sp-tab buy ${st.side === 'buy' ? 'on' : ''}" data-side="buy">Buy ${pair.base}</button>
@@ -4435,8 +4445,15 @@ async function gwSpLoadChart() {
   gwSpLoadChart._tries = 0;
   const container = document.getElementById('gwSpChart');
   if (!container) return;
-  // Reset chart if this is a new container (e.g. after re-render)
-  if (gwSpChart && gwSpChart.__container !== container) { try { gwSpChart.remove(); } catch (_) {} gwSpChart = null; gwSpSeries = null; }
+  // ALWAYS reset if the container node is different (navigation
+  // Markets→Spot rebuilds the DOM tree). Previously we compared to
+  // __container, but the old chart node is orphaned and the new
+  // one is a fresh instance — so we must recreate every time we
+  // detect a new container.
+  if (gwSpChart && (!container.contains(gwSpChart.__container) || gwSpChart.__container !== container)) {
+    try { gwSpChart.remove(); } catch (_) {}
+    gwSpChart = null; gwSpSeries = null;
+  }
   const pair = GW_SP_PAIRS.find((p) => p.sym === gwSpState.pair);
   if (!pair) return;
   if (!gwSpChart) {
@@ -4458,6 +4475,9 @@ async function gwSpLoadChart() {
     const bars = await gwSpFetchKlines(pair.bn, gwSpState.iv, 200);
     gwSpSeries.setData(bars);
     gwSpChart.timeScale().fitContent();
+    // Hide skeleton loader now that real candles are drawn.
+    const skl = document.getElementById('gwSpSkl');
+    if (skl) skl.remove();
   } catch (e) { console.warn('[GROM] spot chart klines', e); }
 }
 async function gwSpRefreshLast() {
@@ -4740,7 +4760,7 @@ function gwTkOpen(which /* 'from' | 'to' */) {
           <h4>Choose asset</h4>
           <button class="close" id="gwTkClose" aria-label="Close">×</button>
         </div>
-        <div class="search"><input id="gwTkSearch" type="text" placeholder="Search 365+ tokens…" autocomplete="off" /></div>
+        <div class="search"><input id="gwTkSearch" type="text" placeholder="Search ${GW_DS_ASSETS.length}+ tokens…" autocomplete="off" /></div>
         <div id="gw-tk-list"></div>
       </div>`;
     document.body.appendChild(ov);
@@ -4751,9 +4771,12 @@ function gwTkOpen(which /* 'from' | 'to' */) {
   ov.classList.add('open');
   const search = ov.querySelector('#gwTkSearch');
   search.value = '';
+  search.placeholder = `Search ${GW_DS_ASSETS.length}+ tokens…`;
   gwTkRender('');
   setTimeout(() => search.focus(), 40);
   search.oninput = () => gwTkRender(search.value.trim());
+  // Kick LiFi token fetch immediately if we haven't yet
+  try { gwDsFetchLifiTokens(); } catch (_) {}
 }
 function gwTkRender(q) {
   const list = document.getElementById('gw-tk-list');

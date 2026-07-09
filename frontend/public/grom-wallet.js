@@ -4839,6 +4839,123 @@ function gwDsChainChipsWire(wrap) {
 /* ==========================================================================
  * PHASE 7 v2 — Token picker modal, route-viz, price impact, explorer links
  * ========================================================================== */
+/* ==========================================================================
+ * ITEM #3 (2026-07-09) — Custom token add
+ *
+ * User pastes a contract address (any EVM chain), we call LiFi's
+ * /token/{chainId}/{address} to fetch metadata, add to GW_DS_ASSETS
+ * and persist in localStorage.gw_custom_tokens. Shows up in the picker
+ * with a "★ custom" tag so user recognises their addition.
+ * ========================================================================== */
+function gwCustomTokensLoad() { try { return JSON.parse(localStorage.getItem('gw_custom_tokens') || '[]'); } catch (_) { return []; } }
+function gwCustomTokensSave(v) { try { localStorage.setItem('gw_custom_tokens', JSON.stringify(v)); } catch (_) {} }
+(function _gwHydrateCustom() {
+  try {
+    const list = gwCustomTokensLoad();
+    for (const c of list) {
+      if (!GW_DS_ASSETS.find((a) => a.sym === c.sym)) GW_DS_ASSETS.push({ ...c, custom: true });
+    }
+  } catch (_) {}
+})();
+
+async function gwCustomTokenValidate({ chainId, address }) {
+  // LiFi /token endpoint returns { symbol, name, decimals, logoURI, priceUSD }
+  try {
+    const r = await fetch(`${GW_LIFI_ENDPOINT}/token?chain=${chainId}&token=${address}`);
+    if (!r.ok) return null;
+    const t = await r.json();
+    if (!t?.symbol) return null;
+    return { sym: t.symbol, name: t.name || t.symbol, logo: t.logoURI || '', decimals: t.decimals, address, chainId };
+  } catch (_) { return null; }
+}
+
+function gwCustomTokenOpenModal() {
+  let ov = document.getElementById('gw-ct-overlay');
+  if (!ov) {
+    ov = document.createElement('div'); ov.id = 'gw-ct-overlay';
+    Object.assign(ov.style, {
+      position: 'fixed', inset: '0', zIndex: '960', display: 'flex',
+      alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(4,8,16,0.55)', backdropFilter: 'blur(6px)',
+    });
+    document.body.appendChild(ov);
+  } else { ov.style.display = 'flex'; }
+  ov.innerHTML = `
+    <div style="width:min(440px,92vw);padding:22px;border-radius:20px;color:#e7eef8;
+                 background:linear-gradient(160deg,rgba(13,22,38,.98),rgba(8,14,26,.98));
+                 border:1px solid rgba(0,194,255,.28);box-shadow:0 20px 60px -12px rgba(0,0,0,.65)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#00c2ff,#6e8dff);color:#04121f;
+                     display:inline-flex;align-items:center;justify-content:center;font-weight:800">★</span>
+        <h3 style="margin:0;font-size:15px;font-weight:800;flex:1">Add custom token</h3>
+        <button id="gwCtClose" style="background:transparent;border:0;color:#98a8c0;font-size:20px;cursor:pointer">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <label style="font-size:11px;letter-spacing:.14em;color:#98a8c0;font-weight:800">CHAIN
+          <select id="gwCtChain" style="width:100%;padding:9px 10px;margin-top:4px;background:rgba(255,255,255,.05);
+                  border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#e7eef8;font-size:13px;font-family:inherit">
+            <option value="1">Ethereum</option>
+            <option value="56">BNB Chain</option>
+            <option value="42161">Arbitrum</option>
+            <option value="137">Polygon</option>
+            <option value="10">Optimism</option>
+            <option value="8453">Base</option>
+            <option value="43114">Avalanche</option>
+            <option value="59144">Linea</option>
+            <option value="250">Fantom</option>
+          </select>
+        </label>
+        <div></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;letter-spacing:.14em;color:#98a8c0;font-weight:800">TOKEN CONTRACT ADDRESS</label>
+        <input id="gwCtAddr" type="text" placeholder="0x…"
+          style="width:100%;padding:10px 12px;margin-top:4px;background:rgba(255,255,255,.05);
+                 border:1px solid rgba(255,255,255,.08);border-radius:10px;color:#e7eef8;font-size:12px;
+                 font-family:'JetBrains Mono',monospace;outline:none" />
+        <div id="gwCtErr" style="font-size:11.5px;color:#f87171;min-height:14px;margin-top:4px"></div>
+      </div>
+      <button id="gwCtLookup" style="width:100%;padding:12px 16px;border-radius:12px;border:0;
+              background:linear-gradient(135deg,#00c2ff,#6e8dff);color:#04121f;font-weight:800;font-size:14px;
+              cursor:pointer">Validate & add →</button>
+      <div id="gwCtResult" style="margin-top:14px"></div>
+    </div>`;
+  document.getElementById('gwCtClose').onclick = () => { ov.style.display = 'none'; };
+  document.getElementById('gwCtLookup').onclick = async () => {
+    const chainId = Number(document.getElementById('gwCtChain').value);
+    const address = document.getElementById('gwCtAddr').value.trim();
+    const err = document.getElementById('gwCtErr');
+    const res = document.getElementById('gwCtResult');
+    err.textContent = ''; res.innerHTML = '';
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) { err.textContent = 'Invalid EVM contract address'; return; }
+    res.innerHTML = `<div style="color:#98a8c0;font-size:12.5px;padding:10px">Looking up token on LiFi…</div>`;
+    const t = await gwCustomTokenValidate({ chainId, address });
+    if (!t) { res.innerHTML = `<div style="color:#f87171;font-size:12.5px;padding:10px">Token not found on that chain — LiFi has no route for it.</div>`; return; }
+    // Add to GW_DS_ASSETS + persist
+    const custom = gwCustomTokensLoad();
+    const already = custom.find((c) => c.sym === t.sym && c.chainId === t.chainId);
+    if (!already) {
+      custom.push(t);
+      gwCustomTokensSave(custom);
+      if (!GW_DS_ASSETS.find((a) => a.sym === t.sym)) GW_DS_ASSETS.push({ ...t, custom: true });
+    }
+    res.innerHTML = `
+      <div style="padding:12px;border-radius:12px;background:rgba(34,193,124,.08);border:1px solid rgba(34,193,124,.28)">
+        <div style="display:flex;align-items:center;gap:10px">
+          ${t.logo ? `<img src="${t.logo}" style="width:32px;height:32px;border-radius:50%"/>` : ''}
+          <div>
+            <div style="font-weight:800">${t.sym} · ${t.name}</div>
+            <div style="font-size:11.5px;color:#98a8c0;font-family:'JetBrains Mono',monospace">${t.address}</div>
+          </div>
+        </div>
+        <div style="color:#22c17c;font-size:12.5px;font-weight:700;margin-top:8px">✓ Added to your picker</div>
+      </div>`;
+    // Update picker view if open
+    try { if (document.getElementById('gw-tk-overlay')?.classList.contains('open')) gwTkRender(document.getElementById('gwTkSearch')?.value || ''); } catch (_) {}
+  };
+  ov.onclick = (e) => { if (e.target === ov) ov.style.display = 'none'; };
+}
+
 function gwTkOpen(which /* 'from' | 'to' */) {
   let ov = document.getElementById('gw-tk-overlay');
   if (!ov) {
@@ -4849,7 +4966,9 @@ function gwTkOpen(which /* 'from' | 'to' */) {
           <h4>Choose asset</h4>
           <button class="close" id="gwTkClose" aria-label="Close">×</button>
         </div>
-        <div class="search"><input id="gwTkSearch" type="text" placeholder="Search ${GW_DS_ASSETS.length}+ tokens…" autocomplete="off" /></div>
+        <div class="search"><input id="gwTkSearch" type="text" placeholder="Search ${GW_DS_ASSETS.length}+ tokens…" autocomplete="off" />
+          <button id="gwTkAddCustom" style="margin-top:8px;width:100%;padding:8px 12px;border-radius:10px;border:1px dashed rgba(0,194,255,.35);background:transparent;color:#5dd5ff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">★ Add custom token by contract address</button>
+        </div>
         <div id="gw-tk-list"></div>
       </div>`;
     document.body.appendChild(ov);
@@ -4866,6 +4985,9 @@ function gwTkOpen(which /* 'from' | 'to' */) {
   search.oninput = () => gwTkRender(search.value.trim());
   // Kick LiFi token fetch immediately if we haven't yet
   try { gwDsFetchLifiTokens(); } catch (_) {}
+  // Item #3 — Add custom token by contract address
+  const addBtn = document.getElementById('gwTkAddCustom');
+  if (addBtn) addBtn.onclick = () => gwCustomTokenOpenModal();
 }
 function gwTkRender(q) {
   const list = document.getElementById('gw-tk-list');

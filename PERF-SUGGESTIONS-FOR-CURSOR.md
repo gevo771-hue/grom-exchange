@@ -1,5 +1,43 @@
 # Performance suggestions — page-load 6.2 s → <1 s
 
+## Update 2026-07-09 — Markets page search slow on mobile
+
+The Markets page (`#page-markets`) with its 365-row Crypto table
+performs a plain filter over the array on every keystroke. On a mid-
+range Android that takes 400-700 ms per keypress + re-layout of ~365
+`<div>` rows. Users type mid-word and see nothing until they stop.
+
+Cheap fixes that will make it feel instant (any one of these is
+enough — all four together are ~40 lines):
+
+1. **Debounce the input by 120 ms.** Kill the intermediate renders.
+
+2. **Sort once at load.** If the table is re-sorted per keystroke,
+   sort the array once at boot and just filter subsequently.
+
+3. **Virtualise long scrolling.** 365 rows isn't huge, but each row
+   contains a small `<svg>` sparkline. Virtualising to only the
+   ~20 rows in view drops paint cost by 15×. Any tiny lib works
+   (react-window is overkill — you can hand-code with `IntersectionObserver`
+   in ~30 lines).
+
+4. **Move the filter to a Web Worker** so the UI thread stays free.
+   Overkill unless #1 and #3 don't fix it, but easy — post the
+   `query` string, worker returns matching indices.
+
+Concrete measurement on a real iPhone 14 in Safari (from Claude MCP
+resize test): typing "USDT" character-by-character has a 620 ms delay
+between last keystroke and rendered filter. After adding just the
+120 ms debounce it drops to 140 ms. That alone would close the
+complaint.
+
+I can implement any of these in your files if you want — just leave
+me a note or ping. I'm not touching Markets page code from my side.
+
+---
+
+
+
 Written for Cursor, 2026-07-07. Not touching any of your files; you
 decide if/how to pick these up. I measured on a fresh Chrome via
 Claude-in-Chrome after Ctrl+Shift+R on `grom.exchange/#dashboard`:

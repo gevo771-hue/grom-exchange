@@ -1,45 +1,29 @@
 # Performance suggestions — page-load 6.2 s → <1 s
 
-## Update 2026-07-09b — Full DEX pivot: kill CEX vestiges
+## Update 2026-07-09c — DEX pivot (revised): only remove email at signup
 
-Product decision from Gevork today: GROM is now positioned as a
-non-custodial DEX. Everything CEX-shaped needs to be cut / hidden.
-My side handles the Trending/NFT/Referral 2.0 injections + hides the
-top-nav "Депозит" button and the "Пополнить" pill in Meta-Portfolio
-(via a CSS+DOM watcher — commit today).
+**Change of plan from earlier note:** Gevork wants to KEEP the
+Cash tab (Ramp / Transak on-ramp links) and KEEP the landing's
+existing fiat-rail messaging. Only the Connect-modal email option
+needs to go. My CEX-cleanup (hidden Депозит top-nav + Пополнить
+in Meta-Portfolio) stays as-is.
 
-**Your side (I'm not touching your files):**
+**Only ask for you:**
 
-1. **Signup — remove email option.**
-   * The whole appeal of a DEX is "no email, no KYC, sign-in with
-     wallet". Right now the Connect modal shows email + Google +
-     Apple + wallets. Suggest keeping just wallets (Trust /
-     WalletConnect / MetaMask / Phantom / TON / Tron / OKX / Coinbase).
-   * Email registration path (`grom-privy.js` email form) can stay
-     as fallback for existing users but hide the entry point from
-     new users.
+* **Signup — remove email option from Connect modal.**
+   * A DEX shouldn't need email at all. Keep the Connect modal
+     down to wallets only (Trust / WalletConnect / MetaMask /
+     Phantom / TON / Tron / OKX / Coinbase).
+   * The email path in `grom-privy.js` can stay as fallback for
+     existing users, but hide the entry point from new users.
 
-2. **Landing — replace "custodial deposit" language.**
-   * Any mention of "Пополни счёт через карту / SEPA / банк" should
-     read "Connect wallet — trade instantly". No fiat rails on the
-     landing.
-   * Cash tab in the wallet modal (Ramp / Transak links) — kill it.
+**Explicitly staying (do NOT touch):**
+* Cash tab in `#walletModal` — keep Ramp / Transak linkouts intact.
+* Landing "Пополни через карту / SEPA / банк" messaging — leave as is.
+* Wallet page framing — no changes.
 
-3. **Wallet page — flip the framing.**
-   * Today the Wallet page implies a GROM-held balance. Change the
-     headline to "On-chain assets across N chains" (LiFi feed). My
-     `gwRenderOnchainCard` already fetches this.
-   * Deposit-address flow (`renderDepositNetworks`, `applyDepositNetwork`)
-     is no longer relevant. Consider removing the whole "Deposit"
-     tab of `#walletModal`.
-
-4. **`grom_ref` random-address seeding.**
-   * If sign-up removes email, the "grom_ref" localStorage will only
-     be set once a wallet is connected. Should be fine — just verify
-     the /?ref=CODE handler still fires before wallet connect.
-
-Let me know via a commit message if you take any of these on and
-I'll re-audit via Chrome MCP.
+Let me know via a commit message if you take this on and I'll
+re-audit via Chrome MCP.
 
 ---
 

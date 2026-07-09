@@ -2634,10 +2634,10 @@ async function gwRenderMetaPortfolio() {
     wrap = document.createElement('div');
     wrap.className = 'gw-mp-wrap';
     wrap.id = 'gwMetaPortfolio';
-    // Meta-Portfolio always goes AFTER the Instant Swap panel so the swap
-    // stays high above the fold (user request 2026-07-09).
+    // Meta-Portfolio goes at the very top of the dash — user request
+    // 2026-07-09c: revert to "MP above Instant Swap" (was flipped briefly).
     const swap = page.querySelector('.gw-ds-wrap');
-    if (swap) swap.after(wrap);
+    if (swap) swap.before(wrap);
     else {
       const banners = page.querySelector('.dash-banners-wrap');
       if (banners) banners.after(wrap);
@@ -7971,10 +7971,14 @@ async function gwRenderTrending() {
   let wrap = document.getElementById('gwTrendingCard');
   if (!wrap) {
     wrap = document.createElement('div'); wrap.id = 'gwTrendingCard'; wrap.className = 'gw-tr-wrap';
-    // Move Trending ABOVE Yield card per user request.
-    const mp = document.querySelector('.gw-mp-card');
-    const yield_ = document.getElementById('gwYieldCard');
-    if (mp?.parentElement) mp.parentElement.after(wrap);
+    // Position: right under the Advanced Orders (Limit + DCA) panel —
+    // user request 2026-07-09c ('верни под Limit orders').
+    // Fallbacks (in order): Adv panel → Instant Swap → Yield → page end.
+    const advPanel = document.getElementById('gwAdvPanel');
+    const swap     = page.querySelector('.gw-ds-wrap');
+    const yield_   = document.getElementById('gwYieldCard');
+    if (advPanel) advPanel.after(wrap);
+    else if (swap) swap.after(wrap);
     else if (yield_) yield_.before(wrap);
     else page.appendChild(wrap);
   }

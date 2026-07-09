@@ -201,17 +201,17 @@ function gwShowWcModal(walletKey, wcUri, opts) {
     openBtn.textContent = 'Open ' + cfg.label;
     openBtn.style.display = '';
   } else {
-    lead.textContent = 'Scan with the ' + cfg.label + ' mobile app';
+    lead.textContent = 'Scan inside ' + cfg.label + ' app (WalletConnect)';
     qrWrap.style.display = '';
     openBtn.style.display = 'none';
     if (qrPayload) gwRenderQr(qrBox, qrPayload);
   }
   modal.querySelector('.gw-wc-hint--en').innerHTML = mobile
-    ? 'Tap the button above — it opens the wallet app directly.'
-    : 'Scan the QR from inside <strong>' + cfg.label + '</strong> → WalletConnect. Do <em>not</em> use the phone camera.';
+    ? 'Tap the button — opens ' + cfg.label + ' directly. Do <em>not</em> use MetaMask for this wallet.'
+    : 'Open <strong>' + cfg.label + '</strong> → WalletConnect → Scan QR below.<br>Do <em>not</em> scan with the phone camera — it may open MetaMask by mistake.';
   modal.querySelector('.gw-wc-hint--ru').innerHTML = mobile
-    ? 'Нажмите кнопку выше — откроется приложение кошелька.'
-    : 'Сканируйте QR из <strong>' + cfg.label + '</strong> → WalletConnect. Не используйте камеру телефона.';
+    ? 'Нажмите кнопку — откроется ' + cfg.label + '. Не используйте MetaMask для этого кошелька.'
+    : 'Откройте <strong>' + cfg.label + '</strong> → WalletConnect → Сканируйте QR ниже.<br>Не сканируйте камерой телефона — может открыть MetaMask.';
   if (cfg.installUrl && !mobile) {
     installA.style.display = 'none';
   } else {
@@ -794,7 +794,7 @@ function gwPrefetchWc() {
   /* Skip prefetch — pre-initing EthereumProvider can resurrect Reown modal on PC. */
 }
 
-/** Reown / WalletConnect modal — same UX on PC and mobile (QR, no site redirects). */
+/** Reown explorer — only for "WalletConnect · More wallets" (generic). */
 async function connectViaReownExplorer(walletKey) {
   const cfg = GW_WALLET_WC[walletKey] || GW_WALLET_WC.generic;
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
@@ -819,7 +819,64 @@ async function connectViaReownExplorer(walletKey) {
   }
 }
 
-/* All wallets → Reown modal. In-app browser only → direct inject (no redirect). */
+/**
+ * Named wallets (Trust, Binance, …): bypass Reown QR — it embeds raw wc: URIs
+ * that Chrome/iOS hand to MetaMask. We use SignClient + our modal with a
+ * wallet-specific universal link in the QR (link.trustwallet.com/wc?uri=…).
+ */
+async function connectViaSignClientCustomQr(walletKey) {
+  const cfg = GW_WALLET_WC[walletKey];
+  if (!cfg) throw new Error('Unknown wallet: ' + walletKey);
+  if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
+
+  gwSetWcFlowActive(true);
+  gwKillReownModals();
+  const killTimer = setInterval(gwKillReownModals, 250);
+
+  try {
+    if (wcProvider) {
+      try { await wcProvider.disconnect?.(); } catch (_) {}
+      wcProvider = null;
+      wcRecommendedForKey = null;
+    }
+
+    const { default: SignClient } = await import('https://esm.sh/@walletconnect/sign-client@2.18.0');
+    const client = await SignClient.init({
+      projectId: WC_PROJECT_ID,
+      metadata: walletMetadata(),
+    });
+    const { uri, approval } = await client.connect(standardWcNamespaces());
+    if (!uri) throw new Error('Could not start ' + cfg.label + ' session');
+
+    gwShowWcModal(walletKey, uri, { mobile: isMobileUA() });
+
+    const session = await Promise.race([
+      approval(),
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error(cfg.label + ' connection timed out — approve in the wallet app')),
+        180000
+      )),
+    ]);
+
+    wcProvider = buildSignClientEip1193(client, session);
+    wcRecommendedForKey = walletKey;
+    wcProvider.on('accountsChanged', (accs) => updateChip(accs?.[0] || null));
+    wcProvider.on('disconnect', () => updateChip(null));
+    const accs = wcProvider.accounts;
+    if (!accs?.length) throw new Error('No accounts returned');
+    gwHideWcModal();
+    return await finalizeWcConnection(wcProvider, accs[0]);
+  } catch (err) {
+    gwHideWcModal();
+    throw err;
+  } finally {
+    clearInterval(killTimer);
+    gwSetWcFlowActive(false);
+    gwKillReownModals();
+  }
+}
+
+/* Named wallets → custom QR; generic → Reown explorer. In-app browser → inject. */
 async function connectWalletWC(walletKey) {
   const cfg = GW_WALLET_WC[walletKey];
   if (!cfg) throw new Error('Unknown wallet: ' + walletKey);
@@ -829,7 +886,10 @@ async function connectWalletWC(walletKey) {
     if (injected) return connectWithProvider(injected, cfg.label);
   }
 
-  return connectViaReownExplorer(walletKey);
+  if (walletKey === 'generic') {
+    return connectViaReownExplorer('generic');
+  }
+  return connectViaSignClientCustomQr(walletKey);
 }
 
 async function connectTrustWC() { return connectWalletWC('trust'); }

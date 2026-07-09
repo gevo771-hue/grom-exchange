@@ -4213,23 +4213,42 @@ let GW_SP_PAIRS = [
 ];
 function gwSpMergePairs() {
   try {
-    if (typeof window.gromInstrumentsByType !== 'function') return false;
-    if (gwSpMergePairs._done) return true;
-    const rows = window.gromInstrumentsByType('crypto') || [];
-    const have = new Set(GW_SP_PAIRS.map((p) => p.sym));
-    for (const r of rows) {
-      const base  = r.base;
-      const quote = r.quote || 'USDT';
-      const sym   = `${base}/${quote}`;
-      if (!base || have.has(sym)) continue;
-      GW_SP_PAIRS.push({ sym, base, quote, bn: (base + quote).toUpperCase() });
-      have.add(sym);
+    let anyMerged = false;
+    // 1) Cursor's Markets crypto (365 pairs)
+    if (typeof window.gromInstrumentsByType === 'function' && !gwSpMergePairs._instrDone) {
+      const rows = window.gromInstrumentsByType('crypto') || [];
+      const have = new Set(GW_SP_PAIRS.map((p) => p.sym));
+      for (const r of rows) {
+        const base  = r.base;
+        const quote = r.quote || 'USDT';
+        const sym   = `${base}/${quote}`;
+        if (!base || have.has(sym)) continue;
+        GW_SP_PAIRS.push({ sym, base, quote, bn: (base + quote).toUpperCase(), logo: r.logo || '' });
+        have.add(sym);
+      }
+      gwSpMergePairs._instrDone = true;
+      anyMerged = true;
     }
-    gwSpMergePairs._done = true;
-    console.log('[GROM] spot pairs expanded to', GW_SP_PAIRS.length);
-    // Force re-render if already mounted.
-    try { if (document.getElementById('gwSpotDex')) gwRenderSpotDex(); } catch (_) {}
-    return true;
+    // 2) LiFi's 9k+ unique symbols paired against USDT so every DEX-tradeable
+    //    token is available in the Spot terminal too.
+    if (!gwSpMergePairs._lifiDone) {
+      const have = new Set(GW_SP_PAIRS.map((p) => p.sym));
+      const seenBase = new Set(GW_SP_PAIRS.map((p) => p.base));
+      let added = 0;
+      for (const a of GW_DS_ASSETS) {
+        if (!a.sym || a.sym === 'USDT' || seenBase.has(a.sym)) continue;
+        const sym = `${a.sym}/USDT`;
+        if (have.has(sym)) continue;
+        GW_SP_PAIRS.push({ sym, base: a.sym, quote: 'USDT', bn: `${a.sym}USDT`.toUpperCase(), logo: a.logo || '' });
+        have.add(sym); seenBase.add(a.sym); added++;
+      }
+      if (added > 0) { gwSpMergePairs._lifiDone = true; anyMerged = true; }
+    }
+    if (anyMerged) {
+      console.log('[GROM] spot pairs total', GW_SP_PAIRS.length);
+      try { if (document.getElementById('gwSpotDex')) gwRenderSpotDex(); } catch (_) {}
+    }
+    return gwSpMergePairs._instrDone;
   } catch (_) { return false; }
 }
 if (typeof window !== 'undefined') {

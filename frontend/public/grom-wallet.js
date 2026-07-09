@@ -212,8 +212,10 @@ function gwShowWcModal(walletKey, wcUri, opts) {
     document.body.appendChild(modal);
     modal.querySelector('.gw-wc-close').onclick = () => gwHideWcModal();
     modal.querySelector('.gw-wc-back').onclick = () => {
+      const fromExplorer = modal.dataset.fromExplorer === '1';
       gwHideWcModal();
-      if (walletKey !== 'generic') gwOpenMoreWalletsExplorer();
+      if (fromExplorer) gwOpenMoreWalletsExplorer();
+      else if (typeof window.openConnectModal === 'function') window.openConnectModal();
     };
     modal.querySelector('.gw-wc-backdrop').onclick = (e) => {
       if (e.target.classList.contains('gw-wc-backdrop')) gwHideWcModal();
@@ -226,6 +228,7 @@ function gwShowWcModal(walletKey, wcUri, opts) {
   }
   modal.dataset.walletKey = walletKey;
   modal.dataset.wcUri = wcUri;
+  modal.dataset.fromExplorer = opts?.fromExplorer ? '1' : '0';
   modal.querySelector('.gw-wc-icon-lg').src = cfg.icon || '';
   modal.querySelector('.gw-wc-qr-badge').src = cfg.icon || '';
   modal.querySelector('.gw-wc-qr-badge').style.display = cfg.icon ? '' : 'none';
@@ -236,7 +239,7 @@ function gwShowWcModal(walletKey, wcUri, opts) {
   const openBtn = modal.querySelector('.gw-wc-open');
   const hint = modal.querySelector('.gw-wc-scan-hint');
   const backBtn = modal.querySelector('.gw-wc-back');
-  if (backBtn) backBtn.style.display = walletKey === 'generic' ? 'none' : '';
+  if (backBtn) backBtn.style.display = '';
   if (mobile) {
     lead.textContent = 'Confirm the connection in ' + cfg.label;
     qrWrap.style.display = 'none';
@@ -319,6 +322,7 @@ function updateChip(addr) {
 
 function failToast(e) {
   const msg = (e && e.message) ? e.message : String(e);
+  if (/cancel/i.test(msg)) return;
   console.error('[grom-wallet]', e);
   if (typeof window.toast === 'function') window.toast('Connection failed: ' + msg.slice(0, 80), 'error');
 }
@@ -911,7 +915,7 @@ function gwOpenMoreWalletsExplorer() {
   grid.querySelectorAll('.gw-expl-item').forEach((btn) => {
     btn.onclick = () => {
       modal.style.display = 'none';
-      connectViaSignClientCustomQr(btn.dataset.key).catch(failToast);
+      connectViaSignClientCustomQr(btn.dataset.key, { fromExplorer: true }).catch(failToast);
     };
   });
 
@@ -986,7 +990,7 @@ async function connectViaReownExplorer() {
  * Named wallets: SignClient + Binance-style QR with wallet-specific universal link
  * (never raw wc: — avoids MetaMask hijack on iOS / Chrome).
  */
-async function connectViaSignClientCustomQr(walletKey) {
+async function connectViaSignClientCustomQr(walletKey, opts) {
   const cfg = gwWalletCfg(walletKey);
   if (!cfg) throw new Error('Unknown wallet: ' + walletKey);
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
@@ -1011,7 +1015,7 @@ async function connectViaSignClientCustomQr(walletKey) {
     const { uri, approval } = await client.connect(standardWcNamespaces());
     if (!uri) throw new Error('Could not start ' + cfg.label + ' session');
 
-    gwShowWcModal(walletKey, uri, { mobile: isMobileUA() });
+    gwShowWcModal(walletKey, uri, { mobile: isMobileUA(), fromExplorer: !!opts?.fromExplorer });
 
     const session = await Promise.race([
       approval(),
@@ -2952,14 +2956,26 @@ function gwEnsureConnectWalletRows() {
 window.gwEnsureConnectWalletRows = gwEnsureConnectWalletRows;
 
 function gwInjectConnectModalCss() {
-  if (document.getElementById('gw-connect-modal-fixups')) return;
+  let style = document.getElementById('gw-connect-modal-fixups');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'gw-connect-modal-fixups';
+    document.head.appendChild(style);
+  }
   const css = `
     #connectModal .wm {
       max-height: min(90dvh, 720px);
       overflow-x: hidden;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
+      background: #181a20 !important;
+      border: 1px solid rgba(234,236,239,.08) !important;
+      color: #eaecef !important;
     }
+    #connectModal .wm-head {
+      border-bottom: 1px solid rgba(234,236,239,.06);
+    }
+    #connectModal .wm-head h3 { color: #eaecef; font-weight: 700; }
     #connectModal .cn-list {
       display: flex !important;
       flex-direction: column;
@@ -2967,7 +2983,20 @@ function gwInjectConnectModalCss() {
     }
     #connectModal .cn-list button.cn-row {
       display: flex !important;
+      background: #0b0e11 !important;
+      border-color: rgba(234,236,239,.08) !important;
+      color: #eaecef !important;
     }
+    #connectModal .cn-list button.cn-row:hover {
+      background: rgba(240,185,11,.06) !important;
+      border-color: rgba(240,185,11,.28) !important;
+    }
+    #connectModal .cn-list button.cn-row.primary {
+      background: rgba(240,185,11,.1) !important;
+      border-color: rgba(240,185,11,.35) !important;
+    }
+    #connectModal .cn-foot { color: #848e9c !important; }
+    #connectModal .cn-foot a { color: #f0b90b !important; }
     html.gw-wc-flow w3m-modal,
     html.gw-wc-flow wcm-modal,
     html.gw-wc-flow w3m-container,
@@ -3059,10 +3088,7 @@ function gwInjectConnectModalCss() {
     }
     .gw-expl-item span { line-height: 1.2; word-break: break-word; }
   `;
-  const style = document.createElement('style');
-  style.id = 'gw-connect-modal-fixups';
   style.textContent = css;
-  document.head.appendChild(style);
 }
 
 function gwSetupConnectModalRows() {
@@ -3146,7 +3172,7 @@ function gwOpenSignIn() {
   }
   const btn = Array.from(document.querySelectorAll('button, a')).find((el) => {
     const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-    return /^(Sign in|Log in|Войти|Войти\s*\/\s*Регистрация|Iniciar sesión|登录|Giriş|دخول)/i.test(t);
+    return /^(Sign in|Log in|Connect wallet|Войти|Подключить|Войти\s*\/\s*Регистрация|Iniciar|Conectar|登录|Giriş|دخول)/i.test(t);
   });
   if (btn) btn.click();
 }

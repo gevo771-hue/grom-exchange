@@ -7148,6 +7148,11 @@
     </div>
     <div class="wm-body">
       <div class="cn-list">
+        <button type="button" class="cn-row primary" onclick="cnConnect('Binance Web3 Wallet','bnw3', event)">
+          <span class="ico bn"><img src="/assets/wallets/binance.svg" alt="" width="40" height="40"/></span>
+          <span class="lbl">Binance Web3 Wallet</span>
+          <span class="chev">›</span>
+        </button>
         <button type="button" class="cn-row" onclick="cnConnect('Trust Wallet','trust', event)">
           <span class="ico tw"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" role="img" aria-hidden="true"><g clip-path="url(#trust__a)"><path fill="#0500FF" d="M24 0H0v24h24z"/><path fill="#fff" d="M4.8 6.311 12 4v16c-5.143-2.134-7.2-6.222-7.2-8.533zm14.4 0L12 4v16c5.143-2.134 7.2-6.222 7.2-8.533z"/></g><defs><clipPath id="trust__a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg></span>
           <span class="lbl">Trust Wallet</span>
@@ -7517,7 +7522,7 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260710d';
+  walletModule.src = '/grom-wallet.js?v=20260710e';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');

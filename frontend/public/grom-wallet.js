@@ -4995,7 +4995,10 @@ function gwTkRender(q) {
   const query = (q || '').toUpperCase();
   const items = GW_DS_ASSETS.filter((a) => !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query));
   if (items.length === 0) { list.innerHTML = `<div class="gw-tk-empty">Nothing matches «${q}»</div>`; return; }
-  list.innerHTML = items.slice(0, 500).map((a) => {
+  // Progressive rendering: paint first 200 immediately, then append batches
+  // of 200 on scroll — supports all 9555+ tokens without DOM freeze.
+  const BATCH = 200;
+  const rowHtml = (a) => {
     const ico = a.logo
       ? `<img class="ico" src="${a.logo}" alt="${a.sym}" loading="lazy" onerror="this.outerHTML='<span class=&quot;ico&quot;>${a.sym.slice(0,3)}</span>' " />`
       : `<span class="ico">${a.sym.slice(0, 3)}</span>`;
@@ -5003,15 +5006,39 @@ function gwTkRender(q) {
       ${ico}
       <div class="body"><div class="sym">${a.sym}</div><div class="name">${a.name || a.sym}</div></div>
     </div>`;
-  }).join('');
-  const which = document.getElementById('gw-tk-overlay').dataset.which;
-  list.querySelectorAll('.gw-tk-row').forEach((r) => {
-    r.onclick = () => {
-      const sel = document.getElementById(which === 'from' ? 'gwDsFrom' : 'gwDsTo');
-      if (sel) { sel.value = r.dataset.sym; gwTkSyncButton(which); try { gwDsRefreshRate(); } catch (_) {} }
-      document.getElementById('gw-tk-overlay').classList.remove('open');
-    };
-  });
+  };
+  let rendered = Math.min(BATCH, items.length);
+  list.innerHTML = items.slice(0, rendered).map(rowHtml).join('') +
+    (rendered < items.length ? `<div class="gw-tk-more" id="gw-tk-more" style="text-align:center;padding:10px;color:#6b7a92;font-size:11.5px">Showing ${rendered} of ${items.length}. Scroll for more…</div>` : `<div style="text-align:center;padding:8px;color:#6b7a92;font-size:11.5px">All ${items.length} tokens shown</div>`);
+  const overlay = document.getElementById('gw-tk-overlay');
+  const which = overlay?.dataset.which;
+  const wire = () => {
+    list.querySelectorAll('.gw-tk-row').forEach((r) => {
+      if (r._wired) return; r._wired = true;
+      r.onclick = () => {
+        const sel = document.getElementById(which === 'from' ? 'gwDsFrom' : 'gwDsTo');
+        if (sel) { sel.value = r.dataset.sym; gwTkSyncButton(which); try { gwDsRefreshRate(); } catch (_) {} }
+        overlay.classList.remove('open');
+      };
+    });
+  };
+  wire();
+  // Scroll handler: append next batch when user nears the bottom.
+  list.onscroll = () => {
+    if (rendered >= items.length) return;
+    if (list.scrollTop + list.clientHeight > list.scrollHeight - 400) {
+      const next = Math.min(rendered + BATCH, items.length);
+      const chunk = items.slice(rendered, next).map(rowHtml).join('');
+      const more = document.getElementById('gw-tk-more');
+      if (more) more.insertAdjacentHTML('beforebegin', chunk);
+      rendered = next;
+      if (more) {
+        if (rendered >= items.length) { more.textContent = `All ${items.length} tokens shown`; }
+        else { more.textContent = `Showing ${rendered} of ${items.length}. Scroll for more…`; }
+      }
+      wire();
+    }
+  };
 }
 function gwTkSyncButton(which) {
   const sel = document.getElementById(which === 'from' ? 'gwDsFrom' : 'gwDsTo');
@@ -7367,6 +7394,7 @@ try {
       safe('yield',            gwSetupYield);
       safe('trending',         gwSetupTrending);
       safe('mega-cards',       gwSetupMegaCards);
+      safe('referral-page2',   gwSetupReferralPage2);
       safe('airdrop',          gwSetupAirdrop);
       safe('predictArb',       gwSetupPredictArb);
       safe('crossMargin',      gwSetupCrossMargin);
@@ -8201,23 +8229,74 @@ function gwRenderReferral2() {
   document.getElementById('gwRef2Copy').onclick = () => { navigator.clipboard?.writeText(link); gwToast('Referral link copied', 'success'); };
 }
 
-/* Trimmed 2026-07-09b — user said "не сильно мы много налепили".
- * Kept: NFT (visual variety) + Referral 2.0 (revenue-driving).
- * Removed: Perpetuals (out of scope), AI Bot (dup of AI Coach FAB),
- * Rebalance (mostly stub). Removal is idempotent — safe to redeploy. */
+/* Trimmed 2026-07-09c — after user feedback:
+ *   Dashboard keeps: Portfolio Rebalance + NFT Hot.
+ *   Removed from dashboard: Perp, AI Bot.
+ *   Referral 2.0 moved to #page-referral (see gwSetupReferralPage2). */
 function gwSetupMegaCards() {
-  ['gwRebalanceCard','gwPerpCard','gwAiBotCard'].forEach(id => document.getElementById(id)?.remove());
+  ['gwPerpCard','gwAiBotCard','gwRef2Card'].forEach(id => document.getElementById(id)?.remove());
   const run = gwDebounce(() => {
     if (!document.getElementById('page-dashboard')) return;
-    ['gwRebalanceCard','gwPerpCard','gwAiBotCard'].forEach(id => document.getElementById(id)?.remove());
+    ['gwPerpCard','gwAiBotCard','gwRef2Card'].forEach(id => document.getElementById(id)?.remove());
+    try { gwRenderRebalance(); } catch (_) {}
     try { gwRenderNftHot(); } catch (_) {}
-    try { gwRenderReferral2(); } catch (_) {}
   }, 300);
   run();
-  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwRef2Card') || n >= 20) clearInterval(id); else run(); }, 500);
+  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwNftCard') || n >= 20) clearInterval(id); else run(); }, 500);
   window.addEventListener('hashchange', run);
   const obs = new MutationObserver(() => run()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
-  window.addEventListener('grom:lang-change', () => { ['gwNftCard','gwRef2Card'].forEach(id => document.getElementById(id)?.remove()); run(); });
+  window.addEventListener('grom:lang-change', () => { ['gwRebalanceCard','gwNftCard'].forEach(id => document.getElementById(id)?.remove()); run(); });
+}
+
+/* Referral 2.0 — mounts on #page-referral (not dashboard). */
+function gwSetupReferralPage2() {
+  const run = gwDebounce(() => {
+    const page = document.getElementById('page-referral');
+    if (!page) return;
+    gwInjectMegaCss();
+    let wrap = document.getElementById('gwRef2CardPage');
+    if (!wrap) {
+      wrap = document.createElement('div'); wrap.id = 'gwRef2CardPage'; wrap.className = 'gw-mg-wrap';
+      // Prepend as the first inner card of the referral page for high visibility.
+      page.insertBefore(wrap, page.firstChild);
+    }
+    const code = (localStorage.getItem('grom_ref_code') || '').toUpperCase();
+    const isAuth = !!code || !!localStorage.getItem('grom_jwt') || !!localStorage.getItem('gw_addr');
+    if (!isAuth) {
+      wrap.innerHTML = `<div class="gw-mg-card ref">
+        <div class="gw-mg-head"><div>
+          <h3 class="gw-mg-h">🎁 Referral 2.0 · 50/50 split forever</h3>
+          <p class="gw-mg-sub">Войди — получи персональный линк и забирай половину нашей 0.20% комиссии со свапов каждого приведённого пользователя</p>
+        </div><span class="gw-mg-badge">50/50</span></div>
+        <button class="gw-mg-cta g" id="gwRef2PSignIn">Sign in to unlock →</button>
+      </div>`;
+      document.getElementById('gwRef2PSignIn').onclick = () => {
+        try { if (typeof openConnectModal === 'function') openConnectModal(); else if (typeof cnConnect === 'function') cnConnect(); } catch (_) {}
+      };
+      return;
+    }
+    const link = `https://grom.exchange/?ref=${code || 'you'}`;
+    wrap.innerHTML = `<div class="gw-mg-card ref">
+      <div class="gw-mg-head"><div>
+        <h3 class="gw-mg-h">🎁 Referral 2.0 · 50/50 split forever</h3>
+        <p class="gw-mg-sub">Earn half of GROM's 0.20% swap fee from every friend you refer — paid daily, forever</p>
+      </div><span class="gw-mg-badge">50/50</span></div>
+      <div class="gw-mg-grid" style="margin-bottom:12px;grid-template-columns:2fr 1fr">
+        <div class="gw-mg-item"><div class="k">Your link</div><div class="v" style="font-size:11.5px;font-family:'JetBrains Mono',monospace;word-break:break-all">${link}</div></div>
+        <div class="gw-mg-item"><div class="k">Earned</div><div class="v">0.00 USDT</div><div class="s">Paid daily</div></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="gw-mg-cta g" id="gwRef2PCopy">Copy link</button>
+        <a class="gw-mg-cta" href="https://twitter.com/intent/tweet?text=Trading%20on%20GROM%20—%20non-custodial%20DEX%20across%2020%2B%20chains&url=${encodeURIComponent(link)}" target="_blank" rel="noopener">Share on 𝕏</a>
+        <a class="gw-mg-cta p" href="https://t.me/share/url?url=${encodeURIComponent(link)}&text=GROM%20exchange" target="_blank" rel="noopener">Share to Telegram</a>
+      </div>
+    </div>`;
+    document.getElementById('gwRef2PCopy').onclick = () => { navigator.clipboard?.writeText(link); gwToast('Referral link copied', 'success'); };
+  }, 300);
+  run();
+  window.addEventListener('hashchange', run);
+  const obs = new MutationObserver(() => run()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  window.addEventListener('grom:lang-change', () => { document.getElementById('gwRef2CardPage')?.remove(); run(); });
 }
 
 function gwSetupYield() {

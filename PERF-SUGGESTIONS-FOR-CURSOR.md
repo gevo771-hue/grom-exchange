@@ -1,5 +1,48 @@
 # Performance suggestions — page-load 6.2 s → <1 s
 
+## Update 2026-07-09b — Full DEX pivot: kill CEX vestiges
+
+Product decision from Gevork today: GROM is now positioned as a
+non-custodial DEX. Everything CEX-shaped needs to be cut / hidden.
+My side handles the Trending/NFT/Referral 2.0 injections + hides the
+top-nav "Депозит" button and the "Пополнить" pill in Meta-Portfolio
+(via a CSS+DOM watcher — commit today).
+
+**Your side (I'm not touching your files):**
+
+1. **Signup — remove email option.**
+   * The whole appeal of a DEX is "no email, no KYC, sign-in with
+     wallet". Right now the Connect modal shows email + Google +
+     Apple + wallets. Suggest keeping just wallets (Trust /
+     WalletConnect / MetaMask / Phantom / TON / Tron / OKX / Coinbase).
+   * Email registration path (`grom-privy.js` email form) can stay
+     as fallback for existing users but hide the entry point from
+     new users.
+
+2. **Landing — replace "custodial deposit" language.**
+   * Any mention of "Пополни счёт через карту / SEPA / банк" should
+     read "Connect wallet — trade instantly". No fiat rails on the
+     landing.
+   * Cash tab in the wallet modal (Ramp / Transak links) — kill it.
+
+3. **Wallet page — flip the framing.**
+   * Today the Wallet page implies a GROM-held balance. Change the
+     headline to "On-chain assets across N chains" (LiFi feed). My
+     `gwRenderOnchainCard` already fetches this.
+   * Deposit-address flow (`renderDepositNetworks`, `applyDepositNetwork`)
+     is no longer relevant. Consider removing the whole "Deposit"
+     tab of `#walletModal`.
+
+4. **`grom_ref` random-address seeding.**
+   * If sign-up removes email, the "grom_ref" localStorage will only
+     be set once a wallet is connected. Should be fine — just verify
+     the /?ref=CODE handler still fires before wallet connect.
+
+Let me know via a commit message if you take any of these on and
+I'll re-audit via Chrome MCP.
+
+---
+
 ## Update 2026-07-09 — Markets page search slow on mobile
 
 The Markets page (`#page-markets`) with its 365-row Crypto table

@@ -2634,9 +2634,10 @@ async function gwRenderMetaPortfolio() {
     wrap = document.createElement('div');
     wrap.className = 'gw-mp-wrap';
     wrap.id = 'gwMetaPortfolio';
-    // Insert BEFORE swap panel (or at top of dash)
+    // Meta-Portfolio always goes AFTER the Instant Swap panel so the swap
+    // stays high above the fold (user request 2026-07-09).
     const swap = page.querySelector('.gw-ds-wrap');
-    if (swap) swap.before(wrap);
+    if (swap) swap.after(wrap);
     else {
       const banners = page.querySelector('.dash-banners-wrap');
       if (banners) banners.after(wrap);
@@ -7395,6 +7396,7 @@ try {
       safe('trending',         gwSetupTrending);
       safe('mega-cards',       gwSetupMegaCards);
       safe('referral-page2',   gwSetupReferralPage2);
+      safe('cex-cleanup',      gwSetupCexCleanup);
       safe('airdrop',          gwSetupAirdrop);
       safe('predictArb',       gwSetupPredictArb);
       safe('crossMargin',      gwSetupCrossMargin);
@@ -7901,10 +7903,13 @@ function gwInjectTrendingCss() {
     .gw-tr-title { margin: 0; font-size: 17px; font-weight: 800; }
     .gw-tr-sub { margin: 4px 0 0; font-size: 12px; color: #98a8c0; }
     .gw-tr-badge { padding: 4px 8px; border-radius: 999px; background: rgba(232,87,107,0.14); color: #f87171; font-size: 10px; font-weight: 800; letter-spacing: .12em; border: 1px solid rgba(232,87,107,0.28); }
-    .gw-tr-list { display: flex; flex-direction: column; gap: 6px; }
+    .gw-tr-list { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
+    .gw-tr-list::-webkit-scrollbar { width: 6px; }
+    .gw-tr-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
     .gw-tr-row { display: grid; grid-template-columns: 32px 1fr auto auto auto; gap: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05); align-items: center; cursor: pointer; transition: background .18s, border-color .18s; }
     .gw-tr-row:hover { background: rgba(255,255,255,0.05); border-color: rgba(232,87,107,0.22); }
     .gw-tr-row img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,0.05); }
+    .gw-tr-row .avatar { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 11px; color: #e7eef8; background: linear-gradient(135deg, rgba(232,87,107,0.35), rgba(140,70,215,0.35)); border: 1px solid rgba(255,255,255,0.1); }
     .gw-tr-row .name { font-weight: 800; font-size: 13.5px; }
     .gw-tr-row .chain { font-size: 10.5px; letter-spacing: .1em; color: #6b7a92; text-transform: uppercase; margin-top: 2px; }
     .gw-tr-row .px { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: #e7eef8; text-align: right; }
@@ -7924,13 +7929,25 @@ async function gwFetchTrending() {
     const b = await fetch('https://api.dexscreener.com/token-boosts/latest/v1').then((r) => r.json());
     if (!Array.isArray(b) || b.length === 0) return [];
     // Take top 10, resolve to pairs concurrently, keep top 5 by volume.
-    const top = b.slice(0, 30);
-    const pairs = await Promise.all(top.map((t) => fetch(`https://api.dexscreener.com/latest/dex/tokens/${t.tokenAddress}`).then((r) => r.json()).catch(() => null)));
+    // Dedupe boosts by tokenAddress (DexScreener returns same token from
+    // multiple boost slots — that produced ANIF/BILLCOIN/Loxley twice each).
+    const seen = new Set();
+    const dedup = [];
+    for (const t of b) {
+      const k = (t.tokenAddress || '').toLowerCase() + ':' + (t.chainId || '');
+      if (!k || seen.has(k)) continue;
+      seen.add(k); dedup.push(t);
+      if (dedup.length >= 30) break;
+    }
+    const pairs = await Promise.all(dedup.map((t) => fetch(`https://api.dexscreener.com/latest/dex/tokens/${t.tokenAddress}`).then((r) => r.json()).catch(() => null)));
     const rows = [];
+    const seen2 = new Set();
     for (let i = 0; i < pairs.length; i++) {
       const j = pairs[i];
       const p = j?.pairs?.[0];
       if (!p) continue;
+      const key = (p.baseToken?.address || '').toLowerCase() + ':' + (p.chainId || '');
+      if (seen2.has(key)) continue; seen2.add(key);
       rows.push({
         sym: p.baseToken?.symbol || '?',
         name: p.baseToken?.name || '',
@@ -7938,8 +7955,8 @@ async function gwFetchTrending() {
         priceUsd: Number(p.priceUsd) || 0,
         change24h: Number(p.priceChange?.h24) || 0,
         volumeUsd: Number(p.volume?.h24) || 0,
-        img: top[i]?.icon || p.info?.imageUrl || '',
-        tokenAddress: top[i].tokenAddress,
+        img: dedup[i]?.icon || p.info?.imageUrl || '',
+        tokenAddress: dedup[i].tokenAddress,
       });
     }
     return rows.sort((a, b) => b.volumeUsd - a.volumeUsd).slice(0, 20);
@@ -7981,7 +7998,8 @@ async function gwRenderTrending() {
     const priceFmt = r.priceUsd > 1
       ? '$' + r.priceUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })
       : '$' + r.priceUsd.toFixed(Math.min(8, 4 + Math.max(0, -Math.log10(Math.max(r.priceUsd, 1e-9)) | 0)));
-    const img = r.img ? `<img src="${r.img}" alt="" onerror="this.style.background='rgba(255,255,255,.05)'" />` : `<div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.05)"></div>`;
+    const initial = (r.sym || '?').slice(0, 3).toUpperCase();
+    const img = r.img ? `<img src="${r.img}" alt="" onerror="this.outerHTML='<span class=&quot;avatar&quot;>${initial}</span>'" />` : `<span class="avatar">${initial}</span>`;
     return `<div class="gw-tr-row" data-sym="${r.sym}" data-chain="${r.chain}">
       ${img}
       <div><div class="name">${r.sym}</div><div class="chain">${r.chain}</div></div>
@@ -7992,14 +8010,24 @@ async function gwRenderTrending() {
   }).join('');
   list.querySelectorAll('.gw-tr-row').forEach((el) => {
     el.onclick = () => {
+      const sym = el.dataset.sym;
       // Prefill swap panel with this token as receive-asset.
       const to = document.getElementById('gwDsTo');
       if (to) {
-        to.value = el.dataset.sym;
+        to.value = sym;
         try { gwTkSyncButton('to'); } catch (_) {}
         try { gwDsRefreshRate(); } catch (_) {}
       }
-      document.querySelector('.gw-ds-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const swap = document.querySelector('.gw-ds-wrap');
+      if (swap) {
+        swap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Flash the panel border so user's eye locks on to it.
+        swap.style.outline = '2px solid rgba(93,213,255,0.7)';
+        swap.style.outlineOffset = '4px';
+        swap.style.borderRadius = '20px';
+        setTimeout(() => { swap.style.outline = 'none'; }, 1600);
+      }
+      try { gwToast(`Loaded ${sym} in Instant Swap`, 'success'); } catch (_) {}
     };
   });
 }
@@ -8246,6 +8274,88 @@ function gwSetupMegaCards() {
   window.addEventListener('hashchange', run);
   const obs = new MutationObserver(() => run()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
   window.addEventListener('grom:lang-change', () => { ['gwRebalanceCard','gwNftCard'].forEach(id => document.getElementById(id)?.remove()); run(); });
+}
+
+/* ==========================================================================
+ * CEX cleanup — 2026-07-09
+ * User pivot: full DEX, no more custodial deposit / cash / send.
+ *   - Hide "Депозит" pill in top nav (Cursor-owned).
+ *   - Hide "Пополнить" (Deposit) button inside Meta-Portfolio actions row.
+ *   - Guard: clicking Wallet or Referral in the sidebar accidentally
+ *     opens the wallet-modal on the Deposit tab (Cursor's SPA quirk) —
+ *     close it right back if the current route is wallet/referral.
+ *   - Landing "coins list / signup email" is Cursor's territory — a note
+ *     lives in PERF-SUGGESTIONS-FOR-CURSOR.md for him to pick up.
+ * ========================================================================== */
+function gwInjectCexCleanupCss() {
+  if (document.getElementById('gw-cex-clean-css')) return;
+  const s = document.createElement('style'); s.id = 'gw-cex-clean-css';
+  s.textContent = `
+    /* Hide top-nav "Депозит" button no matter which language / class name */
+    .header-actions button.deposit,
+    .header-actions .deposit-btn,
+    .header .deposit-cta,
+    .hub-header button[data-action="deposit"],
+    button.deposit-cta { display: none !important; }
+    /* Hide Meta-Portfolio "Пополнить" — its purpose was custodial deposit */
+    .gw-mp-actions button[data-act="deposit"],
+    .gw-mp-actions .mp-deposit,
+    .gw-mp-btn.mp-deposit { display: none !important; }
+  `;
+  document.head.appendChild(s);
+}
+
+function gwSetupCexCleanup() {
+  gwInjectCexCleanupCss();
+  // Belt-and-suspenders: also match by visible text (Cursor's markup uses
+  // no reliable class). Scan on every DOM change.
+  const KILL_TEXTS = ['Депозит', 'Deposit', 'Пополнить', 'Add funds'];
+  const hideDeposit = () => {
+    // 1) Top-nav / header buttons
+    const scope = document.querySelector('.hub-header, header.header, header, .app-header');
+    if (scope) {
+      scope.querySelectorAll('button, a').forEach((el) => {
+        const txt = (el.textContent || '').trim();
+        if (KILL_TEXTS.includes(txt) && !el.dataset.gwCexKilled) {
+          el.dataset.gwCexKilled = '1';
+          el.style.display = 'none';
+        }
+      });
+    }
+    // 2) Meta-portfolio actions row — the "+ Пополнить" btn just below the
+    //    portfolio total. Cursor's markup gives it no id.
+    document.querySelectorAll('.gw-mp-actions button, .gw-mp-actions a').forEach((el) => {
+      const txt = (el.textContent || '').trim();
+      if (KILL_TEXTS.some(k => txt.includes(k)) && !el.dataset.gwCexKilled) {
+        el.dataset.gwCexKilled = '1';
+        el.style.display = 'none';
+      }
+    });
+  };
+  hideDeposit();
+  const debounced = gwDebounce(hideDeposit, 150);
+  const obs = new MutationObserver(() => debounced());
+  obs.observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('hashchange', debounced);
+
+  // Guard: on wallet/referral route, close any spontaneously-opened walletModal.
+  const closeDepositIfStrayed = () => {
+    const route = (location.hash || '').replace(/^#/, '').split('?')[0];
+    if (route !== 'wallet' && route !== 'referral') return;
+    const modal = document.getElementById('walletModal');
+    if (modal && !modal.hidden && !modal.classList.contains('gw-user-opened')) {
+      // Was the modal opened by an explicit user click on the Deposit button?
+      // The button carries data-gw-user-opened when clicked. Otherwise treat
+      // it as accidental and dismiss.
+      modal.hidden = true;
+      modal.style.display = 'none';
+    }
+  };
+  window.addEventListener('hashchange', closeDepositIfStrayed);
+  // Also monitor when modal becomes visible.
+  const modObs = new MutationObserver(closeDepositIfStrayed);
+  const mm = document.getElementById('walletModal');
+  if (mm) modObs.observe(mm, { attributes: true, attributeFilter: ['hidden', 'style', 'class'] });
 }
 
 /* Referral 2.0 — mounts on #page-referral (not dashboard). */

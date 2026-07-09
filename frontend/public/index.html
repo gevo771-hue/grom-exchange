@@ -4991,9 +4991,11 @@
         #page-landing .lp-hero{display:grid;grid-template-columns:1.2fr 1fr;gap:48px;align-items:center;margin-bottom:36px}
         @media(max-width:960px){#page-landing .lp-hero{grid-template-columns:1fr;gap:32px;margin-bottom:28px}}
         #page-landing #gwLandingChainsHost,
+        #page-landing #gwLandingAggHost,
         #page-landing #gwLandingDexHiHost,
         #page-landing #gwLandingCmpHost,
         #page-landing #gwLandingFaqHost{margin:0 0 40px;padding:0;width:100%;min-width:0}
+        #page-landing #gwLandingAggHost{margin-bottom:36px}
         #page-landing #gwLandingDexHiHost{margin-bottom:44px}
         #page-landing #gwLandingCmpHost{margin-bottom:44px}
         #page-landing #gwLandingFaqHost{margin-bottom:48px}
@@ -5094,6 +5096,7 @@
           #page-landing .lp-wrap{padding:24px 16px 60px}
           #page-landing .lp-hero{margin-bottom:24px;gap:20px}
           #page-landing #gwLandingChainsHost,
+          #page-landing #gwLandingAggHost,
           #page-landing #gwLandingDexHiHost,
           #page-landing #gwLandingCmpHost,
           #page-landing #gwLandingFaqHost{margin-bottom:28px}
@@ -5186,6 +5189,7 @@
         </div>
 
         <div id="gwLandingChainsHost" class="lp-inject-chains" aria-label="Supported chains"></div>
+        <div id="gwLandingAggHost" class="lp-inject-agg" aria-label="Swap aggregators"></div>
         <div id="gwLandingDexHiHost" class="lp-inject-dexhi" aria-label="DEX highlights"></div>
 
         <!-- 3 PRODUCT CARDS -->
@@ -7507,13 +7511,13 @@
 </div>
 
 <script src="/grom-instruments.js?v=20260424x"></script>
-<script src="/grom-i18n.js?v=20260710a"></script>
+<script src="/grom-i18n.js?v=20260710c"></script>
 <script src="/grom-i18n-extra.js?v=20260616e"></script>
 <script>
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260710b';
+  walletModule.src = '/grom-wallet.js?v=20260710c';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
@@ -7731,6 +7735,8 @@ function show(page) {
       if (typeof renderOrderBook === 'function') renderOrderBook();
       if (typeof scheduleDeskChartDraw === 'function') scheduleDeskChartDraw('spotChart');
       if (typeof initSpotTradeControls === 'function') initSpotTradeControls();
+      setTimeout(function () { if (typeof scheduleDeskChartDraw === 'function') scheduleDeskChartDraw('spotChart'); }, 120);
+      setTimeout(function () { if (typeof scheduleDeskChartDraw === 'function') scheduleDeskChartDraw('spotChart'); }, 320);
     }
     if (page === 'binary') {
       if (typeof rebuildBinaryPairs === 'function') rebuildBinaryPairs();
@@ -7800,9 +7806,9 @@ if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefau
 function hydratePreviewSurfaces() {
   if (typeof renderMarkets === 'function' && document.getElementById('page-markets')?.classList.contains('active')) renderMarkets();
   if (typeof drawChart === 'function') {
-    drawChart('boChart');
-    drawChart('spotChart');
-    drawChart('futChart');
+    if (document.getElementById('page-binary')?.classList.contains('active')) drawChart('boChart');
+    if (document.getElementById('page-spot')?.classList.contains('active')) drawChart('spotChart');
+    if (document.getElementById('page-futures')?.classList.contains('active')) drawChart('futChart');
   }
 }
 window.addEventListener('load', function () {
@@ -7894,7 +7900,8 @@ function disconnectWallet() {
 function openConnectModal() {
   try {
     if (window.GROM_CONN && GROM_CONN.connected) {
-      if (typeof openWalletModal === 'function') openWalletModal('deposit');
+      var chip = document.getElementById('walletChip');
+      if (chip) chip.click();
       return;
     }
   } catch (_) {}
@@ -7998,14 +8005,22 @@ if (_logout) _logout.addEventListener('click', disconnectWallet);
     var token = localStorage.getItem('grom_jwt') || '';
     if (token === 'demo-session' || token === 'privy-session') {
       localStorage.removeItem('grom_jwt');
+      token = '';
+    }
+    var label = localStorage.getItem('grom_wallet_label') || '';
+    var isWalletAddr = /^0x[a-fA-F0-9]{40}$/.test(label);
+    if (token && String(token).split('.').length === 3) {
+      GROM_CONN = { connected: true, label: label || 'Wallet', method: 'restored' };
+      setWalletLabel(isWalletAddr ? (label.slice(0, 6) + '…' + label.slice(-4)) : (label || 'Wallet'));
+      updateAuthUi();
+      if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
       return;
     }
-    if (!token || String(token).split('.').length !== 3) return;
-      var label = localStorage.getItem('grom_wallet_label') || 'Wallet';
-      GROM_CONN = { connected: true, label: label, method: 'restored' };
-      setWalletLabel(label);
+    if (isWalletAddr) {
+      GROM_CONN = { connected: true, label: label, method: 'restored-wallet' };
+      setWalletLabel(label.slice(0, 6) + '…' + label.slice(-4));
       updateAuthUi();
-    if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
+    }
   } catch (_) {}
 })();
 
@@ -10401,9 +10416,30 @@ function scheduleDeskChartDraw(id) {
   });
 }
 window.scheduleDeskChartDraw = scheduleDeskChartDraw;
+function gromWaitForLightweightCharts(cb) {
+  if (typeof LightweightCharts !== 'undefined') { cb(); return; }
+  if (window.__gromTVLibWait) return;
+  var n = 0;
+  window.__gromTVLibWait = setInterval(function () {
+    n++;
+    if (typeof LightweightCharts !== 'undefined') {
+      clearInterval(window.__gromTVLibWait);
+      window.__gromTVLibWait = null;
+      cb();
+    } else if (n > 120) {
+      clearInterval(window.__gromTVLibWait);
+      window.__gromTVLibWait = null;
+    }
+  }, 50);
+}
 function drawChart(id) {
   if (_gromTVChartIds.indexOf(id) !== -1) {
-    if (typeof window.gromDrawTVChart === 'function' && typeof LightweightCharts !== 'undefined') {
+    if (typeof LightweightCharts === 'undefined') {
+      gromWaitForLightweightCharts(function () { drawVisibleDeskCharts(); });
+      scheduleDeskChartDraw(id);
+      return;
+    }
+    if (typeof window.gromDrawTVChart === 'function') {
       try {
         var rendered = window.gromDrawTVChart(id);
         if (rendered !== false) return rendered;
@@ -10412,10 +10448,6 @@ function drawChart(id) {
       } catch (err) {
         console.warn('[grom-chart] lightweight renderer failed, falling back', id, err);
       }
-    }
-    if (typeof LightweightCharts === 'undefined') {
-    if (typeof window._gromOldDrawChart === 'function') return window._gromOldDrawChart(id);
-    if (typeof _origDrawChart === 'function') return _origDrawChart(id);
     }
     return;
   }
@@ -15153,7 +15185,10 @@ updateAuthUi = function updateAuthUiPatched() {
   var chip = document.getElementById('walletChip');
   var connected = !!GROM_CONN.connected;
   if (actions) actions.classList.toggle('open', connected);
-  if (chip) chip.style.display = connected ? 'none' : '';
+  if (chip) {
+    chip.style.display = '';
+    chip.classList.toggle('connected', connected);
+  }
   var sbLogout = document.getElementById('sidebarLogout');
   if (sbLogout) sbLogout.style.display = connected ? '' : 'none';
   var topLogout = document.getElementById('topLogoutBtn');
@@ -15161,8 +15196,15 @@ updateAuthUi = function updateAuthUiPatched() {
   if (!connected) {
     setWalletLabel(gromSignInLabel());
     if (typeof window.gromResetWalletUi === 'function') window.gromResetWalletUi();
-  } else if (typeof window.hydrateWalletSlice === 'function') {
-    window.hydrateWalletSlice(true);
+  } else {
+    var raw = GROM_CONN.label || '';
+    try { if (!raw) raw = localStorage.getItem('grom_wallet_label') || ''; } catch (_) {}
+    if (raw && /^0x[a-fA-F0-9]{40}$/i.test(raw)) {
+      setWalletLabel(raw.slice(0, 6) + '…' + raw.slice(-4));
+    } else if (raw) {
+      setWalletLabel(raw);
+    }
+    if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
   }
 };
 var __baseDisconnect = disconnectWallet;
@@ -15177,7 +15219,10 @@ var __logoHomeLive = document.getElementById('logoHome');
 if (__logoHomeLive) __logoHomeLive.onclick = function (e) { e.preventDefault(); show(GROM_CONN.connected ? 'dashboard' : 'landing'); };
 var __baseShowLive = show;
 var GW_GATED_PAGES = ['referral', 'wallet', 'history', 'settings'];
-function gromIsAuthed() { try { return !!localStorage.getItem('grom_jwt'); } catch (_) { return false; } }
+function gromIsAuthed() {
+  try { if (localStorage.getItem('grom_jwt')) return true; } catch (_) {}
+  return !!(window.GROM_CONN && window.GROM_CONN.connected && window.GROM_CONN.label);
+}
 show = function showLivePatched(page) {
   if (!gromIsAuthed() && GW_GATED_PAGES.indexOf(page) >= 0) {
     if (typeof window.gwOpenSignIn === 'function') window.gwOpenSignIn();

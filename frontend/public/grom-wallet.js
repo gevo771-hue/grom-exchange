@@ -271,6 +271,7 @@ function updateChip(addr) {
     window.GROM_CONN.label = addr || '';
   }
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
+  if (typeof window.updateAuthUi === 'function') window.updateAuthUi();
   if (typeof window.toast === 'function' && addr) window.toast('Wallet connected · ' + short, 'success');
   // Broadcast address-known event so anything that renders on the connected
   // address (e.g. the on-chain balance card on the Wallet page) refreshes
@@ -2904,7 +2905,8 @@ function gwSetupConnectModalRows() {
 const GW_GATED_PAGES = ['referral', 'wallet', 'history', 'settings'];
 
 function gwIsAuthed() {
-  try { return !!localStorage.getItem('grom_jwt'); } catch (e) { return false; }
+  try { if (localStorage.getItem('grom_jwt')) return true; } catch (e) { /* noop */ }
+  return !!(window.GROM_CONN && window.GROM_CONN.connected && window.GROM_CONN.label);
 }
 
 function gwOpenSignIn() {
@@ -6159,9 +6161,9 @@ function gwOrdDelete(id) { gwOrdSave(gwOrdLoad().filter((o) => o.id !== id)); gw
 function gwInjectAdvancedCss() {
   if (document.getElementById('gw-adv-css')) return;
   const css = `
-    .gw-adv-wrap { margin: 12px 0 4px; }
+    .gw-adv-wrap { margin: 12px 0 4px; max-width: 100%; box-sizing: border-box; }
     .gw-adv-card {
-      padding: 18px; border-radius: 20px; color: #e7eef8;
+      padding: 18px; border-radius: 20px; color: #e7eef8; max-width: 100%; box-sizing: border-box; overflow: hidden;
       background: radial-gradient(120% 140% at 100% 0%, rgba(0,194,255,0.08), transparent 55%),
                   linear-gradient(160deg, rgba(13,22,38,0.72), rgba(8,14,26,0.92));
       border: 1px solid rgba(0,194,255,0.18);
@@ -6169,17 +6171,19 @@ function gwInjectAdvancedCss() {
     .gw-adv-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
     .gw-adv-tab { flex: 0 0 auto; padding: 7px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); color: #98a8c0; border: 1px solid rgba(255,255,255,0.06); font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
     .gw-adv-tab.on { background: rgba(0,194,255,0.14); color: #5dd5ff; border-color: rgba(0,194,255,0.28); }
-    .gw-adv-form { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 8px; margin-bottom: 10px; }
+    .gw-adv-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 8px; margin-bottom: 10px; width: 100%; min-width: 0; }
     @media (max-width: 640px) {
+      .gw-adv-wrap { padding: 0 4px; }
+      .gw-adv-card { padding: 16px 14px; border-radius: 18px; }
       .gw-adv-tabs { gap: 8px; }
       .gw-adv-tab { flex: 1 1 45%; text-align: center; padding: 10px 12px; font-size: 13px; }
-      .gw-adv-form { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .gw-adv-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
       .gw-adv-form select#gdInt { grid-column: 1 / -1; }
-      .gw-adv-form button { grid-column: 1 / -1; padding: 13px 14px; font-size: 15px; }
-      .gw-adv-form input, .gw-adv-form select { font-size: 16px; padding: 12px 12px; min-height: 44px; box-sizing: border-box; }
-      .gw-adv-row { grid-template-columns: 1fr auto !important; padding: 12px; }
+      .gw-adv-form button { grid-column: 1 / -1; padding: 13px 14px; font-size: 15px; width: 100%; max-width: 100%; box-sizing: border-box; }
+      .gw-adv-form input, .gw-adv-form select { font-size: 16px; padding: 12px 12px; min-height: 44px; box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; }
+      .gw-adv-row { grid-template-columns: minmax(0, 1fr) auto !important; padding: 12px; }
       .gw-adv-row .state:not(:first-of-type) { grid-column: 1 / -1; }
-      .gw-adv-row .desc { font-size: 13px; }
+      .gw-adv-row .desc { font-size: 13px; word-break: break-word; }
     }
     .gw-adv-form input, .gw-adv-form select {
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
@@ -7905,43 +7909,51 @@ async function gwRenderYield() {
  * can click straight into a hot swap. Auto-refresh every 5 min.
  * ========================================================================== */
 const GW_TR_TR = {
-  ru: { h: '🔥 Trending на DEX', sub: 'Топ-5 движущихся токенов на всех DEX за 24ч', empty: 'Загружаем свежие данные…', cta: 'Свап →' },
-  en: { h: '🔥 Trending on DEXs', sub: 'Top-5 hot tokens across every DEX (24h)', empty: 'Fetching fresh data…', cta: 'Swap →' },
-  es: { h: '🔥 Trending en DEX', sub: 'Top-5 tokens calientes 24h', empty: 'Cargando…', cta: 'Swap →' },
-  ar: { h: '🔥 الأكثر رواجاً على DEX', sub: 'أفضل 5 توكنات ساخنة على مدار 24 ساعة', empty: 'جارٍ التحميل…', cta: 'مبادلة ←' },
-  zh: { h: '🔥 DEX 热门', sub: '24 小时全 DEX 热门 top-5', empty: '加载中…', cta: '兑换 →' },
-  hi: { h: '🔥 DEX पर ट्रेंडिंग', sub: '24h में सबसे हॉट टॉप-5', empty: 'लोड हो रहा…', cta: 'स्वैप →' },
-  tr: { h: '🔥 DEX\'te trend', sub: '24s en sıcak 5 token', empty: 'Yükleniyor…', cta: 'Swap →' },
+  ru: { h: '🔥 Trending на DEX', sub: 'Топ-20 движущихся токенов на всех DEX за 24ч', empty: 'Загружаем свежие данные…', cta: 'Свап →' },
+  en: { h: '🔥 Trending on DEXs', sub: 'Top-20 hot tokens across every DEX (24h)', empty: 'Fetching fresh data…', cta: 'Swap →' },
+  es: { h: '🔥 Trending en DEX', sub: 'Top-20 tokens calientes 24h', empty: 'Cargando…', cta: 'Swap →' },
+  ar: { h: '🔥 الأكثر رواجاً على DEX', sub: 'أفضل 20 توكن ساخن على مدار 24 ساعة', empty: 'جارٍ التحميل…', cta: 'مبادلة ←' },
+  zh: { h: '🔥 DEX 热门', sub: '24 小时全 DEX 热门 top-20', empty: '加载中…', cta: '兑换 →' },
+  hi: { h: '🔥 DEX पर ट्रेंडिंग', sub: '24h में सबसे हॉट टॉप-20', empty: 'लोड हो रहा…', cta: 'स्वैप →' },
+  tr: { h: '🔥 DEX\'te trend', sub: '24s en sıcak 20 token', empty: 'Yükleniyor…', cta: 'Swap →' },
 };
 function gwTrLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'); if (s&&GW_TR_TR[s]) l=s; } catch (_) {} return GW_TR_TR[l]||GW_TR_TR.en; }
 
 function gwInjectTrendingCss() {
   if (document.getElementById('gw-tr-css')) return;
   const css = `
-    .gw-tr-wrap { margin: 16px 0 4px; }
-    .gw-tr-card { padding: 20px; border-radius: 22px; color: #e7eef8; position: relative; overflow: hidden;
+    .gw-tr-wrap { margin: 16px 0 4px; max-width: 100%; box-sizing: border-box; }
+    .gw-tr-card { padding: 20px; border-radius: 22px; color: #e7eef8; position: relative; overflow: hidden; max-width: 100%; box-sizing: border-box;
       background: radial-gradient(120% 140% at 100% 0%, rgba(232,87,107,0.10), transparent 55%),
                   linear-gradient(160deg, rgba(13,22,38,0.72), rgba(8,14,26,0.92));
       border: 1px solid rgba(232,87,107,0.20); }
     .gw-tr-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
     .gw-tr-title { margin: 0; font-size: 17px; font-weight: 800; }
     .gw-tr-sub { margin: 4px 0 0; font-size: 12px; color: #98a8c0; }
-    .gw-tr-badge { padding: 4px 8px; border-radius: 999px; background: rgba(232,87,107,0.14); color: #f87171; font-size: 10px; font-weight: 800; letter-spacing: .12em; border: 1px solid rgba(232,87,107,0.28); }
-    .gw-tr-list { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
+    .gw-tr-badge { padding: 4px 8px; border-radius: 999px; background: rgba(232,87,107,0.14); color: #f87171; font-size: 10px; font-weight: 800; letter-spacing: .12em; border: 1px solid rgba(232,87,107,0.28); flex-shrink: 0; }
+    .gw-tr-list { display: flex; flex-direction: column; gap: 6px; max-height: 520px; overflow-y: auto; overflow-x: hidden; padding-right: 2px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
     .gw-tr-list::-webkit-scrollbar { width: 6px; }
     .gw-tr-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
-    .gw-tr-row { display: grid; grid-template-columns: 32px 1fr auto auto auto; gap: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05); align-items: center; cursor: pointer; transition: background .18s, border-color .18s; }
-    .gw-tr-row:hover { background: rgba(255,255,255,0.05); border-color: rgba(232,87,107,0.22); }
+    .gw-tr-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto; gap: 8px 10px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05); align-items: center; cursor: pointer; transition: background .18s, border-color .18s; min-width: 0; }
+    .gw-tr-row:hover, .gw-tr-row:active { background: rgba(255,255,255,0.06); border-color: rgba(232,87,107,0.22); }
     .gw-tr-row img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,0.05); }
     .gw-tr-row .avatar { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 11px; color: #e7eef8; background: linear-gradient(135deg, rgba(232,87,107,0.35), rgba(140,70,215,0.35)); border: 1px solid rgba(255,255,255,0.1); }
-    .gw-tr-row .name { font-weight: 800; font-size: 13.5px; }
-    .gw-tr-row .chain { font-size: 10.5px; letter-spacing: .1em; color: #6b7a92; text-transform: uppercase; margin-top: 2px; }
-    .gw-tr-row .px { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: #e7eef8; text-align: right; }
-    .gw-tr-row .chg { padding: 3px 7px; border-radius: 6px; font-size: 11.5px; font-weight: 800; text-align: right; min-width: 62px; }
+    .gw-tr-row .meta { min-width: 0; overflow: hidden; }
+    .gw-tr-row .name { font-weight: 800; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gw-tr-row .chain { font-size: 10.5px; letter-spacing: .1em; color: #6b7a92; text-transform: uppercase; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gw-tr-row .px { font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 700; color: #e7eef8; text-align: right; white-space: nowrap; }
+    .gw-tr-row .chg { padding: 3px 7px; border-radius: 6px; font-size: 11px; font-weight: 800; text-align: right; min-width: 58px; white-space: nowrap; }
     .gw-tr-row .chg.up { color: #22c17c; background: rgba(34,193,124,0.14); border: 1px solid rgba(34,193,124,0.28); }
     .gw-tr-row .chg.dn { color: #f87171; background: rgba(232,87,107,0.14); border: 1px solid rgba(232,87,107,0.28); }
     .gw-tr-row .cta { color: #5dd5ff; font-size: 12px; font-weight: 800; }
     .gw-tr-empty { color: #6b7a92; font-size: 13px; text-align: center; padding: 20px 0; }
+    @media (max-width: 640px) {
+      .gw-tr-card { padding: 16px 14px; border-radius: 18px; }
+      .gw-tr-row { grid-template-columns: 34px minmax(0, 1fr) auto auto; padding: 11px 10px; gap: 6px 8px; }
+      .gw-tr-row .px { font-size: 12px; }
+      .gw-tr-row .chg { font-size: 10.5px; min-width: 52px; padding: 3px 6px; }
+      .gw-tr-row .cta { display: none; }
+    }
   `;
   const s = document.createElement('style'); s.id = 'gw-tr-css'; s.textContent = css; document.head.appendChild(s);
 }
@@ -8028,12 +8040,12 @@ async function gwRenderTrending() {
       : '$' + r.priceUsd.toFixed(Math.min(8, 4 + Math.max(0, -Math.log10(Math.max(r.priceUsd, 1e-9)) | 0)));
     const initial = (r.sym || '?').slice(0, 3).toUpperCase();
     const img = r.img ? `<img src="${r.img}" alt="" onerror="this.outerHTML='<span class=&quot;avatar&quot;>${initial}</span>'" />` : `<span class="avatar">${initial}</span>`;
-    return `<div class="gw-tr-row" data-sym="${r.sym}" data-chain="${r.chain}">
+    return `<div class="gw-tr-row" data-sym="${r.sym}" data-chain="${r.chain}" role="button" tabindex="0" aria-label="Swap ${r.sym}">
       ${img}
-      <div><div class="name">${r.sym}</div><div class="chain">${r.chain}</div></div>
+      <div class="meta"><div class="name">${r.sym}</div><div class="chain">${r.chain}</div></div>
       <div class="px">${priceFmt}</div>
       <div class="chg ${chgCls}">${chgTxt}</div>
-      <div class="cta">${t.cta}</div>
+      <div class="cta" aria-hidden="true">${t.cta}</div>
     </div>`;
   }).join('');
   list.querySelectorAll('.gw-tr-row').forEach((el) => {
@@ -8103,7 +8115,28 @@ function gwInjectMegaCss() {
     .gw-mg-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.025); font-size: 12.5px; margin-bottom: 4px; }
     .gw-mg-row .up { color: #22c17c; font-weight: 800; }
     .gw-mg-row .dn { color: #f87171; font-weight: 800; }
-    .gw-mg-inp { padding: 8px 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; color: #e7eef8; font-size: 13px; font-family: inherit; outline: none; }
+    .gw-mg-inp { padding: 8px 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; color: #e7eef8; font-size: 13px; font-family: inherit; outline: none; width: 100%; box-sizing: border-box; }
+    .gw-rb-wrap { display: grid; gap: 14px; }
+    .gw-rb-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); }
+    .gw-rb-seg { height: 100%; transition: width .25s ease; }
+    .gw-rb-seg.btc { background: linear-gradient(90deg, #f5b94d, #d9942c); }
+    .gw-rb-seg.eth { background: linear-gradient(90deg, #6e8dff, #9d6cf5); }
+    .gw-rb-seg.usdt { background: linear-gradient(90deg, #22c17c, #10a06a); }
+    .gw-rb-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .gw-rb-item { padding: 14px 12px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .gw-rb-item .k { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #98a8c0; font-weight: 800; }
+    .gw-rb-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .gw-rb-dot.btc { background: #f5b94d; }
+    .gw-rb-dot.eth { background: #9d6cf5; }
+    .gw-rb-dot.usdt { background: #22c17c; }
+    .gw-rb-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #98a8c0; }
+    .gw-rb-sum { font-weight: 800; font-variant-numeric: tabular-nums; }
+    .gw-rb-sum.ok { color: #22c17c; }
+    .gw-rb-sum.bad { color: #f87171; }
+    @media (max-width: 640px) {
+      .gw-rb-grid { grid-template-columns: 1fr; gap: 8px; }
+      .gw-rb-item { padding: 12px; }
+    }
   `;
   document.head.appendChild(s);
 }
@@ -8122,14 +8155,46 @@ async function gwRenderRebalance() {
       <h3 class="gw-mg-h">⚖ Portfolio Rebalance</h3>
       <p class="gw-mg-sub">Задай целевое распределение — мы найдём оптимальный маршрут свапов</p>
     </div><span class="gw-mg-badge">ONE-CLICK</span></div>
-    <div class="gw-mg-grid">
-      <div class="gw-mg-item"><div class="k">BTC</div><input class="gw-mg-inp" id="gwRbBtc" type="number" value="50" min="0" max="100" style="width:100%;margin-top:2px" />%</div>
-      <div class="gw-mg-item"><div class="k">ETH</div><input class="gw-mg-inp" id="gwRbEth" type="number" value="30" min="0" max="100" style="width:100%;margin-top:2px" />%</div>
-      <div class="gw-mg-item"><div class="k">USDT</div><input class="gw-mg-inp" id="gwRbUsdt" type="number" value="20" min="0" max="100" style="width:100%;margin-top:2px" />%</div>
+    <div class="gw-rb-wrap">
+      <div class="gw-rb-bar" id="gwRbBar">
+        <div class="gw-rb-seg btc" id="gwRbBarBtc" style="width:50%"></div>
+        <div class="gw-rb-seg eth" id="gwRbBarEth" style="width:30%"></div>
+        <div class="gw-rb-seg usdt" id="gwRbBarUsdt" style="width:20%"></div>
+      </div>
+      <div class="gw-rb-grid">
+        <div class="gw-rb-item"><div class="k"><span class="gw-rb-dot btc"></span>BTC</div><input class="gw-mg-inp" id="gwRbBtc" type="number" value="50" min="0" max="100" inputmode="numeric" />%</div>
+        <div class="gw-rb-item"><div class="k"><span class="gw-rb-dot eth"></span>ETH</div><input class="gw-mg-inp" id="gwRbEth" type="number" value="30" min="0" max="100" inputmode="numeric" />%</div>
+        <div class="gw-rb-item"><div class="k"><span class="gw-rb-dot usdt"></span>USDT</div><input class="gw-mg-inp" id="gwRbUsdt" type="number" value="20" min="0" max="100" inputmode="numeric" />%</div>
+      </div>
+      <div class="gw-rb-foot"><span>Target allocation</span><span class="gw-rb-sum ok" id="gwRbSum">100%</span></div>
     </div>
-    <button class="gw-mg-cta o" id="gwRbGo">Compute swap plan →</button>
-    <div id="gwRbOut" style="margin-top:10px;font-size:12.5px;color:#98a8c0"></div>
+    <button class="gw-mg-cta o" id="gwRbGo" style="width:100%;justify-content:center;margin-top:14px">Compute swap plan →</button>
+    <div id="gwRbOut" style="margin-top:12px;font-size:12.5px;color:#98a8c0;line-height:1.55"></div>
   </div>`;
+  function gwRbSyncBar() {
+    const btc = Math.max(0, Math.min(100, Number(document.getElementById('gwRbBtc').value) || 0));
+    const eth = Math.max(0, Math.min(100, Number(document.getElementById('gwRbEth').value) || 0));
+    const usdt = Math.max(0, Math.min(100, Number(document.getElementById('gwRbUsdt').value) || 0));
+    const sum = btc + eth + usdt;
+    const sumEl = document.getElementById('gwRbSum');
+    if (sumEl) {
+      sumEl.textContent = sum + '%';
+      sumEl.classList.toggle('ok', sum === 100);
+      sumEl.classList.toggle('bad', sum !== 100);
+    }
+    const scale = sum > 0 ? 100 / sum : 0;
+    const barBtc = document.getElementById('gwRbBarBtc');
+    const barEth = document.getElementById('gwRbBarEth');
+    const barUsdt = document.getElementById('gwRbBarUsdt');
+    if (barBtc) barBtc.style.width = (btc * scale) + '%';
+    if (barEth) barEth.style.width = (eth * scale) + '%';
+    if (barUsdt) barUsdt.style.width = (usdt * scale) + '%';
+  }
+  ['gwRbBtc', 'gwRbEth', 'gwRbUsdt'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', gwRbSyncBar);
+  });
+  gwRbSyncBar();
   document.getElementById('gwRbGo').onclick = async () => {
     const btc = Number(document.getElementById('gwRbBtc').value);
     const eth = Number(document.getElementById('gwRbEth').value);
@@ -8951,7 +9016,13 @@ function gwInjectLpPolishCss() {
       text-align: center; line-height: 1.2; word-break: break-word;
     }
 
-    /* Aggregator ribbon — inside chains card */
+    /* Aggregator ribbon — standalone card below chains */
+    .gw-lp-agg {
+      padding: clamp(18px, 4vw, 24px); border-radius: 20px; text-align: center;
+      background: linear-gradient(180deg, rgba(11,18,32,.72), rgba(8,12,20,.55));
+      border: 1px solid rgba(168,85,247,.18);
+      box-sizing: border-box;
+    }
     .gw-lp-agg-inline {
       margin-top: 18px; padding-top: 16px;
       border-top: 1px solid rgba(122,162,199,.12); text-align: center;
@@ -9086,7 +9157,7 @@ function gwRenderLandingPolish() {
     </div>
   `;
 
-  // 2) Chain grid + powered-by ribbon (single card, right after hero)
+  // 2) Chain grid (right after hero)
   const chains = document.createElement('section');
   chains.className = 'gw-lp-chains';
   chains.innerHTML = `
@@ -9100,11 +9171,15 @@ function gwRenderLandingPolish() {
         </div>
       `).join('')}
     </div>
-    <div class="gw-lp-agg-inline">
-      <div class="gw-lp-agg-eyebrow">${d.aggEyebrow}</div>
-      <div class="gw-lp-agg-line">
-        ${d.aggLine.split('·').map(s => `<span class="gw-lp-agg-tag">${s.trim()}</span>`).join('')}
-      </div>
+  `;
+
+  // 3) Powered-by aggregators — separate card below chains
+  const agg = document.createElement('section');
+  agg.className = 'gw-lp-agg';
+  agg.innerHTML = `
+    <div class="gw-lp-agg-eyebrow">${d.aggEyebrow}</div>
+    <div class="gw-lp-agg-line">
+      ${d.aggLine.split('·').map(s => `<span class="gw-lp-agg-tag">${s.trim()}</span>`).join('')}
     </div>
   `;
 
@@ -9154,11 +9229,13 @@ function gwRenderLandingPolish() {
 
   // Insert into dedicated landing slots (2026-07-10 DEX pivot)
   const chainsHost = page.querySelector('#gwLandingChainsHost');
+  const aggHost = page.querySelector('#gwLandingAggHost');
   const dexHiHost = page.querySelector('#gwLandingDexHiHost');
   const cmpHost = page.querySelector('#gwLandingCmpHost');
   const faqHost = page.querySelector('#gwLandingFaqHost');
 
   if (chainsHost) chainsHost.replaceChildren(chains);
+  if (aggHost) aggHost.replaceChildren(agg);
   if (dexHiHost) dexHiHost.replaceChildren(dex);
   if (cmpHost) cmpHost.replaceChildren(cmp);
   if (faqHost) faqHost.replaceChildren(faq);

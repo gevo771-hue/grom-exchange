@@ -541,7 +541,14 @@
   function applyI18n() {
     var L = STR[getLang()] || STR.en;
     document.querySelectorAll('[data-i18n]').forEach(function (el) {
-      if (el.id === 'walletLabel' && localStorage.getItem('grom_jwt')) return;
+      if (el.id === 'walletLabel') {
+        if (localStorage.getItem('grom_jwt')) return;
+        if (window.GROM_CONN && window.GROM_CONN.connected && window.GROM_CONN.label) return;
+        try {
+          var wl = localStorage.getItem('grom_wallet_label') || '';
+          if (/^0x[a-fA-F0-9]{40}$/.test(wl)) return;
+        } catch (_) {}
+      }
       var k = el.getAttribute('data-i18n');
       if (k && L[k]) el.textContent = L[k];
     });

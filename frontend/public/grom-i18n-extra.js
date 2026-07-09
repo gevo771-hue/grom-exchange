@@ -427,7 +427,7 @@
 
   var SHARED = {
     ru: {
-      auth_login: 'Войти / Регистрация', lang_switched: 'Язык', mkt_trade: 'Торговать', nav_binary: 'Binary',
+      auth_login: 'Подключить кошелёк', lang_switched: 'Язык', mkt_trade: 'Торговать', nav_binary: 'Binary',
       set_regional_title: 'Регион', set_theme_title: 'Тема', set_theme_dark: 'Тёмная', set_theme_system: 'Системная',
       set_notif_fills: 'Исполнения и выигрыши', set_notif_transfers: 'Депозиты и выводы', set_notif_digest: 'Еженедельный дайджест', set_notif_product: 'Обновления продукта',
       set_protect_title: 'Торговая защита', set_protect_sub: 'Ответственная торговля',
@@ -437,7 +437,7 @@
       set_enabled: 'Включено', set_strict: 'Строго', set_edit: 'Изменить', set_policy: 'Политика', set_review: 'Проверить',
     },
     en: {
-      auth_login: 'Sign in / Sign up', lang_switched: 'Language', mkt_trade: 'Trade', nav_binary: 'Binary',
+      auth_login: 'Connect wallet', lang_switched: 'Language', mkt_trade: 'Trade', nav_binary: 'Binary',
       set_regional_title: 'Regional', set_theme_title: 'Theme', set_theme_dark: 'Dark', set_theme_system: 'System',
       set_notif_fills: 'Order fills & wins', set_notif_transfers: 'Deposits & withdrawals', set_notif_digest: 'Weekly digest', set_notif_product: 'Product updates',
       set_protect_title: 'Trading protections', set_protect_sub: 'Responsible trading',
@@ -447,7 +447,7 @@
       set_enabled: 'Enabled', set_strict: 'Strict', set_edit: 'Edit', set_policy: 'Policy', set_review: 'Review',
     },
     es: {
-      auth_login: 'Iniciar / Registrarse', lang_switched: 'Idioma', mkt_trade: 'Operar', nav_binary: 'Binary',
+      auth_login: 'Conectar billetera', lang_switched: 'Idioma', mkt_trade: 'Operar', nav_binary: 'Binary',
       set_regional_title: 'Regional', set_theme_title: 'Tema', set_theme_dark: 'Oscuro', set_theme_system: 'Sistema',
       set_notif_fills: 'Ejecuciones y ganancias', set_notif_transfers: 'Depósitos y retiros', set_notif_digest: 'Resumen semanal', set_notif_product: 'Actualizaciones',
       set_protect_title: 'Protecciones de trading', set_protect_sub: 'Trading responsable',
@@ -457,7 +457,7 @@
       set_enabled: 'Activo', set_strict: 'Estricto', set_edit: 'Editar', set_policy: 'Política', set_review: 'Revisar',
     },
     ar: {
-      auth_login: 'تسجيل / إنشاء حساب', lang_switched: 'اللغة', mkt_trade: 'تداول', nav_binary: 'Binary',
+      auth_login: 'ربط المحفظة', lang_switched: 'اللغة', mkt_trade: 'تداول', nav_binary: 'Binary',
       set_regional_title: 'الإعدادات الإقليمية', set_theme_title: 'المظهر', set_theme_dark: 'داكن', set_theme_system: 'النظام',
       set_notif_fills: 'تنفيذات وانتصارات', set_notif_transfers: 'إيداعات وسحوبات', set_notif_digest: 'ملخص أسبوعي', set_notif_product: 'تحديثات المنتج',
       set_protect_title: 'حماية التداول', set_protect_sub: 'تداول مسؤول',
@@ -467,7 +467,7 @@
       set_enabled: 'مفعّل', set_strict: 'صارم', set_edit: 'تعديل', set_policy: 'السياسة', set_review: 'مراجعة',
     },
     zh: {
-      auth_login: '登录 / 注册', lang_switched: '语言', mkt_trade: '交易', nav_binary: 'Binary',
+      auth_login: '连接钱包', lang_switched: '语言', mkt_trade: '交易', nav_binary: 'Binary',
       set_regional_title: '区域', set_theme_title: '主题', set_theme_dark: '深色', set_theme_system: '跟随系统',
       set_notif_fills: '成交与盈利', set_notif_transfers: '充值与提现', set_notif_digest: '每周摘要', set_notif_product: '产品更新',
       set_protect_title: '交易保护', set_protect_sub: '负责任交易',
@@ -477,7 +477,7 @@
       set_enabled: '已启用', set_strict: '严格', set_edit: '编辑', set_policy: '政策', set_review: '审核',
     },
     hi: {
-      auth_login: 'लॉगिन / साइन अप', lang_switched: 'भाषा', mkt_trade: 'ट्रेड', nav_binary: 'Binary',
+      auth_login: 'वॉलेट कनेक्ट करें', lang_switched: 'भाषा', mkt_trade: 'ट्रेड', nav_binary: 'Binary',
       set_regional_title: 'क्षेत्र', set_theme_title: 'थीम', set_theme_dark: 'डार्क', set_theme_system: 'सिस्टम',
       set_notif_fills: 'ऑर्डर फिल और जीत', set_notif_transfers: 'जमा और निकासी', set_notif_digest: 'साप्ताहिक सार', set_notif_product: 'उत्पाद अपडेट',
       set_protect_title: 'ट्रेडिंग सुरक्षा', set_protect_sub: 'जिम्मेदार ट्रेडिंग',
@@ -487,7 +487,7 @@
       set_enabled: 'सक्रिय', set_strict: 'सख्त', set_edit: 'संपादित', set_policy: 'नीति', set_review: 'समीक्षा',
     },
     tr: {
-      auth_login: 'Giriş / Kayıt', lang_switched: 'Dil', mkt_trade: 'İşlem', nav_binary: 'Binary',
+      auth_login: 'Cüzdan bağla', lang_switched: 'Dil', mkt_trade: 'İşlem', nav_binary: 'Binary',
       set_regional_title: 'Bölgesel', set_theme_title: 'Tema', set_theme_dark: 'Koyu', set_theme_system: 'Sistem',
       set_notif_fills: 'Emir gerçekleşmeleri ve kazançlar', set_notif_transfers: 'Yatırma ve çekme', set_notif_digest: 'Haftalık özet', set_notif_product: 'Ürün güncellemeleri',
       set_protect_title: 'İşlem korumaları', set_protect_sub: 'Sorumlu işlem',

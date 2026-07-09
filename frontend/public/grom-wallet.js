@@ -133,9 +133,30 @@ function setWalletWcDeepLinkChoice(walletKey) {
     }));
   } catch (_) {}
 }
-function gwHideWcModal() {
+function gwHideWcModalOnly() {
   const modal = document.getElementById('gwWcModal');
   if (modal) modal.style.display = 'none';
+  const explorer = document.getElementById('gwMoreWalletsModal');
+  if (explorer) explorer.style.display = 'none';
+}
+let _wcPendingReject = null;
+let _wcPendingKillTimer = null;
+function gwClearWcPending() {
+  gwSetWcFlowActive(false);
+  if (_wcPendingKillTimer) { clearInterval(_wcPendingKillTimer); _wcPendingKillTimer = null; }
+  _wcPendingReject = null;
+}
+function gwAbortPendingWc(reason) {
+  const reject = _wcPendingReject;
+  gwClearWcPending();
+  if (reject) {
+    try { reject(new Error(reason || 'Connection cancelled')); } catch (_) {}
+  }
+  gwHideWcModalOnly();
+}
+window.gwAbortPendingWc = gwAbortPendingWc;
+function gwHideWcModal() {
+  gwAbortPendingWc('Connection cancelled');
 }
 let _qrLib = null;
 async function gwRenderQr(el, text) {
@@ -158,10 +179,11 @@ async function gwRenderQr(el, text) {
     el.appendChild(img);
   }
 }
-/** Polymarket-style modal: mobile → open app; desktop → QR scan + install extension. */
+/** Binance-style QR modal — wallet logo, clean scan UI, no site redirects. */
 function gwShowWcModal(walletKey, wcUri, opts) {
   gwInjectConnectModalCss();
-  const cfg = GW_WALLET_WC[walletKey] || GW_WALLET_WC.generic;
+  const cfg = gwWalletCfg(walletKey);
+  if (!cfg) return;
   const mobile = opts?.mobile ?? isMobileUA();
   const qrPayload = mobile ? null : cfg.desktopQrLink(wcUri);
   let modal = document.getElementById('gwWcModal');
@@ -170,23 +192,29 @@ function gwShowWcModal(walletKey, wcUri, opts) {
     modal.id = 'gwWcModal';
     modal.innerHTML = [
       '<div class="gw-wc-backdrop">',
-      '  <div class="gw-wc-panel" role="dialog">',
-      '    <div class="gw-wc-head">',
-      '      <img class="gw-wc-icon" alt="" width="28" height="28" decoding="async"/>',
-      '      <span class="gw-wc-title"></span>',
+      '  <div class="gw-wc-panel gw-wc-panel--binance" role="dialog" aria-modal="true">',
+      '    <div class="gw-wc-topbar">',
+      '      <button type="button" class="gw-wc-back" aria-label="Back">←</button>',
+      '      <span class="gw-wc-top-title">WalletConnect</span>',
       '      <button type="button" class="gw-wc-close" aria-label="Close">×</button>',
       '    </div>',
+      '    <div class="gw-wc-brand">',
+      '      <img class="gw-wc-icon-lg" alt="" width="48" height="48" decoding="async"/>',
+      '      <h3 class="gw-wc-title"></h3>',
+      '    </div>',
       '    <p class="gw-wc-lead"></p>',
-      '    <div class="gw-wc-qr-wrap"><div class="gw-wc-qr"></div></div>',
-      '    <p class="gw-wc-hint gw-wc-hint--en"></p>',
-      '    <p class="gw-wc-hint gw-wc-hint--ru"></p>',
-      '    <button type="button" class="gw-wc-open">Open wallet app</button>',
-      '    <a class="gw-wc-install" target="_blank" rel="noopener noreferrer"></a>',
+      '    <div class="gw-wc-qr-wrap"><div class="gw-wc-qr-frame"><div class="gw-wc-qr"></div><img class="gw-wc-qr-badge" alt="" width="36" height="36" decoding="async"/></div></div>',
+      '    <p class="gw-wc-scan-hint"></p>',
+      '    <button type="button" class="gw-wc-open">Open in wallet app</button>',
       '  </div>',
       '</div>',
     ].join('');
     document.body.appendChild(modal);
     modal.querySelector('.gw-wc-close').onclick = () => gwHideWcModal();
+    modal.querySelector('.gw-wc-back').onclick = () => {
+      gwHideWcModal();
+      if (walletKey !== 'generic') gwOpenMoreWalletsExplorer();
+    };
     modal.querySelector('.gw-wc-backdrop').onclick = (e) => {
       if (e.target.classList.contains('gw-wc-backdrop')) gwHideWcModal();
     };
@@ -198,40 +226,35 @@ function gwShowWcModal(walletKey, wcUri, opts) {
   }
   modal.dataset.walletKey = walletKey;
   modal.dataset.wcUri = wcUri;
-  modal.querySelector('.gw-wc-icon').src = cfg.icon;
+  modal.querySelector('.gw-wc-icon-lg').src = cfg.icon || '';
+  modal.querySelector('.gw-wc-qr-badge').src = cfg.icon || '';
+  modal.querySelector('.gw-wc-qr-badge').style.display = cfg.icon ? '' : 'none';
   modal.querySelector('.gw-wc-title').textContent = cfg.label;
   const lead = modal.querySelector('.gw-wc-lead');
   const qrWrap = modal.querySelector('.gw-wc-qr-wrap');
   const qrBox = modal.querySelector('.gw-wc-qr');
   const openBtn = modal.querySelector('.gw-wc-open');
-  const installA = modal.querySelector('.gw-wc-install');
+  const hint = modal.querySelector('.gw-wc-scan-hint');
+  const backBtn = modal.querySelector('.gw-wc-back');
+  if (backBtn) backBtn.style.display = walletKey === 'generic' ? 'none' : '';
   if (mobile) {
-    lead.textContent = 'Confirm the connection in ' + cfg.label + ', then return to this tab.';
+    lead.textContent = 'Confirm the connection in ' + cfg.label;
     qrWrap.style.display = 'none';
     openBtn.textContent = 'Open ' + cfg.label;
     openBtn.style.display = '';
+    hint.textContent = 'Tap to open the wallet app directly — stay on this page to finish signing in.';
   } else {
-    lead.textContent = 'Scan inside ' + cfg.label + ' app (WalletConnect)';
+    lead.textContent = '';
     qrWrap.style.display = '';
     openBtn.style.display = 'none';
+    hint.textContent = 'Scan this QR code with your phone camera or inside the ' + cfg.label + ' app.';
     if (qrPayload) gwRenderQr(qrBox, qrPayload);
-  }
-  modal.querySelector('.gw-wc-hint--en').innerHTML = mobile
-    ? 'Tap the button — opens ' + cfg.label + ' directly. Do <em>not</em> use MetaMask for this wallet.'
-    : 'Open <strong>' + cfg.label + '</strong> → WalletConnect → Scan QR below.<br>Do <em>not</em> scan with the phone camera — it may open MetaMask by mistake.';
-  modal.querySelector('.gw-wc-hint--ru').innerHTML = mobile
-    ? 'Нажмите кнопку — откроется ' + cfg.label + '. Не используйте MetaMask для этого кошелька.'
-    : 'Откройте <strong>' + cfg.label + '</strong> → WalletConnect → Сканируйте QR ниже.<br>Не сканируйте камерой телефона — может открыть MetaMask.';
-  if (cfg.installUrl && !mobile) {
-    installA.style.display = 'none';
-  } else {
-    installA.style.display = 'none';
   }
   modal.style.display = 'flex';
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
 }
 function openWalletWcApp(walletKey, wcUri) {
-  const cfg = GW_WALLET_WC[walletKey] || GW_WALLET_WC.generic;
+  const cfg = gwWalletCfg(walletKey) || GW_WALLET_WC.generic;
   const link = cfg.mobileScheme(wcUri);
   if (!link) return;
   try {
@@ -748,6 +771,155 @@ const GW_WALLET_WC = {
   },
 };
 
+const GW_EXTRA_WALLETS = {
+  safepal: {
+    id: WC_WALLET_IDS.safepal,
+    label: 'SafePal',
+    icon: 'https://explorer-api.walletconnect.com/v3/logo/md/0b415a746fb9ee99cce155c2ceca0c6f6061b1dbca2d722b3ba16381d0562150',
+    nativeScheme: 'safepalwallet://',
+    mobileScheme: (uri) => 'safepalwallet://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://link.safepal.io/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  tokenpocket: {
+    label: 'TokenPocket',
+    icon: '',
+    mobileScheme: (uri) => 'tpoutside://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://link.tp.xyz/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  imtoken: {
+    label: 'imToken',
+    icon: '',
+    mobileScheme: (uri) => 'imtokenv2://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://connect.imtoken.io/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  zerion: {
+    label: 'Zerion',
+    icon: '',
+    mobileScheme: (uri) => 'zerion://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://wallet.zerion.io/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  ledger: {
+    label: 'Ledger Live',
+    icon: 'https://explorer-api.walletconnect.com/v3/logo/md/19177a982382e07ddfc9af2083ba4e07ef627cb6103467ffebb33e28233159765',
+    mobileScheme: (uri) => 'ledgerlive://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://www.ledger.com/ledger-live/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  trezor: {
+    label: 'Trezor Suite',
+    icon: '',
+    mobileScheme: (uri) => 'trezor-suite://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://suite.trezor.io/web/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  iopay: {
+    label: 'ioPay',
+    icon: '',
+    mobileScheme: (uri) => 'iopay://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://link.iopay.me/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  bitget: {
+    label: 'Bitget Wallet',
+    icon: 'https://explorer-api.walletconnect.com/v3/logo/md/38f5d18bd8522c24495280a7b4f875746cb3f149776e8370d4e4a449852a3292',
+    mobileScheme: (uri) => 'bitkeep://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://bkcode.vip/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+  rabby: {
+    label: 'Rabby',
+    icon: 'https://explorer-api.walletconnect.com/v3/logo/md/16365912e399b5adbc2d247983105ecaa79ca125dbb1680531741410b0a8c0b8',
+    mobileScheme: (uri) => 'rabby://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://rabby.io/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => rdnsProvider('io.rabby'),
+  },
+  onekey: {
+    label: 'OneKey',
+    icon: '',
+    mobileScheme: (uri) => 'onekey-wallet://wc?uri=' + encodeURIComponent(uri),
+    desktopQrLink: (uri) => 'https://app.onekey.so/wc?uri=' + encodeURIComponent(uri),
+    injectCheck: () => null,
+  },
+};
+
+function gwWalletCfg(walletKey) {
+  return GW_WALLET_WC[walletKey] || GW_EXTRA_WALLETS[walletKey] || null;
+}
+
+const GW_EXPLORER_WALLET_KEYS = [
+  'binance', 'metamask', 'trust', 'okx', 'coinbase', 'safepal', 'tokenpocket',
+  'imtoken', 'ledger', 'trezor', 'zerion', 'iopay', 'bitget', 'rabby', 'onekey',
+];
+
+function gwOpenMoreWalletsExplorer() {
+  gwInjectConnectModalCss();
+  gwClearWcPending();
+  gwSetWcFlowActive(false);
+  gwKillReownModals();
+  if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
+
+  let modal = document.getElementById('gwMoreWalletsModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'gwMoreWalletsModal';
+    modal.innerHTML = [
+      '<div class="gw-wc-backdrop">',
+      '  <div class="gw-expl-panel" role="dialog" aria-modal="true">',
+      '    <div class="gw-wc-topbar">',
+      '      <button type="button" class="gw-wc-back gw-expl-back" aria-label="Back">←</button>',
+      '      <span class="gw-wc-top-title">WalletConnect</span>',
+      '      <button type="button" class="gw-wc-close gw-expl-close" aria-label="Close">×</button>',
+      '    </div>',
+      '    <input class="gw-expl-search" type="search" placeholder="Search wallets" autocomplete="off" />',
+      '    <div class="gw-expl-grid"></div>',
+      '  </div>',
+      '</div>',
+    ].join('');
+    document.body.appendChild(modal);
+    modal.querySelector('.gw-expl-close').onclick = () => { modal.style.display = 'none'; };
+    modal.querySelector('.gw-expl-back').onclick = () => {
+      modal.style.display = 'none';
+      if (typeof window.openConnectModal === 'function') window.openConnectModal();
+    };
+    modal.querySelector('.gw-wc-backdrop').onclick = (e) => {
+      if (e.target.classList.contains('gw-wc-backdrop')) modal.style.display = 'none';
+    };
+    modal.querySelector('.gw-expl-search').addEventListener('input', (e) => {
+      const q = String(e.target.value || '').trim().toLowerCase();
+      modal.querySelectorAll('.gw-expl-item').forEach((el) => {
+        const name = (el.dataset.label || '').toLowerCase();
+        el.style.display = !q || name.includes(q) ? '' : 'none';
+      });
+    });
+  }
+
+  const grid = modal.querySelector('.gw-expl-grid');
+  grid.innerHTML = GW_EXPLORER_WALLET_KEYS.map((key) => {
+    const cfg = gwWalletCfg(key);
+    if (!cfg) return '';
+    const initial = (cfg.label || key).slice(0, 2).toUpperCase();
+    const icon = cfg.icon
+      ? `<img src="${cfg.icon}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;gw-expl-fallback&quot;>${initial}</span>'"/>`
+      : `<span class="gw-expl-fallback">${initial}</span>`;
+    return `<button type="button" class="gw-expl-item" data-key="${key}" data-label="${cfg.label}">${icon}<span>${cfg.label}</span></button>`;
+  }).join('');
+
+  grid.querySelectorAll('.gw-expl-item').forEach((btn) => {
+    btn.onclick = () => {
+      modal.style.display = 'none';
+      connectViaSignClientCustomQr(btn.dataset.key).catch(failToast);
+    };
+  });
+
+  modal.querySelector('.gw-expl-search').value = '';
+  modal.style.display = 'flex';
+}
+window.gwOpenMoreWalletsExplorer = gwOpenMoreWalletsExplorer;
+
 async function ensureWC(forceNew, opts) {
   const wantRecommend = opts?.recommendedWalletId || null;
   const walletKey = opts?.walletKey || null;
@@ -805,44 +977,24 @@ function gwPrefetchWc() {
   /* Skip prefetch — pre-initing EthereumProvider can resurrect Reown modal on PC. */
 }
 
-/** Reown explorer — only for "WalletConnect · More wallets" (generic). */
-async function connectViaReownExplorer(walletKey) {
-  const cfg = GW_WALLET_WC[walletKey] || GW_WALLET_WC.generic;
-  if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
-  gwHideWcModal();
-  gwSetWcFlowActive(false);
-  try {
-    const p = await ensureWC(true, {
-      walletKey,
-      showQrModal: true,
-      requiredChains: [1],
-      optionalChains: [42161, 8453, 137, 56, 10, 43114],
-      recommendedWalletId: cfg.id || null,
-      excludeWalletIds: wcExcludeIdsFor(walletKey),
-    });
-    await p.connect();
-    const accs = await p.request({ method: 'eth_accounts' });
-    if (!accs?.length) throw new Error('No accounts returned');
-    return await finalizeWcConnection(p, accs[0]);
-  } catch (err) {
-    try { gwKillReownModals(); } catch (_) {}
-    throw err;
-  }
+/** More wallets — our Binance-style explorer (no Reown modal). */
+async function connectViaReownExplorer() {
+  gwOpenMoreWalletsExplorer();
 }
 
 /**
- * Named wallets (Trust, Binance, …): bypass Reown QR — it embeds raw wc: URIs
- * that Chrome/iOS hand to MetaMask. We use SignClient + our modal with a
- * wallet-specific universal link in the QR (link.trustwallet.com/wc?uri=…).
+ * Named wallets: SignClient + Binance-style QR with wallet-specific universal link
+ * (never raw wc: — avoids MetaMask hijack on iOS / Chrome).
  */
 async function connectViaSignClientCustomQr(walletKey) {
-  const cfg = GW_WALLET_WC[walletKey];
+  const cfg = gwWalletCfg(walletKey);
   if (!cfg) throw new Error('Unknown wallet: ' + walletKey);
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
 
+  gwAbortPendingWc();
   gwSetWcFlowActive(true);
   gwKillReownModals();
-  const killTimer = setInterval(gwKillReownModals, 250);
+  _wcPendingKillTimer = setInterval(gwKillReownModals, 400);
 
   try {
     if (wcProvider) {
@@ -863,11 +1015,15 @@ async function connectViaSignClientCustomQr(walletKey) {
 
     const session = await Promise.race([
       approval(),
-      new Promise((_, reject) => setTimeout(
-        () => reject(new Error(cfg.label + ' connection timed out — approve in the wallet app')),
-        180000
-      )),
+      new Promise((_, reject) => {
+        _wcPendingReject = reject;
+        setTimeout(
+          () => reject(new Error(cfg.label + ' connection timed out — approve in the wallet app')),
+          180000
+        );
+      }),
     ]);
+    _wcPendingReject = null;
 
     wcProvider = buildSignClientEip1193(client, session);
     wcRecommendedForKey = walletKey;
@@ -875,30 +1031,33 @@ async function connectViaSignClientCustomQr(walletKey) {
     wcProvider.on('disconnect', () => updateChip(null));
     const accs = wcProvider.accounts;
     if (!accs?.length) throw new Error('No accounts returned');
-    gwHideWcModal();
+    gwHideWcModalOnly();
+    gwClearWcPending();
     return await finalizeWcConnection(wcProvider, accs[0]);
   } catch (err) {
-    gwHideWcModal();
+    gwClearWcPending();
+    gwHideWcModalOnly();
     throw err;
   } finally {
-    clearInterval(killTimer);
+    if (_wcPendingKillTimer) { clearInterval(_wcPendingKillTimer); _wcPendingKillTimer = null; }
     gwSetWcFlowActive(false);
-    gwKillReownModals();
+    _wcPendingReject = null;
   }
 }
 
 /* Named wallets → custom QR; generic → Reown explorer. In-app browser → inject. */
 async function connectWalletWC(walletKey) {
-  const cfg = GW_WALLET_WC[walletKey];
-  if (!cfg) throw new Error('Unknown wallet: ' + walletKey);
+  const cfg = gwWalletCfg(walletKey);
+  if (!cfg && walletKey !== 'generic') throw new Error('Unknown wallet: ' + walletKey);
 
-  if (isInsideWalletBrowser(walletKey)) {
-    const injected = typeof cfg.injectCheck === 'function' ? cfg.injectCheck() : null;
+  if (walletKey !== 'generic') {
+    const injected = typeof cfg?.injectCheck === 'function' ? cfg.injectCheck() : null;
     if (injected) return connectWithProvider(injected, cfg.label);
   }
 
   if (walletKey === 'generic') {
-    return connectViaReownExplorer('generic');
+    gwOpenMoreWalletsExplorer();
+    return;
   }
   return connectViaSignClientCustomQr(walletKey);
 }
@@ -1084,8 +1243,7 @@ function hook() {
     updateChip(window.ethereum.selectedAddress);
   }
 
-  // Auto-reconnect WalletConnect если была сессия
-  ensureWC().catch(() => {});
+  // Do not prefetch WC — pre-init can leave Reown modal in a broken state.
 
   console.log('[grom-wallet] ready · project:', WC_PROJECT_ID.slice(0, 8) + '…');
 }
@@ -2810,59 +2968,96 @@ function gwInjectConnectModalCss() {
     #connectModal .cn-list button.cn-row {
       display: flex !important;
     }
-    html.gw-trust-flow w3m-modal,
-    html.gw-trust-flow wcm-modal,
-    html.gw-trust-flow w3m-container,
-    html.gw-trust-flow wcm-container,
     html.gw-wc-flow w3m-modal,
     html.gw-wc-flow wcm-modal,
     html.gw-wc-flow w3m-container,
-    html.gw-wc-flow wcm-container {
+    html.gw-wc-flow wcm-container,
+    html.gw-trust-flow w3m-modal,
+    html.gw-trust-flow wcm-modal {
       display: none !important;
       visibility: hidden !important;
       pointer-events: none !important;
     }
-    #gwWcModal, #gwTrustWcModal {
+    #gwWcModal, #gwMoreWalletsModal, #gwTrustWcModal {
       display: none; position: fixed; inset: 0; z-index: 2500;
       align-items: center; justify-content: center;
     }
     .gw-wc-backdrop, .gw-trust-wc-backdrop {
-      position: absolute; inset: 0; background: rgba(0,0,0,.72);
+      position: absolute; inset: 0; background: rgba(0,0,0,.78);
       display: flex; align-items: center; justify-content: center; padding: 16px;
     }
-    .gw-wc-panel, .gw-trust-wc-panel {
-      position: relative; z-index: 1; width: min(380px, 100%);
-      background: #0b1220; border: 1px solid rgba(0,194,255,.25);
-      border-radius: 16px; padding: 20px; color: #e8eef7;
-      box-shadow: 0 24px 64px rgba(0,0,0,.55);
+    .gw-wc-panel--binance, .gw-expl-panel {
+      position: relative; z-index: 1; width: min(420px, 100%);
+      background: #181a20; border: 1px solid rgba(234,236,239,.08);
+      border-radius: 16px; padding: 0 0 20px; color: #eaecef;
+      box-shadow: 0 24px 80px rgba(0,0,0,.65);
+      max-height: min(90dvh, 640px); overflow: hidden; display: flex; flex-direction: column;
     }
-    .gw-wc-head, .gw-trust-wc-head {
-      display: flex; align-items: center; gap: 10px;
-      font-weight: 700; font-size: 1.05rem; margin-bottom: 10px;
+    .gw-wc-topbar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 14px 16px 10px; border-bottom: 1px solid rgba(234,236,239,.06);
     }
-    .gw-wc-close, .gw-trust-wc-close {
-      margin-left: auto; border: 0; background: transparent;
-      color: #9fb0c8; font-size: 1.5rem; line-height: 1; cursor: pointer;
+    .gw-wc-top-title { flex: 1; text-align: center; font-weight: 700; font-size: 15px; color: #eaecef; }
+    .gw-wc-back, .gw-wc-close {
+      border: 0; background: transparent; color: #848e9c; font-size: 20px;
+      line-height: 1; cursor: pointer; width: 32px; height: 32px; border-radius: 8px;
     }
-    .gw-wc-lead { font-size: .9rem; color: #c5d4e8; margin: 0 0 12px; }
-    .gw-wc-qr-wrap, .gw-trust-wc-qr {
-      display: flex; justify-content: center; margin: 8px 0 12px;
-      background: #fff; border-radius: 12px; padding: 10px;
+    .gw-wc-back:hover, .gw-wc-close:hover { background: rgba(255,255,255,.06); color: #eaecef; }
+    .gw-wc-brand { text-align: center; padding: 18px 20px 8px; }
+    .gw-wc-icon-lg { width: 48px; height: 48px; border-radius: 12px; object-fit: cover; margin-bottom: 10px; }
+    .gw-wc-brand .gw-wc-title { margin: 0; font-size: 18px; font-weight: 700; color: #eaecef; }
+    .gw-wc-lead { margin: 0; padding: 0 20px; text-align: center; font-size: 13px; color: #848e9c; }
+    .gw-wc-qr-wrap {
+      display: flex; justify-content: center; margin: 16px 20px 10px;
     }
-    .gw-wc-hint, .gw-trust-wc-hint {
-      font-size: .82rem; line-height: 1.45; color: #9fb0c8; margin: 0 0 8px;
+    .gw-wc-qr-frame {
+      position: relative; background: #fff; border-radius: 16px; padding: 14px;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
     }
-    .gw-wc-hint em, .gw-trust-wc-hint em { color: #ffb347; font-style: normal; }
-    .gw-wc-open, .gw-trust-wc-open {
-      display: block; width: 100%; text-align: center; margin-top: 10px; padding: 12px 14px;
-      border-radius: 10px; background: #3375bb; color: #fff;
-      border: 0; font-weight: 600; cursor: pointer; font-size: .95rem;
+    .gw-wc-qr canvas, .gw-wc-qr img { display: block; border-radius: 8px; }
+    .gw-wc-qr-badge {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 36px; height: 36px; border-radius: 10px; background: #fff;
+      padding: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.12); object-fit: cover;
     }
-    .gw-wc-install {
-      display: block; text-align: center; margin-top: 12px; padding: 10px 14px;
-      border-radius: 10px; background: rgba(255,255,255,.08); color: #00c2ff;
-      text-decoration: none; font-weight: 600; font-size: .88rem;
+    .gw-wc-scan-hint {
+      margin: 0; padding: 0 24px; text-align: center;
+      font-size: 13px; line-height: 1.5; color: #848e9c;
     }
+    .gw-wc-open {
+      display: block; width: calc(100% - 40px); margin: 16px auto 0;
+      text-align: center; padding: 13px 14px; border-radius: 10px;
+      background: #f0b90b; color: #181a20; border: 0;
+      font-weight: 700; cursor: pointer; font-size: 15px;
+    }
+    .gw-wc-open:hover { filter: brightness(1.05); }
+    .gw-expl-search {
+      margin: 12px 16px 8px; padding: 12px 14px; border-radius: 10px;
+      border: 1px solid rgba(234,236,239,.12); background: #0b0e11;
+      color: #eaecef; font-size: 14px; outline: none; width: calc(100% - 32px); box-sizing: border-box;
+    }
+    .gw-expl-search:focus { border-color: rgba(240,185,11,.45); }
+    .gw-expl-grid {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
+      padding: 8px 16px 16px; overflow-y: auto; max-height: min(52dvh, 420px);
+    }
+    @media (max-width: 480px) { .gw-expl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    .gw-expl-item {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 10px 6px; border-radius: 12px; border: 1px solid rgba(234,236,239,.06);
+      background: #0b0e11; color: #eaecef; cursor: pointer; font: inherit; font-size: 11px;
+      font-weight: 600; text-align: center; min-width: 0;
+    }
+    .gw-expl-item:hover { background: rgba(240,185,11,.08); border-color: rgba(240,185,11,.25); }
+    .gw-expl-item img, .gw-expl-fallback {
+      width: 40px; height: 40px; border-radius: 12px; object-fit: cover;
+    }
+    .gw-expl-fallback {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, rgba(240,185,11,.25), rgba(0,194,255,.2));
+      font-weight: 800; font-size: 13px; color: #eaecef;
+    }
+    .gw-expl-item span { line-height: 1.2; word-break: break-word; }
   `;
   const style = document.createElement('style');
   style.id = 'gw-connect-modal-fixups';

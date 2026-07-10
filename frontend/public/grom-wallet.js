@@ -1287,6 +1287,10 @@ Issued At: ${issuedAt}`;
  *    – Base USDC was WRONG (0x...120e → real 0x...02913).
  *    – Base USDT was MISSING entirely.
  *  Added Optimism (10) and Avalanche (43114) for full multi-chain reads. */
+/* Primary RPC per chain. gwRpcTry() below falls back to secondary RPCs
+ * if the primary times out / rate-limits — was seeing on Arbitrum where
+ * the balance flickered $3.81 → $0.81 on refresh (arb1.arbitrum.io/rpc
+ * silently fails, USDT read returns 0). */
 const ONCHAIN_RPC = {
   1: 'https://ethereum.publicnode.com',
   42161: 'https://arb1.arbitrum.io/rpc',
@@ -1295,6 +1299,15 @@ const ONCHAIN_RPC = {
   56: 'https://bsc-dataseed.binance.org',
   10: 'https://mainnet.optimism.io',
   43114: 'https://api.avax.network/ext/bc/C/rpc',
+};
+const ONCHAIN_RPC_FALLBACK = {
+  1:     ['https://rpc.ankr.com/eth',          'https://eth.llamarpc.com'],
+  42161: ['https://arbitrum.publicnode.com',   'https://rpc.ankr.com/arbitrum',   'https://arbitrum.llamarpc.com'],
+  137:   ['https://polygon-rpc.com',           'https://rpc.ankr.com/polygon'],
+  8453:  ['https://base.publicnode.com',       'https://rpc.ankr.com/base'],
+  56:    ['https://bsc.publicnode.com',        'https://rpc.ankr.com/bsc'],
+  10:    ['https://optimism.publicnode.com',   'https://rpc.ankr.com/optimism'],
+  43114: ['https://avalanche.publicnode.com',  'https://rpc.ankr.com/avalanche'],
 };
 const ONCHAIN_TOKENS = {
   1: {
@@ -1350,25 +1363,45 @@ function padAddressData(address) {
   return '0x70a08231' + address.slice(2).toLowerCase().padStart(64, '0');
 }
 
+/** Try primary RPC then fallbacks in order until one returns a non-error
+ *  response. Prevents "flickering" balance where a rate-limited primary
+ *  returned 0x0 for balanceOf() and the UI showed \$0.81 instead of \$3.81. */
+async function gwRpcTry(chainId, method, params) {
+  const urls = [ONCHAIN_RPC[chainId], ...(ONCHAIN_RPC_FALLBACK[chainId] || [])].filter(Boolean);
+  let lastErr;
+  for (const url of urls) {
+    try {
+      const res = await rpcCall(url, method, params);
+      // rpcCall throws on JSON-RPC error, so if we're here it's a valid response.
+      return res;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('all RPCs failed');
+}
+
 window.gromFetchOnchainBalances = async function gromFetchOnchainBalances(address, chainId) {
   if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) return null;
   chainId = Number(chainId || currentChainId || 42161);
-  const rpc = ONCHAIN_RPC[chainId];
-  if (!rpc) return { chainId, nativeEth: null, tokens: {} };
+  if (!ONCHAIN_RPC[chainId]) return { chainId, nativeEth: null, tokens: {} };
 
-  const nativeWei = await rpcCall(rpc, 'eth_getBalance', [address, 'latest']);
-  const nativeEth = Number(BigInt(nativeWei || '0x0')) / 1e18;
+  // Native balance — retry with fallback URLs if primary chokes.
+  let nativeEth = 0;
+  try {
+    const nativeWei = await gwRpcTry(chainId, 'eth_getBalance', [address, 'latest']);
+    nativeEth = Number(BigInt(nativeWei || '0x0')) / 1e18;
+  } catch (_) { /* leave nativeEth = 0 */ }
+
   const tokens = {};
   const tokenMap = ONCHAIN_TOKENS[chainId] || {};
-  for (const [sym, contract] of Object.entries(tokenMap)) {
+  await Promise.all(Object.entries(tokenMap).map(async ([sym, contract]) => {
     try {
-      const raw = await rpcCall(rpc, 'eth_call', [{ to: contract, data: padAddressData(address) }, 'latest']);
+      const raw = await gwRpcTry(chainId, 'eth_call', [{ to: contract, data: padAddressData(address) }, 'latest']);
       const dec = gwTokenDecimals(chainId, sym);
       tokens[sym] = Number(BigInt(raw || '0x0')) / (10 ** dec);
     } catch (_) {
       tokens[sym] = 0;
     }
-  }
+  }));
   return { chainId, nativeEth, tokens };
 };
 
@@ -8610,31 +8643,19 @@ async function gwRenderTrending() {
         name: el.querySelector('.name')?.textContent || sym,
         img: el.querySelector('img')?.src || '',
       };
-      // Was this token in our catalogue BEFORE the click? (gwDsPickToken
-      // will inject it, so we check first.)
-      const wasKnown = !!GW_DS_ASSETS.find((a) => a.sym === sym);
-      const supportedChain = !!GW_DX_CHAIN_TO_NUM[chain.toLowerCase()];
-      if (wasKnown && supportedChain) {
-        gwDsPickToken(sym, 'to', meta);
-        const swap = document.querySelector('.gw-ds-wrap');
-        if (swap) {
-          swap.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          swap.style.outline = '2px solid rgba(93,213,255,0.7)';
-          swap.style.outlineOffset = '4px';
-          swap.style.borderRadius = '20px';
-          setTimeout(() => { swap.style.outline = 'none'; }, 1600);
-        }
-        try { gwToast(`Loaded ${sym} in Instant Swap`, 'success'); } catch (_) {}
-      } else {
-        // Fresh meme / unsupported chain (Solana / Sui etc). LiFi has no
-        // route — send the user directly to DexScreener where they can
-        // trade the token on its native DEX.
-        const dsUrl = addr && chain
-          ? `https://dexscreener.com/${chain}/${addr}`
-          : `https://dexscreener.com/search?q=${encodeURIComponent(sym)}`;
-        window.open(dsUrl, '_blank', 'noopener,noreferrer');
-        try { gwToast(`Opening ${sym} on DexScreener — trade on its native DEX`, 'info'); } catch (_) {}
+      // Always prefill Instant Swap in-site — user asked us to stop
+      // redirecting to DexScreener. gwDsPickToken injects the token into
+      // GW_DS_ASSETS + switches the chain chip when supported.
+      gwDsPickToken(sym, 'to', meta);
+      const swap = document.querySelector('.gw-ds-wrap');
+      if (swap) {
+        swap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        swap.style.outline = '2px solid rgba(93,213,255,0.7)';
+        swap.style.outlineOffset = '4px';
+        swap.style.borderRadius = '20px';
+        setTimeout(() => { swap.style.outline = 'none'; }, 1600);
       }
+      try { gwToast(`Loaded ${sym} in Instant Swap`, 'success'); } catch (_) {}
     };
   });
 }

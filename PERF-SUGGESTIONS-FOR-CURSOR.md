@@ -7,6 +7,113 @@
 останавливаюсь на своей стороне, чтобы не создавать race conditions.
 Ты берёшь всё, включая surgical edits в `grom-wallet.js` где надо.
 
+### ✅ Update 2026-07-11 — Cursor audit results (deploy `?v=20260711a`)
+
+**Cache bust:** `grom-wallet.js?v=20260711a`, `grom-privy.js?v=20260711a`
+
+---
+
+#### 1. DISCONNECT — FIXED
+
+**Root cause (цепочка logout):**
+```
+Sidebar «Выйти» / chip Disconnect
+  → disconnectWallet (grom-privy wrapDisconnect)
+    → disconnectWalletPatched (index.html)
+      → gromHardLogout()  ← СТАРЫЙ ПУТЬ: localStorage.clear + reload
+      → gromWallet.disconnect() НИКОГДА НЕ ВЫЗЫВАЛСЯ
+```
+`wrapDisconnect` вызывал `clearSession()` + `orig()` где `orig` = patched
+версия, которая сразу делала `return` после `gromHardLogout`. WC session в
+IndexedDB (`WALLET_CONNECT_V2_INDEXED_DB`) и `sessionStorage` (`privy:`,
+`wcm:`, `wc:`, `wagmi.`) оставались → Trust auto-restore без WC-модалки.
+
+**Fix:**
+- `gromFullLogout()` — единая async-цепочка: `grom:logged_out` → Privy
+  logout → `sessionStorage` purge → `gwPurgeStaleWcStorage` → IndexedDB
+  delete → **`gromWallet.disconnect()`** (твой `0ed7bc5`, не трогал) →
+  `gromResetAuthedUi()` → `location.replace` через 400ms
+- `wrapDisconnect` / `disconnectWalletPatched` / sidebar — все ведут в
+  `gromFullLogout`
+- `gwPrefetchWc()` — skip если `grom:logged_out === '1'`
+- Слушатели `wallet-disconnected` + `grom:wallet-disconnected` →
+  `gromResetAuthedUi()` (stats-grid, referral KPI, sidebar logout)
+
+**Verify on live:** chip → Disconnect → reload → Connect → WC QR modal
+(не silent Trust restore). Dashboard P&L = `—`, sidebar tour hidden.
+
+---
+
+#### 2. КЭШ-персистентность — FIXED
+
+Inline `<script>` + `<style>` в `<head>` (до body):
+- `html.grom-authed` toggled sync from `grom_jwt` / `grom_wallet_label`,
+  suppressed when `grom:logged_out`
+- `html:not(.grom-authed) [data-authed-only] { display: none }`
+
+Marked `data-authed-only="1"`:
+- `.sidebar-footer` (Впервые на GROM?)
+- `#sidebarLogout`
+- `.stats-grid` (defaults `—`, not `+$302.11`)
+- `.ref-kpis` (defaults `—`)
+- `.spot-chart-shell` (legacy canvas hidden until authed)
+
+`gromSyncAuthedClass()` called from `updateAuthUiPatched`.
+
+---
+
+#### 3. SPOT — PARTIAL FIX
+
+**UX:** `gwRenderSpotDex` теперь показывает hint:
+«① Выбери пару → ② введи amount → ③ Buy/Sell». Legacy paper UI скрыт
+CSS `#page-spot > *:not(#gwSpotDex)`.
+
+**Chart flash:** `html.grom-spot-ready` — legacy `#spotChart` hidden until
+DEX chart loads; `gwSpLoadChart` removes class on pair change, adds after
+klines `setData`. Skeleton bars until candles ready.
+
+**Still manual verify:** Buy/Sell CTA → `gwSpSubmitOrder` (meta-agg path);
+depth uses Binance public API when no wallet, LiFi when connected.
+
+---
+
+#### 4. SWAP — audit matrix (code review, not live E2E on all chains)
+
+| Chain | LiFi | Paraswap | Kyber | Odos | 0x | CoW | Squid | 1inch | OpenOcean |
+|---|---|---|---|---|---|---|---|---|---|
+| ETH (1) | ✅ quote+exec | ✅ | ✅ | ✅ | ❌ нет в коде | ⚠️ quote only (`gwAggCanExec` skip) | ✅ | ❌ | ❌ |
+| Arb (42161) | ✅ | ✅ | ✅ | ✅ | ❌ | — | ✅ | ❌ | ❌ |
+| OP (10) | ✅ | ✅ | ✅ | ✅ | ❌ | — | ✅ | ❌ | ❌ |
+| Base (8453) | ✅ | ✅ | ✅ | ✅ | ❌ | — | ✅ | ❌ | ❌ |
+| Polygon (137) | ✅ | ✅ | ✅ | ✅ | ❌ | — | ✅ | ❌ | ❌ |
+| BSC (56) | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ❌ | ❌ |
+| Avalanche (43114) | ✅ | ✅ | ✅ | ✅ | ❌ | — | ✅ | ❌ | ❌ |
+
+Non-EVM: ❌ не реализовано (Jupiter/THOR/SunSwap/STON.fi отсутствуют).
+
+**Surgical fixes applied:**
+- `window.__gromMetaQuoteErrors` — rejected aggregator quotes logged
+- `gwErc20ApproveMax` — USDT mainnet `approve(0)` before max approve
+- `gwDsSubmit._busy` — nonce race / double-click guard
+- Chain from UI chip (`gwResolveSwapChainId`) — already in prior commits
+- CoW skipped at exec (`gwAggCanExec`) — intent-based, no tx
+
+**Still open:** 0x/1inch/OpenOcean integration, fee-on-transfer paths,
+permit2, insufficient-gas pre-check, slippage revert UX strings, non-EVM.
+
+---
+
+#### 5. AUTH — recommendation
+
+**Вариант A (рекомендую):** убрать Privy/email OTP, оставить
+Connect wallet → SIWE → JWT. Меньше race conditions (как с logout),
+соответствует non-custodial модели.
+
+**Вариант B:** если оставляем — Email/Google только secondary CTA;
+`gromFullLogout` уже чистит Privy session.
+
+---
+
 ### 📋 Пять направлений аудита
 
 1. **SWAP** — все цепи, все агрегаторы, все edge cases

@@ -1546,6 +1546,7 @@ window.gwSyncRestoredIdentityUi = gwSyncRestoredIdentityUi;
  * with an existing session get their provider hot-loaded before the
  * first swap click. */
 function gwPrefetchWc() {
+  try { if (localStorage.getItem('grom:logged_out') === '1') return; } catch (_) {}
   const kick = () => {
     gwBootWalletSession()
       .catch((e) => console.log('[GROM] WC boot skipped:', e?.message || e))
@@ -5725,6 +5726,9 @@ function gwInjectSpotDexCss() {
     /* Hide Cursor's paper Spot-Trade UI — DEX terminal fully replaces it. */
     #page-spot > *:not(#gwSpotDex):not(script):not(style):not(link) { display: none !important; }
     .gw-sp-wrap { margin: 12px 0 20px; }
+    .gw-sp-hint { margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; font-size: 13px; color: #98a8c0;
+      background: rgba(0,194,255,0.06); border: 1px dashed rgba(0,194,255,0.22); }
+    .gw-sp-hint strong { color: #e7eef8; }
     .gw-sp-card { border-radius: 22px; padding: 18px; color: #e7eef8;
       background: linear-gradient(160deg, rgba(13,22,38,0.78), rgba(8,14,26,0.94));
       border: 1px solid rgba(0,194,255,0.20); box-shadow: 0 20px 60px -20px rgba(0,0,0,0.5); }
@@ -5806,6 +5810,7 @@ async function gwRenderSpotDex() {
   const st = gwSpState;
   const pair = GW_SP_PAIRS.find((p) => p.sym === st.pair) || GW_SP_PAIRS[0];
   wrap.innerHTML = `
+    <div class="gw-sp-hint"><strong>Как свопнуть:</strong> ① Выбери пару → ② введи amount → ③ нажми Buy/Sell (нужен подключённый кошелёк)</div>
     <div class="gw-sp-card">
       <div class="gw-sp-head">
         <h3>⚡ DEX Terminal</h3>
@@ -5851,7 +5856,11 @@ async function gwRenderSpotDex() {
     </div>
   `;
   // Wire pair change
-  document.getElementById('gwSpPair').onchange = (e) => { st.pair = e.target.value; gwRenderSpotDex(); };
+  document.getElementById('gwSpPair').onchange = (e) => {
+    st.pair = e.target.value;
+    document.documentElement.classList.remove('grom-spot-ready');
+    gwRenderSpotDex();
+  };
   // Interval buttons
   wrap.querySelectorAll('.iv').forEach((b) => b.onclick = () => { st.iv = b.dataset.iv; gwSpLoadChart(); });
   // Side / mode tabs
@@ -5907,6 +5916,7 @@ async function gwSpRefreshBalance() {
 
 let gwSpChart = null, gwSpSeries = null;
 async function gwSpLoadChart() {
+  document.documentElement.classList.remove('grom-spot-ready');
   // The Cursor page loads `lightweight-charts.standalone.production.js`
   // as an async <script> — it may still be parsing when we first render.
   // Poll a few times (2 s cap) then bail. Also cover the case where
@@ -5957,6 +5967,7 @@ async function gwSpLoadChart() {
     const bars = await gwSpFetchKlines(pair.bn, gwSpState.iv, 200);
     gwSpSeries.setData(bars);
     gwSpChart.timeScale().fitContent();
+    document.documentElement.classList.add('grom-spot-ready');
     // Hide skeleton loader now that real candles are drawn.
     const skl = document.getElementById('gwSpSkl');
     if (skl) skl.remove();
@@ -7058,6 +7069,19 @@ async function gwErc20Allowance(provider, token, owner, spender, chainId) {
 
 /* Send: ERC-20 approve(spender, MaxUint256). Waits for receipt. */
 async function gwErc20ApproveMax(provider, token, spender, from, chainId) {
+  const tokenLc = String(token || '').toLowerCase();
+  const USDT_RESET = new Set(['0xdac17f958d2ee523a2206206994597c13d831ec7']);
+  if (USDT_RESET.has(tokenLc)) {
+    const allow = await gwErc20Allowance(provider, token, from, spender, chainId);
+    if (allow > 0n) {
+      const data0 = '0x095ea7b3' + gwAddr(spender) + '0'.repeat(64);
+      const hash0 = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{ from, to: token, data: data0, value: '0x0' }],
+      });
+      await gwWaitReceipt(provider, hash0, 60000, true, chainId);
+    }
+  }
   const MAX = 'f'.repeat(64);
   const data = '0x095ea7b3' + gwAddr(spender) + MAX;
   const hash = await provider.request({
@@ -7489,6 +7513,21 @@ async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account }) {
     gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account }),
   ];
   const settled = await Promise.allSettled(jobs);
+  const aggNames = ['LiFi', 'Paraswap', 'KyberSwap', 'Odos', 'CoWSwap', 'Squid'];
+  settled.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      window.__gromMetaQuoteErrors = window.__gromMetaQuoteErrors || [];
+      window.__gromMetaQuoteErrors.push({
+        at: Date.now(),
+        aggregator: aggNames[i] || '?',
+        chainId,
+        fromSym,
+        toSym,
+        err: String(r.reason?.message || r.reason || 'unknown').slice(0, 240),
+      });
+      if (window.__gromMetaQuoteErrors.length > 50) window.__gromMetaQuoteErrors.shift();
+    }
+  });
   // Filter out quotes that lack a valid BigInt toAmount — mixing BigInt
   // with Number (or undefined) in the sort comparator throws 'Cannot mix
   // BigInt and other types, use explicit conversions'.
@@ -8160,14 +8199,16 @@ function gwDsFlashSuccess(msg) {
 }
 
 async function gwDsSubmit() {
+  if (gwDsSubmit._busy) return;
+  gwDsSubmit._busy = true;
   const t = gwDsLang();
   const cta = document.getElementById('gwDsCta');
   const mode = gwDsGetMode();
   const from = document.getElementById('gwDsFrom')?.value || 'USDT';
   const to   = document.getElementById('gwDsTo')?.value   || 'BTC';
   const amt  = Number(document.getElementById('gwDsAmt')?.value || 0);
-  if (amt <= 0) { gwToast('Enter an amount', 'warn'); return; }
-  if (from === to) { gwToast('Choose different assets', 'warn'); return; }
+  if (amt <= 0) { gwToast('Enter an amount', 'warn'); gwDsSubmit._busy = false; return; }
+  if (from === to) { gwToast('Choose different assets', 'warn'); gwDsSubmit._busy = false; return; }
 
   if (mode === 'onchain') {
     if (cta) cta.classList.add('busy');
@@ -8216,12 +8257,13 @@ async function gwDsSubmit() {
       window.__gromLastSwapErr = { at: new Date().toISOString(), message: e?.message, stack: e?.stack, name: e?.name, raw: String(e) };
     } finally {
       if (cta) cta.classList.remove('busy');
+      gwDsSubmit._busy = false;
     }
     return;
   }
 
   // paper (trading account) — needs JWT
-  if (!gwIsAuthed()) { gwOpenSignIn(); return; }
+  if (!gwIsAuthed()) { gwOpenSignIn(); gwDsSubmit._busy = false; return; }
   if (cta) cta.classList.add('busy');
   try {
     const jwt = localStorage.getItem('grom_jwt');
@@ -8251,6 +8293,7 @@ async function gwDsSubmit() {
     gwToast(e?.message || 'Swap failed', 'error');
   } finally {
     if (cta) cta.classList.remove('busy');
+    gwDsSubmit._busy = false;
   }
 }
 

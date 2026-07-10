@@ -442,16 +442,17 @@ window.privyLogout = async function privyLogout() {
   window.updateAuthUi?.();
 };
 
-/* Оборачиваем существующий disconnectWallet — чтобы "Logout" в хедере тоже чистил Privy */
+/* Оборачиваем существующий disconnectWallet — единая цепочка через gromFullLogout */
 (function wrapDisconnect() {
   const orig = window.disconnectWallet;
   window.disconnectWallet = function () {
-    clearSession();
-    try { localStorage.removeItem('grom:privy:oauth-pkce'); } catch {}
-    try { localStorage.setItem('grom:logged_out', '1'); } catch {}
-    // Reset connect modal state — next time it opens it should show the main rows,
-    // not the email OTP form left over from the previous login.
     try { showMainRows(); resetInlineForm(); } catch {}
+    if (typeof window.gromFullLogout === 'function') {
+      window.gromFullLogout();
+      return;
+    }
+    clearSession();
+    try { localStorage.setItem('grom:logged_out', '1'); } catch {}
     if (typeof orig === 'function') {
       try { orig(); } catch (e) { console.warn('[grom-privy] orig disconnect threw', e); }
     } else {

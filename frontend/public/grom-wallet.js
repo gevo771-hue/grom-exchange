@@ -4040,15 +4040,40 @@ const GW_SIM_SAME_CHAIN = {
 /** Cross-chain popular targets — 15+ options. */
 const GW_SIM_CROSS_CHAIN = ['BTC', 'SOL', 'TRX', 'TON', 'MATIC', 'AVAX', 'BNB', 'ETH', 'ARB', 'OP', 'BASE', 'LINEA', 'FTM', 'DOGE', 'XRP'];
 
+/** Read-only address lookup — for BALANCES / UI display only. Doesn't
+ *  need a live WC provider (balances go via public RPC). More permissive
+ *  than gwOcConnectedAddress: if Cursor's purge left grom_wallet_label
+ *  in storage, that means chip is showing connected state, so trust it.
+ *  Never use this for signing — for that, gwOnChainSwapExec resolves
+ *  a live provider via warm-restore. */
+function gwReadOnlyAddress() {
+  const isAddr = (a) => typeof a === 'string' && /^0x[a-fA-F0-9]{40}$/.test(a.trim());
+  try {
+    if (typeof gwOcConnectedAddress === 'function') {
+      const a = gwOcConnectedAddress();
+      if (isAddr(a)) return a.trim();
+    }
+  } catch (_) {}
+  try {
+    const label = localStorage.getItem('grom_wallet_label');
+    if (isAddr(label)) return label.trim();
+  } catch (_) {}
+  try {
+    if (isAddr(window.ethereum?.selectedAddress)) return window.ethereum.selectedAddress.trim();
+  } catch (_) {}
+  try {
+    if (window.gromWallet?.wcProvider?.accounts?.[0] && isAddr(window.gromWallet.wcProvider.accounts[0])) {
+      return window.gromWallet.wcProvider.accounts[0].trim();
+    }
+  } catch (_) {}
+  return null;
+}
+
 async function gwDsSimRenderBalances() {
   const list = document.getElementById('gwDsSimBalances');
   if (!list) return;
-  // Multi-source address lookup — gwOcConnectedAddress covers 5 sources
-  // (live state, injected wallet, WC provider, header chip, persisted
-  // label). We had a stray `gw_addr` key that was never actually written
-  // — dropped it.
-  const addr = (typeof gwOcConnectedAddress === 'function' && gwOcConnectedAddress()) || null;
-  if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+  const addr = gwReadOnlyAddress();
+  if (!addr) {
     list.innerHTML = `<div class="gw-ds-sim-empty">Connect a wallet in the top right to see your balances</div>`;
     return;
   }
@@ -7598,7 +7623,11 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   // Prefer WC provider if session exists. Fall back to window.ethereum.
   const wc = window.gromWallet?.wcProvider;
   let provider = wc || window.ethereum;
-  const savedAddr = (typeof gwOcConnectedAddress === 'function' && gwOcConnectedAddress()) || null;
+  // Use the permissive read-only lookup — Cursor's strict
+  // gwOcConnectedAddress can be null even for connected users. If the
+  // chip shows an address, that IS our authed identity. Warm-restore
+  // below will re-establish the live provider on next call.
+  const savedAddr = gwReadOnlyAddress();
 
   // If no live provider AND we detect a persisted WC session in
   // localStorage, silently rebuild — this restores signing capability

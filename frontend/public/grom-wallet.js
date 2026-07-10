@@ -545,26 +545,25 @@ function gwKillReownModals() {
 }
 function openTrustWcApp(uri) { openWalletWcApp('trust', uri); }
 function standardWcNamespaces() {
-  // 2026-07-10: adding read-only methods to the OPTIONAL list so newer WC
-  // wallets can answer eth_call / eth_getBalance / eth_chainId directly
-  // instead of throwing "Missing or invalid request() method: eth_call".
-  // Read-only calls are also routed through public RPC as first choice
-  // (see gwEthCall) so this is belt-and-suspenders.
-  const methods = [
-    'eth_sendTransaction', 'personal_sign', 'eth_signTypedData', 'eth_signTypedData_v4',
+  // Trust / OKX / Binance Web3 reject sessions with too many REQUIRED
+  // methods or chains. Keep required to the strict minimum needed for
+  // SIWE + tx signing; put every extra (read-only, chain-switch, extra
+  // chains) into optionalNamespaces so old builds don't throw "Some of
+  // the required chains are not supported yet".
+  const requiredMethods = ['eth_sendTransaction', 'personal_sign'];
+  const optionalMethods = [
+    'eth_signTypedData', 'eth_signTypedData_v4',
     'eth_call', 'eth_getBalance', 'eth_chainId', 'eth_accounts',
     'wallet_switchEthereumChain', 'wallet_addEthereumChain',
   ];
   const events = ['chainChanged', 'accountsChanged'];
-  // Trust Wallet rejects sessions that REQUIRE Arbitrum/exotic chains.
-  // SIWE only needs Ethereum mainnet — other GROM chains stay optional.
   return {
     requiredNamespaces: {
-      eip155: { methods, chains: ['eip155:1'], events },
+      eip155: { methods: requiredMethods, chains: ['eip155:1'], events },
     },
     optionalNamespaces: {
       eip155: {
-        methods,
+        methods: optionalMethods,
         chains: ['eip155:42161', 'eip155:56', 'eip155:137', 'eip155:8453', 'eip155:10', 'eip155:43114'],
         events,
       },

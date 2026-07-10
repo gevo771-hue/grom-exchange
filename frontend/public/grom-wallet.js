@@ -3545,25 +3545,29 @@ async function gwRenderMetaPortfolio() {
   gwInjectMetaPortfolioCss();
   let wrap = document.getElementById('gwMetaPortfolio');
   const t = gwMpLang();
+  // Own a dedicated `#gwMpSlot` right after banners so other injected
+  // cards (Trending, Yield, Cross-Margin) which also anchor via
+  // `banners.after()` can't push MP down. On every render make sure the
+  // slot exists AND MP lives inside it.
+  const ensureSlot = () => {
+    let slot = document.getElementById('gwMpSlot');
+    if (slot) return slot;
+    slot = document.createElement('div');
+    slot.id = 'gwMpSlot';
+    const banners = page.querySelector('.dash-banners-wrap')
+                 || document.getElementById('dashBannersWrap');
+    if (banners && banners.parentNode === page) banners.after(slot);
+    else page.insertBefore(slot, page.firstChild);
+    return slot;
+  };
+  const slot = ensureSlot();
   if (!wrap) {
     wrap = document.createElement('div');
     wrap.className = 'gw-mp-wrap';
     wrap.id = 'gwMetaPortfolio';
-    // Meta-Portfolio ALWAYS goes right after the banners strip near the
-    // top of the dashboard. Previously we anchored it to the Instant Swap
-    // panel, but after Cursor's dashboard reorder the swap panel dropped
-    // ~4000px down the page — MP followed it and disappeared from the
-    // fold. Bind to banners first, then fall back to page.prepend.
-    const banners = page.querySelector('.dash-banners-wrap')
-                 || document.getElementById('dashBannersWrap');
-    if (banners && banners.parentNode === page) {
-      banners.after(wrap);
-    } else {
-      // Absolute fallback — first child of page-dashboard.
-      const first = page.firstChild;
-      if (first) page.insertBefore(wrap, first);
-      else page.appendChild(wrap);
-    }
+    slot.appendChild(wrap);
+  } else if (wrap.parentElement !== slot) {
+    slot.appendChild(wrap);
   }
 
   // Ensure the `.gw-mp-card` shell always exists so the async

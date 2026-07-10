@@ -8068,13 +8068,20 @@ async function gwDsSubmit() {
         msg = `Not enough ${from} to cover swap + gas`;
       } else if (/chain.*mismatch|wrong chain|unsupported.*chain/i.test(reason)) {
         msg = `Switch your wallet to the correct network first, then retry`;
+      } else if (/cannot mix bigint|invalid mix of bigint/i.test(reason)) {
+        msg = `Internal error (BigInt mix). Reload the page and retry — this should be fixed on the next tick.`;
       } else if (/unsupported|not supported|no route|no routes/i.test(reason)) {
         msg = `No on-chain route ${from} → ${to} on this chain. Try USDT or USDC as intermediate, or a different chain from the strip above.`;
       } else {
         msg = `Swap failed: ${reason}`;
       }
       try { gwToast(msg, 'error'); } catch (_) {}
-      console.warn('[GROM] swap fail — raw error:', e);
+      // Full-fat error dump so we can pinpoint the crash line via Chrome MCP.
+      console.warn('[GROM] swap fail — RAW error object:', e);
+      console.warn('[GROM] swap fail — message:', e?.message);
+      console.warn('[GROM] swap fail — stack:', e?.stack);
+      // Preserve for later inspection.
+      window.__gromLastSwapErr = { at: new Date().toISOString(), message: e?.message, stack: e?.stack, name: e?.name, raw: String(e) };
     } finally {
       if (cta) cta.classList.remove('busy');
     }

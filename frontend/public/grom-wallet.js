@@ -6662,8 +6662,6 @@ async function gwDsRefreshRate() {
           // Compact comparison strip — winner first, then losers sorted.
           const cmp = quotes.slice(0, 4).map((q, i) => {
             const out = Number(q.toAmount) / 10 ** outDec;
-            const diffPct = i === 0 ? '' : ` <span class="diff">−${((1 - Number(q.toAmount) * 1n / winner.toAmount) * 100 || 0).toFixed(2)}%</span>`;
-            void diffPct; // reserved for a future badge; safer bigint math below
             const winMark = i === 0 ? '✓ ' : '';
             const outFmt = out.toLocaleString('en-US', { maximumFractionDigits: Math.min(outDec, 6) });
             return `<span class="agg${i === 0 ? ' win' : ''}">${winMark}${q.aggregator} ${outFmt}</span>`;

@@ -1459,8 +1459,59 @@ function gwInjectDexPagesCss() {
     #page-wallet .grid-2 > .card:first-child { display: none !important; }
     #page-wallet .grid-2 { grid-template-columns: 1fr !important; }
     #page-referral .page-title .tag { background: rgba(34,193,124,.12); border-color: rgba(34,193,124,.35); color: #22c17c; }
+
+    /* Settings — hide CEX-only cards. Match by text content of card-head h3. */
     #page-settings .set-row:has(#setEmail) { display: none; }
     #page-settings .set-row:has(#set2fa) { display: none; }
+    #page-settings .set-row:has(#setDev) { display: none; }
+    #page-settings .set-row:has(#setAntiPhish) { display: none; }
+    #page-settings .set-row:has(#setNotifTransfers) { display: none; }
+    #page-settings .set-actions:has(button[onclick*="reviewSessions"]) { display: none; }
+
+    /* DEX-styled cards for Wallet + Settings + Referral extensions */
+    .gw-dp-wrap { margin: 18px 0; }
+    .gw-dp-card {
+      padding: 22px 24px; border-radius: 22px; color: #e7eef8; position: relative; overflow: hidden;
+      background: radial-gradient(140% 200% at 100% 0%, rgba(0,194,255,.08), transparent 55%),
+                  linear-gradient(160deg, rgba(13,22,38,.75), rgba(8,14,26,.92));
+      border: 1px solid rgba(0,194,255,.20);
+    }
+    .gw-dp-card.g { border-color: rgba(34,193,124,.22); }
+    .gw-dp-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    .gw-dp-h { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: #fff; }
+    .gw-dp-sub { margin: 4px 0 0; font-size: 12.5px; color: #98a8c0; line-height: 1.5; }
+    .gw-dp-badge { padding: 4px 10px; border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: .12em;
+      border: 1px solid rgba(0,194,255,.30); background: rgba(0,194,255,.10); color: #5dd5ff; }
+    .gw-dp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    .gw-dp-action {
+      display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 14px;
+      background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); color: #e7eef8;
+      font-weight: 700; font-size: 13.5px; cursor: pointer; text-decoration: none;
+      transition: background .18s, border-color .18s, transform .18s;
+    }
+    .gw-dp-action:hover { background: rgba(0,194,255,.08); border-color: rgba(0,194,255,.35); transform: translateY(-1px); }
+    .gw-dp-action .ic { font-size: 20px; flex: 0 0 auto; }
+    .gw-dp-action .lbl { flex: 1; }
+    .gw-dp-action .hint { font-size: 10.5px; letter-spacing: .1em; color: #6b7a92; text-transform: uppercase; font-weight: 800; }
+
+    .gw-dp-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 12px 0; align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,.04); }
+    .gw-dp-row:last-child { border-bottom: 0; }
+    .gw-dp-row .k { color: #cfdfee; font-size: 13.5px; font-weight: 700; }
+    .gw-dp-row .k small { display: block; color: #6b7a92; font-size: 11.5px; font-weight: 500; margin-top: 2px; }
+    .gw-dp-inp { padding: 8px 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+      border-radius: 10px; color: #e7eef8; font-size: 13px; font-family: inherit; outline: none; min-width: 90px; text-align: right; }
+    .gw-dp-sel { padding: 8px 30px 8px 12px; background: rgba(255,255,255,.04) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%2398a8c0' fill='none' stroke-width='1.5'/></svg>") right 10px center no-repeat;
+      border: 1px solid rgba(255,255,255,.08); border-radius: 10px; color: #e7eef8; font-size: 13px; font-family: inherit; outline: none; appearance: none; }
+    .gw-dp-toggle { position: relative; width: 44px; height: 24px; }
+    .gw-dp-toggle input { opacity: 0; width: 0; height: 0; }
+    .gw-dp-toggle .slider { position: absolute; inset: 0; background: rgba(255,255,255,.08); border-radius: 999px;
+      transition: background .2s; cursor: pointer; }
+    .gw-dp-toggle .slider::before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; top: 3px;
+      background: #cfdfee; border-radius: 50%; transition: transform .2s, background .2s; }
+    .gw-dp-toggle input:checked + .slider { background: linear-gradient(135deg, #00c2ff, #6e8dff); }
+    .gw-dp-toggle input:checked + .slider::before { transform: translateX(20px); background: #fff; }
+
     @media (max-width: 768px) {
       .stats-grid { margin-top: 14px !important; gap: 14px !important; }
       .stat-card { padding: 16px !important; }
@@ -7875,6 +7926,7 @@ try {
       safe('mega-cards',       gwSetupMegaCards);
       safe('referral-page2',   gwSetupReferralPage2);
       safe('cex-cleanup',      gwSetupCexCleanup);
+      safe('dex-pages',        gwSetupDexPages);
       safe('airdrop',          gwSetupAirdrop);
       safe('predictArb',       gwSetupPredictArb);
       safe('crossMargin',      gwSetupCrossMargin);
@@ -8991,6 +9043,175 @@ function gwSetupCexCleanup() {
   const modObs = new MutationObserver(closeDepositIfStrayed);
   const mm = document.getElementById('walletModal');
   if (mm) modObs.observe(mm, { attributes: true, attributeFilter: ['hidden', 'style', 'class'] });
+}
+
+/* ==========================================================================
+ * DEX overlay for Referral / Wallet / Settings — 2026-07-10
+ * Adds DEX-native cards + hides stubborn CEX cards that survived
+ * gwInjectDexPagesCss. Idempotent, i18n-friendly.
+ * ========================================================================== */
+const GW_DP_TR = {
+  ru: {
+    walletH: '⚡ DEX Quick Actions', walletSub: 'Всё что нужно — свап, мост, обзор on-chain',
+    walletA1: 'Мгновенный своп', walletA1s: '20+ сетей', walletA2: 'Bridge между сетями', walletA2s: 'LiFi + Squid', walletA3: 'Открыть в explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Свап через wallet', walletA4s: 'Non-custodial',
+    setH: '⚙ DEX Preferences', setSub: 'Настройки маршрутизации и защиты от MEV',
+    setSlip: 'Slippage по умолчанию', setSlipS: 'Максимальное проскальзывание для свапов', setMev: 'MEV protection', setMevS: 'Приоритет CoWSwap batch, если доступно', setAgg: 'Основной агрегатор', setAggS: 'Наш meta-agg сравнивает 6 источников', setRpc: 'Свой RPC (опционально)', setRpcS: 'Для приватного нод-провайдера',
+    refH: '📖 Как работает non-custodial реферал', refSub: 'Простая формула: делись, получай процент. Без KYC.',
+    refStep1: 'Ты подключаешь кошелёк — получаешь линк с уникальным кодом', refStep2: 'Друг переходит по линку и торгует через любой наш свап', refStep3: '50% от нашей 0.20% комиссии автоматически идёт тебе — навсегда',
+    saved: 'Сохранено',
+  },
+  en: {
+    walletH: '⚡ DEX Quick Actions', walletSub: 'Everything you need — swap, bridge, on-chain review',
+    walletA1: 'Instant Swap', walletA1s: '20+ chains', walletA2: 'Cross-chain Bridge', walletA2s: 'LiFi + Squid', walletA3: 'View on explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Swap via wallet', walletA4s: 'Non-custodial',
+    setH: '⚙ DEX Preferences', setSub: 'Routing settings and MEV protection',
+    setSlip: 'Default slippage', setSlipS: 'Maximum slippage tolerated on swaps', setMev: 'MEV protection', setMevS: 'Prefer CoWSwap batch when available', setAgg: 'Preferred aggregator', setAggS: 'Our meta-agg compares 6 sources', setRpc: 'Custom RPC (optional)', setRpcS: 'For private node providers',
+    refH: '📖 How non-custodial referral works', refSub: 'Simple: share, earn a cut. No KYC.',
+    refStep1: 'Connect wallet — get a link with your unique code', refStep2: 'Friend follows the link and trades via any of our swaps', refStep3: "50% of our 0.20% fee is routed to you automatically — forever",
+    saved: 'Saved',
+  },
+};
+function gwDpLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'); if (s&&GW_DP_TR[s]) l=s; } catch (_) {} return GW_DP_TR[l]||GW_DP_TR.en; }
+function gwDpPrefLoad() { try { return JSON.parse(localStorage.getItem('gw_dex_prefs') || '{}'); } catch (_) { return {}; } }
+function gwDpPrefSave(v) { try { localStorage.setItem('gw_dex_prefs', JSON.stringify(v)); } catch (_) {} }
+
+function gwRenderDexWalletActions() {
+  const page = document.getElementById('page-wallet'); if (!page) return;
+  gwInjectDexPagesCss();
+  let wrap = document.getElementById('gwDpWalletCard');
+  if (!wrap) {
+    wrap = document.createElement('div'); wrap.id = 'gwDpWalletCard'; wrap.className = 'gw-dp-wrap';
+    // Insert right after page title.
+    const title = page.querySelector('.page-title, h1.page-title') || page.querySelector('h1');
+    const subtitle = title?.nextElementSibling?.classList.contains('page-subtitle') ? title.nextElementSibling : null;
+    (subtitle || title || page).after ? (subtitle || title || page).after(wrap) : page.prepend(wrap);
+  }
+  const t = gwDpLang();
+  const addr = (localStorage.getItem('gw_addr') || '').toLowerCase();
+  const explorerUrl = addr ? `https://etherscan.io/address/${addr}` : 'https://etherscan.io';
+  wrap.innerHTML = `<div class="gw-dp-card">
+    <div class="gw-dp-head"><div>
+      <h3 class="gw-dp-h">${t.walletH}</h3>
+      <p class="gw-dp-sub">${t.walletSub}</p>
+    </div><span class="gw-dp-badge">DEX</span></div>
+    <div class="gw-dp-grid">
+      <a class="gw-dp-action" href="#dashboard" data-scroll="gw-ds-wrap"><span class="ic">⚡</span><span class="lbl">${t.walletA1}<div class="hint">${t.walletA1s}</div></span></a>
+      <a class="gw-dp-action" href="#dashboard" data-scroll="gw-ds-wrap"><span class="ic">🌉</span><span class="lbl">${t.walletA2}<div class="hint">${t.walletA2s}</div></span></a>
+      <a class="gw-dp-action" href="${explorerUrl}" target="_blank" rel="noopener"><span class="ic">🔍</span><span class="lbl">${t.walletA3}<div class="hint">${t.walletA3s}</div></span></a>
+      <a class="gw-dp-action" href="#dashboard" data-scroll="gw-ds-wrap"><span class="ic">🔐</span><span class="lbl">${t.walletA4}<div class="hint">${t.walletA4s}</div></span></a>
+    </div>
+  </div>`;
+  wrap.querySelectorAll('[data-scroll]').forEach((a) => {
+    a.addEventListener('click', () => {
+      setTimeout(() => { const el = document.querySelector('.' + a.dataset.scroll); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 250);
+    });
+  });
+}
+
+function gwRenderDexSettings() {
+  const page = document.getElementById('page-settings'); if (!page) return;
+  gwInjectDexPagesCss();
+  let wrap = document.getElementById('gwDpSettingsCard');
+  if (!wrap) {
+    wrap = document.createElement('div'); wrap.id = 'gwDpSettingsCard'; wrap.className = 'gw-dp-wrap';
+    const title = page.querySelector('.page-title, h1.page-title') || page.querySelector('h1');
+    const subtitle = title?.nextElementSibling?.classList.contains('page-subtitle') ? title.nextElementSibling : null;
+    (subtitle || title || page).after ? (subtitle || title || page).after(wrap) : page.prepend(wrap);
+  }
+  const t = gwDpLang();
+  const prefs = gwDpPrefLoad();
+  const slip = prefs.slippage ?? '0.5';
+  const mev = prefs.mev !== false;
+  const agg = prefs.agg || 'auto';
+  const rpc = prefs.rpc || '';
+  wrap.innerHTML = `<div class="gw-dp-card">
+    <div class="gw-dp-head"><div>
+      <h3 class="gw-dp-h">${t.setH}</h3>
+      <p class="gw-dp-sub">${t.setSub}</p>
+    </div><span class="gw-dp-badge">DEX</span></div>
+    <div class="gw-dp-row">
+      <div class="k">${t.setSlip}<small>${t.setSlipS}</small></div>
+      <div><input type="number" step="0.1" min="0.05" max="10" class="gw-dp-inp" id="gwDpSlippage" value="${slip}" style="width:80px" /> %</div>
+    </div>
+    <div class="gw-dp-row">
+      <div class="k">${t.setMev}<small>${t.setMevS}</small></div>
+      <label class="gw-dp-toggle"><input type="checkbox" id="gwDpMev" ${mev ? 'checked' : ''} /><span class="slider"></span></label>
+    </div>
+    <div class="gw-dp-row">
+      <div class="k">${t.setAgg}<small>${t.setAggS}</small></div>
+      <select class="gw-dp-sel" id="gwDpAgg">
+        <option value="auto" ${agg === 'auto' ? 'selected' : ''}>Auto (best rate)</option>
+        <option value="lifi" ${agg === 'lifi' ? 'selected' : ''}>LiFi</option>
+        <option value="cow" ${agg === 'cow' ? 'selected' : ''}>CoWSwap (MEV-safe)</option>
+        <option value="squid" ${agg === 'squid' ? 'selected' : ''}>Squid (Axelar)</option>
+        <option value="paraswap" ${agg === 'paraswap' ? 'selected' : ''}>Paraswap</option>
+        <option value="kyber" ${agg === 'kyber' ? 'selected' : ''}>KyberSwap</option>
+        <option value="odos" ${agg === 'odos' ? 'selected' : ''}>Odos</option>
+      </select>
+    </div>
+    <div class="gw-dp-row">
+      <div class="k">${t.setRpc}<small>${t.setRpcS}</small></div>
+      <input type="text" class="gw-dp-inp" id="gwDpRpc" placeholder="https://…" value="${rpc}" style="width:220px;text-align:left" />
+    </div>
+  </div>`;
+  const save = () => {
+    gwDpPrefSave({
+      slippage: Number(document.getElementById('gwDpSlippage').value) || 0.5,
+      mev: document.getElementById('gwDpMev').checked,
+      agg: document.getElementById('gwDpAgg').value,
+      rpc: document.getElementById('gwDpRpc').value.trim(),
+    });
+    try { gwToast(t.saved, 'success'); } catch (_) {}
+  };
+  ['gwDpSlippage', 'gwDpMev', 'gwDpAgg', 'gwDpRpc'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', save);
+  });
+}
+
+function gwRenderDexReferralExplainer() {
+  const page = document.getElementById('page-referral'); if (!page) return;
+  gwInjectDexPagesCss();
+  let wrap = document.getElementById('gwDpReferralExplainer');
+  if (!wrap) {
+    wrap = document.createElement('div'); wrap.id = 'gwDpReferralExplainer'; wrap.className = 'gw-dp-wrap';
+    // Insert AFTER Referral 2.0 card if it exists, else before first card.
+    const ref2 = document.getElementById('gwRef2CardPage');
+    const firstCard = page.querySelector('.card');
+    if (ref2) ref2.after(wrap);
+    else if (firstCard) firstCard.before(wrap);
+    else page.appendChild(wrap);
+  }
+  const t = gwDpLang();
+  wrap.innerHTML = `<div class="gw-dp-card g">
+    <div class="gw-dp-head"><div>
+      <h3 class="gw-dp-h">${t.refH}</h3>
+      <p class="gw-dp-sub">${t.refSub}</p>
+    </div><span class="gw-dp-badge" style="background:rgba(34,193,124,.12);border-color:rgba(34,193,124,.30);color:#22c17c">50/50</span></div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      ${[t.refStep1, t.refStep2, t.refStep3].map((s, i) => `
+        <div style="flex:1 1 220px;padding:16px 18px;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)">
+          <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#22c17c,#10a06a);color:#04160a;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;margin-bottom:10px">${i + 1}</div>
+          <div style="color:#e7eef8;font-size:13.5px;line-height:1.5">${s}</div>
+        </div>
+      `).join('')}
+    </div>
+  </div>`;
+}
+
+function gwSetupDexPages() {
+  const run = gwDebounce(() => {
+    try { if (document.getElementById('page-wallet'))   gwRenderDexWalletActions();   } catch (_) {}
+    try { if (document.getElementById('page-settings')) gwRenderDexSettings();        } catch (_) {}
+    try { if (document.getElementById('page-referral')) gwRenderDexReferralExplainer(); } catch (_) {}
+  }, 250);
+  run();
+  let n = 0; const id = setInterval(() => { n++; const anyMounted = document.getElementById('gwDpWalletCard') || document.getElementById('gwDpSettingsCard') || document.getElementById('gwDpReferralExplainer'); if (anyMounted || n >= 20) clearInterval(id); else run(); }, 500);
+  window.addEventListener('hashchange', run);
+  const obs = new MutationObserver(() => run()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  window.addEventListener('grom:lang-change', () => {
+    ['gwDpWalletCard', 'gwDpSettingsCard', 'gwDpReferralExplainer'].forEach(id => document.getElementById(id)?.remove());
+    run();
+  });
 }
 
 /* Referral 2.0 — mounts on #page-referral (not dashboard). */

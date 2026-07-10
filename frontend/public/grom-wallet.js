@@ -1144,12 +1144,38 @@ async function ensureWC(forceNew, opts) {
   return wcProvider;
 }
 
-/* Prefetch WC provider on page load (background, non-blocking). Kills the
- * 1-2 second handshake delay users see on their first "Connect" click.
- * Waits until the tab has been idle for a moment so it doesn't fight
- * with initial render. */
+/** Peek at localStorage for the WC v2 session marker. If any key starts
+ *  with `wc@2:` and looks fresh, we can silently re-init the provider
+ *  without popping a QR modal — the underlying session is already there. */
+function gwHasPersistedWcSession() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('wc@2:')) return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+/* Prefetch WC provider on page load. Only fires when we already have a
+ * persisted session — that way we never pop the Reown QR modal
+ * unprompted (which was the original bug that led to the skip). Users
+ * with an existing session get their provider hot-loaded before the
+ * first swap click. */
 function gwPrefetchWc() {
-  /* Skip prefetch — pre-initing EthereumProvider can resurrect Reown modal on PC. */
+  if (!gwHasPersistedWcSession()) return;
+  const kick = () => {
+    if (window.gromWallet?.wcProvider) return;
+    try {
+      // Silent — showQrModal: false.  connectWC returns fast when the
+      // session actually restores from persisted state.
+      typeof connectWC === 'function' && connectWC({ showQrModal: false })
+        .then(() => console.log('[GROM] WC session warm-restored'))
+        .catch((e) => console.log('[GROM] WC warm-restore skipped:', e?.message || e));
+    } catch (_) {}
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(kick, { timeout: 3000 });
+  else setTimeout(kick, 1200);
 }
 
 /** More wallets — our Binance-style explorer (no Reown modal). */
@@ -3850,10 +3876,13 @@ const GW_SIM_CROSS_CHAIN = ['BTC', 'SOL', 'TRX', 'TON', 'MATIC', 'AVAX', 'BNB', 
 async function gwDsSimRenderBalances() {
   const list = document.getElementById('gwDsSimBalances');
   if (!list) return;
-  const addr = (typeof gwOcConnectedAddress === 'function' && gwOcConnectedAddress())
-    || localStorage.getItem('gw_addr') || null;
+  // Multi-source address lookup — gwOcConnectedAddress covers 5 sources
+  // (live state, injected wallet, WC provider, header chip, persisted
+  // label). We had a stray `gw_addr` key that was never actually written
+  // — dropped it.
+  const addr = (typeof gwOcConnectedAddress === 'function' && gwOcConnectedAddress()) || null;
   if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) {
-    list.innerHTML = `<div class="gw-ds-sim-empty">Sign in with your wallet to see balances</div>`;
+    list.innerHTML = `<div class="gw-ds-sim-empty">Connect a wallet in the top right to see your balances</div>`;
     return;
   }
   list.innerHTML = `<div class="gw-ds-sim-empty">Loading balances…</div>`;
@@ -7372,23 +7401,18 @@ if (typeof window !== 'undefined' && !gwTwapTickTimer) {
 
 async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   // Prefer WC provider if session exists. Fall back to window.ethereum.
-  // If neither is available (WC session got wiped between page loads),
-  // try to SILENTLY restore the WC session before showing an error.
   const wc = window.gromWallet?.wcProvider;
   let provider = wc || window.ethereum;
-  const savedAddr = localStorage.getItem('gw_addr');
+  const savedAddr = (typeof gwOcConnectedAddress === 'function' && gwOcConnectedAddress()) || null;
 
-  if (!provider && savedAddr) {
-    // WC session was persisted (`wc@2:*` in localStorage) but our in-memory
-    // provider is null after a page refresh. Rebuild via connectWC with
-    // QR modal enabled — this way if the persisted session can't be
-    // restored (e.g. wallet was cleared on user's phone) they still get
-    // a way to reconnect. connectWC will short-circuit when the persisted
-    // session is intact — no QR shows in that case.
+  // If no live provider AND we detect a persisted WC session in
+  // localStorage, silently rebuild — this restores signing capability
+  // after a page refresh without any modal.
+  if (!provider && gwHasPersistedWcSession()) {
     try {
       gwToast('Restoring wallet session…', 'info');
       provider = await Promise.race([
-        typeof connectWC === 'function' ? connectWC({ showQrModal: true }) : Promise.reject(new Error('no connectWC')),
+        typeof connectWC === 'function' ? connectWC({ showQrModal: false }) : Promise.reject(new Error('no connectWC')),
         new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000)),
       ]);
     } catch (_) { provider = null; }
@@ -7399,7 +7423,7 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
       if (typeof openConnectModal === 'function') openConnectModal();
       else if (typeof cnConnect === 'function') cnConnect();
     } catch (_) {}
-    throw new Error('Wallet session lost — please reconnect from the modal, then try Swap again');
+    throw new Error('Reconnect your wallet in the modal that opened — then hit Swap again');
   }
   const accs = await provider.request({ method: 'eth_accounts' }).catch(() => []);
   const account = (accs && accs[0]) || savedAddr;

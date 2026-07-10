@@ -1654,9 +1654,47 @@ async function connectWC() {
 }
 
 /* ----- disconnect ----- */
+/**
+ * Full disconnect: severs the WalletConnect session AND purges every
+ * persisted trace so the user can connect a DIFFERENT wallet next time.
+ *
+ * Prior implementation only called wcProvider.disconnect() which severs
+ * the socket but leaves `wc@2:*` cache keys in localStorage. On the next
+ * openConnectModal(), the WC library auto-restores that session and the
+ * OLD wallet reconnects silently, so the user thinks "Logout" is broken.
+ *
+ * We now:
+ *   1. Tell the wallet the session is over (best-effort disconnect)
+ *   2. Null the in-memory provider so the next connect starts fresh
+ *   3. Delete every `wc@2:*` key from localStorage (WC v2 session cache)
+ *   4. Drop our own auth crumbs: grom_jwt, grom_wallet_label, currentAccount
+ *   5. Update the chip to disconnected state
+ *   6. Fire 'wallet-disconnected' so injected UI (Meta-Portfolio, Simple
+ *      mode balances, Referral 2.0) reset immediately
+ */
 async function disconnect() {
   try { await wcProvider?.disconnect?.(); } catch (_) {}
+  wcProvider = null;
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      // WalletConnect v2 stores session under multiple `wc@2:*` prefixes.
+      if (k.startsWith('wc@2:')) keysToRemove.push(k);
+      // Reown / WalletConnect Modal auxiliary caches.
+      if (k.startsWith('WCM_')) keysToRemove.push(k);
+      if (k.startsWith('wagmi.')) keysToRemove.push(k);
+    }
+    keysToRemove.forEach((k) => { try { localStorage.removeItem(k); } catch (_) {} });
+    localStorage.removeItem('grom_jwt');
+    localStorage.removeItem('grom_wallet_label');
+    localStorage.removeItem('grom_ref_code');
+  } catch (_) {}
+  try { currentAccount = null; currentChainId = null; } catch (_) {}
   updateChip(null);
+  try { window.dispatchEvent(new CustomEvent('wallet-disconnected')); } catch (_) {}
+  console.log('[grom-wallet] full disconnect — session + storage cleared');
 }
 
 /* ----- SIWE — подпись для backend-аутентификации ----- */

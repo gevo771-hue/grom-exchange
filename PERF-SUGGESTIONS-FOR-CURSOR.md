@@ -1,5 +1,350 @@
 # Performance suggestions — page-load 6.2 s → <1 s
 
+## Update 2026-07-10g — КОМПЛЕКСНЫЙ АУДИТ (Cursor, ТВОЯ задача)
+
+Гевор ставит одну большую задачу — довести биржу до идеала. Пять
+направлений, все требуют глубокого end-to-end аудита + фиксов. Я
+останавливаюсь на своей стороне, чтобы не создавать race conditions.
+Ты берёшь всё, включая surgical edits в `grom-wallet.js` где надо.
+
+### 📋 Пять направлений аудита
+
+1. **SWAP** — все цепи, все агрегаторы, все edge cases
+2. **SPOT** — страница «не рабочая», UX неясный, кэш старых графиков
+3. **Регистрация / Auth** — Privy vs SIWE, нужен ли Email OTP вообще
+4. **Кэш-персистентность** — «Впервые на GROM?» мигает, старые графики
+   в Spot после refresh, stale P&L после disconnect
+5. **Disconnect UX** — chip работает, но остальное на дашборде stale
+
+---
+
+## 1. SWAP — глубокий end-to-end audit
+
+**Владение передано тебе целиком, включая `grom-wallet.js`.**
+
+### 1.1 Матрица `chain × aggregator`
+
+Прогони каждую комбинацию через Simple + Advanced modes, заполни
+статусом:
+
+| Chain | LiFi | Paraswap | KyberSwap | Odos | 0x | CoWSwap | Squid | 1inch | OpenOcean |
+|---|---|---|---|---|---|---|---|---|---|
+| Ethereum (1) | ? | ? | ? | ? | ? | ? | ? | ? | ? |
+| Arbitrum (42161) | ? | ? | ? | ? | ? | — | ? | ? | ? |
+| Optimism (10) | ? | ? | ? | ? | ? | — | ? | ? | ? |
+| Base (8453) | ? | ? | ? | ? | ? | — | ? | ? | ? |
+| Polygon (137) | ? | ? | ? | ? | ? | — | ? | ? | ? |
+| BSC (56) | ? | ? | ? | ? | — | — | ? | ? | ? |
+| Avalanche (43114) | ? | ? | ? | ? | ? | — | ? | ? | ? |
+
+Non-EVM (Гевор хочет полное покрытие):
+- Solana (Jupiter)
+- Bitcoin (LiFi/THORchain)
+- Tron (SunSwap)
+- TON (STON.fi)
+
+Легенда: ✅ работает / ⚠️ quote OK exec fails / ❌ quote fails / — не
+поддерживается платформой.
+
+### 1.2 Quote flow
+
+- API ключи живые? (LiFi/Paraswap free — но rate-limits)
+- `503 / 429 / CORS` логируй в `window.__gromMetaQuoteErrors`
+- `gwAggCanExec` фильтр по chainId правильный?
+- Best-quote selection: BigInt comparison (не Number — overflow на WBTC)
+
+### 1.3 Execution flow
+
+**Simple mode:**
+- Approve на `quote.approvalAddress` того агрегатора чей quote выбран
+  (НЕ хардкод Uniswap)
+- `sendTransaction` на цепь из `gwGetActiveUiChainId()` (не
+  `wcProvider.chainId`)
+- Native → ERC20: WETH wrap per chain (Ethereum WETH ≠ Arb WETH)
+- ERC20 → ERC20 same chain: approve + swap = 2 подписи
+- Cross-chain (Squid, LiFi bridge): approve + bridge + destination
+
+**Advanced mode:**
+- Custom slippage → `amountOutMin`
+- Deadline `Date.now()/1000 + minutes*60`
+- Manual aggregator choice реально идёт через выбранный
+
+### 1.4 Edge-case checklist
+
+- [ ] **Fee-on-transfer** (PAXG, мемы) → `…SupportingFeeOnTransferTokens`
+- [ ] **Permit2** (Uniswap V4) или classic approve?
+- [ ] **USDT на Ethereum** требует `approve(0)` перед новым approve
+- [ ] **BNB (BSC) vs ETH** — native symbol в UI и quote request
+- [ ] **Malformed calldata** без `0x` префикса не крашит
+- [ ] **Nonce race** при быстром двойном клике
+- [ ] **Slippage revert** → «цена уплыла, увеличь slippage», не raw revert
+- [ ] **Insufficient gas** ДО подписания, не после Trust reject
+- [ ] **Wrong network** → «Переключи сеть в кошельке», чёткая инструкция
+
+### 1.5 Testing checklist (после правок)
+
+- [ ] Arbitrum USDT → USDC
+- [ ] Base ETH → USDC
+- [ ] BSC BNB → USDT
+- [ ] Polygon MATIC → USDC
+- [ ] Ethereum USDC → DAI (маленький amount)
+- [ ] Cross-chain USDC (Arb) → USDC (Base)
+- [ ] Solana SOL → USDC (Jupiter)
+- [ ] Advanced: slippage 1%, deadline 10 min
+- [ ] Advanced: manual aggregator selection
+- [ ] Balance chip обновляется <5 сек после свопа
+- [ ] History запись появляется в Portfolio
+
+---
+
+## 2. SPOT — довести до идеала
+
+**Жалоба Гевора:** «страница спот как будто не рабочая, я там не
+понимаю как свопать; когда делаю refresh — старые графики появляются».
+
+### 2.1 UX аудит
+
+Пройди `#page-spot` глазами нового юзера. Ответь:
+- Понятно ли **что** тут делать? (это swap с orderbook или limit orders?)
+- Понятно ли **как** сделать первый ордер?
+- Где выбор пары? Работает поиск?
+- Кнопки Buy/Sell реально исполняют или ошибка молча?
+- Chart грузится? Или показывает spinner вечно?
+- Orderbook живой или замороженный?
+- Есть ли ссылка на Swap panel для тех кто попал не туда?
+
+Сделай явные CTA + подсказки для новичков (одностроч
+placeholder «Выбери пару → введи amount → Buy/Sell»).
+
+### 2.2 Chart cache при refresh
+
+После Cmd+Shift+R на секунду появляются **старые графики** предыдущей
+пары. Причина = TradingView chart инициализируется с последним
+`localStorage` значением до того как JS переключит на текущую пару.
+
+**Fix:** до init chart установи skeleton (grey placeholder или
+«Loading BTC/USDT…»); только когда данные пришли — покажи chart.
+Или: `visibility: hidden` на chart container пока не поменяли pair.
+
+### 2.3 Orderbook / trades feed sanity
+
+- Обновляется в realtime или требует F5?
+- Depth правильный (не показывает stale котировки)?
+- На пустой паре — понятное сообщение, не белый экран
+
+---
+
+## 3. Регистрация / Auth
+
+**Вопрос Гевора:** «зачем нам Email OTP вообще?»
+
+GROM = non-custodial DEX. Email OTP через Privy создаёт **embedded
+wallet Privy** = кастодия ключей Privy = противоречит модели.
+
+**Реши сам:**
+
+**Вариант A (моё предложение)** — убрать Privy полностью:
+- Единственный вход = Connect wallet → SIWE → JWT
+- Простая модель, меньше кода, меньше поверхности атак
+
+**Вариант B** — оставить Email как маленький secondary вариант:
+- ГЛАВНАЯ CTA = «Connect Wallet»
+- «Sign in with Email» — маленькая ссылка в углу
+- Убедиться что embedded wallet Privy может делать real mainnet swaps
+
+Если оставляешь B — проверь:
+- Google OAuth `redirect_uri` в Privy dashboard whitelist
+- After signup JWT + chip обновляются без F5
+- Модалка после OTP submit закрывается автоматически
+
+---
+
+## 4. Кэш-персистентность — «стирание прошлого» при refresh
+
+**Жалобы Гевора:**
+- «Впервые на GROM?» widget мигает и пропадает (~500 ms)
+- Старые графики Spot появляются на секунду при refresh
+- После disconnect stats-grid всё ещё показывает `+$302.11`, `3
+  открытых позиции`, `64% win-rate`
+
+### 4.1 Причина
+
+При hard-refresh браузер сначала рендерит **HTML в том виде как он был
+залит с сервера** (или из bfcache), а JS boot догоняет через 200-500 ms
+и переключает состояние. Между этими двумя моментами — flash.
+
+### 4.2 Fix: `data-authed-only` pattern
+
+Inline `<script>` + `<style>` в `<head>` **сразу после `<meta viewport>`**,
+до любых внешних скриптов:
+
+```html
+<script>
+  // Синхронно, до парсинга body
+  document.documentElement.classList.toggle(
+    'grom-authed',
+    !!localStorage.getItem('grom_jwt')
+  );
+</script>
+<style>
+  html:not(.grom-authed) [data-authed-only] { display: none !important; }
+</style>
+```
+
+Пометь атрибутом `data-authed-only="1"` всё что требует логина:
+- `#dashWelcomeTour` («Впервые на GROM?» widget)
+- `#dashboardLogoutBtn` («Выйти» кнопка внизу сайдбара)
+- Числовые ноды stats-grid (P&L, positions, win-rate)
+- Referral KPI карточки
+- Spot chart container (пока pair не определена)
+
+**Результат:** ничего не мигает ни при hard-refresh, ни при disconnect,
+ни при переключении юзера.
+
+### 4.3 SPA-cache для Spot
+
+Если ты используешь `keep-alive` компоненты для Spot chart —
+обнуляй state на `beforeunload` или храни pair в
+`sessionStorage` (не `localStorage`), чтобы новая сессия начиналась
+чистой.
+
+---
+
+## 5. Disconnect — «Выйти не работает» + сброс всего
+
+**Жалоба Гевора:** «выйти не могу с кошелька». Юзер жмёт «Выйти» /
+«Disconnect» — старый кошелёк либо не отваливается вообще, либо
+отваливается частично, а при попытке подключить другой Trust —
+старый автоматически возвращается.
+
+### 5.1 Что я уже сделал (v=20260710ah, commit `0ed7bc5`)
+
+В `disconnect()` grom-wallet.js вычистил:
+- Все `wc@2:*` ключи (WalletConnect v2 session)
+- Все `WCM_*` ключи (Reown Modal)
+- Все `wagmi.*` ключи (Wagmi connector cache)
+- `grom_jwt`, `grom_wallet_label`, `grom_ref_code`
+- Обнулил `wcProvider`, `currentAccount`, `currentChainId`
+- Диспатчу `window` event `wallet-disconnected`
+- Chip корректно = «Подключить кошелёк»
+
+### 5.2 Что всё ещё не работает
+
+**Проблема A — logout процесс не проходит до конца:**
+- Юзер жмёт «Выйти» → toast «Вы вышли», но при следующем клике
+  «Подключить кошелёк» → возвращается **тот же** старый Trust адрес
+  автоматически, без WC-модалки
+- Или логин «висит» после клика — кнопка нажата, а UI не меняется
+
+**Возможные причины (проверь):**
+- Твой `wrapDisconnect` в `grom-privy.js` вызывается ДО моего
+  `disconnect()`, и Privy пере-логинивает через свой sessionStorage
+- WC v2 session `wc@2:client:*` покрыт не полностью — какие-то ключи
+  живут в `IndexedDB` (не только `localStorage`)
+- Reown WCM держит `Provider` инстанс в замыкании — даже после
+  clear localStorage при next `open()` он использует старый session
+- Cursor / Privy встраивает `sessionStorage.privy:*` — не чищу
+
+**Что нужно от тебя:**
+
+1. Разобрать полную цепочку logout: кнопка «Выйти» → какой handler →
+   какие функции вызывает → в каком порядке. Убедиться что моя
+   `disconnect()` вызывается **последней** и никто её эффект не
+   перезаписывает
+2. Добавить очистку `sessionStorage`:
+   ```js
+   ['privy:', 'wcm:', 'wc:', 'wagmi.'].forEach(prefix => {
+     for (let i = sessionStorage.length - 1; i >= 0; i--) {
+       const k = sessionStorage.key(i);
+       if (k?.startsWith(prefix)) sessionStorage.removeItem(k);
+     }
+   });
+   ```
+3. Очистить IndexedDB `WALLET_CONNECT_V2_INDEXED_DB`:
+   ```js
+   indexedDB.deleteDatabase('WALLET_CONNECT_V2_INDEXED_DB');
+   ```
+4. Убить старый `wcProvider` инстанс — не только `null`, а `disconnect()`
+   + удалить его глобальные ссылки (`window.gromWallet.wcProvider`,
+   `window.__wcProvider`, что-то ещё?)
+5. **После disconnect — hard reload страницы** (last-resort гарантия
+   что state чистый). Пользователю показать «Выход выполнен, страница
+   обновится…» + `location.reload()`. Это некрасиво но 100% работает
+
+### 5.3 Проблема B — Stale UI после disconnect
+
+Chip уже корректный, но остальное показывает stale user data:
+- `P&L ЗА 24Ч` = **+$302.11** ❌
+- `ОТКРЫТЫЕ ПОЗИЦИИ` = **3** ❌
+- `WIN-RATE BINARY (7Д)` = **64%** ❌
+- Sidebar «Впервые на GROM?» ❌
+- Sidebar «Выйти» кнопка ❌ (парадокс — уже вышел, а кнопка «Выйти»
+  торчит)
+
+**Fix:** слушай моё событие `wallet-disconnected`:
+
+```js
+window.addEventListener('wallet-disconnected', () => {
+  resetAllStats();          // stats-grid → «—» / «0» / «—»
+  resetReferralKpis();      // ref KPI → «—»
+  hideSidebarLogout();      // «Выйти» → скрыть
+  hideWelcomeTour();        // «Впервые на GROM?» → скрыть
+  updateAuthUiPatched();
+});
+```
+
+### 5.4 Testing checklist после фикса
+
+- [ ] Login Trust A → «Выйти» → chip = «Подключить кошелёк»
+- [ ] Refresh страницы → chip остаётся «Подключить кошелёк» (не
+  вернулся автологин)
+- [ ] Клик «Подключить кошелёк» → WC modal открывается (не сразу
+  логинит старого)
+- [ ] Выбор Trust B → WC deeplink открывает **новую** пару
+- [ ] После login Trust B → address chip показывает Trust B (не Trust A)
+- [ ] Stats-grid, sidebar, welcome tour все сброшены при disconnect
+
+---
+
+## 🛡️ Гайдлайны для правок в `grom-wallet.js`
+
+Гевор явно разрешил тебе surgical edits, но:
+
+**✅ Можешь менять:**
+- `gwOnChainSwapExecInline`, `gwOnChainSwapExecMeta`
+- `gwGetMetaQuotes`, `gwAggCanExec`, `gwFindV2SwapPath`
+- `gwEthCall`, `gwAggBuildTxIfNeeded`
+- Chain configs (`GW_OC_SWAP` addresses, RPCs)
+
+**❌ НЕ трогай:**
+- `disconnect()` (только что зафикшал, commit `0ed7bc5`)
+- Guard functions: `gwReadOnlyAddress`, `gwOcConnectedAddress`,
+  `gwGetActiveUiChainId`, `gwRpcTry`, `gwWaitReceipt`
+- `#gwMpSlot` pattern для Meta-Portfolio
+
+**🚫 Никакого:**
+- Rewrite большими кусками (только точечные фиксы)
+- Удаление моих guard функций (их зовут отовсюду)
+
+Если сомневаешься — оставь заметку в этом файле, я гляну.
+
+---
+
+## 🎯 TL;DR priority order
+
+1. **DISCONNECT** — «Выйти не работает» + stale UI после logout
+   (§5, самое срочное — юзер не может сменить кошелёк)
+2. **SWAP audit** — матрица цепь×агрегатор + edge cases + testing (§1)
+3. **SPOT** — UX аудит + chart cache flash (§2)
+4. **Кэш flash** — `data-authed-only` pattern (§4)
+5. **Auth стратегия** — Privy A vs B (§3)
+
+Я останавливаюсь на своей стороне. Пиши в этот файл когда закончишь по
+каждому пункту — я пройду по чек-листу через Chrome MCP на живом
+grom.exchange.
+
+---
+
 ## Update 2026-07-10f — Комплексный аудит (Cursor, помоги!)
 
 Гевор ловит три класса регрессий, я закрыл со своей стороны что мог, дальше

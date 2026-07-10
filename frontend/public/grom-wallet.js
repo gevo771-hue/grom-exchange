@@ -7022,19 +7022,44 @@ async function gwErc20ApproveMax(provider, token, spender, from) {
     method: 'eth_sendTransaction',
     params: [{ from, to: token, data, value: '0x0' }],
   });
-  await gwWaitReceipt(provider, hash);
+  await gwWaitReceipt(provider, hash, 60000, /*isApprove=*/true);
   return hash;
 }
 
-async function gwWaitReceipt(provider, hash, timeoutMs = 90000) {
+async function gwWaitReceipt(provider, hash, timeoutMs = 60000, isApprove = false) {
   const start = Date.now();
+  const chainId = Number(currentChainId) || 42161;
+  // Progress toast that updates every second so user knows we're working.
+  let tickId = null;
+  const showProgress = () => {
+    if (tickId) clearInterval(tickId);
+    tickId = setInterval(() => {
+      const s = Math.round((Date.now() - start) / 1000);
+      try { gwToast(`${isApprove ? 'Approving' : 'Confirming'}… ${s}s (Arb: ~2-8s, ETH: ~30s)`, 'info'); } catch (_) {}
+    }, 1500);
+  };
+  showProgress();
+
+  // Poll receipt via PUBLIC RPC (500ms interval) — much faster than
+  // WalletConnect round-trips (which are ~2s each and often silent-drop).
   while (Date.now() - start < timeoutMs) {
     try {
-      const r = await provider.request({ method: 'eth_getTransactionReceipt', params: [hash] });
-      if (r && r.status) return r;
-    } catch (_) {}
-    await new Promise((r) => setTimeout(r, 2000));
+      const r = await gwRpcTry(chainId, 'eth_getTransactionReceipt', [hash]);
+      if (r && (r.status === '0x1' || r.status === 1 || r.status === true)) {
+        if (tickId) clearInterval(tickId);
+        try { gwToast(`${isApprove ? 'Approved ✓' : 'Confirmed ✓'} in ${Math.round((Date.now() - start) / 1000)}s`, 'success'); } catch (_) {}
+        return r;
+      }
+      if (r && (r.status === '0x0' || r.status === 0)) {
+        if (tickId) clearInterval(tickId);
+        throw new Error('Transaction reverted on-chain');
+      }
+    } catch (e) {
+      if (String(e?.message || '').includes('reverted')) { if (tickId) clearInterval(tickId); throw e; }
+    }
+    await new Promise((r) => setTimeout(r, 500));
   }
+  if (tickId) clearInterval(tickId);
   throw new Error('Transaction timed out — check your wallet');
 }
 

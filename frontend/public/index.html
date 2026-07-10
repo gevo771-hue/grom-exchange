@@ -4939,7 +4939,7 @@
       <button type="button" class="auth-action primary" id="topDepositBtn" onclick="openWalletModal('deposit')"><svg width="14" height="14" aria-hidden="true"><use href="#i-deposit"/></svg> <span data-i18n="wallet_deposit">Deposit</span></button>
       <button type="button" class="auth-action" id="topLogoutBtn" data-i18n="auth_logout" onclick="gromHardLogout()" style="display:none">Logout</button>
     </div>
-    <span class="wallet-chip" id="walletChip">
+    <span class="wallet-chip" id="walletChip" role="button" tabindex="0" onclick="gwWalletChipClick(event)">
       <span class="avatar"></span>
       <span id="walletLabel" data-i18n="auth_login">Sign in / Sign up</span>
     </span>
@@ -7522,12 +7522,12 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260710q';
+  walletModule.src = '/grom-wallet.js?v=20260710r';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = '/grom-privy.js?v=20260709r';
+  privyModule.src = '/grom-privy.js?v=20260710q';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -8007,8 +8007,23 @@ function cnConnect(name, kind, ev) {
   toast('Wallet module is still loading. Please wait a moment and try again.', 'error');
 }
 function connectWallet() { openConnectModal(); }
+/** Chip click — always opens connect when disconnected; connected state uses privy dropdown. */
+function gwWalletChipClick(ev) {
+  if (ev && ev.isTrusted === false) return;
+  if (window.GROM_CONN && window.GROM_CONN.connected) return;
+  try {
+    if (typeof window.gwIsOrphanWalletChip === 'function' && window.gwIsOrphanWalletChip()) {
+      if (typeof window.gwReconcileOrphanWalletChip === 'function') window.gwReconcileOrphanWalletChip('chip-click');
+      else {
+        try { localStorage.removeItem('grom_wallet_label'); } catch (_) {}
+      }
+    }
+  } catch (_) {}
+  openConnectModal();
+}
+window.gwWalletChipClick = gwWalletChipClick;
 var _wc = document.getElementById('walletChip');
-if (_wc) _wc.addEventListener('click', connectWallet);
+if (_wc) _wc.addEventListener('click', gwWalletChipClick);
 var _logout = document.getElementById('topLogoutBtn');
 if (_logout) _logout.addEventListener('click', disconnectWallet);
 (function restoreAuthUi() {
@@ -15225,9 +15240,34 @@ updateAuthUi = function updateAuthUiPatched() {
   var topLogout = document.getElementById('topLogoutBtn');
   if (topLogout) topLogout.style.display = 'none';
   if (!connected) {
+    try {
+      if (typeof window.gwReconcileOrphanWalletChip === 'function') {
+        window.gwReconcileOrphanWalletChip('auth-ui');
+      } else {
+        var stale = localStorage.getItem('grom_wallet_label') || '';
+        if (/^0x[a-fA-F0-9]{40}$/i.test(stale)) {
+          var hasWc = false;
+          try {
+            for (var wi = 0; wi < localStorage.length; wi++) {
+              var wk = localStorage.key(wi);
+              if (wk && wk.indexOf('wc@2:') === 0) { hasWc = true; break; }
+            }
+          } catch (_) {}
+          var hasEth = !!(window.ethereum && window.ethereum.selectedAddress);
+          if (!hasWc && !hasEth) localStorage.removeItem('grom_wallet_label');
+        }
+      }
+    } catch (_) {}
     setWalletLabel(gromSignInLabel());
     if (typeof window.gromResetWalletUi === 'function') window.gromResetWalletUi();
   } else {
+    if (typeof window.gwIsOrphanWalletChip === 'function' && window.gwIsOrphanWalletChip()) {
+      if (typeof window.gwReconcileOrphanWalletChip === 'function') window.gwReconcileOrphanWalletChip('auth-ui-stale');
+      setWalletLabel(gromSignInLabel());
+      if (chip) chip.classList.remove('connected');
+      if (actions) actions.classList.remove('open');
+      return;
+    }
     var raw = GROM_CONN.label || '';
     try { if (!raw) raw = localStorage.getItem('grom_wallet_label') || ''; } catch (_) {}
     if (raw && /^0x[a-fA-F0-9]{40}$/i.test(raw)) {

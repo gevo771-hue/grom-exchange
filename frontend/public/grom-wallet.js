@@ -2747,10 +2747,13 @@ function gwOcConnectedAddress() {
     const chip = document.getElementById('walletChipAddr')?.textContent?.trim();
     if (isAddr(chip)) return chip;
   } catch (_) {}
-  // 5. Persistent label from prior session
+  // 5. Persistent label from prior session (skip orphan ghost)
   try {
     const stored = localStorage.getItem('grom_wallet_label');
-    if (isAddr(stored)) return stored.trim();
+    if (isAddr(stored)) {
+      if (typeof gwIsOrphanWalletLabel === 'function' && gwIsOrphanWalletLabel(stored)) return null;
+      return stored.trim();
+    }
   } catch (_) {}
   return null;
 }

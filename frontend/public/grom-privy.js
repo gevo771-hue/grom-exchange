@@ -380,16 +380,30 @@ function hookChipDropdown() {
   const chip = document.getElementById('walletChip');
   if (!chip || chip.dataset.pvHooked === '1') return;
   chip.dataset.pvHooked = '1';
+  document.addEventListener('grom:wallet-disconnected', () => {
+    const menu = document.getElementById('walletChipMenu');
+    if (menu) menu.style.display = 'none';
+  });
   chip.addEventListener('click', (e) => {
     if (typeof window.gwIsWalletUiConnected === 'function' && window.gwIsWalletUiConnected()) {
       e.preventDefault();
       e.stopImmediatePropagation();
       const menu = ensureChipMenu();
-      let addr = window.GROM_CONN?.label || '';
+      let addr = '';
+      try {
+        if (typeof window.gromWallet?.state === 'function') {
+          const s = window.gromWallet.state();
+          if (s?.account) addr = s.account;
+        }
+      } catch (_) {}
       try {
         const stored = localStorage.getItem('grom_wallet_label') || '';
         if (/^0x[a-fA-F0-9]{40}$/i.test(stored)) addr = stored;
       } catch (_) {}
+      if (!/^0x[a-fA-F0-9]{40}$/i.test(addr)) {
+        menu.style.display = 'none';
+        return;
+      }
       menu.querySelector('#pvChipAddr').textContent = addr;
       const r = chip.getBoundingClientRect();
       menu.style.top = (r.bottom + 6) + 'px';

@@ -1156,6 +1156,61 @@ function gwHasPersistedWcSession() {
   } catch (_) {}
   return false;
 }
+window.gwHasWcSession = gwHasPersistedWcSession;
+
+function gwHasInjectedEthAddress() {
+  try {
+    const a = window.ethereum?.selectedAddress;
+    return !!(a && /^0x[a-fA-F0-9]{40}$/i.test(a));
+  } catch (_) {}
+  return false;
+}
+
+/** Saved 0x label with no WC session and no injected extension — chip is a lie. */
+function gwIsOrphanWalletLabel(label) {
+  const addr = String(label || '').trim();
+  if (!/^0x[a-fA-F0-9]{40}$/i.test(addr)) return false;
+  if (gwHasPersistedWcSession()) return false;
+  if (gwHasInjectedEthAddress()) return false;
+  try {
+    if (wcProvider?.accounts?.length) return false;
+  } catch (_) {}
+  return true;
+}
+
+function gwIsOrphanWalletChip() {
+  let label = '';
+  try { label = localStorage.getItem('grom_wallet_label') || ''; } catch (_) {}
+  if (!label && window.GROM_CONN?.label) label = window.GROM_CONN.label;
+  return gwIsOrphanWalletLabel(label);
+}
+window.gwIsOrphanWalletChip = gwIsOrphanWalletChip;
+
+/** Clear chip when grom_wallet_label survived but WC / injected provider did not. */
+function gwReconcileOrphanWalletChip(reason) {
+  let label = '';
+  try { label = localStorage.getItem('grom_wallet_label') || ''; } catch (_) {}
+  if (!gwIsOrphanWalletLabel(label)) return false;
+
+  try { localStorage.removeItem('grom_wallet_label'); } catch (_) {}
+  currentAccount = null;
+  if (window.GROM_CONN) {
+    window.GROM_CONN.connected = false;
+    window.GROM_CONN.label = '';
+    window.GROM_CONN.method = '';
+  }
+  const signIn = (typeof window.gromSignInLabel === 'function')
+    ? window.gromSignInLabel()
+    : 'Connect wallet';
+  if (typeof window.setWalletLabel === 'function') window.setWalletLabel(signIn);
+  if (typeof window.updateAuthUi === 'function') window.updateAuthUi();
+  try {
+    document.dispatchEvent(new CustomEvent('grom:wallet-disconnected'));
+  } catch (_) {}
+  console.log('[GROM] cleared orphan wallet chip' + (reason ? ' (' + reason + ')' : ''));
+  return true;
+}
+window.gwReconcileOrphanWalletChip = gwReconcileOrphanWalletChip;
 
 /* Prefetch WC provider on page load. Only fires when we already have a
  * persisted session — that way we never pop the Reown QR modal
@@ -1497,12 +1552,14 @@ function hook() {
   // Disconnect при повторном клике на чип
   window.disconnectWallet = disconnect;
 
+  // Drop stale chip when label outlived the WC session (Safari / new device).
+  gwReconcileOrphanWalletChip('boot');
+  gwPrefetchWc();
+
   // Подписка на сетевые ивенты window.ethereum (если юзер подключал ранее)
   if (window.ethereum && window.ethereum.selectedAddress) {
     updateChip(window.ethereum.selectedAddress);
   }
-
-  // Do not prefetch WC — pre-init can leave Reown modal in a broken state.
 
   console.log('[grom-wallet] ready · project:', WC_PROJECT_ID.slice(0, 8) + '…');
   try { gwInjectDexPagesCss(); } catch (_) {}
@@ -7427,11 +7484,12 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   }
 
   if (!provider) {
+    if (gwIsOrphanWalletChip()) gwReconcileOrphanWalletChip('swap');
     try {
       if (typeof openConnectModal === 'function') openConnectModal();
       else if (typeof cnConnect === 'function') cnConnect();
     } catch (_) {}
-    throw new Error('Reconnect your wallet in the modal that opened — then hit Swap again');
+    throw new Error('Wallet session expired — reconnect in the modal, then hit Swap again');
   }
   const accs = await provider.request({ method: 'eth_accounts' }).catch(() => []);
   const account = (accs && accs[0]) || savedAddr;
@@ -10575,6 +10633,9 @@ window.gromWallet = {
   fetchOnchainBalances: window.gromFetchOnchainBalances,
   state: () => ({ account: currentAccount, chainId: currentChainId }),
   get wcProvider() { return wcProvider; },
+  hasWcSession: gwHasPersistedWcSession,
+  reconcileOrphanChip: gwReconcileOrphanWalletChip,
+  isOrphanChip: gwIsOrphanWalletChip,
   networks: GROM_NETWORKS,
   assetNets: GROM_ASSET_NETS,
 };

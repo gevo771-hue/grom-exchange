@@ -7522,7 +7522,7 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260710p';
+  walletModule.src = '/grom-wallet.js?v=20260710q';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
@@ -7908,7 +7908,9 @@ function openConnectModal() {
     if (typeof window.gwAbortPendingWc === 'function') window.gwAbortPendingWc();
   } catch (_) {}
   try {
-    if (window.GROM_CONN && GROM_CONN.connected) {
+    if (typeof window.gwIsOrphanWalletChip === 'function' && window.gwIsOrphanWalletChip()) {
+      if (typeof window.gwReconcileOrphanWalletChip === 'function') window.gwReconcileOrphanWalletChip('connect-modal');
+    } else if (window.GROM_CONN && GROM_CONN.connected) {
       var chip = document.getElementById('walletChip');
       if (chip) chip.click();
       return;
@@ -8010,6 +8012,19 @@ if (_wc) _wc.addEventListener('click', connectWallet);
 var _logout = document.getElementById('topLogoutBtn');
 if (_logout) _logout.addEventListener('click', disconnectWallet);
 (function restoreAuthUi() {
+  function gwHasWcSessionEarly() {
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('wc@2:') === 0) return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+  function gwHasEthEarly() {
+    try { return !!(window.ethereum && window.ethereum.selectedAddress); } catch (_) {}
+    return false;
+  }
   try {
     var token = localStorage.getItem('grom_jwt') || '';
     if (token === 'demo-session' || token === 'privy-session') {
@@ -8026,9 +8041,16 @@ if (_logout) _logout.addEventListener('click', disconnectWallet);
       return;
     }
     if (isWalletAddr) {
-      GROM_CONN = { connected: true, label: label, method: 'restored-wallet' };
-      setWalletLabel(label.slice(0, 6) + '…' + label.slice(-4));
-      updateAuthUi();
+      if (!gwHasWcSessionEarly() && !gwHasEthEarly()) {
+        localStorage.removeItem('grom_wallet_label');
+        GROM_CONN = { connected: false, label: '', method: '' };
+        setWalletLabel(typeof t === 'function' ? t('top_connect') : 'Connect wallet');
+        updateAuthUi();
+      } else {
+        GROM_CONN = { connected: true, label: label, method: 'restored-wallet' };
+        setWalletLabel(label.slice(0, 6) + '…' + label.slice(-4));
+        updateAuthUi();
+      }
     }
   } catch (_) {}
 })();

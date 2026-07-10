@@ -381,6 +381,14 @@ function hookChipDropdown() {
   if (!chip || chip.dataset.pvHooked === '1') return;
   chip.dataset.pvHooked = '1';
   chip.addEventListener('click', (e) => {
+    if (typeof window.gwIsOrphanWalletChip === 'function' && window.gwIsOrphanWalletChip()) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (typeof window.gwReconcileOrphanWalletChip === 'function') window.gwReconcileOrphanWalletChip('chip-click');
+      window.openConnectModal?.();
+      window.toast?.('Wallet session expired — reconnect to swap', 'warn');
+      return;
+    }
     if (!window.GROM_CONN?.connected) return; // не перехватываем — пусть откроется connect modal
     e.preventDefault();
     e.stopImmediatePropagation();

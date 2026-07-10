@@ -1279,13 +1279,22 @@ Issued At: ${issuedAt}`;
   return { message: msg, signature, nonce };
 }
 
-/* ----- On-chain balances (ETH + ERC-20 USDT/USDC) ----- */
+/* ----- On-chain balances (ETH + ERC-20 USDT/USDC) -----
+ *  Addresses verified against LiFi /v1/tokens API (2026-07-10):
+ *    – Arbitrum USDT was WRONG (0x...685e32 → real 0x...FCbb9) — this hid
+ *      user's $3 USDT balance on Trust.
+ *    – Arbitrum USDC was WRONG (bridged 0x...FccC7 → native 0x...e5831).
+ *    – Base USDC was WRONG (0x...120e → real 0x...02913).
+ *    – Base USDT was MISSING entirely.
+ *  Added Optimism (10) and Avalanche (43114) for full multi-chain reads. */
 const ONCHAIN_RPC = {
   1: 'https://ethereum.publicnode.com',
   42161: 'https://arb1.arbitrum.io/rpc',
   137: 'https://polygon-bor-rpc.publicnode.com',
   8453: 'https://mainnet.base.org',
   56: 'https://bsc-dataseed.binance.org',
+  10: 'https://mainnet.optimism.io',
+  43114: 'https://api.avax.network/ext/bc/C/rpc',
 };
 const ONCHAIN_TOKENS = {
   1: {
@@ -1293,19 +1302,28 @@ const ONCHAIN_TOKENS = {
     USDC: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
   },
   42161: {
-    USDT: '0xfd086bc7cd5c481dcc9c85eb478a1c0b6c685e32',
-    USDC: '0xaf88d065e77c8cC2239327C0EDb1A48022fCcC7',
+    USDT: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+    USDC: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
   },
   137: {
     USDT: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
     USDC: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
   },
   8453: {
-    USDC: '0x833589fCD6eDb6E08f4c7C32D6f7b9bD686120e',
+    USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    USDT: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
   },
   56: {
     USDT: '0x55d398326f99059fF775485246999027B3197955',
     USDC: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+  },
+  10: {
+    USDT: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58',
+    USDC: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
+  },
+  43114: {
+    USDT: '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7',
+    USDC: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
   },
 };
 const TOKEN_DECIMALS = { USDT: 6, USDC: 6 };
@@ -2460,15 +2478,17 @@ function gwSetupDepositAutoContinue() {
  * the Wallet page. Falls back to a clean "Nothing on-chain yet" state on
  * empty addresses so it never looks broken. */
 const GW_OC_CHAIN_META = {
-  1:     { label: 'Ethereum',  native: 'ETH', tickerSym: 'ETHUSDT' },
-  42161: { label: 'Arbitrum',  native: 'ETH', tickerSym: 'ETHUSDT' },
+  1:     { label: 'Ethereum',  native: 'ETH',   tickerSym: 'ETHUSDT' },
+  42161: { label: 'Arbitrum',  native: 'ETH',   tickerSym: 'ETHUSDT' },
   137:   { label: 'Polygon',   native: 'MATIC', tickerSym: 'MATICUSDT' },
-  8453:  { label: 'Base',      native: 'ETH', tickerSym: 'ETHUSDT' },
-  56:    { label: 'BSC',       native: 'BNB', tickerSym: 'BNBUSDT' },
+  8453:  { label: 'Base',      native: 'ETH',   tickerSym: 'ETHUSDT' },
+  56:    { label: 'BSC',       native: 'BNB',   tickerSym: 'BNBUSDT' },
+  10:    { label: 'Optimism',  native: 'ETH',   tickerSym: 'ETHUSDT' },
+  43114: { label: 'Avalanche', native: 'AVAX',  tickerSym: 'AVAXUSDT' },
 };
 
 async function gwOcFetchPrices() {
-  const symbols = new Set(['ETHUSDT', 'BNBUSDT', 'MATICUSDT']);
+  const symbols = new Set(['ETHUSDT', 'BNBUSDT', 'MATICUSDT', 'AVAXUSDT']);
   const out = { USDT: 1, USDC: 1 };
   await Promise.all([...symbols].map(async (s) => {
     try {
@@ -2593,7 +2613,7 @@ async function gwRenderOnchainCard() {
           <p class="gw-oc-total">—</p>
         </div>
       </div>
-      <div class="gw-oc-empty">Подключи кошелёк, чтобы увидеть свои on-chain балансы (ETH, BNB, MATIC, USDT, USDC на 5 сетях).</div>
+      <div class="gw-oc-empty">Подключи кошелёк, чтобы увидеть свои on-chain балансы (ETH, BNB, MATIC, AVAX, USDT, USDC на 7 сетях).</div>
     `;
     return;
   }
@@ -2608,7 +2628,7 @@ async function gwRenderOnchainCard() {
       </div>
       <button type="button" class="gw-oc-refresh" id="gwOcRefresh">↻ Обновить</button>
     </div>
-    <div class="gw-oc-loading">Загружаем балансы по 5 сетям…</div>
+    <div class="gw-oc-loading">Загружаем балансы по 7 сетям…</div>
   `;
   document.getElementById('gwOcRefresh')?.addEventListener('click', gwRenderOnchainCard);
 
@@ -2649,14 +2669,14 @@ async function gwRenderOnchainCard() {
 
     const list = rows.length
       ? `<div class="gw-oc-list">${rows.join('')}</div>`
-      : `<div class="gw-oc-empty">На поддерживаемых сетях (ETH · Arbitrum · Polygon · Base · BSC) нет баланса. Пополни кошелёк, чтобы увидеть здесь.</div>`;
+      : `<div class="gw-oc-empty">На поддерживаемых сетях (ETH · Arbitrum · Optimism · Polygon · Base · BSC · Avalanche) нет баланса. Пополни кошелёк, чтобы увидеть здесь.</div>`;
 
     card.innerHTML = `
       <div class="gw-oc-head">
         <div>
           <p class="gw-oc-title">Ваш кошелёк · on-chain</p>
           <p class="gw-oc-total">$${totalUsd.toFixed(2)}</p>
-          <p class="gw-oc-addr">${short} · всего по 5 сетям</p>
+          <p class="gw-oc-addr">${short} · всего по 7 сетям</p>
         </div>
         <button type="button" class="gw-oc-refresh" id="gwOcRefresh">↻ Обновить</button>
       </div>

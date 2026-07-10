@@ -4366,15 +4366,16 @@ function gwDsSimRenderTargets(chainId, fromSym) {
       : `<span class="chip-ico">${sym.slice(0, 3)}</span>`;
     return `<span class="gw-ds-sim-chip" data-sym="${sym}" data-group="${group}">${ico}<span class="chip-sym">${sym}</span></span>`;
   };
+  const moreChip = `<span class="gw-ds-sim-chip gw-ds-sim-more-chip" data-more="1"><span class="chip-ico" style="background:linear-gradient(135deg,rgba(93,213,255,0.30),rgba(110,141,255,0.20));border-color:rgba(93,213,255,0.45);color:#5dd5ff">···</span><span class="chip-sym">More</span></span>`;
   box.innerHTML = `
     <input type="text" class="gw-ds-sim-search" id="gwDsSimSearchInput" placeholder="Search token symbol or name…" />
     <div class="gw-ds-sim-target-group" data-group="same">
       <p class="gw-ds-sim-target-group-lbl">Same chain (${chainMeta.label}) · cheap · fast</p>
-      <div class="chip-list">${same.map((s) => chip(s, 'same')).join('') || '<span style="color:#6b7a92;font-size:12px">No same-chain routes</span>'}</div>
+      <div class="chip-list">${same.map((s) => chip(s, 'same')).join('') || '<span style="color:#6b7a92;font-size:12px">No same-chain routes</span>'}${same.length ? moreChip : ''}</div>
     </div>
     <div class="gw-ds-sim-target-group" data-group="cross">
       <p class="gw-ds-sim-target-group-lbl">Cross-chain (bridge · takes 1-5 min)</p>
-      <div class="chip-list">${cross.map((s) => chip(s, 'cross')).join('')}</div>
+      <div class="chip-list">${cross.map((s) => chip(s, 'cross')).join('')}${cross.length ? moreChip.replace('data-more="1"', 'data-more="cross"') : ''}</div>
     </div>
     <div class="gw-ds-sim-more" id="gwDsSimSearchBtn">🔍 Full search — all 10 000+ tokens →</div>
   `;
@@ -4385,7 +4386,12 @@ function gwDsSimRenderTargets(chainId, fromSym) {
     try { gwDsEnsureTokenOption(sym, { sym }); gwTkSyncButton('to'); } catch (_) {}
     try { gwDsRefreshRate(); } catch (_) {}
   };
-  box.querySelectorAll('.gw-ds-sim-chip').forEach((c) => { c.onclick = () => pickTarget(c.dataset.sym); });
+  box.querySelectorAll('.gw-ds-sim-chip').forEach((c) => {
+    c.onclick = () => {
+      if (c.dataset.more) { try { gwTkOpen('to'); } catch (_) {} return; }
+      pickTarget(c.dataset.sym);
+    };
+  });
 
   // Inline live-filter over the chip lists.
   const searchInp = document.getElementById('gwDsSimSearchInput');

@@ -7374,11 +7374,17 @@ async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account }) {
     gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account }),
   ];
   const settled = await Promise.allSettled(jobs);
-  const quotes = settled.filter((r) => r.status === 'fulfilled' && r.value).map((r) => r.value);
-  // Rank by net toAmount (subtracting a rough gas-in-toAmount penalty).
-  // For MVP we just sort by toAmount; gas cost is small vs. 50-200 bps
-  // aggregator spread. Refine later once we track USD price per token.
-  quotes.sort((a, b) => (b.toAmount > a.toAmount ? 1 : b.toAmount < a.toAmount ? -1 : 0));
+  // Filter out quotes that lack a valid BigInt toAmount — mixing BigInt
+  // with Number (or undefined) in the sort comparator throws 'Cannot mix
+  // BigInt and other types, use explicit conversions'.
+  const quotes = settled
+    .filter((r) => r.status === 'fulfilled' && r.value && typeof r.value.toAmount === 'bigint')
+    .map((r) => r.value);
+  // Rank by net toAmount (larger is better). BigInt comparison is safe now.
+  quotes.sort((a, b) => {
+    if (a.toAmount === b.toAmount) return 0;
+    return a.toAmount < b.toAmount ? 1 : -1;
+  });
   return quotes;
 }
 
@@ -7893,32 +7899,19 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
     } catch (_) {}
     throw new Error('Wallet not connected — sign in from the modal that just opened');
   }
-  let chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
-
-  // === Chain-sync check — if the user picked a token on a different
-  //     chain than the wallet is currently on (Simple mode click on
-  //     'USDT · Arbitrum' while Trust is still on Ethereum mainnet)
-  //     Trust would try to sign the approve on ETH mainnet and demand
-  //     ETH for gas. Ask the wallet to switch first. ===
+  // Chain source of truth = UI chip (Simple mode / chain strip). The
+  // WC session default might be cached at `eip155:1` even when Trust
+  // is actually on Arbitrum, so trusting provider.request(eth_chainId)
+  // routes swaps to the wrong chain. Yesterday's auto-switch attempt
+  // (wallet_switchEthereumChain) tripped Trust into re-opening the
+  // Connect dApp dialog because the chain isn't in requiredNamespaces.
+  // Simpler: use the UI chain for quote + tx build. If the wallet is
+  // truly on a different chain, tx will fail during signing with a
+  // clear error — no session breakage.
   const uiChainId = gwGetActiveUiChainId();
-  if (uiChainId && uiChainId !== chainId) {
-    try {
-      gwToast(`Switching wallet to ${GW_OC_CHAIN_META[uiChainId]?.label || 'chain ' + uiChainId}…`, 'info');
-      await provider.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x' + uiChainId.toString(16) }],
-      });
-      chainId = uiChainId;
-    } catch (e) {
-      const em = String(e?.message || e || '');
-      if (/user rejected|declined/i.test(em)) {
-        throw new Error(`Approve the network switch in your wallet, then hit Swap again`);
-      }
-      const uiLbl  = GW_OC_CHAIN_META[uiChainId]?.label || `chain ${uiChainId}`;
-      const nowLbl = GW_OC_CHAIN_META[chainId]?.label   || `chain ${chainId}`;
-      throw new Error(`Wallet is on ${nowLbl}, but you picked a ${uiLbl} token. Switch your wallet to ${uiLbl} and retry.`);
-    }
-  }
+  let walletChainId = 1;
+  try { walletChainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16); } catch (_) {}
+  const chainId = uiChainId || walletChainId;
 
   // === Phase 9 hook — if `to` is BTC and user saved a BTC address,
   //     bridge out to Bitcoin via THORchain instead of an EVM swap. ===

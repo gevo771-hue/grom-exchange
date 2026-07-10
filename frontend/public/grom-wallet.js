@@ -7945,7 +7945,11 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
     try {
       return await gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote: q, provider, account });
     } catch (e) {
-      console.warn(`[GROM] ${q.aggregator} exec failed, trying next:`, e?.message || e);
+      const em = String(e?.message || e || '');
+      // User rejected in wallet — abort entire loop, don't spam them
+      // with approve requests to every router.
+      if (/user rejected|declined|rejected the request/i.test(em)) throw e;
+      console.warn(`[GROM] ${q.aggregator} exec failed, trying next:`, em);
     }
   }
 
@@ -7967,9 +7971,17 @@ async function gwOnChainSwapExecInline({ fromSym, toSym, amtNum, provider, accou
   const outDec = cfg.decimals[toSym]   ?? 18;
   const amountIn = BigInt(Math.floor(amtNum * 10 ** inDec));
   const path = [inAddr, outAddr];
-  // Read expected out & compute minOut (0.5% slippage)
+  // Read expected out & compute minOut (0.5% slippage).
+  // gwGetAmountsOut can return [] if the DEX has no direct pool for
+  // fromSym → toSym on this chain (e.g. SushiSwap on Arbitrum doesn't
+  // route USDT/USDC directly, needs a WETH hop). Guard the result so
+  // we don't multiply undefined * BigInt (which throws 'Cannot mix
+  // BigInt and other types').
   const outs = await gwGetAmountsOut(provider, cfg.router, amountIn.toString(), path);
-  const expected = outs[outs.length - 1];
+  const expected = outs?.[outs?.length - 1];
+  if (typeof expected !== 'bigint' || expected === 0n) {
+    throw new Error(`No direct ${fromSym} → ${toSym} pool on ${dexLabel}. Try USDC or WETH as an intermediary.`);
+  }
   const minOut = (expected * 995n) / 1000n;
   const deadline = Math.floor(Date.now() / 1000) + 20 * 60;
 

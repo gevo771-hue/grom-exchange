@@ -75,11 +75,14 @@ function walletAppOrigin() {
 }
 function walletMetadata() {
   const origin = walletAppOrigin();
+  // Metadata sent to WalletConnect Verify API + shown by wallets on connect.
+  // MUST match the description registered in Reown Cloud dashboard for the
+  // "Verify" status to become green in Trust / Rainbow / MetaMask mobile.
   return {
     name: 'GROM',
-    description: 'Trade spot, binary options, and futures on GROM.',
+    description: 'Non-custodial cross-chain DEX. 10 000+ tokens, 20+ networks, best-route swaps from your wallet.',
     url: origin,
-    icons: [origin + '/icon-512.png?v=20260607g']
+    icons: [origin + '/icon-512.png?v=20260711']
   };
 }
 

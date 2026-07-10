@@ -7032,12 +7032,16 @@ if (typeof window !== 'undefined' && !gwTwapTickTimer) {
 }
 
 async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
-  const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
-    ? window.gromWallet.wcProvider
-    : window.ethereum;
-  if (!provider) throw new Error('No wallet provider');
-  const [account] = await provider.request({ method: 'eth_accounts' });
-  if (!account) throw new Error('Wallet not connected');
+  // Prefer WC provider if a session exists (even if the .accounts array
+  // is momentarily empty — WC lazy-loads on request). Falls back to
+  // window.ethereum (browser extension).  Gives a helpful error when
+  // neither is present.
+  const wc = window.gromWallet?.wcProvider;
+  const provider = wc || window.ethereum;
+  if (!provider) throw new Error('Wallet not connected — tap the address in the top right or sign in with your wallet');
+  const accs = await provider.request({ method: 'eth_accounts' });
+  const account = accs && accs[0];
+  if (!account) throw new Error('Wallet session expired — reconnect via the top-right address chip');
   const chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
 
   // === Phase 9 hook — if `to` is BTC and user saved a BTC address,
@@ -8990,6 +8994,18 @@ function gwInjectCexCleanupCss() {
     #page-wallet .wallet-hero-actions button:first-child,
     #page-wallet .wallet-total-actions button:first-child,
     #page-wallet .wallet-actions button:first-child { display: none !important; }
+
+    /* Referral 2.0 card was duplicating Cursor's real invite hero — hide it.
+     * Cursor's original section shows the real GROM-CODE + /r/ link + QR.
+     * Our HOW-IT-WORKS explainer (id=gwDpReferralExplainer) stays below. */
+    #page-referral #gwRef2CardPage { display: none !important; }
+
+    /* Wallet page — hide the CEX Deposit btn (Cursor may re-emit it on
+     * re-render, so multiple selectors) */
+    #page-wallet button[data-action="deposit"],
+    #page-wallet .wallet-actions button:first-of-type,
+    #page-wallet .wallet-hero-actions button:first-of-type,
+    #page-wallet .wallet-total-actions button:first-of-type { display: none !important; }
 
     /* Referral page — remove CEX-only sections:
      * - Payout settings (custodial payout wallet setup)

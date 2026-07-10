@@ -545,7 +545,16 @@ function gwKillReownModals() {
 }
 function openTrustWcApp(uri) { openWalletWcApp('trust', uri); }
 function standardWcNamespaces() {
-  const methods = ['eth_sendTransaction', 'personal_sign', 'eth_signTypedData', 'eth_signTypedData_v4'];
+  // 2026-07-10: adding read-only methods to the OPTIONAL list so newer WC
+  // wallets can answer eth_call / eth_getBalance / eth_chainId directly
+  // instead of throwing "Missing or invalid request() method: eth_call".
+  // Read-only calls are also routed through public RPC as first choice
+  // (see gwEthCall) so this is belt-and-suspenders.
+  const methods = [
+    'eth_sendTransaction', 'personal_sign', 'eth_signTypedData', 'eth_signTypedData_v4',
+    'eth_call', 'eth_getBalance', 'eth_chainId', 'eth_accounts',
+    'wallet_switchEthereumChain', 'wallet_addEthereumChain',
+  ];
   const events = ['chainChanged', 'accountsChanged'];
   // Trust Wallet rejects sessions that REQUIRE Arbitrum/exotic chains.
   // SIWE only needs Ethereum mainnet — other GROM chains stay optional.
@@ -1212,6 +1221,49 @@ function gwReconcileOrphanWalletChip(reason) {
 }
 window.gwReconcileOrphanWalletChip = gwReconcileOrphanWalletChip;
 
+function gwHasLiveWalletSession() {
+  if (gwHasPersistedWcSession()) return true;
+  if (gwHasInjectedEthAddress()) return true;
+  try {
+    if (wcProvider?.accounts?.length) return true;
+    if (window.gromWallet?.wcProvider?.accounts?.length) return true;
+  } catch (_) {}
+  return false;
+}
+
+/** JWT + wallet label without live WC / injected provider — stale SIWE session. */
+function gwPurgeStaleWalletAuth(reason) {
+  let jwt = '';
+  try { jwt = localStorage.getItem('grom_jwt') || ''; } catch (_) {}
+  const jwtValid = jwt && jwt.split('.').length === 3
+    && jwt !== 'demo-session' && jwt !== 'privy-session';
+  let label = '';
+  try { label = localStorage.getItem('grom_wallet_label') || ''; } catch (_) {}
+  const isAddr = /^0x[a-fA-F0-9]{40}$/i.test(label);
+  const hasLive = gwHasLiveWalletSession();
+
+  if (isAddr && !hasLive) {
+    if (jwtValid) try { localStorage.removeItem('grom_jwt'); } catch (_) {}
+    try { localStorage.removeItem('grom_wallet_label'); } catch (_) {}
+    currentAccount = null;
+    if (window.GROM_CONN) {
+      window.GROM_CONN.connected = false;
+      window.GROM_CONN.label = '';
+      window.GROM_CONN.method = '';
+    }
+    const signIn = (typeof window.gromSignInLabel === 'function')
+      ? window.gromSignInLabel()
+      : 'Connect wallet';
+    if (typeof window.setWalletLabel === 'function') window.setWalletLabel(signIn);
+    if (typeof window.updateAuthUi === 'function') window.updateAuthUi();
+    try { document.dispatchEvent(new CustomEvent('grom:wallet-disconnected')); } catch (_) {}
+    console.log('[GROM] purged stale wallet auth' + (reason ? ' (' + reason + ')' : ''));
+    return true;
+  }
+  return false;
+}
+window.gwPurgeStaleWalletAuth = gwPurgeStaleWalletAuth;
+
 /* Prefetch WC provider on page load. Only fires when we already have a
  * persisted session — that way we never pop the Reown QR modal
  * unprompted (which was the original bug that led to the skip). Users
@@ -1553,6 +1605,7 @@ function hook() {
   window.disconnectWallet = disconnect;
 
   // Drop stale chip when label outlived the WC session (Safari / new device).
+  gwPurgeStaleWalletAuth('boot');
   gwReconcileOrphanWalletChip('boot');
   gwPrefetchWc();
 
@@ -6602,10 +6655,28 @@ function gwEncodeAddrArray(arr, base) {
   return out;
 }
 
-/* Call read-only method (eth_call) and parse a single uint256 (or array). */
-async function gwEthCall(provider, to, data) {
-  const raw = await provider.request({ method: 'eth_call', params: [{ to, data }, 'latest'] });
-  return raw;
+/* Call read-only method (eth_call) — routed to PUBLIC RPC, not the WC
+ * provider. WalletConnect sessions only declare eth_sendTransaction /
+ * personal_sign / signTypedData in their `methods` list, so calling
+ * eth_call via provider.request throws "Missing or invalid. request()
+ * method: eth_call". Public RPCs answer read-only queries fine and
+ * gwRpcTry has fallback chain (publicnode/Ankr/llama). */
+async function gwEthCall(provider, to, data, chainIdHint) {
+  let chainId = Number(chainIdHint) || null;
+  if (!chainId) {
+    try {
+      const hex = await provider.request({ method: 'eth_chainId' });
+      chainId = parseInt(hex, 16);
+    } catch (_) { chainId = currentChainId || 42161; }
+  }
+  try {
+    return await gwRpcTry(chainId, 'eth_call', [{ to, data }, 'latest']);
+  } catch (_) {
+    // Last resort — try the wallet provider (some Trust builds do
+    // support eth_call). If wallet rejects, throw the more helpful msg.
+    try { return await provider.request({ method: 'eth_call', params: [{ to, data }, 'latest'] }); }
+    catch (e) { throw new Error(`read-only call failed: ${e?.message || e}`); }
+  }
 }
 
 /* getAmountsOut(uint256 amountIn, address[] path) -> uint256[] */
@@ -10638,6 +10709,8 @@ window.gromWallet = {
   get wcProvider() { return wcProvider; },
   hasWcSession: gwHasPersistedWcSession,
   reconcileOrphanChip: gwReconcileOrphanWalletChip,
+  purgeStaleAuth: gwPurgeStaleWalletAuth,
+  hasLiveWalletSession: gwHasLiveWalletSession,
   isOrphanChip: gwIsOrphanWalletChip,
   networks: GROM_NETWORKS,
   assetNets: GROM_ASSET_NETS,

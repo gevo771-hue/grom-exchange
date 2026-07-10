@@ -1,5 +1,164 @@
 # Performance suggestions — page-load 6.2 s → <1 s
 
+## Update 2026-07-10e — Полный аудит свапа (Cursor, помоги!)
+
+Гевор ловит свап-ошибки уже полдня, я в тупике. Прошу тебя провести
+глубокий end-to-end аудит меты-агрегатора и подписания транз. Ниже —
+что я уже нашёл + где предположительно застряло.
+
+## Текущее состояние (v=20260710af)
+
+Юзер: 0x362D…71fF на Arbitrum через Trust (WalletConnect).
+Баланс: 3 USDT, 0.001426 BNB (BSC), 0.00000024 ETH (Arb).
+Проблема: любой свап USDT (Arb) → любое (USDC/DAI/etc) — падает.
+
+### Что видит юзер (последний скрин)
+
+```
+Route:  KyberSwap · balancer-v2-stable  (winner)
+        Paraswap 2.99249  ·  CoWSwap 2.880058
+Gas:    ≈ $0.05
+Rate:   1 USDT ≈ 0.99947 DAI
+
+[click "Свап через кошелёк"]
+Toast:  Swap failed: No direct USDT → DAI pool on SushiSwap.
+        Try USDC or WETH as an intermediary.
+```
+
+Т.е. quotes работают. Meta-agg exec (KyberSwap) не работает.
+Валится через все meta-agg → inline SushiSwap → No direct pool.
+
+### Что я исправил уже
+
+- ✅ Wrong Arb USDT address (`0x…685e32` → `0xFd08…FCbb9`)
+- ✅ Wrong Arb USDC (Bridged → Native)  
+- ✅ Wrong Base USDC / missing Base USDT
+- ✅ Optimism/Avalanche добавлены
+- ✅ `eth_call` через public RPC (WC methods list не блокирует)
+- ✅ WC namespaces required = ['eth_sendTransaction','personal_sign']
+- ✅ BigInt sort crash + inline fallback undefined guard
+- ✅ Reverted auto chain-switch (Trust re-opens Connect dialog)
+- ✅ Receipt polling 500ms via public RPC (was WC 2s)
+- ✅ Progress toasts every 1.5s
+
+### Где сейчас предположительно падает
+
+`gwOnChainSwapExecMeta` (grom-wallet.js ~7465). Flow:
+
+```js
+async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, provider, account }) {
+  const cfg = GW_OC_SWAP[chainId];
+  const inAddr = fromSym === cfg.native ? cfg.wrapped : cfg.tokens[fromSym];
+  const inDec = cfg.decimals[fromSym] ?? 18;
+  const amountIn = BigInt(Math.floor(amtNum * 10 ** inDec));
+  await gwAggBuildTxIfNeeded(quote, { chainId, account });  // builds tx from Kyber/Paraswap/Odos
+  const tx = quote.transactionRequest;
+  if (!tx?.to || !tx?.data) throw new Error(`${quote.aggregator}: no tx`);
+  if (fromSym !== cfg.native) {
+    const spender = quote.approvalAddress || tx.to;
+    const allow = await gwErc20Allowance(provider, inAddr, account, spender);
+    if (allow < amountIn) {
+      gwToast(`Approve ${fromSym} to ${quote.aggregator} router…`, 'info');
+      await gwErc20ApproveMax(provider, inAddr, spender, account);   // ← might silently fail
+    }
+  }
+  const hash = await provider.request({
+    method: 'eth_sendTransaction',
+    params: [{ from: account, to: tx.to, data: tx.data,
+               value: tx.value || '0x0',
+               ...(tx.gasLimit ? { gas: tx.gasLimit } : {}) }]
+  });
+  await gwWaitReceipt(provider, hash);
+  return hash;
+}
+```
+
+Гипотезы (что может отваливаться и почему):
+
+1. **`gwErc20Allowance` возвращает BigInt но по неправильному контракту.**
+   На новых USDC/USDT адресах allowance в Trust может не читаться
+   правильно, потому что WC-провайдер кэширует chainId `eip155:1`
+   (mainnet) и `eth_call` уходит на mainnet-USDT где allowance = 0.
+   Проверь: логи из gwEthCall через public RPC и что chainId для
+   allowance query = 42161, не 1.
+
+2. **`gwErc20ApproveMax` вызывает eth_sendTransaction, но Trust не
+   показывает popup.** Из-за той же session-chainId рассинхронизации.
+   Trust ждёт транзу на mainnet USDT, а мы шлём на Arb USDT.
+
+3. **`gwAggBuildTxIfNeeded` для KyberSwap** делает POST на build API
+   с `slippageTolerance: 50` — если body некорректный, tx возвращается
+   пустой. Проверь актуальный формат Kyber's `/api/v1/route/build`
+   endpoint — возможно у них API изменился.
+
+4. **CoWSwap возвращает `transactionRequest: null`** (Cow — intent-based,
+   не имеет прямой tx). Мой exec ловит "no tx" и пробует next. Но
+   Cow всегда есть в quotes list — надо fully skip его в `gwOnChainSwapExec`.
+
+### Что от тебя нужно
+
+**A. Проверь WC session flow:**
+- Логи chainId в момент `provider.request(eth_chainId)` — совпадает
+  ли с реальным chainId в Trust?
+- Если нет — как правильно синхронизировать (не через
+  `wallet_switchEthereumChain` — это выкидывает в Connect dialog!)
+
+**B. Проверь meta-agg exec end-to-end:**
+- Simple mode: USDT (Arb) → USDC (Arb), amount=3
+- Advanced mode: та же пара
+- Логи каждого шага в console (уже есть `console.warn('[GROM]…')` для swap fails)
+
+**C. Проверь Simple mode balance clicks:**
+- Клик на «USDT · Arbitrum» в balance list → корректно ли
+  переключает chain chip И выставляет token?
+- Клик на «USDC» в target chips → корректно ли ставит `to`?
+
+**D. Advanced mode:**
+- Chain chip strip (ETH · BSC · ARB · POL · BASE · OP · AVAX · LINEA · FTM · SOL · BTC · TON · TRX)
+- YOU PAY / YOU GET pickers
+- %-chips (25/50/75/MAX)
+- Flip button
+
+**E. Проверь все aggregator adapters (grom-wallet.js ~7181–7375):**
+- gwAggQuoteLifi, gwAggQuoteParaswap, gwAggQuoteKyber,
+  gwAggQuoteOdos, gwAggQuoteCow, gwAggQuoteSquid
+- Каждый возвращает `toAmount: BigInt(...)` — так, но лучше добавь
+  guard в meta-agg что-то вроде:
+  ```js
+  const quotes = settled
+    .filter((r) => r.status === 'fulfilled' && r.value
+                && typeof r.value.toAmount === 'bigint'
+                && r.value.toAmount > 0n)
+    .map((r) => r.value);
+  ```
+
+**F. `gwOnChainSwapExecInline` fallback:**
+- Уже throws clean error 'No direct pool' если outs=[]
+- Возможно надо добавить multi-hop через WETH или USDC
+- ИЛИ вообще выпилить inline и полагаться только на meta-agg
+
+### Быстрая проверка через Chrome MCP
+
+```js
+// 1. State
+JSON.stringify({
+  ver: /grom-wallet\.js\?v=(\S+?)['"]/.exec(document.documentElement.outerHTML)?.[1],
+  chainFromWallet: await window.gromWallet.wcProvider?.request({method:'eth_chainId'}),
+  chip: document.getElementById('walletLabel')?.textContent,
+  balances: Object.keys(localStorage).filter(k => k.startsWith('wc@2:')).length,
+});
+
+// 2. Trigger swap + wait
+document.getElementById('gwDsCta')?.click();
+await new Promise(r => setTimeout(r, 5000));
+JSON.stringify(window.__gromLastSwapErr);
+```
+
+Спасибо. Как задеплоишь — я перепроверю через MCP.
+
+---
+
+
 ## Update 2026-07-09d — Spot page performance + stale-flash on refresh
 
 Gevork замечает три вещи на `#page-spot`:

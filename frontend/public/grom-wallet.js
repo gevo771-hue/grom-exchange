@@ -7834,6 +7834,24 @@ if (typeof window !== 'undefined' && !gwTwapTickTimer) {
   setTimeout(gwTwapTick, 4000);
 }
 
+/** Return the chainId the UI currently thinks the user is on. Simple
+ *  mode + Advanced chain-chips both flip `.gw-ds-chain.on`. Fallback to
+ *  gwSpState.chainId (Spot Terminal). Returns null if nothing set. */
+function gwGetActiveUiChainId() {
+  try {
+    const chip = document.querySelector('.gw-ds-chain.on');
+    if (chip?.dataset?.cid) {
+      const n = Number(chip.dataset.cid);
+      if (n) return n;
+    }
+  } catch (_) {}
+  try {
+    const sp = window.gwSpState;
+    if (sp?.chainId) return Number(sp.chainId);
+  } catch (_) {}
+  return null;
+}
+
 async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   let provider = gwActiveSigningProvider() || window.gromWallet?.wcProvider || window.ethereum;
   // Use the permissive read-only lookup — Cursor's strict
@@ -7875,7 +7893,32 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
     } catch (_) {}
     throw new Error('Wallet not connected — sign in from the modal that just opened');
   }
-  const chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+  let chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+
+  // === Chain-sync check — if the user picked a token on a different
+  //     chain than the wallet is currently on (Simple mode click on
+  //     'USDT · Arbitrum' while Trust is still on Ethereum mainnet)
+  //     Trust would try to sign the approve on ETH mainnet and demand
+  //     ETH for gas. Ask the wallet to switch first. ===
+  const uiChainId = gwGetActiveUiChainId();
+  if (uiChainId && uiChainId !== chainId) {
+    try {
+      gwToast(`Switching wallet to ${GW_OC_CHAIN_META[uiChainId]?.label || 'chain ' + uiChainId}…`, 'info');
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x' + uiChainId.toString(16) }],
+      });
+      chainId = uiChainId;
+    } catch (e) {
+      const em = String(e?.message || e || '');
+      if (/user rejected|declined/i.test(em)) {
+        throw new Error(`Approve the network switch in your wallet, then hit Swap again`);
+      }
+      const uiLbl  = GW_OC_CHAIN_META[uiChainId]?.label || `chain ${uiChainId}`;
+      const nowLbl = GW_OC_CHAIN_META[chainId]?.label   || `chain ${chainId}`;
+      throw new Error(`Wallet is on ${nowLbl}, but you picked a ${uiLbl} token. Switch your wallet to ${uiLbl} and retry.`);
+    }
+  }
 
   // === Phase 9 hook — if `to` is BTC and user saved a BTC address,
   //     bridge out to Bitcoin via THORchain instead of an EVM swap. ===

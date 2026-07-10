@@ -81,34 +81,170 @@ positions, win-rate) которые должны показываться ТОЛ
 Тогда пометь всё что требует auth: `data-authed-only="1"` — и это никогда
 не мигнёт на дизконнекте.
 
-## 3. Registration flow (Cursor territory)
+## 3. Registration / Auth — ВОПРОС от Гевора
 
-Юзер жалуется на несколько мелочей в регистрации/логине через Privy — я не
-вижу их напрямую, но раз ты владелец `grom-privy.js`, проверь на живом
-grom.exchange:
+Гевор спрашивает: **«зачем нам вообще Email OTP?»** — и он прав. GROM это
+**non-custodial DEX**, юзер подключает свой Trust/Metamask через
+WalletConnect. Email OTP через Privy создаёт **embedded wallet Privy**,
+что:
+- Противоречит модели «твои ключи → твой контроль»
+- Требует довеpять Privy кастодию ключей
+- Дублирует основной wallet-flow → путает юзера
+- Требует поддерживать 2 auth системы параллельно (SIWE + Privy JWT)
 
-- **Email OTP**: приходит письмо мгновенно? Если нет — throttling или
-  DKIM/SPF issue на стороне Privy dashboard.
+**Твоё решение** (реши сам, ты владелец `grom-privy.js`):
+
+**Вариант A — убрать Privy полностью** (моё предложение):
+- Единственный вход = Connect wallet → SIWE подпись → JWT
+- Простая модель, ноль confusion
+- Меньше кода, меньше поверхности атак
+
+**Вариант B — оставить Privy как «Sign in with email» для юзеров без
+кошелька** (создаёт им embedded wallet):
+- Только если есть чёткий сегмент юзеров, которые пришли без кошелька
+- Тогда ГЛАВНАЯ CTA = «Connect Wallet», а «Email» — маленький вторичный
+  вариант в углу
+- Убедись что embedded wallet может делать real swaps на mainnet (не
+  только demo)
+
+Если оставляешь Privy — проверь на живом grom.exchange:
 - **Google OAuth**: `redirect_uri` совпадает с whitelisted? Проверь
   https://dashboard.privy.io/apps/cmobpd4kh006e0cl5zuziu36v/settings
-- **After signup**: user сразу получает JWT и chip обновляется? Или
-  требует ручной F5?
-- **Модалка после OTP submit**: закрывается автоматически? У меня были
-  жалобы что после подтверждения кода модалка висит с пустым инпутом.
+- **After signup**: JWT сразу получается + chip обновляется без F5?
+- **Модалка после OTP**: закрывается автоматически?
 
-## 4. Swap полный audit (ты уже сделал v=20260710ag — спасибо!)
+## 4. Swap — ГЛУБОКИЙ полный аудит (все цепи, все агрегаторы)
 
-Проверено через MCP:
-- ✅ `gwResolveSwapChainId` работает
-- ✅ `gwAggCanExec` фильтрует
-- ✅ `gwFindV2SwapPath` multi-hop
-- ✅ `wallet_switchEthereumChain` убран
-- ✅ Meta-exec logs включены
-- ✅ Approve на Arb приходит правильно (Trust popup показал 0.07\$ комиссии)
+Гевор просит: **ТЫ теперь владеешь свопом целиком, включая
+`grom-wallet.js`**. Он явно разрешил тебе делать surgical edits в моём
+файле. Я останавливаюсь по свопу чтобы не создавать конфликты.
 
-Единственный последний user report — approve popup требует ETH на Arb для
-gas, у юзера 0.00000024 ETH < 0.00000409 нужно. Это НЕ баг — это user
-top-up. Свап логически рабочий.
+**Задача:** пройди полный swap flow end-to-end — Simple + Advanced modes,
+все поддерживаемые сети, все агрегаторы — и подтверди что каждая
+комбинация реально работает на живом grom.exchange.
+
+### 4.1 Матрица which-chains × which-aggregators
+
+Заполни матрицу реальным status после теста котировок + execution:
+
+| Chain | LiFi | Paraswap | KyberSwap | Odos | 0x | CoWSwap | Squid | 1inch | OpenOcean |
+|---|---|---|---|---|---|---|---|---|---|
+| Ethereum (1) | ? | ? | ? | ? | ? | ? | ? | ? | ? |
+| Arbitrum (42161) | ? | ? | ? | ? | ? | — | ? | ? | ? |
+| Optimism (10) | ? | ? | ? | ? | ? | — | ? | ? | ? |
+| Base (8453) | ? | ? | ? | ? | ? | — | ? | ? | ? |
+| Polygon (137) | ? | ? | ? | ? | ? | — | ? | ? | ? |
+| BSC (56) | ? | ? | ? | ? | — | — | ? | ? | ? |
+| Avalanche (43114) | ? | ? | ? | ? | ? | — | ? | ? | ? |
+
+Легенда:
+- ✅ = quote OK + swap выполняется
+- ⚠️ = quote OK но swap fails (укажи причину)
+- ❌ = quote fails (укажи из ответа агрегатора)
+- — = не поддерживается платформой (это нормально)
+
+### 4.2 Quote flow
+
+Проверь каждый агрегатор через `gwGetMetaQuotes`:
+1. Все API ключи ещё живые? (LiFi/Paraswap free, но rate-limits)
+2. Кто-то отдаёт `503 / 429 / CORS` — залоги в консоль и в
+   `window.__gromMetaQuoteErrors`
+3. `gwAggCanExec` правильно фильтрует по chainId? (напр. 0x не работает
+   на BSC — фильтр это ловит и не пытается exec)
+4. **Best quote selection**: сравнение по `toAmount` в BigInt или Number?
+   Если Number — на дорогих токенах (WBTC) будет overflow
+
+### 4.3 Execution flow (самое важное)
+
+**Simple mode:**
+- [ ] Approve идёт на `quote.approvalAddress` того агрегатора чей quote
+  выбран (НЕ хардкод Uniswap!)
+- [ ] `wcProvider.sendTransaction` идёт на правильную цепь (сверить с
+  `gwGetActiveUiChainId()`, не с `wcProvider.chainId`)
+- [ ] Если native → ERC20: правильно wrap? (WETH deposit на Ethereum,
+  на Arb — тоже WETH но другой адрес)
+- [ ] Если ERC20 → ERC20 same chain: approve + swap = 2 подписи
+- [ ] Если cross-chain (Squid, LiFi bridge): approve + bridge +
+  destination message — какой UX юзер видит?
+- [ ] `gwWaitReceipt` polling через public RPC (не через WC) — время
+  на Arb ~2-8с, Base ~2с, ETH ~30с, BSC ~3с, Polygon ~3с
+
+**Advanced mode:**
+- [ ] Кастомный slippage применяется к `amountOutMin`?
+- [ ] Deadline корректный (`Date.now()/1000 + userMinutes*60`)?
+- [ ] Ручной выбор route: если юзер выбрал не-best агрегатор, execution
+  идёт именно через него (а не через best)?
+
+### 4.4 Специфические баги — ЧЕК-ЛИСТ
+
+- [ ] **Fee-on-transfer токены** (PAXG, некоторые мемы): используем
+  `swapExactTokensForTokensSupportingFeeOnTransferTokens`? Или падаем?
+- [ ] **Permit2 (Uniswap V4)**: используется где-нибудь? Или всегда
+  classic approve?
+- [ ] **USDT на Ethereum**: требует `approve(0)` перед новым approve —
+  учтено?
+- [ ] **BNB на BSC** vs **ETH на всём остальном**: native symbol
+  правильно показывается в UI и в quote request?
+- [ ] **Malformed calldata**: если агрегатор вернул `data` без `0x`
+  префикса — не падаем?
+- [ ] **Nonce management**: если юзер быстро жмёт Swap 2 раза подряд —
+  вторая tx получает правильный nonce?
+- [ ] **Slippage revert**: если tx падает on-chain из-за slippage,
+  показываем понятную ошибку («цена уплыла, увеличь slippage») а не
+  raw revert data?
+- [ ] **Insufficient gas token**: если у юзера 0 ETH на Arb но есть USDT
+  — до подписания показать «нужно ETH для газа» а не после reject'а?
+- [ ] **Wrong network**: если Trust на BSC а UI на Arb — показать
+  «Переключи сеть в кошельке» с чёткой инструкцией?
+
+### 4.5 Handoff — можешь трогать grom-wallet.js
+
+Гевор явно разрешил тебе делать surgical edits в:
+- `frontend/public/grom-wallet.js`
+- `frontend/public/index.html` (кроме языкового попапа + переводов
+  которые в `grom-i18n.js`)
+
+Мои guidelines:
+- **Не rewrite** большими кусками — только точечные фиксы
+- **Не трогай** disconnect logic который я только что зафикшал
+  (v=20260710ah, commit 0ed7bc5) — я его протестирую отдельно
+- **Не удаляй** мои guard functions (`gwReadOnlyAddress`,
+  `gwOcConnectedAddress`, `gwGetActiveUiChainId`, `gwRpcTry`,
+  `gwWaitReceipt`) — их зовут отовсюду
+- **Не трогай** `gwMpSlot` pattern для Meta-Portfolio (работает)
+- **Меняй** внутренности `gwOnChainSwapExecInline`,
+  `gwOnChainSwapExecMeta`, `gwGetMetaQuotes`, `gwAggCanExec`,
+  `gwFindV2SwapPath`, `gwEthCall`, `gwAggBuildTxIfNeeded` — это всё
+  swap engine, твоя территория
+
+Если сомневаешься — оставь заметку в этом файле и я гляну.
+
+### 4.6 Testing checklist после правок
+
+Задеплой и подтверди на живом grom.exchange через Trust Wallet (mobile
+via WC):
+- [ ] **Arbitrum**: USDT → USDC swap работает end-to-end
+- [ ] **Base**: ETH → USDC swap работает
+- [ ] **BSC**: BNB → USDT swap работает
+- [ ] **Polygon**: MATIC → USDC swap работает
+- [ ] **Ethereum mainnet**: USDC → DAI (маленький amount, чтобы газ не
+  съел)
+- [ ] **Cross-chain**: USDC (Arb) → USDC (Base) через Squid/LiFi
+- [ ] **Advanced mode**: свап с ручным slippage 1%, deadline 10 min
+- [ ] **Advanced mode**: свап с выбором конкретного агрегатора (не best)
+- [ ] После свапа: balance chip обновляется в течение 5 секунд
+- [ ] После свапа: history запись появляется в Portfolio
+
+### 4.7 Что уже точно работает (не ломай)
+
+Из моих последних правок:
+- ✅ `gwResolveSwapChainId` резолвит правильную цепь по UI chip
+- ✅ `gwAggCanExec` фильтрует агрегаторы по chainId
+- ✅ `gwFindV2SwapPath` — multi-hop через WETH/USDC
+- ✅ `wallet_switchEthereumChain` УБРАН (Trust re-open Connect dialog)
+- ✅ Meta-exec debug logs включены
+- ✅ Approve на Arb приходит правильно (Trust popup показывает $0.07)
+- ✅ Receipt polling 500ms через public RPC
 
 ## 5. Cache-busting стратегия (мета-совет)
 
@@ -124,16 +260,19 @@ top-up. Свап логически рабочий.
 
 ## TL;DR — что от тебя нужно (priority order)
 
-1. **Disconnect reset UX** — слушать `wallet-disconnected`, сбросить всё
-   что показывает stale user data (stats-grid, sidebar widgets)
+1. **Disconnect reset UX** — слушать `wallet-disconnected`, сбросить
+   stats-grid, sidebar widgets, welcome tour
 2. **Cache flash prevention** — inline `<script>` + `<style>` в `<head>`
    с `data-authed-only` pattern
-3. **Registration end-to-end** — проверь Email OTP + Google OAuth + JWT
-   propagation
-4. **(nice-to-have)** Cache-bust automation в deploy.sh
+3. **DEEP SWAP AUDIT** — матрица chain×aggregator, execution flow,
+   специфические баги, testing checklist (см. §4.1-4.7). Можешь трогать
+   grom-wallet.js по guidelines в §4.5
+4. **Auth стратегия** — решить нужен ли Privy Email OTP вообще для DEX
+   (см. §3, вариант A vs B)
+5. **(nice-to-have)** Cache-bust automation в deploy.sh
 
-Я останавливаюсь на своей стороне (grom-wallet.js) и жду твоих правок,
-чтобы не создавать race conditions.
+Я останавливаюсь на своей стороне (grom-wallet.js swap engine, disconnect
+уже готов) и жду твоих правок, чтобы не создавать race conditions.
 
 ---
 

@@ -621,7 +621,12 @@
     });
   }
   function refreshAuthLoginLabel() {
-    try { if (localStorage.getItem('grom_jwt')) return; } catch (_) {}
+    try {
+      if (localStorage.getItem('grom_jwt')) return;
+      var wl = localStorage.getItem('grom_wallet_label') || '';
+      if (/^0x[a-fA-F0-9]{40}$/.test(wl)) return;
+      if (window.GROM_CONN && window.GROM_CONN.connected && window.GROM_CONN.label) return;
+    } catch (_) {}
     var el = document.getElementById('walletLabel');
     if (el && typeof window.t === 'function') el.textContent = window.t('auth_login');
   }

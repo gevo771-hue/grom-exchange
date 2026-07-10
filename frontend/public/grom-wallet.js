@@ -5537,14 +5537,16 @@ async function gwSpRefreshBalance() {
     const cfg = GW_OC_SWAP[chainId];
     if (!cfg) { el.textContent = 'Switch to a supported chain'; return; }
     if (asset === cfg.native) {
-      const hex = await provider.request({ method: 'eth_getBalance', params: [account, 'latest'] });
+      // Route read-only balance query through public RPC — some WC wallets
+      // reject eth_getBalance since it's not in the session methods list.
+      const hex = await gwRpcTry(chainId, 'eth_getBalance', [account, 'latest']);
       const wei = BigInt(hex);
       const eth = Number(wei) / 1e18;
       el.textContent = `Balance: ${eth.toFixed(4)} ${asset}`;
     } else if (cfg.tokens[asset]) {
       // erc20.balanceOf(account) → 0x70a08231 + 32-byte padded account
       const data = '0x70a08231' + account.slice(2).toLowerCase().padStart(64, '0');
-      const hex = await provider.request({ method: 'eth_call', params: [{ to: cfg.tokens[asset], data }, 'latest'] });
+      const hex = await gwRpcTry(chainId, 'eth_call', [{ to: cfg.tokens[asset], data }, 'latest']);
       const dec = cfg.decimals[asset] ?? 18;
       const val = Number(BigInt(hex || '0x0')) / 10 ** dec;
       el.textContent = `Balance: ${val.toFixed(4)} ${asset}`;

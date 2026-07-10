@@ -4355,7 +4355,7 @@ function gwDsSimPickFrom(sym, chainId, availAmt) {
   document.querySelectorAll('.gw-ds-chain.on').forEach(x => x.classList.remove('on'));
   const chip = document.querySelector(`.gw-ds-chain[data-cid="${chainId}"]`);
   if (chip) chip.classList.add('on');
-  // Update amount input in the simple strip
+  currentChainId = chainId;
   const amtEl = document.getElementById('gwDsSimAmt');
   if (amtEl) {
     amtEl.max = availAmt;
@@ -4363,6 +4363,9 @@ function gwDsSimPickFrom(sym, chainId, availAmt) {
     amtEl.placeholder = `Max ${availAmt.toLocaleString('en-US', { maximumFractionDigits: 6 })}`;
     amtEl.focus();
   }
+  const dsAmt = document.getElementById('gwDsAmt');
+  if (amtEl && dsAmt && amtEl.value) dsAmt.value = amtEl.value;
+  try { gwDsRefreshRate(); } catch (_) {}
   gwDsSimRenderTargets(chainId, sym);
 }
 
@@ -5485,10 +5488,10 @@ async function gwBtcSwapExec({ fromChainId, fromSym, amtNum }) {
   const amountIn = BigInt(Math.floor(amtNum * 10 ** inDec));
   if (fromSym !== cfg.native) {
     const spender = quote.estimate?.approvalAddress || quote.transactionRequest.to;
-    const allow = await gwErc20Allowance(provider, inAddr, account, spender);
+    const allow = await gwErc20Allowance(provider, inAddr, account, spender, fromChainId);
     if (allow < amountIn) {
       gwToast('Approve token to THORchain router…', 'info');
-      await gwErc20ApproveMax(provider, inAddr, spender, account);
+      await gwErc20ApproveMax(provider, inAddr, spender, account, fromChainId);
     }
   }
   const outSat = Number(quote.estimate?.toAmount || 0) / 1e8;
@@ -6122,19 +6125,11 @@ function gwDsChainChipsHtml(activeChainId) {
 
 function gwDsChainChipsWire(wrap) {
   wrap.querySelectorAll('.gw-ds-chain[data-cid]').forEach((b) => {
-    b.onclick = async () => {
+    b.onclick = () => {
       const cid = Number(b.dataset.cid);
-      const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
-        ? window.gromWallet.wcProvider
-        : window.ethereum;
-      if (!provider) { gwToast('Connect a wallet first', 'warn'); return; }
-      try {
-        await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: GW_DS_EVM_HEX(cid) }] });
-        gwToast(`Switched to ${GW_DS_CHAINS.find((c) => c.chainId === cid)?.name || 'chain'}`, 'success');
-        setTimeout(() => { try { gwDsRefreshRate(); } catch (_) {} }, 400);
-      } catch (e) {
-        gwToast('Chain switch cancelled or unsupported', 'warn');
-      }
+      wrap.querySelectorAll('.gw-ds-chain[data-cid]').forEach((x) => x.classList.remove('on'));
+      b.classList.add('on');
+      try { gwDsRefreshRate(); } catch (_) {}
     };
   });
   wrap.querySelectorAll('.gw-ds-chain[data-nonevm]').forEach((b) => {
@@ -6662,12 +6657,15 @@ async function gwDsRefreshRate() {
         ? window.gromWallet.wcProvider
         : window.ethereum;
       if (account && provider) {
-        const chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+        let walletChainId = 42161;
+        try { walletChainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16); } catch (_) {}
+        const chainId = gwResolveSwapChainId(walletChainId);
         const quotes = await gwMetaAggQuoteAll({ chainId, fromSym: from, toSym: to, amtNum: amt, account });
         if (quotes.length > 0) {
           // Cache for gwOnChainSwapExec so it doesn't refetch.
           window.__gwLastAggQuotes = { chainId, fromSym: from, toSym: to, amtNum: amt, quotes, at: Date.now() };
-          const winner = quotes[0];
+          const execQuotes = quotes.filter(gwAggCanExec);
+          const winner = execQuotes[0] || quotes[0];
           const outDec = GW_OC_SWAP[chainId]?.decimals?.[to] ?? 18;
           const winnerOut = Number(winner.toAmount) / 10 ** outDec;
           outEl.value = Number(winnerOut.toFixed(8));
@@ -6973,6 +6971,12 @@ async function gwEthCall(provider, to, data, chainIdHint) {
   let chainId = Number(chainIdHint) || null;
   if (!chainId) {
     try {
+      const ui = typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : null;
+      if (ui) chainId = ui;
+    } catch (_) {}
+  }
+  if (!chainId) {
+    try {
       const hex = await provider.request({ method: 'eth_chainId' });
       chainId = parseInt(hex, 16);
     } catch (_) { chainId = currentChainId || 42161; }
@@ -6988,14 +6992,14 @@ async function gwEthCall(provider, to, data, chainIdHint) {
 }
 
 /* getAmountsOut(uint256 amountIn, address[] path) -> uint256[] */
-async function gwGetAmountsOut(provider, router, amountIn, path) {
+async function gwGetAmountsOut(provider, router, amountIn, path, chainId) {
   const selector = '0xd06ca61f';
   // Params: uint256 amountIn, uint256 offset_to_path (0x40), then dynamic array
   const data = selector
     + gwUint256(amountIn)
     + gwUint256(0x40)
     + gwEncodeAddrArray(path, 0);
-  const raw = await gwEthCall(provider, router, data);
+  const raw = await gwEthCall(provider, router, data, chainId);
   // Parse array: skip head (0x20 offset), read length, then N * 32 bytes
   const hex = raw.replace(/^0x/, '');
   const arrayLen = parseInt(hex.slice(64, 128), 16);
@@ -7008,27 +7012,27 @@ async function gwGetAmountsOut(provider, router, amountIn, path) {
 }
 
 /* ERC-20 allowance(owner, spender) -> uint256 */
-async function gwErc20Allowance(provider, token, owner, spender) {
+async function gwErc20Allowance(provider, token, owner, spender, chainId) {
   const data = '0xdd62ed3e' + gwAddr(owner) + gwAddr(spender);
-  const raw = await gwEthCall(provider, token, data);
+  const raw = await gwEthCall(provider, token, data, chainId);
   return BigInt(raw || '0x0');
 }
 
 /* Send: ERC-20 approve(spender, MaxUint256). Waits for receipt. */
-async function gwErc20ApproveMax(provider, token, spender, from) {
+async function gwErc20ApproveMax(provider, token, spender, from, chainId) {
   const MAX = 'f'.repeat(64);
   const data = '0x095ea7b3' + gwAddr(spender) + MAX;
   const hash = await provider.request({
     method: 'eth_sendTransaction',
     params: [{ from, to: token, data, value: '0x0' }],
   });
-  await gwWaitReceipt(provider, hash, 60000, /*isApprove=*/true);
+  await gwWaitReceipt(provider, hash, 60000, true, chainId);
   return hash;
 }
 
-async function gwWaitReceipt(provider, hash, timeoutMs = 60000, isApprove = false) {
+async function gwWaitReceipt(provider, hash, timeoutMs = 60000, isApprove = false, chainIdHint) {
   const start = Date.now();
-  const chainId = Number(currentChainId) || 42161;
+  const chainId = Number(chainIdHint) || Number(currentChainId) || (typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : null) || 42161;
   // Progress toast that updates every second so user knows we're working.
   let tickId = null;
   const showProgress = () => {
@@ -7169,10 +7173,10 @@ async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, p
   // If from is an ERC-20 (not native), approve LiFi's router first.
   if (fromSym !== cfg.native) {
     const spender = quote.estimate?.approvalAddress || tx.to;
-    const allow = await gwErc20Allowance(provider, inAddr, account, spender);
+    const allow = await gwErc20Allowance(provider, inAddr, account, spender, chainId);
     if (allow < amountIn) {
       gwToast('Approve token to LiFi router…', 'info');
-      await gwErc20ApproveMax(provider, inAddr, spender, account);
+      await gwErc20ApproveMax(provider, inAddr, spender, account, chainId);
     }
   }
   const outDec = cfg.decimals[toSym] ?? 18;
@@ -7188,8 +7192,29 @@ async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, p
   }];
   const hash = await provider.request({ method: 'eth_sendTransaction', params });
   gwToast('Submitted · waiting for confirmation…', 'info');
-  await gwWaitReceipt(provider, hash);
+  await gwWaitReceipt(provider, hash, 60000, false, chainId);
   return hash;
+}
+
+/* Try direct + WETH/USDC hub paths for V2 inline fallback. */
+async function gwFindV2SwapPath(provider, cfg, inAddr, outAddr, amountIn, chainId) {
+  const paths = [[inAddr, outAddr]];
+  if (cfg.wrapped && inAddr !== cfg.wrapped && outAddr !== cfg.wrapped) {
+    paths.push([inAddr, cfg.wrapped, outAddr]);
+  }
+  const usdc = cfg.tokens?.USDC;
+  if (usdc && inAddr !== usdc && outAddr !== usdc) {
+    paths.push([inAddr, usdc, outAddr]);
+    if (cfg.wrapped) paths.push([inAddr, cfg.wrapped, usdc, outAddr]);
+  }
+  for (const path of paths) {
+    try {
+      const outs = await gwGetAmountsOut(provider, cfg.router, amountIn.toString(), path, chainId);
+      const expected = outs?.[outs.length - 1];
+      if (typeof expected === 'bigint' && expected > 0n) return { path, expected };
+    } catch (_) {}
+  }
+  return null;
 }
 
 /* =========================================================================
@@ -7401,6 +7426,21 @@ async function gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account }) {
   } catch (_) { return null; }
 }
 
+/** Chain for quotes / eth_call / receipts — UI chip beats stale WC session. */
+function gwResolveSwapChainId(walletChainId) {
+  const ui = typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : null;
+  return Number(ui || walletChainId || currentChainId || 42161);
+}
+
+/** Aggregators we can actually sign (CoW is quote-only / intent-based). */
+function gwAggCanExec(q) {
+  if (!q || typeof q.toAmount !== 'bigint' || q.toAmount <= 0n) return false;
+  if (/cow/i.test(String(q.aggregator || ''))) return false;
+  if (q.transactionRequest?.to && q.transactionRequest?.data) return true;
+  if (q._psPriceRoute || q._ksSummary || q._odosPathId) return true;
+  return false;
+}
+
 async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account }) {
   const jobs = [
     gwAggQuoteLifi({ chainId, fromSym, toSym, amtNum, account }),
@@ -7415,7 +7455,9 @@ async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account }) {
   // with Number (or undefined) in the sort comparator throws 'Cannot mix
   // BigInt and other types, use explicit conversions'.
   const quotes = settled
-    .filter((r) => r.status === 'fulfilled' && r.value && typeof r.value.toAmount === 'bigint')
+    .filter((r) => r.status === 'fulfilled' && r.value
+      && typeof r.value.toAmount === 'bigint'
+      && r.value.toAmount > 0n)
     .map((r) => r.value);
   // Rank by net toAmount (larger is better). BigInt comparison is safe now.
   quotes.sort((a, b) => {
@@ -7456,14 +7498,28 @@ async function gwAggBuildTxIfNeeded(q, { chainId, account }) {
     const r = await fetch(`https://aggregator-api.kyberswap.com/${q._ksSlug}/api/v1/route/build`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ routeSummary: q._ksSummary, sender: q._ksAcc, recipient: q._ksAcc, slippageTolerance: 50 }),
+      body: JSON.stringify({
+        routeSummary: q._ksSummary,
+        sender: q._ksAcc,
+        recipient: q._ksAcc,
+        slippageTolerance: 50,
+        source: 'grom-exchange',
+      }),
     });
-    if (!r.ok) throw new Error(`KyberSwap build ${r.status}`);
+    if (!r.ok) {
+      const errTxt = await r.text().catch(() => '');
+      throw new Error(`KyberSwap build ${r.status}${errTxt ? ': ' + errTxt.slice(0, 120) : ''}`);
+    }
     const j = await r.json();
     const d = j?.data;
     if (!d?.data) throw new Error('KyberSwap build empty');
-    q.transactionRequest = { to: q._ksRouter, data: d.data, value: d.transactionValue || '0x0', gasLimit: d.gas };
-    q.approvalAddress = q._ksRouter;
+    q.transactionRequest = {
+      to: d.routerAddress || q._ksRouter,
+      data: d.data,
+      value: d.transactionValue || '0x0',
+      gasLimit: d.gas ? (typeof d.gas === 'string' ? d.gas : '0x' + Number(d.gas).toString(16)) : undefined,
+    };
+    q.approvalAddress = d.routerAddress || q._ksRouter;
     return q;
   }
   if (q.aggregator === 'Odos') {
@@ -7489,19 +7545,22 @@ async function gwAggBuildTxIfNeeded(q, { chainId, account }) {
  */
 async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, provider, account }) {
   const cfg = GW_OC_SWAP[chainId];
+  if (!cfg) throw new Error(`unsupported chain ${chainId}`);
   const inAddr = fromSym === cfg.native ? cfg.wrapped : cfg.tokens[fromSym];
   const inDec = cfg.decimals[fromSym] ?? 18;
   const amountIn = BigInt(Math.floor(amtNum * 10 ** inDec));
+  currentChainId = chainId;
+  console.log('[GROM] meta-exec start', { agg: quote.aggregator, chainId, fromSym, toSym, amtNum });
   await gwAggBuildTxIfNeeded(quote, { chainId, account });
   const tx = quote.transactionRequest;
   if (!tx?.to || !tx?.data) throw new Error(`${quote.aggregator}: no tx`);
-  // Approve if needed
   if (fromSym !== cfg.native) {
     const spender = quote.approvalAddress || tx.to;
-    const allow = await gwErc20Allowance(provider, inAddr, account, spender);
+    const allow = await gwErc20Allowance(provider, inAddr, account, spender, chainId);
+    console.log('[GROM] meta-exec allowance', { token: inAddr, spender, allow: allow.toString(), need: amountIn.toString() });
     if (allow < amountIn) {
       gwToast(`Approve ${fromSym} to ${quote.aggregator} router…`, 'info');
-      await gwErc20ApproveMax(provider, inAddr, spender, account);
+      await gwErc20ApproveMax(provider, inAddr, spender, account, chainId);
     }
   }
   const outDec = cfg.decimals[toSym] ?? 18;
@@ -7515,7 +7574,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
     ...(tx.gasLimit ? { gas: tx.gasLimit } : {}),
   }] });
   gwToast('Submitted · waiting for confirmation…', 'info');
-  await gwWaitReceipt(provider, hash);
+  await gwWaitReceipt(provider, hash, 60000, false, chainId);
   return hash;
 }
 
@@ -7948,7 +8007,11 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   const uiChainId = gwGetActiveUiChainId();
   let walletChainId = 1;
   try { walletChainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16); } catch (_) {}
-  const chainId = uiChainId || walletChainId;
+  const chainId = gwResolveSwapChainId(walletChainId);
+  currentChainId = chainId;
+  if (uiChainId && walletChainId && uiChainId !== walletChainId) {
+    console.warn('[GROM] swap chain: UI', uiChainId, '≠ wallet', walletChainId, '— using UI for quotes/exec');
+  }
 
   // === Phase 9 hook — if `to` is BTC and user saved a BTC address,
   //     bridge out to Bitcoin via THORchain instead of an EVM swap. ===
@@ -7965,8 +8028,9 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   const cached = window.__gwLastAggQuotes;
   const cacheOk = cached && cached.chainId === chainId && cached.fromSym === fromSym && cached.toSym === toSym && cached.amtNum === amtNum && (Date.now() - cached.at) < 15_000;
   const quotes = cacheOk ? cached.quotes : await gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account });
-  console.log('[GROM] meta-agg quotes:', quotes.map((q) => ({ agg: q.aggregator, toAmount: q.toAmount.toString(), gasUsd: q.gasUsd })));
-  for (const q of quotes) {
+  const execQuotes = quotes.filter(gwAggCanExec);
+  console.log('[GROM] meta-agg quotes:', quotes.map((q) => ({ agg: q.aggregator, toAmount: q.toAmount.toString(), gasUsd: q.gasUsd, exec: gwAggCanExec(q) })));
+  for (const q of execQuotes) {
     try {
       return await gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote: q, provider, account });
     } catch (e) {
@@ -7995,18 +8059,11 @@ async function gwOnChainSwapExecInline({ fromSym, toSym, amtNum, provider, accou
   const inDec  = cfg.decimals[fromSym] ?? 18;
   const outDec = cfg.decimals[toSym]   ?? 18;
   const amountIn = BigInt(Math.floor(amtNum * 10 ** inDec));
-  const path = [inAddr, outAddr];
-  // Read expected out & compute minOut (0.5% slippage).
-  // gwGetAmountsOut can return [] if the DEX has no direct pool for
-  // fromSym → toSym on this chain (e.g. SushiSwap on Arbitrum doesn't
-  // route USDT/USDC directly, needs a WETH hop). Guard the result so
-  // we don't multiply undefined * BigInt (which throws 'Cannot mix
-  // BigInt and other types').
-  const outs = await gwGetAmountsOut(provider, cfg.router, amountIn.toString(), path);
-  const expected = outs?.[outs?.length - 1];
-  if (typeof expected !== 'bigint' || expected === 0n) {
-    throw new Error(`No direct ${fromSym} → ${toSym} pool on ${dexLabel}. Try USDC or WETH as an intermediary.`);
+  const route = await gwFindV2SwapPath(provider, cfg, inAddr, outAddr, amountIn, chainId);
+  if (!route) {
+    throw new Error(`No ${fromSym} → ${toSym} route on ${dexLabel}. Meta-aggregators failed — try USDC or WETH as intermediate.`);
   }
+  const { path, expected } = route;
   const minOut = (expected * 995n) / 1000n;
   const deadline = Math.floor(Date.now() / 1000) + 20 * 60;
 
@@ -8024,8 +8081,8 @@ async function gwOnChainSwapExecInline({ fromSym, toSym, amtNum, provider, accou
     tx = { from: account, to: cfg.router, data, value: '0x' + amountIn.toString(16) };
   } else if (toSym === cfg.native) {
     // Need approve
-    const allow = await gwErc20Allowance(provider, inAddr, account, cfg.router);
-    if (allow < amountIn) await gwErc20ApproveMax(provider, inAddr, cfg.router, account);
+    const allow = await gwErc20Allowance(provider, inAddr, account, cfg.router, chainId);
+    if (allow < amountIn) await gwErc20ApproveMax(provider, inAddr, cfg.router, account, chainId);
     // swapExactTokensForETH(amountIn, minOut, path, to, deadline) — 0x18cbafe5
     const data = '0x18cbafe5'
       + gwUint256(amountIn.toString())
@@ -8037,8 +8094,8 @@ async function gwOnChainSwapExecInline({ fromSym, toSym, amtNum, provider, accou
     tx = { from: account, to: cfg.router, data, value: '0x0' };
   } else {
     // token-token: approve + swapExactTokensForTokens — 0x38ed1739
-    const allow = await gwErc20Allowance(provider, inAddr, account, cfg.router);
-    if (allow < amountIn) await gwErc20ApproveMax(provider, inAddr, cfg.router, account);
+    const allow = await gwErc20Allowance(provider, inAddr, account, cfg.router, chainId);
+    if (allow < amountIn) await gwErc20ApproveMax(provider, inAddr, cfg.router, account, chainId);
     const data = '0x38ed1739'
       + gwUint256(amountIn.toString())
       + gwUint256(minOut.toString())
@@ -8051,7 +8108,7 @@ async function gwOnChainSwapExecInline({ fromSym, toSym, amtNum, provider, accou
 
   const hash = await provider.request({ method: 'eth_sendTransaction', params: [tx] });
   gwToast('Submitted · waiting for confirmation…', 'info');
-  await gwWaitReceipt(provider, hash);
+  await gwWaitReceipt(provider, hash, 60000, false, chainId);
   return hash;
 }
 

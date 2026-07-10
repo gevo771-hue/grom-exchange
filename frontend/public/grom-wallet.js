@@ -241,11 +241,11 @@ function gwShowWcModal(walletKey, wcUri, opts) {
   const backBtn = modal.querySelector('.gw-wc-back');
   if (backBtn) backBtn.style.display = '';
   if (mobile) {
-    lead.textContent = 'Confirm the connection in ' + cfg.label;
+    lead.textContent = 'Подтверди подключение в ' + cfg.label;
     qrWrap.style.display = 'none';
-    openBtn.textContent = 'Open ' + cfg.label;
+    openBtn.textContent = 'Открыть ' + cfg.label;
     openBtn.style.display = '';
-    hint.textContent = 'Tap to open the wallet app directly — stay on this page to finish signing in.';
+    hint.textContent = 'После подтверждения в кошельке вернись в браузер — не закрывай эту вкладку.';
   } else {
     lead.textContent = '';
     qrWrap.style.display = '';
@@ -255,6 +255,10 @@ function gwShowWcModal(walletKey, wcUri, opts) {
   }
   modal.style.display = 'flex';
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
+  // Auto-open wallet on mobile — user already tapped a wallet row (gesture).
+  if (mobile && wcUri) {
+    setTimeout(() => openWalletWcApp(walletKey, wcUri), 350);
+  }
 }
 function openWalletWcApp(walletKey, wcUri) {
   const cfg = gwWalletCfg(walletKey) || GW_WALLET_WC.generic;
@@ -631,6 +635,9 @@ async function connectViaEthereumProvider(walletKey, uriHandler) {
 async function finalizeWcConnection(provider, account) {
   window.__gromConnecting = true;
   try {
+    if (isMobileUA()) {
+      try { gwToast('Вернись в браузер и подпиши сообщение в кошельке для входа', 'info'); } catch (_) {}
+    }
     await authenticateWithSIWE(account, provider);
     updateChip(account);
   } catch (err) {
@@ -640,6 +647,55 @@ async function finalizeWcConnection(provider, account) {
     window.__gromConnecting = false;
   }
   return account;
+}
+
+/** Pending SignClient state — resume WC after iOS app-switch. */
+let _gwMobileWcState = null;
+let _gwMobileWcResolving = false;
+function gwClearMobileWcState() { _gwMobileWcState = null; }
+
+async function gwTryResumeMobileWc() {
+  if (_gwMobileWcResolving) return false;
+  const st = _gwMobileWcState;
+  if (!st?.client || !window.__gromConnecting) return false;
+  if (Date.now() - st.startedAt > 180000) return false;
+  _gwMobileWcResolving = true;
+  try {
+    const sessions = (st.client.session.getAll() || []).filter(
+      (s) => s?.active !== false && s?.namespaces?.eip155?.accounts?.length
+    );
+    if (!sessions.length) return false;
+    sessions.sort((a, b) => (Number(b?.expiry) || 0) - (Number(a?.expiry) || 0));
+    const session = sessions[0];
+    const provider = buildSignClientEip1193(st.client, session);
+    wcProvider = provider;
+    wcRecommendedForKey = st.walletKey;
+    provider.on('accountsChanged', (accs) => updateChip(accs?.[0] || null));
+    provider.on('disconnect', () => updateChip(null));
+    const acc = provider.accounts?.[0];
+    if (!acc) return false;
+    gwHideWcModalOnly();
+    gwClearWcPending();
+    gwClearMobileWcState();
+    await finalizeWcConnection(provider, acc);
+    return true;
+  } catch (e) {
+    console.log('[GROM] mobile WC resume:', e?.message || e);
+    return false;
+  } finally {
+    _gwMobileWcResolving = false;
+  }
+}
+
+function gwInstallMobileWcHandlers() {
+  if (gwInstallMobileWcHandlers._done) return;
+  gwInstallMobileWcHandlers._done = true;
+  const kick = () => { setTimeout(() => { gwTryResumeMobileWc(); }, 600); };
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) kick();
+  });
+  window.addEventListener('pageshow', (ev) => { if (ev.persisted) kick(); });
+  window.addEventListener('focus', kick);
 }
 /** @deprecated */
 async function connectTrustViaEthereumProvider(uriHandler) {
@@ -685,7 +741,9 @@ function gwSiweFailToast(err) {
     rawMsg.includes('denied') ||
     err?.code === 4001 || err?.code === -32000;
   const msg = rejected
-    ? 'Sign the message in your wallet to finish signing in.'
+    ? (isMobileUA()
+      ? 'Подпиши сообщение в кошельке (открой Trust) — без подписи вход не завершится.'
+      : 'Sign the message in your wallet to finish signing in.')
     : 'Sign-in failed: ' + (err?.message || 'signature not verified');
   try { gwToast(msg, rejected ? 'warn' : 'error'); } catch (_) {}
 }
@@ -747,7 +805,12 @@ const GW_WALLET_WC = {
     label: 'Trust Wallet',
     icon: '/assets/wallets/trust.svg',
     nativeScheme: 'trust://',
-    mobileScheme: (uri) => 'trust://wc?uri=' + encodeURIComponent(uri),
+    mobileScheme: (uri) => {
+      const ua = navigator.userAgent || '';
+      // iOS Safari opens Trust more reliably via universal link than trust://
+      if (/iPhone|iPad|iPod/i.test(ua)) return trustWcUniversalLink(uri);
+      return trustWcDeepLink(uri);
+    },
     desktopQrLink: (uri) => 'https://link.trustwallet.com/wc?uri=' + encodeURIComponent(uri),
     installUrl: 'https://trustwallet.com/download',
     injectCheck: resolveTrustProvider,
@@ -1571,6 +1634,8 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
   if (!cfg) throw new Error('Unknown wallet: ' + walletKey);
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
 
+  try { localStorage.removeItem('grom:logged_out'); } catch (_) {}
+  gwInstallMobileWcHandlers();
   window.__gromConnecting = true;
   gwAbortPendingWc();
   gwSetWcFlowActive(true);
@@ -1592,7 +1657,11 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
     const { uri, approval } = await client.connect(standardWcNamespaces());
     if (!uri) throw new Error('Could not start ' + cfg.label + ' session');
 
+    _gwMobileWcState = { walletKey, client, uri, startedAt: Date.now() };
     gwShowWcModal(walletKey, uri, { mobile: isMobileUA(), fromExplorer: !!opts?.fromExplorer });
+    if (isMobileUA()) {
+      try { gwToast('Подтверди в ' + cfg.label + ', затем вернись в браузер', 'info'); } catch (_) {}
+    }
 
     const session = await Promise.race([
       approval(),
@@ -1614,16 +1683,19 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
     if (!accs?.length) throw new Error('No accounts returned');
     gwHideWcModalOnly();
     gwClearWcPending();
+    gwClearMobileWcState();
     return await finalizeWcConnection(wcProvider, accs[0]);
   } catch (err) {
     gwClearWcPending();
     gwHideWcModalOnly();
+    gwClearMobileWcState();
     throw err;
   } finally {
     if (_wcPendingKillTimer) { clearInterval(_wcPendingKillTimer); _wcPendingKillTimer = null; }
     gwSetWcFlowActive(false);
     _wcPendingReject = null;
     window.__gromConnecting = false;
+    gwClearMobileWcState();
   }
 }
 

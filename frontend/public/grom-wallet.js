@@ -2985,8 +2985,18 @@ async function gwMpFetchXstocks() {
   return { usd: 0, has: false };
 }
 
+/** RU plural helper: 1 → single, 2-4 → few, 5+/0 → many. */
+function gwMpPlural(n, t, key) {
+  n = Math.abs(Number(n) || 0);
+  if (!t.plurals || !t.plurals[key]) return t[key];
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return t.plurals[key][0];
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return t.plurals[key][1];
+  return t.plurals[key][2];
+}
 const GW_MP_TR = {
-  ru: { eyebrow: 'МЕТА-ПОРТФЕЛЬ', badge: 'ALL-IN-ONE', sub: 'Всё что у тебя есть в GROM — в одном месте', c1: 'Торговый счёт', c2: 'On-chain', c3: 'Прогнозы', c4: 'Акции', assets: 'активов', chains: 'сетей', posN: 'позиций', empty: 'Пока пусто — подключи кошелёк или пополни счёт', a1: 'Пополнить', a2: 'Свап', a3: 'Обновить', loading: 'Загружаем портфель…' },
+  ru: { eyebrow: 'МЕТА-ПОРТФЕЛЬ', badge: 'ALL-IN-ONE', sub: 'Всё что у тебя есть в GROM — в одном месте', c1: 'Торговый счёт', c2: 'On-chain', c3: 'Прогнозы', c4: 'Акции', assets: 'активов', chains: 'сетей', posN: 'позиций', empty: 'Пока пусто — подключи кошелёк или пополни счёт', a1: 'Пополнить', a2: 'Свап', a3: 'Обновить', loading: 'Загружаем портфель…',
+       plurals: { chains: ['сеть', 'сети', 'сетей'], assets: ['актив', 'актива', 'активов'], posN: ['позиция', 'позиции', 'позиций'] } },
   en: { eyebrow: 'META-PORTFOLIO', badge: 'ALL-IN-ONE', sub: 'Everything you own on GROM — in one place', c1: 'Trading account', c2: 'On-chain', c3: 'Predictions', c4: 'Stocks', assets: 'assets', chains: 'chains', posN: 'positions', empty: "Nothing yet — connect a wallet or top up", a1: 'Deposit', a2: 'Swap', a3: 'Refresh', loading: 'Loading portfolio…' },
   es: { eyebrow: 'META-PORTFOLIO', badge: 'ALL-IN-ONE', sub: 'Todo lo tuyo en GROM — en un lugar', c1: 'Cuenta trading', c2: 'On-chain', c3: 'Predicciones', c4: 'Acciones', assets: 'activos', chains: 'cadenas', posN: 'posiciones', empty: 'Nada aún — conecta una cartera', a1: 'Depositar', a2: 'Swap', a3: 'Refrescar', loading: 'Cargando…' },
   ar: { eyebrow: 'المحفظة الشاملة', badge: 'كل شيء', sub: 'كل ما تملك في GROM في مكان واحد', c1: 'حساب التداول', c2: 'على السلسلة', c3: 'التنبؤات', c4: 'الأسهم', assets: 'أصول', chains: 'شبكات', posN: 'مراكز', empty: 'لا شيء بعد', a1: 'إيداع', a2: 'مبادلة', a3: 'تحديث', loading: 'جارٍ التحميل…' },
@@ -3089,10 +3099,10 @@ async function gwRenderMetaPortfolio() {
       ${barSpan('xstocks',   xst.usd,  '#f5b94d')}
     </div>`}
     ${isEmpty ? '' : `<div class="gw-mp-cats">
-      ${cat('custodial', t.c1, cust.usd, cust.assetsN ? `${cust.assetsN} ${t.assets}` : '—')}
-      ${cat('onchain',   t.c2, onch.usd, onch.chainsN ? `${onch.chainsN} ${t.chains}` : '—')}
-      ${cat('predict',   t.c3, pred.usd, pred.positionsN ? `${pred.positionsN} ${t.posN}` : '—')}
-      ${cat('xstocks',   t.c4, xst.usd,  xst.positionsN ? `${xst.positionsN} ${t.posN}` : '—')}
+      ${cat('custodial', t.c1, cust.usd, cust.assetsN ? `${cust.assetsN} ${gwMpPlural(cust.assetsN, t, 'assets')}` : '—')}
+      ${cat('onchain',   t.c2, onch.usd, onch.chainsN ? `${onch.chainsN} ${gwMpPlural(onch.chainsN, t, 'chains')}` : '—')}
+      ${cat('predict',   t.c3, pred.usd, pred.positionsN ? `${pred.positionsN} ${gwMpPlural(pred.positionsN, t, 'posN')}` : '—')}
+      ${cat('xstocks',   t.c4, xst.usd,  xst.positionsN ? `${xst.positionsN} ${gwMpPlural(xst.positionsN, t, 'posN')}` : '—')}
     </div>`}
     <div class="gw-mp-actions">
       <button class="gw-mp-btn primary" id="gwMpDeposit">+ ${t.a1}</button>
@@ -8521,23 +8531,38 @@ async function gwRenderTrending() {
   list.querySelectorAll('.gw-tr-row').forEach((el) => {
     el.onclick = () => {
       const sym = el.dataset.sym;
+      const chain = el.dataset.chain || '';
+      const addr = el.dataset.addr || '';
       const meta = {
-        sym,
-        chain: el.dataset.chain,
-        tokenAddress: el.dataset.addr,
+        sym, chain, tokenAddress: addr,
         name: el.querySelector('.name')?.textContent || sym,
         img: el.querySelector('img')?.src || '',
       };
-      gwDsPickToken(sym, 'to', meta);
-      const swap = document.querySelector('.gw-ds-wrap');
-      if (swap) {
-        swap.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        swap.style.outline = '2px solid rgba(93,213,255,0.7)';
-        swap.style.outlineOffset = '4px';
-        swap.style.borderRadius = '20px';
-        setTimeout(() => { swap.style.outline = 'none'; }, 1600);
+      // Was this token in our catalogue BEFORE the click? (gwDsPickToken
+      // will inject it, so we check first.)
+      const wasKnown = !!GW_DS_ASSETS.find((a) => a.sym === sym);
+      const supportedChain = !!GW_DX_CHAIN_TO_NUM[chain.toLowerCase()];
+      if (wasKnown && supportedChain) {
+        gwDsPickToken(sym, 'to', meta);
+        const swap = document.querySelector('.gw-ds-wrap');
+        if (swap) {
+          swap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          swap.style.outline = '2px solid rgba(93,213,255,0.7)';
+          swap.style.outlineOffset = '4px';
+          swap.style.borderRadius = '20px';
+          setTimeout(() => { swap.style.outline = 'none'; }, 1600);
+        }
+        try { gwToast(`Loaded ${sym} in Instant Swap`, 'success'); } catch (_) {}
+      } else {
+        // Fresh meme / unsupported chain (Solana / Sui etc). LiFi has no
+        // route — send the user directly to DexScreener where they can
+        // trade the token on its native DEX.
+        const dsUrl = addr && chain
+          ? `https://dexscreener.com/${chain}/${addr}`
+          : `https://dexscreener.com/search?q=${encodeURIComponent(sym)}`;
+        window.open(dsUrl, '_blank', 'noopener,noreferrer');
+        try { gwToast(`Opening ${sym} on DexScreener — trade on its native DEX`, 'info'); } catch (_) {}
       }
-      try { gwToast(`Loaded ${sym} in Instant Swap`, 'success'); } catch (_) {}
     };
   });
 }
@@ -8868,6 +8893,31 @@ function gwInjectCexCleanupCss() {
   document.head.appendChild(s);
 }
 
+/** Dash-banner Spot text swap: Cursor's copy calls out CEX (365 pairs +
+ *  Binance/Kraken/Coinbase liquidity). Replace with DEX language while
+ *  keeping the same DOM nodes (i18n compatible — we only touch text). */
+const GW_DASH_TEXT_SUBS = [
+  { from: /365\s*(крипто-?пар|crypto\s*pairs?)/gi, to: '10 000+ токенов · любая сеть' },
+  { from: /Ликвидность\s+Binance\s*·\s*Kraken\s*·\s*Coinbase/gi, to: 'Meta-aggregator: LiFi + CoWSwap + Squid + Kyber' },
+  { from: /Binance\s*·\s*Kraken\s*·\s*Coinbase/gi, to: 'LiFi · CoWSwap · Squid · Kyber' },
+  { from: /On-chain\s*свопы\s*доступны\./gi, to: 'Non-custodial · подпись в кошельке.' },
+  { from: /On-chain\s*swaps\s*available\./gi, to: 'Non-custodial · sign in wallet.' },
+];
+function gwPatchDashBannerText() {
+  const spot = document.querySelector('[data-i18n="dash_banner_spot_h"], [data-i18n="dash_banner_spot_p"]');
+  const scope = spot?.closest('.dash-banners-wrap') || document.querySelector('.dash-banners-wrap');
+  if (!scope) return;
+  scope.querySelectorAll('h3, p, .banner-eyebrow, .banner-cta, span, div').forEach((el) => {
+    // Text-only leaves. Skip if it has element children.
+    if (el.children.length && el.querySelectorAll('h3, p, span, div, strong, b').length) return;
+    const raw = el.textContent;
+    if (!raw) return;
+    let out = raw;
+    for (const { from, to } of GW_DASH_TEXT_SUBS) out = out.replace(from, to);
+    if (out !== raw) el.textContent = out;
+  });
+}
+
 function gwSetupCexCleanup() {
   gwInjectCexCleanupCss();
   // Belt-and-suspenders: also match by visible text (Cursor's markup uses
@@ -8896,10 +8946,12 @@ function gwSetupCexCleanup() {
     });
   };
   hideDeposit();
-  const debounced = gwDebounce(hideDeposit, 150);
+  gwPatchDashBannerText();
+  const debounced = gwDebounce(() => { hideDeposit(); gwPatchDashBannerText(); }, 150);
   const obs = new MutationObserver(() => debounced());
   obs.observe(document.body, { childList: true, subtree: true });
   window.addEventListener('hashchange', debounced);
+  window.addEventListener('grom:lang-change', debounced);
 
   // Guard: on wallet/referral route, close any spontaneously-opened walletModal.
   const closeDepositIfStrayed = () => {

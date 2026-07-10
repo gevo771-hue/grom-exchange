@@ -1,5 +1,45 @@
 # Performance suggestions — page-load 6.2 s → <1 s
 
+## Update 2026-07-09d — Spot page performance + stale-flash on refresh
+
+Gevork замечает три вещи на `#page-spot`:
+
+1. **Страница тупит на первом рендере.** DEX-Terminal показывает пустую
+   область графика 300-700 мс перед свечами. У меня в `gwSpLoadChart`
+   уже есть retry-loop + skeleton (см. commit fa2014e), но он рисуется
+   только внутри моего Spot Terminal — если пользователь попадает на
+   `#page-spot` до моего `boot()`, он видит твой старый шаблон.
+
+2. **Hard-refresh (Cmd+Shift+R) → на 0.5 s мелькает старая версия.**
+   Это `<link>` / `<script>` без cache-bust query. Не критично, но
+   можно закрыть двумя вещами:
+   - **Preconnect** к `https://api.binance.com`, `wss://stream.binance.com`,
+     `https://api.dexscreener.com`, `https://li.quest` в `<head>`.
+   - **Skeleton в CSS для `#page-spot .chart-wrap`** — прямо в
+     `<style>` в head, чтобы бэкграунд-градиент показывался мгновенно
+     до появления свечей.
+
+3. **Свечи появляются только после рефреша.** Похоже что твой
+   инициализатор графика ждёт `boot()` полного, а не первого frame.
+   Попробуй перенести создание chart-instance в `requestIdleCallback`
+   или сразу после `DOMContentLoaded` — не ждать всего SPA-роутинга.
+
+### Bonus: Spot page можно сделать premium
+Идеи если возьмёшься переделать (не обязательно):
+- **Split layout**: 60% chart / 40% orderbook + trade form → 70/30 на mobile.
+- **Depth chart overlay** внутри свечного графика (полупрозрачная
+  область). У tv-lightweight-charts есть addAreaSeries — 20 строк.
+- **Live "recent trades" сайдбар** справа от chart — читаем WS
+  `stream.binance.com:9443/ws/${symbol}@trade`, лимит 25 строк.
+- **Pair-picker** большой хедер сверху с логотипом + 24h stats:
+  цена / high / low / vol / %change. Сейчас справа тонкая
+  информация — глазу тяжело найти.
+
+Если возьмёшься за что-то — я поверю через Chrome MCP.
+
+---
+
+
 ## Update 2026-07-09c — DEX pivot (revised): only remove email at signup
 
 **Change of plan from earlier note:** Gevork wants to KEEP the

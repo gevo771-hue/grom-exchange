@@ -630,9 +630,16 @@ async function connectViaEthereumProvider(walletKey, uriHandler) {
   return { provider: p, account: accs[0] };
 }
 async function finalizeWcConnection(provider, account) {
-  updateChip(account);
-  try { await authenticateWithSIWE(account, provider); }
-  catch (err) { gwSiweFailToast(err); throw err; }
+  window.__gromConnecting = true;
+  try {
+    await authenticateWithSIWE(account, provider);
+    updateChip(account);
+  } catch (err) {
+    gwSiweFailToast(err);
+    throw err;
+  } finally {
+    window.__gromConnecting = false;
+  }
   return account;
 }
 /** @deprecated */
@@ -651,17 +658,21 @@ function isCoinbaseProvider(p) {
 
 async function connectWithProvider(provider, label) {
   if (!provider?.request) throw new Error(label + ' provider unavailable');
-  const accounts = await provider.request({ method: 'eth_requestAccounts' });
-  if (!accounts?.length) throw new Error('User rejected');
-  provider.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
-  provider.on?.('chainChanged', (hex) => { currentChainId = parseInt(hex, 16); });
+  window.__gromConnecting = true;
   try {
+    const accounts = await provider.request({ method: 'eth_requestAccounts' });
+    if (!accounts?.length) throw new Error('User rejected');
+    provider.on?.('accountsChanged', (accs) => updateChip(accs[0] || null));
+    provider.on?.('chainChanged', (hex) => { currentChainId = parseInt(hex, 16); });
     await authenticateWithSIWE(accounts[0], provider);
+    updateChip(accounts[0]);
+    return accounts[0];
   } catch (err) {
     gwSiweFailToast(err);
     throw err;
+  } finally {
+    window.__gromConnecting = false;
   }
-  return accounts[0];
 }
 
 /* Show a friendly, actionable toast when SIWE fails. Called by all wallet
@@ -1175,16 +1186,53 @@ function gwHasInjectedEthAddress() {
   return false;
 }
 
+function gwJwtValid() {
+  try {
+    const jwt = localStorage.getItem('grom_jwt') || '';
+    return !!(jwt && jwt.split('.').length === 3
+      && jwt !== 'demo-session' && jwt !== 'privy-session');
+  } catch (_) {}
+  return false;
+}
+
+function gwAuthPurgeBlocked() {
+  if (window.__gromConnecting) return true;
+  if (document.documentElement.classList.contains('gw-wc-flow')) return true;
+  if (document.getElementById('gwWcModal')?.style.display === 'flex') return true;
+  if (document.getElementById('gwMoreWalletsModal')?.style.display === 'flex') return true;
+  return false;
+}
+
+function gwHasLiveWalletSession() {
+  if (gwHasPersistedWcSession()) return true;
+  if (gwHasInjectedEthAddress()) return true;
+  try {
+    if (currentAccount && /^0x[a-fA-F0-9]{40}$/i.test(currentAccount)) return true;
+    if (wcProvider?.accounts?.length) return true;
+    if (window.gromWallet?.wcProvider?.accounts?.length) return true;
+  } catch (_) {}
+  return false;
+}
+
+/** Wallet chip may show connected address only when signing is actually possible. */
+function gwIsWalletUiConnected() {
+  if (window.__gromConnecting) return true;
+  if (!gwHasLiveWalletSession()) return false;
+  let label = '';
+  try { label = localStorage.getItem('grom_wallet_label') || ''; } catch (_) {}
+  if (/^0x[a-fA-F0-9]{40}$/i.test(label)) return true;
+  if (currentAccount && /^0x[a-fA-F0-9]{40}$/i.test(currentAccount)) return true;
+  if (window.GROM_CONN?.label && /^0x[a-fA-F0-9]{40}$/i.test(window.GROM_CONN.label)) return true;
+  return false;
+}
+window.gwIsWalletUiConnected = gwIsWalletUiConnected;
+
 /** Saved 0x label with no WC session and no injected extension — chip is a lie. */
 function gwIsOrphanWalletLabel(label) {
+  if (gwAuthPurgeBlocked()) return false;
   const addr = String(label || '').trim();
   if (!/^0x[a-fA-F0-9]{40}$/i.test(addr)) return false;
-  if (gwHasPersistedWcSession()) return false;
-  if (gwHasInjectedEthAddress()) return false;
-  try {
-    if (wcProvider?.accounts?.length) return false;
-  } catch (_) {}
-  return true;
+  return !gwHasLiveWalletSession();
 }
 
 function gwIsOrphanWalletChip() {
@@ -1212,7 +1260,6 @@ function gwReconcileOrphanWalletChip(reason) {
     ? window.gromSignInLabel()
     : 'Connect wallet';
   if (typeof window.setWalletLabel === 'function') window.setWalletLabel(signIn);
-  if (typeof window.updateAuthUi === 'function') window.updateAuthUi();
   try {
     document.dispatchEvent(new CustomEvent('grom:wallet-disconnected'));
   } catch (_) {}
@@ -1221,48 +1268,58 @@ function gwReconcileOrphanWalletChip(reason) {
 }
 window.gwReconcileOrphanWalletChip = gwReconcileOrphanWalletChip;
 
-function gwHasLiveWalletSession() {
-  if (gwHasPersistedWcSession()) return true;
-  if (gwHasInjectedEthAddress()) return true;
-  try {
-    if (wcProvider?.accounts?.length) return true;
-    if (window.gromWallet?.wcProvider?.accounts?.length) return true;
-  } catch (_) {}
-  return false;
-}
-
-/** JWT + wallet label without live WC / injected provider — stale SIWE session. */
+/** Clear stale wallet UI when label/JWT outlived WC session. Never during active connect. */
 function gwPurgeStaleWalletAuth(reason) {
-  let jwt = '';
-  try { jwt = localStorage.getItem('grom_jwt') || ''; } catch (_) {}
-  const jwtValid = jwt && jwt.split('.').length === 3
-    && jwt !== 'demo-session' && jwt !== 'privy-session';
+  if (gwAuthPurgeBlocked()) return false;
+
   let label = '';
   try { label = localStorage.getItem('grom_wallet_label') || ''; } catch (_) {}
   const isAddr = /^0x[a-fA-F0-9]{40}$/i.test(label);
-  const hasLive = gwHasLiveWalletSession();
+  if (!isAddr) return false;
 
-  if (isAddr && !hasLive) {
-    if (jwtValid) try { localStorage.removeItem('grom_jwt'); } catch (_) {}
-    try { localStorage.removeItem('grom_wallet_label'); } catch (_) {}
-    currentAccount = null;
-    if (window.GROM_CONN) {
-      window.GROM_CONN.connected = false;
-      window.GROM_CONN.label = '';
-      window.GROM_CONN.method = '';
-    }
-    const signIn = (typeof window.gromSignInLabel === 'function')
-      ? window.gromSignInLabel()
-      : 'Connect wallet';
-    if (typeof window.setWalletLabel === 'function') window.setWalletLabel(signIn);
-    if (typeof window.updateAuthUi === 'function') window.updateAuthUi();
-    try { document.dispatchEvent(new CustomEvent('grom:wallet-disconnected')); } catch (_) {}
-    console.log('[GROM] purged stale wallet auth' + (reason ? ' (' + reason + ')' : ''));
-    return true;
+  // Persisted WC keys → warm-restore will reconnect; don't purge.
+  if (gwHasPersistedWcSession()) return false;
+  if (gwHasLiveWalletSession()) return false;
+
+  const jwtValid = gwJwtValid();
+  try { localStorage.removeItem('grom_wallet_label'); } catch (_) {}
+  if (jwtValid) try { localStorage.removeItem('grom_jwt'); } catch (_) {}
+  currentAccount = null;
+  if (window.GROM_CONN) {
+    window.GROM_CONN.connected = false;
+    window.GROM_CONN.label = '';
+    window.GROM_CONN.method = '';
   }
-  return false;
+  const signIn = (typeof window.gromSignInLabel === 'function')
+    ? window.gromSignInLabel()
+    : 'Connect wallet';
+  if (typeof window.setWalletLabel === 'function') window.setWalletLabel(signIn);
+  try { document.dispatchEvent(new CustomEvent('grom:wallet-disconnected')); } catch (_) {}
+  console.log('[GROM] purged stale wallet auth' + (reason ? ' (' + reason + ')' : ''));
+  return true;
 }
 window.gwPurgeStaleWalletAuth = gwPurgeStaleWalletAuth;
+
+async function gwRestorePersistedWcSession() {
+  if (!gwHasPersistedWcSession()) return null;
+  if (wcProvider?.accounts?.length) return wcProvider;
+  try {
+    const p = await ensureWC(false, { showQrModal: false });
+    if (p.accounts?.length) {
+      if (!currentAccount) updateChip(p.accounts[0]);
+      return p;
+    }
+    await p.connect();
+    const accs = await p.request({ method: 'eth_accounts' }).catch(() => []);
+    if (accs?.length) {
+      updateChip(accs[0]);
+      return p;
+    }
+  } catch (e) {
+    console.log('[GROM] WC silent restore skipped:', e?.message || e);
+  }
+  return null;
+}
 
 /* Prefetch WC provider on page load. Only fires when we already have a
  * persisted session — that way we never pop the Reown QR modal
@@ -1272,14 +1329,10 @@ window.gwPurgeStaleWalletAuth = gwPurgeStaleWalletAuth;
 function gwPrefetchWc() {
   if (!gwHasPersistedWcSession()) return;
   const kick = () => {
-    if (window.gromWallet?.wcProvider) return;
-    try {
-      // Silent — showQrModal: false.  connectWC returns fast when the
-      // session actually restores from persisted state.
-      typeof connectWC === 'function' && connectWC({ showQrModal: false })
-        .then(() => console.log('[GROM] WC session warm-restored'))
-        .catch((e) => console.log('[GROM] WC warm-restore skipped:', e?.message || e));
-    } catch (_) {}
+    if (window.gromWallet?.wcProvider?.accounts?.length) return;
+    gwRestorePersistedWcSession()
+      .then((p) => { if (p) console.log('[GROM] WC session warm-restored'); })
+      .catch((e) => console.log('[GROM] WC warm-restore skipped:', e?.message || e));
   };
   if ('requestIdleCallback' in window) requestIdleCallback(kick, { timeout: 3000 });
   else setTimeout(kick, 1200);
@@ -1299,6 +1352,7 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
   if (!cfg) throw new Error('Unknown wallet: ' + walletKey);
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
 
+  window.__gromConnecting = true;
   gwAbortPendingWc();
   gwSetWcFlowActive(true);
   gwKillReownModals();
@@ -1350,6 +1404,7 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
     if (_wcPendingKillTimer) { clearInterval(_wcPendingKillTimer); _wcPendingKillTimer = null; }
     gwSetWcFlowActive(false);
     _wcPendingReject = null;
+    window.__gromConnecting = false;
   }
 }
 
@@ -1604,10 +1659,10 @@ function hook() {
   // Disconnect при повторном клике на чип
   window.disconnectWallet = disconnect;
 
-  // Drop stale chip when label outlived the WC session (Safari / new device).
+  // Boot: purge only truly dead sessions; warm-restore persisted WC before eth inject.
+  gwPrefetchWc();
   gwPurgeStaleWalletAuth('boot');
   gwReconcileOrphanWalletChip('boot');
-  gwPrefetchWc();
 
   // Подписка на сетевые ивенты window.ethereum (если юзер подключал ранее)
   if (window.ethereum && window.ethereum.selectedAddress) {
@@ -7553,8 +7608,8 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
     try {
       gwToast('Restoring wallet session…', 'info');
       provider = await Promise.race([
-        typeof connectWC === 'function' ? connectWC({ showQrModal: false }) : Promise.reject(new Error('no connectWC')),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000)),
+        gwRestorePersistedWcSession(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000)),
       ]);
     } catch (_) { provider = null; }
   }
@@ -10712,7 +10767,9 @@ window.gromWallet = {
   hasWcSession: gwHasPersistedWcSession,
   reconcileOrphanChip: gwReconcileOrphanWalletChip,
   purgeStaleAuth: gwPurgeStaleWalletAuth,
+  restorePersistedWc: gwRestorePersistedWcSession,
   hasLiveWalletSession: gwHasLiveWalletSession,
+  isWalletUiConnected: gwIsWalletUiConnected,
   isOrphanChip: gwIsOrphanWalletChip,
   networks: GROM_NETWORKS,
   assetNets: GROM_ASSET_NETS,

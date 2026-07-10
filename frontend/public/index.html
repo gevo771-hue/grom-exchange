@@ -7533,12 +7533,12 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260710s';
+  walletModule.src = '/grom-wallet.js?v=20260710t';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = '/grom-privy.js?v=20260710q';
+  privyModule.src = '/grom-privy.js?v=20260710t';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -7914,14 +7914,17 @@ function disconnectWallet() {
   if (typeof applyI18n === 'function') applyI18n();
 }
 function openConnectModal() {
+  var inWcFlow = document.documentElement.classList.contains('gw-wc-flow');
   try {
-    document.documentElement.classList.remove('gw-wc-flow', 'gw-trust-flow');
-    if (typeof window.gwAbortPendingWc === 'function') window.gwAbortPendingWc();
+    if (!inWcFlow) {
+      document.documentElement.classList.remove('gw-wc-flow', 'gw-trust-flow');
+      if (typeof window.gwAbortPendingWc === 'function') window.gwAbortPendingWc();
+    }
   } catch (_) {}
   try {
-    if (typeof window.gwIsOrphanWalletChip === 'function' && window.gwIsOrphanWalletChip()) {
+    if (!inWcFlow && typeof window.gwIsOrphanWalletChip === 'function' && window.gwIsOrphanWalletChip()) {
       if (typeof window.gwReconcileOrphanWalletChip === 'function') window.gwReconcileOrphanWalletChip('connect-modal');
-    } else if (window.GROM_CONN && GROM_CONN.connected) {
+    } else if (window.GROM_CONN && GROM_CONN.connected && typeof window.gwIsWalletUiConnected === 'function' && window.gwIsWalletUiConnected()) {
       var chip = document.getElementById('walletChip');
       if (chip) chip.click();
       return;
@@ -8021,7 +8024,7 @@ function connectWallet() { openConnectModal(); }
 /** Chip click — always opens connect when disconnected; connected state uses privy dropdown. */
 function gwWalletChipClick(ev) {
   if (ev && ev.isTrusted === false) return;
-  if (window.GROM_CONN && window.GROM_CONN.connected) return;
+  if (typeof window.gwIsWalletUiConnected === 'function' && window.gwIsWalletUiConnected()) return;
   try {
     if (typeof window.gwIsOrphanWalletChip === 'function' && window.gwIsOrphanWalletChip()) {
       if (typeof window.gwReconcileOrphanWalletChip === 'function') window.gwReconcileOrphanWalletChip('chip-click');
@@ -8068,8 +8071,13 @@ if (_logout) _logout.addEventListener('click', disconnectWallet);
         updateAuthUi();
         return;
       }
-      GROM_CONN = { connected: true, label: isWalletAddr ? label : (label || 'Wallet'), method: 'restored' };
-      setWalletLabel(isWalletAddr ? (label.slice(0, 6) + '…' + label.slice(-4)) : (label || 'Wallet'));
+      if (isWalletAddr) {
+        GROM_CONN = { connected: true, label: label, method: 'restored-wallet' };
+        setWalletLabel(label.slice(0, 6) + '…' + label.slice(-4));
+      } else {
+        GROM_CONN = { connected: true, label: label || 'Wallet', method: 'restored' };
+        setWalletLabel(label || 'Wallet');
+      }
       updateAuthUi();
       if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
       return;
@@ -15245,76 +15253,55 @@ function gromSignInLabel() {
 }
 var __baseUpdateAuthUi = updateAuthUi;
 updateAuthUi = function updateAuthUiPatched() {
-  try {
-    if (typeof window.gwPurgeStaleWalletAuth === 'function') {
-      window.gwPurgeStaleWalletAuth('auth-ui');
-    } else {
-      var _jwt = localStorage.getItem('grom_jwt') || '';
-      var _jwtOk = _jwt && String(_jwt).split('.').length === 3;
-      var _lbl = localStorage.getItem('grom_wallet_label') || '';
-      var _isAddr = /^0x[a-fA-F0-9]{40}$/i.test(_lbl);
-      var _hasWc = false;
-      for (var _i = 0; _i < localStorage.length; _i++) {
-        var _k = localStorage.key(_i);
-        if (_k && _k.indexOf('wc@2:') === 0) { _hasWc = true; break; }
-      }
-      var _hasEth = !!(window.ethereum && window.ethereum.selectedAddress);
-      if (_jwtOk && _isAddr && !_hasWc && !_hasEth) {
-        localStorage.removeItem('grom_jwt');
-        localStorage.removeItem('grom_wallet_label');
-        GROM_CONN.connected = false;
-        GROM_CONN.label = '';
-      }
-    }
-  } catch (_) {}
   if (typeof __baseUpdateAuthUi === 'function') __baseUpdateAuthUi();
   var actions = document.getElementById('authActions');
   var chip = document.getElementById('walletChip');
-  var connected = !!GROM_CONN.connected;
-  if (actions) actions.classList.toggle('open', connected);
+  var stored = '';
+  var isAddr = false;
+  try {
+    stored = localStorage.getItem('grom_wallet_label') || '';
+    isAddr = /^0x[a-fA-F0-9]{40}$/i.test(stored);
+  } catch (_) {}
+  var walletUiOn = false;
+  try {
+    walletUiOn = typeof window.gwIsWalletUiConnected === 'function' && window.gwIsWalletUiConnected();
+  } catch (_) {}
+  var jwtOk = false;
+  try {
+    var j = localStorage.getItem('grom_jwt') || '';
+    jwtOk = !!(j && String(j).split('.').length === 3 && j !== 'demo-session' && j !== 'privy-session');
+  } catch (_) {}
+  var connected = false;
+  if (isAddr) {
+    connected = walletUiOn;
+    if (!connected && GROM_CONN) {
+      GROM_CONN.connected = false;
+      GROM_CONN.label = '';
+    } else if (connected && GROM_CONN) {
+      GROM_CONN.connected = true;
+      GROM_CONN.label = stored;
+    }
+  } else {
+    connected = !!(GROM_CONN && GROM_CONN.connected) || jwtOk;
+  }
+  if (actions) actions.classList.toggle('open', connected && walletUiOn);
   if (chip) {
     chip.style.display = '';
-    chip.classList.toggle('connected', connected);
+    chip.classList.toggle('connected', connected && (walletUiOn || !isAddr));
   }
   var sbLogout = document.getElementById('sidebarLogout');
   if (sbLogout) sbLogout.style.display = connected ? '' : 'none';
   var topLogout = document.getElementById('topLogoutBtn');
   if (topLogout) topLogout.style.display = 'none';
-  if (!connected) {
-    try {
-      if (typeof window.gwReconcileOrphanWalletChip === 'function') {
-        window.gwReconcileOrphanWalletChip('auth-ui');
-      } else {
-        var stale = localStorage.getItem('grom_wallet_label') || '';
-        if (/^0x[a-fA-F0-9]{40}$/i.test(stale)) {
-          var hasWc = false;
-          try {
-            for (var wi = 0; wi < localStorage.length; wi++) {
-              var wk = localStorage.key(wi);
-              if (wk && wk.indexOf('wc@2:') === 0) { hasWc = true; break; }
-            }
-          } catch (_) {}
-          var hasEth = !!(window.ethereum && window.ethereum.selectedAddress);
-          if (!hasWc && !hasEth) localStorage.removeItem('grom_wallet_label');
-        }
-      }
-    } catch (_) {}
+  if (!connected || (isAddr && !walletUiOn)) {
     setWalletLabel(gromSignInLabel());
     if (typeof window.gromResetWalletUi === 'function') window.gromResetWalletUi();
   } else {
-    if (typeof window.gwIsOrphanWalletChip === 'function' && window.gwIsOrphanWalletChip()) {
-      if (typeof window.gwReconcileOrphanWalletChip === 'function') window.gwReconcileOrphanWalletChip('auth-ui-stale');
-      setWalletLabel(gromSignInLabel());
-      if (chip) chip.classList.remove('connected');
-      if (actions) actions.classList.remove('open');
-      return;
+    var raw = (GROM_CONN && GROM_CONN.label) || '';
+    if (isAddr) raw = stored || raw;
+    else {
+      try { if (!raw) raw = localStorage.getItem('grom_wallet_label') || ''; } catch (_) {}
     }
-    var raw = GROM_CONN.label || '';
-    try {
-      var storedAddr = localStorage.getItem('grom_wallet_label') || '';
-      if (/^0x[a-fA-F0-9]{40}$/i.test(storedAddr)) raw = storedAddr;
-      else if (!raw) raw = storedAddr;
-    } catch (_) {}
     if (raw && /^0x[a-fA-F0-9]{40}$/i.test(raw)) {
       setWalletLabel(raw.slice(0, 6) + '…' + raw.slice(-4));
     } else if (raw) {

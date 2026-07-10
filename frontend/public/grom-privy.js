@@ -381,26 +381,25 @@ function hookChipDropdown() {
   if (!chip || chip.dataset.pvHooked === '1') return;
   chip.dataset.pvHooked = '1';
   chip.addEventListener('click', (e) => {
-    if (typeof window.gwIsOrphanWalletChip === 'function' && window.gwIsOrphanWalletChip()) {
+    if (typeof window.gwIsWalletUiConnected === 'function' && window.gwIsWalletUiConnected()) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (typeof window.gwReconcileOrphanWalletChip === 'function') window.gwReconcileOrphanWalletChip('chip-click');
-      window.openConnectModal?.();
-      window.toast?.('Wallet session expired — reconnect to swap', 'warn');
+      const menu = ensureChipMenu();
+      let addr = window.GROM_CONN?.label || '';
+      try {
+        const stored = localStorage.getItem('grom_wallet_label') || '';
+        if (/^0x[a-fA-F0-9]{40}$/i.test(stored)) addr = stored;
+      } catch (_) {}
+      menu.querySelector('#pvChipAddr').textContent = addr;
+      const r = chip.getBoundingClientRect();
+      menu.style.top = (r.bottom + 6) + 'px';
+      menu.style.right = Math.max(8, (window.innerWidth - r.right)) + 'px';
+      menu.style.left = 'auto';
+      menu.style.display = 'block';
       return;
     }
-    if (!window.GROM_CONN?.connected) return; // не перехватываем — пусть откроется connect modal
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    const menu = ensureChipMenu();
-    const addr = window.GROM_CONN.label || '';
-    menu.querySelector('#pvChipAddr').textContent = addr;
-    const r = chip.getBoundingClientRect();
-    menu.style.top = (r.bottom + 6) + 'px';
-    menu.style.right = Math.max(8, (window.innerWidth - r.right)) + 'px';
-    menu.style.left = 'auto';
-    menu.style.display = 'block';
-  }, true); // capture-phase, чтобы обогнать старый connectWallet обработчик
+    // Not connected — let gwWalletChipClick / openConnectModal handle it.
+  }, true);
 }
 
 /* ---------- Public API ---------- */

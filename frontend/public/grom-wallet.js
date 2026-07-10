@@ -3737,6 +3737,304 @@ function gwDsLang() {
   return GW_DS_TR[lang] || GW_DS_TR.en;
 }
 
+/* ==========================================================================
+ * Simple mode for the Instant Swap panel — 2026-07-10
+ *
+ * Balance-first swap UX. When active:
+ *   - Real wallet balances shown at top (multi-chain aggregate)
+ *   - Click a balance -> auto-select chain + set as YOU PAY token
+ *   - Suggested swap targets appear (same-chain quick + cross-chain popular)
+ *   - Classic YOU PAY / YOU GET / chain chips row hidden via CSS
+ *   - CTA + recent swaps at the bottom continue to work
+ * Advanced mode restores the current full manual UX.
+ * ========================================================================== */
+function gwSwapModeGet() { try { return localStorage.getItem('gw_swap_mode') || 'simple'; } catch (_) { return 'simple'; } }
+function gwSwapModeSet(m) { try { localStorage.setItem('gw_swap_mode', m); } catch (_) {} document.querySelectorAll('.gw-ds-wrap').forEach(w => w.classList.toggle('gw-ds-mode-simple', m === 'simple')); }
+function gwInjectSimpleModeCss() {
+  if (document.getElementById('gw-ds-simple-css')) return;
+  const css = `
+    .gw-ds-mode-tabs { display: inline-flex; gap: 4px; padding: 3px; border-radius: 10px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); }
+    .gw-ds-mode-tab { padding: 6px 14px; border: 0; background: transparent; color: #98a8c0;
+      font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+      border-radius: 8px; cursor: pointer; transition: color .15s, background .15s; }
+    .gw-ds-mode-tab.on { color: #04121f; background: linear-gradient(135deg, #00c2ff, #6e8dff); }
+    /* Simple mode strip */
+    .gw-ds-simple { display: none; margin: 10px 0 6px; }
+    .gw-ds-mode-simple .gw-ds-simple { display: block; }
+    .gw-ds-mode-simple .gw-ds-chains { display: none; }
+    .gw-ds-mode-simple .gw-ds-row { display: none; }
+    .gw-ds-mode-simple .gw-ds-flip { display: none; }
+    .gw-ds-mode-simple .gw-ds-pct { display: none; }
+    .gw-ds-sim-lbl { font-size: 10.5px; letter-spacing: .14em; color: #6b7a92;
+      font-weight: 800; text-transform: uppercase; margin: 0 0 8px; }
+    .gw-ds-sim-bal { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .gw-ds-sim-row {
+      display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
+      padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06); cursor: pointer;
+      transition: background .18s, border-color .18s, transform .12s;
+    }
+    .gw-ds-sim-row:hover { background: rgba(0,194,255,0.06); border-color: rgba(0,194,255,0.35); transform: translateY(-1px); }
+    .gw-ds-sim-row.on { background: rgba(0,194,255,0.10); border-color: rgba(0,194,255,0.55); box-shadow: 0 0 0 1px rgba(0,194,255,0.35) inset; }
+    .gw-ds-sim-row .ico { width: 28px; height: 28px; border-radius: 50%;
+      background: linear-gradient(135deg, rgba(0,194,255,0.20), rgba(110,141,255,0.10));
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800; color: #5dd5ff; overflow: hidden; }
+    .gw-ds-sim-row .ico img { width: 100%; height: 100%; object-fit: cover; }
+    .gw-ds-sim-row .body .sym { color: #e7eef8; font-weight: 800; font-size: 13.5px; }
+    .gw-ds-sim-row .body .chain { color: #98a8c0; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; margin-top: 1px; }
+    .gw-ds-sim-row .amt .primary { color: #e7eef8; font-weight: 800; font-size: 13.5px; font-variant-numeric: tabular-nums; text-align: right; }
+    .gw-ds-sim-row .amt .usd { color: #98a8c0; font-size: 11px; margin-top: 1px; text-align: right; }
+    .gw-ds-sim-empty { padding: 18px; text-align: center; color: #6b7a92; font-size: 12.5px;
+      border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.08); }
+    .gw-ds-sim-arrow { display: flex; justify-content: center; margin: 8px 0; color: #6b7a92; font-size: 20px; }
+    .gw-ds-sim-target { margin-bottom: 12px; }
+    .gw-ds-sim-target-group { margin: 8px 0 12px; }
+    .gw-ds-sim-target-group-lbl { font-size: 10.5px; letter-spacing: .12em; color: #6b7a92;
+      font-weight: 800; text-transform: uppercase; margin: 0 0 6px; }
+    .gw-ds-sim-chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: #e7eef8; font-size: 12.5px; font-weight: 800; cursor: pointer; margin: 0 6px 6px 0;
+      transition: background .15s, border-color .15s;
+    }
+    .gw-ds-sim-chip:hover { background: rgba(0,194,255,0.10); border-color: rgba(0,194,255,0.40); }
+    .gw-ds-sim-chip.on { background: rgba(0,194,255,0.20); border-color: rgba(0,194,255,0.60); color: #fff; }
+    .gw-ds-sim-more { color: #5dd5ff; font-size: 12px; font-weight: 800; cursor: pointer; padding: 6px 0; }
+    .gw-ds-sim-amt { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end;
+      padding: 14px; border-radius: 14px; background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06); }
+    .gw-ds-sim-amt .lbl { font-size: 10.5px; letter-spacing: .12em; color: #6b7a92; font-weight: 800; text-transform: uppercase; }
+    .gw-ds-sim-amt input { background: transparent; border: 0; outline: none; color: #e7eef8;
+      font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; width: 100%; padding: 4px 0 0; font-family: inherit; }
+    .gw-ds-sim-amt .max { padding: 6px 12px; border-radius: 8px; background: rgba(0,194,255,0.14);
+      border: 1px solid rgba(0,194,255,0.35); color: #5dd5ff; font-size: 11px; font-weight: 800; cursor: pointer; }
+    .gw-ds-sim-hint { color: #98a8c0; font-size: 12px; padding: 10px 12px; border-radius: 10px;
+      background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.08); text-align: center;
+      margin-top: 8px; }
+  `;
+  const s = document.createElement('style'); s.id = 'gw-ds-simple-css'; s.textContent = css;
+  document.head.appendChild(s);
+}
+
+/** Same-chain popular tokens for a given chainId. */
+const GW_SIM_SAME_CHAIN = {
+  1:     ['USDC', 'USDT', 'ETH', 'WBTC', 'DAI'],
+  42161: ['USDC', 'USDT', 'ETH', 'WBTC', 'ARB'],
+  137:   ['USDC', 'USDT', 'MATIC', 'ETH', 'WBTC'],
+  8453:  ['USDC', 'ETH', 'DAI'],
+  56:    ['USDT', 'USDC', 'BNB', 'BUSD'],
+  10:    ['USDC', 'USDT', 'ETH', 'OP'],
+  43114: ['USDC', 'USDT', 'AVAX', 'ETH'],
+};
+const GW_SIM_CROSS_CHAIN = ['BTC', 'SOL', 'TRX', 'TON', 'MATIC', 'AVAX', 'BNB'];
+
+async function gwDsSimRenderBalances() {
+  const list = document.getElementById('gwDsSimBalances');
+  if (!list) return;
+  const addr = (typeof gwOcConnectedAddress === 'function' && gwOcConnectedAddress())
+    || localStorage.getItem('gw_addr') || null;
+  if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+    list.innerHTML = `<div class="gw-ds-sim-empty">Sign in with your wallet to see balances</div>`;
+    return;
+  }
+  list.innerHTML = `<div class="gw-ds-sim-empty">Loading balances…</div>`;
+  try {
+    const [prices, chains] = await Promise.all([
+      typeof gwOcFetchPrices === 'function' ? gwOcFetchPrices() : Promise.resolve({ USDT: 1, USDC: 1 }),
+      typeof gwOcFetchAllChains === 'function' ? gwOcFetchAllChains(addr) : Promise.resolve([]),
+    ]);
+    const rows = [];
+    for (const c of chains) {
+      if (!c?.data) continue;
+      // Native
+      if (c.data.nativeEth > 0.0000001) {
+        const usd = c.data.nativeEth * (prices[c.meta.native] || 0);
+        rows.push({ chainId: c.chainId, chain: c.meta.label, sym: c.meta.native,
+          amt: c.data.nativeEth, usd });
+      }
+      // ERC-20
+      for (const [sym, amt] of Object.entries(c.data.tokens || {})) {
+        if (!(amt > 0.0001)) continue;
+        rows.push({ chainId: c.chainId, chain: c.meta.label, sym, amt, usd: amt * (prices[sym] || 1) });
+      }
+    }
+    rows.sort((a, b) => b.usd - a.usd);
+    if (!rows.length) {
+      list.innerHTML = `<div class="gw-ds-sim-empty">No balance yet — bridge or receive to your wallet, then swap here</div>`;
+      return;
+    }
+    list.innerHTML = rows.map((r) => `
+      <div class="gw-ds-sim-row" data-cid="${r.chainId}" data-sym="${r.sym}">
+        <div class="ico">${r.sym.slice(0, 3)}</div>
+        <div class="body">
+          <div class="sym">${r.sym}</div>
+          <div class="chain">${r.chain}</div>
+        </div>
+        <div class="amt">
+          <div class="primary">${r.amt.toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>
+          <div class="usd">≈ $${r.usd.toLocaleString('en-US', { maximumFractionDigits: 2 })}</div>
+        </div>
+      </div>
+    `).join('');
+    list.querySelectorAll('.gw-ds-sim-row').forEach((el) => {
+      el.onclick = () => {
+        list.querySelectorAll('.gw-ds-sim-row.on').forEach(x => x.classList.remove('on'));
+        el.classList.add('on');
+        gwDsSimPickFrom(el.dataset.sym, Number(el.dataset.cid), Number(el.querySelector('.primary').textContent.replace(/,/g, '')));
+      };
+    });
+  } catch (e) { list.innerHTML = `<div class="gw-ds-sim-empty">Failed to load balances — try again</div>`; }
+}
+
+function gwDsSimPickFrom(sym, chainId, availAmt) {
+  // Wire underlying gwDsFrom + chain chip
+  const from = document.getElementById('gwDsFrom'); if (from) from.value = sym;
+  try { gwDsEnsureTokenOption(sym, { sym }); gwTkSyncButton('from'); } catch (_) {}
+  // Switch chain chip
+  document.querySelectorAll('.gw-ds-chain.on').forEach(x => x.classList.remove('on'));
+  const chip = document.querySelector(`.gw-ds-chain[data-cid="${chainId}"]`);
+  if (chip) chip.classList.add('on');
+  // Update amount input in the simple strip
+  const amtEl = document.getElementById('gwDsSimAmt');
+  if (amtEl) {
+    amtEl.max = availAmt;
+    amtEl.dataset.max = String(availAmt);
+    amtEl.placeholder = `Max ${availAmt.toLocaleString('en-US', { maximumFractionDigits: 6 })}`;
+    amtEl.focus();
+  }
+  gwDsSimRenderTargets(chainId, sym);
+}
+
+function gwDsSimRenderTargets(chainId, fromSym) {
+  const box = document.getElementById('gwDsSimTarget');
+  if (!box) return;
+  const same = (GW_SIM_SAME_CHAIN[chainId] || []).filter((s) => s !== fromSym);
+  const cross = GW_SIM_CROSS_CHAIN.filter((s) => s !== fromSym && !same.includes(s));
+  const chip = (sym, group) => `<span class="gw-ds-sim-chip" data-sym="${sym}" data-group="${group}">${sym}</span>`;
+  box.innerHTML = `
+    <div class="gw-ds-sim-target-group">
+      <p class="gw-ds-sim-target-group-lbl">Same chain (cheap · fast)</p>
+      <div>${same.map((s) => chip(s, 'same')).join('') || '<span style="color:#6b7a92;font-size:12px">No same-chain routes</span>'}</div>
+    </div>
+    <div class="gw-ds-sim-target-group">
+      <p class="gw-ds-sim-target-group-lbl">Cross-chain (bridge)</p>
+      <div>${cross.map((s) => chip(s, 'cross')).join('')}</div>
+    </div>
+    <div class="gw-ds-sim-more" id="gwDsSimSearch">🔍 Search all 10 000+ tokens</div>
+  `;
+  box.querySelectorAll('.gw-ds-sim-chip').forEach((c) => {
+    c.onclick = () => {
+      box.querySelectorAll('.gw-ds-sim-chip.on').forEach(x => x.classList.remove('on'));
+      c.classList.add('on');
+      const to = document.getElementById('gwDsTo'); if (to) to.value = c.dataset.sym;
+      try { gwDsEnsureTokenOption(c.dataset.sym, { sym: c.dataset.sym }); gwTkSyncButton('to'); } catch (_) {}
+      try { gwDsRefreshRate(); } catch (_) {}
+    };
+  });
+  document.getElementById('gwDsSimSearch')?.addEventListener('click', () => {
+    try { gwTkOpen('to'); } catch (_) {}
+  });
+}
+
+/** Build the Simple mode DOM strip. Injected once into .gw-ds-card. */
+function gwDsSimBuild() {
+  gwInjectSimpleModeCss();
+  const card = document.getElementById('gwDsCard');
+  if (!card || document.getElementById('gwDsSimple')) return;
+  const strip = document.createElement('div');
+  strip.className = 'gw-ds-simple';
+  strip.id = 'gwDsSimple';
+  strip.innerHTML = `
+    <p class="gw-ds-sim-lbl">🎒 In your wallet</p>
+    <div class="gw-ds-sim-bal" id="gwDsSimBalances">
+      <div class="gw-ds-sim-empty">Loading balances…</div>
+    </div>
+    <div class="gw-ds-sim-arrow">↓</div>
+    <p class="gw-ds-sim-lbl">→ Swap to</p>
+    <div class="gw-ds-sim-target" id="gwDsSimTarget">
+      <div class="gw-ds-sim-empty">Pick a token from your wallet above to see options</div>
+    </div>
+    <div class="gw-ds-sim-amt">
+      <div>
+        <p class="lbl">Amount</p>
+        <input id="gwDsSimAmt" type="number" step="any" placeholder="0.0" />
+      </div>
+      <button class="max" id="gwDsSimMax">MAX</button>
+    </div>
+    <div class="gw-ds-sim-hint">GROM fee 0.20% · slippage 0.5% · Non-custodial</div>
+  `;
+  // Insert Simple strip AFTER the head+chains but BEFORE the classic form.
+  const chains = card.querySelector('.gw-ds-chains');
+  const firstRow = card.querySelector('.gw-ds-row');
+  if (chains && chains.nextSibling) chains.after(strip);
+  else if (firstRow) firstRow.before(strip);
+  else card.appendChild(strip);
+  // Sync amount input to underlying gwDsAmt so quote refresh works.
+  const simAmt = document.getElementById('gwDsSimAmt');
+  const dsAmt = document.getElementById('gwDsAmt');
+  if (simAmt && dsAmt) {
+    simAmt.addEventListener('input', () => {
+      dsAmt.value = simAmt.value;
+      try { gwDsRefreshRate(); } catch (_) {}
+    });
+    dsAmt.addEventListener('input', () => { if (dsAmt.value !== simAmt.value) simAmt.value = dsAmt.value; });
+  }
+  document.getElementById('gwDsSimMax')?.addEventListener('click', () => {
+    const max = Number(simAmt?.dataset.max || 0);
+    if (max > 0 && simAmt && dsAmt) {
+      simAmt.value = max; dsAmt.value = max;
+      try { gwDsRefreshRate(); } catch (_) {}
+    }
+  });
+}
+
+/** Header toggle inserted into .gw-ds-head. */
+function gwDsSimBuildToggle() {
+  const head = document.querySelector('.gw-ds-head');
+  if (!head || head.querySelector('.gw-ds-mode-tabs')) return;
+  const mode = gwSwapModeGet();
+  const tabs = document.createElement('div');
+  tabs.className = 'gw-ds-mode-tabs';
+  tabs.innerHTML = `
+    <button class="gw-ds-mode-tab ${mode === 'simple' ? 'on' : ''}" data-mode="simple">Simple</button>
+    <button class="gw-ds-mode-tab ${mode === 'advanced' ? 'on' : ''}" data-mode="advanced">Advanced</button>
+  `;
+  // Replace the LIVE badge with our toggle (badge stays as small hint below).
+  const badge = head.querySelector('.gw-ds-badge');
+  if (badge) badge.before(tabs); else head.appendChild(tabs);
+  tabs.querySelectorAll('button').forEach((b) => {
+    b.onclick = () => {
+      tabs.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      gwSwapModeSet(b.dataset.mode);
+      if (b.dataset.mode === 'simple') { gwDsSimBuild(); gwDsSimRenderBalances(); }
+    };
+  });
+}
+
+function gwDsSimSetup() {
+  // Wait for the swap panel to be mounted, then augment.
+  let n = 0; const id = setInterval(() => {
+    n++;
+    if (document.getElementById('gwDsCard')) {
+      clearInterval(id);
+      gwDsSimBuildToggle();
+      gwDsSimBuild();
+      const initMode = gwSwapModeGet();
+      document.querySelectorAll('.gw-ds-wrap').forEach(w => w.classList.toggle('gw-ds-mode-simple', initMode === 'simple'));
+      if (initMode === 'simple') gwDsSimRenderBalances();
+    } else if (n >= 30) { clearInterval(id); }
+  }, 500);
+  window.addEventListener('grom:wallet-connected', () => gwDsSimRenderBalances());
+  window.addEventListener('hashchange', () => setTimeout(() => {
+    if (document.getElementById('gwDsCard') && gwSwapModeGet() === 'simple') {
+      gwDsSimBuildToggle(); gwDsSimBuild(); gwDsSimRenderBalances();
+    }
+  }, 400));
+}
+
 function gwInjectDashSwapCss() {
   if (document.getElementById('gw-ds-css')) return;
   const css = `
@@ -7960,6 +8258,7 @@ try {
       safe('referral-page2',   gwSetupReferralPage2);
       safe('cex-cleanup',      gwSetupCexCleanup);
       safe('dex-pages',        gwSetupDexPages);
+      safe('simple-swap',      gwDsSimSetup);
       safe('airdrop',          gwSetupAirdrop);
       safe('predictArb',       gwSetupPredictArb);
       safe('crossMargin',      gwSetupCrossMargin);

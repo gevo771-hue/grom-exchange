@@ -1241,7 +1241,50 @@ function gwResolvedWalletAddress() {
   return null;
 }
 
-/** Wallet chip / dropdown only when signing is actually possible. */
+/** Address for balances / swap UI — does not require live signing provider. */
+function gwDisplayAddress() {
+  if (gwHasSigningProvider()) {
+    const live = gwResolvedWalletAddress();
+    if (live) return live;
+  }
+  try {
+    const stored = localStorage.getItem('grom_wallet_label') || '';
+    if (gwAddrOk(stored)) return stored.trim();
+  } catch (_) {}
+  if (gwAddrOk(currentAccount)) return currentAccount.trim();
+  if (gwAddrOk(window.GROM_CONN?.label)) return window.GROM_CONN.label.trim();
+  try {
+    if (typeof gwOcConnectedAddress === 'function') {
+      const a = gwOcConnectedAddress();
+      if (gwAddrOk(a)) return a.trim();
+    }
+  } catch (_) {}
+  return null;
+}
+window.gwDisplayAddress = gwDisplayAddress;
+
+/** JWT + saved 0x label — identity survives refresh while WC warm-restores. */
+function gwHasRestoredWalletIdentity() {
+  if (gwAddrOk(currentAccount)) return true;
+  try {
+    if (gwAddrOk(localStorage.getItem('grom_wallet_label'))) return true;
+  } catch (_) {}
+  if (gwAddrOk(window.GROM_CONN?.label)) return true;
+  if (gwJwtValid()) {
+    try {
+      if (gwAddrOk(localStorage.getItem('grom_wallet_label'))) return true;
+    } catch (_) {}
+  }
+  return false;
+}
+window.gwHasRestoredWalletIdentity = gwHasRestoredWalletIdentity;
+
+/** Can warm-restore WC or already has signing provider. */
+function gwHasWalletSessionPendingOrLive() {
+  return gwHasSigningProvider() || gwHasPersistedWcSession() || gwHasRestoredWalletIdentity();
+}
+
+/** Dropdown / signing — requires live provider. Chip may show address earlier. */
 function gwIsWalletUiConnected() {
   if (window.__gromConnecting) return true;
   if (!gwHasSigningProvider()) return false;
@@ -1313,6 +1356,7 @@ function gwReconcileStaleWalletUi(reason) {
   const staleLabel = gwAddrOk(stored) || gwAddrOk(window.GROM_CONN?.label);
   if (!staleLabel) return false;
   if (gwHasPersistedWcSession()) return false;
+  if (gwJwtValid() && gwAddrOk(stored)) return false;
   try { localStorage.removeItem('grom_wallet_label'); } catch (_) {}
   if (gwJwtValid()) try { localStorage.removeItem('grom_jwt'); } catch (_) {}
   gwClearWalletUiState(reason || 'stale-ui');
@@ -1325,6 +1369,7 @@ function gwIsOrphanWalletLabel(label) {
   if (gwAuthPurgeBlocked()) return false;
   if (!gwAddrOk(label)) return false;
   if (gwHasPersistedWcSession() && !gwHasSigningProvider()) return false;
+  if (gwJwtValid() && gwAddrOk(label)) return false;
   return !gwHasSigningProvider();
 }
 
@@ -1412,7 +1457,16 @@ async function gwRestorePersistedWcSession() {
   }
   if (!gwHasSigningProvider()) {
     gwPurgeStaleWcStorage();
-    gwReconcileStaleWalletUi('wc-restore-failed');
+    if (!gwJwtValid() && !gwAddrOk(localStorage.getItem('grom_wallet_label'))) {
+      gwReconcileStaleWalletUi('wc-restore-failed');
+    } else {
+      try {
+        const addr = gwDisplayAddress();
+        if (addr) {
+          document.dispatchEvent(new CustomEvent('grom:wallet-address-known', { detail: { address: addr } }));
+        }
+      } catch (_) {}
+    }
   }
   return null;
 }
@@ -1432,6 +1486,23 @@ async function gwBootWalletSession() {
     try { gwRefreshCombinedPortfolioTotals(); } catch (_) {}
     return;
   }
+  if (gwHasRestoredWalletIdentity()) {
+    try {
+      const addr = gwDisplayAddress();
+      if (addr) {
+        if (window.GROM_CONN) {
+          window.GROM_CONN.connected = true;
+          window.GROM_CONN.label = addr;
+          window.GROM_CONN.method = window.GROM_CONN.method || 'restored-wallet';
+        }
+        if (!gwAddrOk(currentAccount)) currentAccount = addr;
+        document.dispatchEvent(new CustomEvent('grom:wallet-address-known', { detail: { address: addr } }));
+      }
+    } catch (_) {}
+    try { if (typeof window.updateAuthUi === 'function') window.updateAuthUi(); } catch (_) {}
+    try { gwDsSimRenderBalances(); } catch (_) {}
+    return;
+  }
   gwPurgeStaleWalletAuth('boot-wc-dead');
   gwReconcileStaleWalletUi('boot-wc-dead');
 }
@@ -1444,7 +1515,11 @@ async function gwBootWalletSession() {
 function gwPrefetchWc() {
   const kick = () => {
     gwBootWalletSession()
-      .catch((e) => console.log('[GROM] WC boot skipped:', e?.message || e));
+      .catch((e) => console.log('[GROM] WC boot skipped:', e?.message || e))
+      .finally(() => {
+        try { gwDsSimRenderBalances(); } catch (_) {}
+        try { gwRenderMetaPortfolio(); } catch (_) {}
+      });
   };
   if ('requestIdleCallback' in window) requestIdleCallback(kick, { timeout: 2500 });
   else setTimeout(kick, 800);
@@ -2944,6 +3019,10 @@ function gwInjectOnchainCardCss() {
 }
 
 function gwOcConnectedAddress() {
+  if (typeof gwDisplayAddress === 'function') {
+    const a = gwDisplayAddress();
+    if (gwAddrOk(a)) return a.trim();
+  }
   const isAddr = (a) => typeof a === 'string' && /^0x[a-fA-F0-9]{40}$/.test(a.trim());
   // 1. Live module state (set by updateChip on every connect / accountsChanged)
   try {
@@ -4160,38 +4239,16 @@ const GW_SIM_CROSS_CHAIN = ['BTC', 'SOL', 'TRX', 'TON', 'MATIC', 'AVAX', 'BNB', 
  *  Never use this for signing — for that, gwOnChainSwapExec resolves
  *  a live provider via warm-restore. */
 function gwReadOnlyAddress() {
-  if (gwHasSigningProvider()) {
-    const live = gwResolvedWalletAddress();
-    if (live) return live;
-  }
-  const isAddr = (a) => typeof a === 'string' && /^0x[a-fA-F0-9]{40}$/.test(a.trim());
-  try {
-    if (typeof gwOcConnectedAddress === 'function') {
-      const a = gwOcConnectedAddress();
-      if (isAddr(a)) return a.trim();
-    }
-  } catch (_) {}
-  try {
-    const label = localStorage.getItem('grom_wallet_label');
-    if (isAddr(label)) {
-      if (typeof gwIsOrphanWalletLabel === 'function' && gwIsOrphanWalletLabel(label)) return null;
-      return label.trim();
-    }
-  } catch (_) {}
-  if (gwHasPersistedWcSession()) return null;
-  try {
-    if (isAddr(window.GROM_CONN?.label)) return window.GROM_CONN.label.trim();
-  } catch (_) {}
-  return null;
+  return gwDisplayAddress();
 }
 
 async function gwDsSimRenderBalances() {
   const list = document.getElementById('gwDsSimBalances');
   if (!list) return;
-  let addr = gwReadOnlyAddress();
-  if (!addr && gwHasPersistedWcSession() && !gwAuthPurgeBlocked()) {
+  let addr = gwDisplayAddress();
+  if (!addr && (gwHasPersistedWcSession() || gwHasRestoredWalletIdentity()) && !gwAuthPurgeBlocked()) {
     try { await gwRestorePersistedWcSession(); } catch (_) {}
-    addr = gwReadOnlyAddress();
+    addr = gwDisplayAddress();
   }
   if (!addr) {
     list.innerHTML = `<div class="gw-ds-sim-empty">Connect a wallet in the top right to see your balances</div>`;
@@ -4410,6 +4467,8 @@ function gwDsSimSetup() {
     } else if (n >= 30) { clearInterval(id); }
   }, 500);
   window.addEventListener('grom:wallet-connected', () => gwDsSimRenderBalances());
+  document.addEventListener('grom:wallet-address-known', () => gwDsSimRenderBalances());
+  document.addEventListener('grom:wallet-disconnected', () => gwDsSimRenderBalances());
   window.addEventListener('hashchange', () => setTimeout(() => {
     if (document.getElementById('gwDsCard') && gwSwapModeGet() === 'simple') {
       gwDsSimBuildToggle(); gwDsSimBuild(); gwDsSimRenderBalances();
@@ -10921,6 +10980,8 @@ window.gromWallet = {
   hasSigningProvider: gwHasSigningProvider,
   reconcileStaleUi: gwReconcileStaleWalletUi,
   isWalletUiConnected: gwIsWalletUiConnected,
+  displayAddress: gwDisplayAddress,
+  hasRestoredWalletIdentity: gwHasRestoredWalletIdentity,
   isOrphanChip: gwIsOrphanWalletChip,
   networks: GROM_NETWORKS,
   assetNets: GROM_ASSET_NETS,

@@ -3549,14 +3549,20 @@ async function gwRenderMetaPortfolio() {
     wrap = document.createElement('div');
     wrap.className = 'gw-mp-wrap';
     wrap.id = 'gwMetaPortfolio';
-    // Meta-Portfolio goes at the very top of the dash — user request
-    // 2026-07-09c: revert to "MP above Instant Swap" (was flipped briefly).
-    const swap = page.querySelector('.gw-ds-wrap');
-    if (swap) swap.before(wrap);
-    else {
-      const banners = page.querySelector('.dash-banners-wrap');
-      if (banners) banners.after(wrap);
-      else page.prepend(wrap);
+    // Meta-Portfolio ALWAYS goes right after the banners strip near the
+    // top of the dashboard. Previously we anchored it to the Instant Swap
+    // panel, but after Cursor's dashboard reorder the swap panel dropped
+    // ~4000px down the page — MP followed it and disappeared from the
+    // fold. Bind to banners first, then fall back to page.prepend.
+    const banners = page.querySelector('.dash-banners-wrap')
+                 || document.getElementById('dashBannersWrap');
+    if (banners && banners.parentNode === page) {
+      banners.after(wrap);
+    } else {
+      // Absolute fallback — first child of page-dashboard.
+      const first = page.firstChild;
+      if (first) page.insertBefore(wrap, first);
+      else page.appendChild(wrap);
     }
   }
 

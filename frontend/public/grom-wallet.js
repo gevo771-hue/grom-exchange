@@ -6426,14 +6426,22 @@ const GW_OC_SWAP = {
     wrapped: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
     dexName: 'SushiSwap',
     tokens: {
-      USDT: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
-      USDC: '0xaf88d065e77c8cC2239327C0EDb1A48022fCcC7',
-      DAI:  '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1',
-      WBTC: '0x2f2a2543B76A4166549F7aaBB2cF6eB5C76A4166549F7aa',
-      ARB:  '0x912CE59144191C1204E64559FE8253a0e49E6548',
-      LINK: '0xf97f4df75117a78c1A5a0DBb814Af92458539FB4',
+      USDT:  '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+      USDC:  '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+      DAI:   '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1',
+      WBTC:  '0x2f2a2543B76A4166549F7aaBB2cF6eB5C76A4166', // was WRONG (46 hex → 40)
+      ARB:   '0x912CE59144191C1204E64559FE8253a0e49E6548',
+      LINK:  '0xf97f4df75117a78c1A5a0DBb814Af92458539FB4',
+      UNI:   '0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0',
+      GMX:   '0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a',
+      MAGIC: '0x539bdE0d7Dbd336b79148AA742883198BBF60342',
+      RDNT:  '0x3082CC23568eA640225c2467653dB90e9250AaA0',
+      JOE:   '0x371c7ec6D8039ff7933a2AA28EB827Ffe1F52f07',
+      PENDLE:'0x0c880f6761F1af8d9Aa9C466984b80DAb9a8c9e8',
+      GRAIL: '0x3d9907F9a368ad0a51Be60f7Da3b97cf940982D8',
+      AAVE:  '0xba5DdD1f9d7F570dc94a51479a000E3BCE967196',
     },
-    decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8, ARB: 18, LINK: 18 },
+    decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8, ARB: 18, LINK: 18, UNI: 18, GMX: 18, MAGIC: 18, RDNT: 18, JOE: 18, PENDLE: 18, GRAIL: 18, AAVE: 18 },
   },
   137: { // Polygon · QuickSwap V2
     router: '0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff',
@@ -7569,13 +7577,23 @@ async function gwDsSubmit() {
       }, 800);
     } catch (e) {
       // Stay in-site: DEX should never redirect users to external web apps.
-      // Show a helpful toast with the actual failure reason. If pair is
-      // truly unsupported, tell the user which chain/token to switch to.
-      const reason = String(e?.message || e || '').slice(0, 200);
-      const msg = /unsupported|not supported|no route|no routes/i.test(reason)
-        ? `No on-chain route ${from} → ${to} yet. Try USDT or USDC as an intermediary, or switch chain via the chip strip above.`
-        : `Swap failed: ${reason}`;
+      const reason = String(e?.message || e || '').slice(0, 250);
+      let msg;
+      if (/session lost|reconnect|not connected|no provider/i.test(reason)) {
+        msg = `Wallet session expired — please reconnect from the modal that opened`;
+      } else if (/user rejected|rejected the request|declined/i.test(reason)) {
+        msg = `You cancelled the transaction in your wallet`;
+      } else if (/insufficient funds|insufficient balance|exceeds balance/i.test(reason)) {
+        msg = `Not enough ${from} to cover swap + gas`;
+      } else if (/chain.*mismatch|wrong chain|unsupported.*chain/i.test(reason)) {
+        msg = `Switch your wallet to the correct network first, then retry`;
+      } else if (/unsupported|not supported|no route|no routes/i.test(reason)) {
+        msg = `No on-chain route ${from} → ${to} on this chain. Try USDT or USDC as intermediate, or a different chain from the strip above.`;
+      } else {
+        msg = `Swap failed: ${reason}`;
+      }
       try { gwToast(msg, 'error'); } catch (_) {}
+      console.warn('[GROM] swap fail — raw error:', e);
     } finally {
       if (cta) cta.classList.remove('busy');
     }

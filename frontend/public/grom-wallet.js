@@ -3545,19 +3545,23 @@ async function gwRenderMetaPortfolio() {
   gwInjectMetaPortfolioCss();
   let wrap = document.getElementById('gwMetaPortfolio');
   const t = gwMpLang();
-  // Own a dedicated `#gwMpSlot` right after banners so other injected
-  // cards (Trending, Yield, Cross-Margin) which also anchor via
-  // `banners.after()` can't push MP down. On every render make sure the
-  // slot exists AND MP lives inside it.
+  // Force a `#gwMpSlot` to always sit right after banners. Cannot just
+  // create-once-and-leave because other card renders can move the slot
+  // by re-parenting siblings, and the initial slot creation might have
+  // happened before banners loaded (then slot ends up somewhere else).
   const ensureSlot = () => {
-    let slot = document.getElementById('gwMpSlot');
-    if (slot) return slot;
-    slot = document.createElement('div');
-    slot.id = 'gwMpSlot';
     const banners = page.querySelector('.dash-banners-wrap')
                  || document.getElementById('dashBannersWrap');
-    if (banners && banners.parentNode === page) banners.after(slot);
-    else page.insertBefore(slot, page.firstChild);
+    let slot = document.getElementById('gwMpSlot');
+    if (!slot) { slot = document.createElement('div'); slot.id = 'gwMpSlot'; }
+    // ALWAYS re-position — banners.after() moves slot to the correct
+    // spot regardless of where it was before. Idempotent if already
+    // the immediate next sibling.
+    if (banners && banners.parentNode === page && banners.nextSibling !== slot) {
+      banners.after(slot);
+    } else if ((!banners || banners.parentNode !== page) && slot.parentNode !== page) {
+      page.insertBefore(slot, page.firstChild);
+    }
     return slot;
   };
   const slot = ensureSlot();

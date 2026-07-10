@@ -7330,16 +7330,42 @@ if (typeof window !== 'undefined' && !gwTwapTickTimer) {
 }
 
 async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
-  // Prefer WC provider if a session exists (even if the .accounts array
-  // is momentarily empty — WC lazy-loads on request). Falls back to
-  // window.ethereum (browser extension).  Gives a helpful error when
-  // neither is present.
+  // Prefer WC provider if session exists. Fall back to window.ethereum.
+  // If neither is available (WC session got wiped between page loads),
+  // try to SILENTLY restore the WC session before showing an error.
   const wc = window.gromWallet?.wcProvider;
-  const provider = wc || window.ethereum;
-  if (!provider) throw new Error('Wallet not connected — tap the address in the top right or sign in with your wallet');
-  const accs = await provider.request({ method: 'eth_accounts' });
-  const account = accs && accs[0];
-  if (!account) throw new Error('Wallet session expired — reconnect via the top-right address chip');
+  let provider = wc || window.ethereum;
+  const savedAddr = localStorage.getItem('gw_addr');
+
+  if (!provider && savedAddr && typeof connectWC === 'function') {
+    // Silent init — showQrModal: false prevents popup. If the browser
+    // already has a WC session in localStorage (`wc@2:*` keys), the
+    // provider will pick it up and be immediately ready for eth_sendTx.
+    try {
+      gwToast('Restoring wallet session…', 'info');
+      provider = await Promise.race([
+        connectWC({ showQrModal: false }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
+      ]);
+    } catch (_) { provider = null; }
+  }
+
+  if (!provider) {
+    try {
+      if (typeof openConnectModal === 'function') openConnectModal();
+      else if (typeof cnConnect === 'function') cnConnect();
+    } catch (_) {}
+    throw new Error('Session lost — reconnect from the modal that just opened, then try again');
+  }
+  const accs = await provider.request({ method: 'eth_accounts' }).catch(() => []);
+  const account = (accs && accs[0]) || savedAddr;
+  if (!account) {
+    try {
+      if (typeof openConnectModal === 'function') openConnectModal();
+      else if (typeof cnConnect === 'function') cnConnect();
+    } catch (_) {}
+    throw new Error('Wallet not connected — sign in from the modal that just opened');
+  }
   const chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
 
   // === Phase 9 hook — if `to` is BTC and user saved a BTC address,

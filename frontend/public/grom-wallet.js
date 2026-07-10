@@ -3793,15 +3793,31 @@ function gwInjectSimpleModeCss() {
     .gw-ds-sim-target-group { margin: 8px 0 12px; }
     .gw-ds-sim-target-group-lbl { font-size: 10.5px; letter-spacing: .12em; color: #6b7a92;
       font-weight: 800; text-transform: uppercase; margin: 0 0 6px; }
-    .gw-ds-sim-chip {
-      display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px;
+    .gw-ds-sim-search {
+      width: 100%; padding: 12px 14px; margin-bottom: 12px; border-radius: 12px;
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-      color: #e7eef8; font-size: 12.5px; font-weight: 800; cursor: pointer; margin: 0 6px 6px 0;
-      transition: background .15s, border-color .15s;
+      color: #e7eef8; font-size: 14px; font-family: inherit; outline: none;
     }
-    .gw-ds-sim-chip:hover { background: rgba(0,194,255,0.10); border-color: rgba(0,194,255,0.40); }
+    .gw-ds-sim-search:focus { border-color: rgba(0,194,255,0.40); }
+    .chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .gw-ds-sim-chip {
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px 8px 6px; border-radius: 999px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: #e7eef8; font-size: 13px; font-weight: 800; cursor: pointer;
+      transition: background .15s, border-color .15s, transform .12s;
+    }
+    .gw-ds-sim-chip:hover { background: rgba(0,194,255,0.10); border-color: rgba(0,194,255,0.40); transform: translateY(-1px); }
     .gw-ds-sim-chip.on { background: rgba(0,194,255,0.20); border-color: rgba(0,194,255,0.60); color: #fff; }
-    .gw-ds-sim-more { color: #5dd5ff; font-size: 12px; font-weight: 800; cursor: pointer; padding: 6px 0; }
+    .gw-ds-sim-chip img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,0.05); }
+    .gw-ds-sim-chip .chip-ico {
+      width: 22px; height: 22px; border-radius: 50%; display: inline-flex;
+      align-items: center; justify-content: center; font-size: 8px; font-weight: 900; letter-spacing: 0;
+      background: linear-gradient(135deg, rgba(0,194,255,0.20), rgba(110,141,255,0.10));
+      border: 1px solid rgba(0,194,255,0.25); color: #5dd5ff;
+    }
+    .gw-ds-sim-chip .chip-sym { line-height: 1; }
+    .gw-ds-sim-more { color: #5dd5ff; font-size: 12.5px; font-weight: 800; cursor: pointer; padding: 10px 0 4px; }
+    .gw-ds-sim-more:hover { color: #99e8ff; }
     .gw-ds-sim-amt { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end;
       padding: 14px; border-radius: 14px; background: rgba(255,255,255,0.03);
       border: 1px solid rgba(255,255,255,0.06); }
@@ -3818,17 +3834,18 @@ function gwInjectSimpleModeCss() {
   document.head.appendChild(s);
 }
 
-/** Same-chain popular tokens for a given chainId. */
+/** Same-chain popular tokens for a given chainId — enriched, 15+ each. */
 const GW_SIM_SAME_CHAIN = {
-  1:     ['USDC', 'USDT', 'ETH', 'WBTC', 'DAI'],
-  42161: ['USDC', 'USDT', 'ETH', 'WBTC', 'ARB'],
-  137:   ['USDC', 'USDT', 'MATIC', 'ETH', 'WBTC'],
-  8453:  ['USDC', 'ETH', 'DAI'],
-  56:    ['USDT', 'USDC', 'BNB', 'BUSD'],
-  10:    ['USDC', 'USDT', 'ETH', 'OP'],
-  43114: ['USDC', 'USDT', 'AVAX', 'ETH'],
+  1:     ['ETH', 'USDC', 'USDT', 'WBTC', 'DAI', 'LINK', 'UNI', 'AAVE', 'PEPE', 'SHIB', 'MKR', 'CRV', 'LDO', 'ARB', 'MATIC'],
+  42161: ['ETH', 'USDC', 'USDT', 'WBTC', 'ARB', 'DAI', 'LINK', 'UNI', 'AAVE', 'GMX', 'MAGIC', 'JOE', 'GRAIL', 'RDNT', 'PENDLE'],
+  137:   ['MATIC', 'USDC', 'USDT', 'ETH', 'WBTC', 'DAI', 'LINK', 'AAVE', 'QUICK', 'CRV', 'BAL', 'STG', 'GNS'],
+  8453:  ['ETH', 'USDC', 'DAI', 'AERO', 'DEGEN', 'TOSHI', 'BRETT', 'HIGHER'],
+  56:    ['BNB', 'USDT', 'USDC', 'BUSD', 'CAKE', 'DAI', 'ETH', 'BTCB', 'DOGE', 'ADA', 'XRP'],
+  10:    ['ETH', 'USDC', 'USDT', 'OP', 'DAI', 'WBTC', 'LINK', 'SNX', 'VELO'],
+  43114: ['AVAX', 'USDC', 'USDT', 'ETH', 'WBTC', 'JOE', 'PNG', 'GMX', 'DAI', 'LINK'],
 };
-const GW_SIM_CROSS_CHAIN = ['BTC', 'SOL', 'TRX', 'TON', 'MATIC', 'AVAX', 'BNB'];
+/** Cross-chain popular targets — 15+ options. */
+const GW_SIM_CROSS_CHAIN = ['BTC', 'SOL', 'TRX', 'TON', 'MATIC', 'AVAX', 'BNB', 'ETH', 'ARB', 'OP', 'BASE', 'LINEA', 'FTM', 'DOGE', 'XRP'];
 
 async function gwDsSimRenderBalances() {
   const list = document.getElementById('gwDsSimBalances');
@@ -3910,30 +3927,54 @@ function gwDsSimPickFrom(sym, chainId, availAmt) {
 function gwDsSimRenderTargets(chainId, fromSym) {
   const box = document.getElementById('gwDsSimTarget');
   if (!box) return;
+  const chainMeta = GW_OC_CHAIN_META[chainId] || { label: '' };
   const same = (GW_SIM_SAME_CHAIN[chainId] || []).filter((s) => s !== fromSym);
   const cross = GW_SIM_CROSS_CHAIN.filter((s) => s !== fromSym && !same.includes(s));
-  const chip = (sym, group) => `<span class="gw-ds-sim-chip" data-sym="${sym}" data-group="${group}">${sym}</span>`;
+  const findLogo = (sym) => (GW_DS_ASSETS.find((a) => a.sym === sym)?.logo) || '';
+  const chip = (sym, group) => {
+    const logo = findLogo(sym);
+    const ico = logo
+      ? `<img src="${logo}" alt="" onerror="this.outerHTML='<span class=&quot;chip-ico&quot;>${sym.slice(0, 3)}</span>'" />`
+      : `<span class="chip-ico">${sym.slice(0, 3)}</span>`;
+    return `<span class="gw-ds-sim-chip" data-sym="${sym}" data-group="${group}">${ico}<span class="chip-sym">${sym}</span></span>`;
+  };
   box.innerHTML = `
-    <div class="gw-ds-sim-target-group">
-      <p class="gw-ds-sim-target-group-lbl">Same chain (cheap · fast)</p>
-      <div>${same.map((s) => chip(s, 'same')).join('') || '<span style="color:#6b7a92;font-size:12px">No same-chain routes</span>'}</div>
+    <input type="text" class="gw-ds-sim-search" id="gwDsSimSearchInput" placeholder="Search token symbol or name…" />
+    <div class="gw-ds-sim-target-group" data-group="same">
+      <p class="gw-ds-sim-target-group-lbl">Same chain (${chainMeta.label}) · cheap · fast</p>
+      <div class="chip-list">${same.map((s) => chip(s, 'same')).join('') || '<span style="color:#6b7a92;font-size:12px">No same-chain routes</span>'}</div>
     </div>
-    <div class="gw-ds-sim-target-group">
-      <p class="gw-ds-sim-target-group-lbl">Cross-chain (bridge)</p>
-      <div>${cross.map((s) => chip(s, 'cross')).join('')}</div>
+    <div class="gw-ds-sim-target-group" data-group="cross">
+      <p class="gw-ds-sim-target-group-lbl">Cross-chain (bridge · takes 1-5 min)</p>
+      <div class="chip-list">${cross.map((s) => chip(s, 'cross')).join('')}</div>
     </div>
-    <div class="gw-ds-sim-more" id="gwDsSimSearch">🔍 Search all 10 000+ tokens</div>
+    <div class="gw-ds-sim-more" id="gwDsSimSearchBtn">🔍 Full search — all 10 000+ tokens →</div>
   `;
-  box.querySelectorAll('.gw-ds-sim-chip').forEach((c) => {
-    c.onclick = () => {
-      box.querySelectorAll('.gw-ds-sim-chip.on').forEach(x => x.classList.remove('on'));
-      c.classList.add('on');
-      const to = document.getElementById('gwDsTo'); if (to) to.value = c.dataset.sym;
-      try { gwDsEnsureTokenOption(c.dataset.sym, { sym: c.dataset.sym }); gwTkSyncButton('to'); } catch (_) {}
-      try { gwDsRefreshRate(); } catch (_) {}
+  const pickTarget = (sym) => {
+    box.querySelectorAll('.gw-ds-sim-chip.on').forEach(x => x.classList.remove('on'));
+    box.querySelector(`.gw-ds-sim-chip[data-sym="${sym}"]`)?.classList.add('on');
+    const to = document.getElementById('gwDsTo'); if (to) to.value = sym;
+    try { gwDsEnsureTokenOption(sym, { sym }); gwTkSyncButton('to'); } catch (_) {}
+    try { gwDsRefreshRate(); } catch (_) {}
+  };
+  box.querySelectorAll('.gw-ds-sim-chip').forEach((c) => { c.onclick = () => pickTarget(c.dataset.sym); });
+
+  // Inline live-filter over the chip lists.
+  const searchInp = document.getElementById('gwDsSimSearchInput');
+  if (searchInp) {
+    searchInp.oninput = () => {
+      const q = searchInp.value.trim().toUpperCase();
+      box.querySelectorAll('.gw-ds-sim-chip').forEach((c) => {
+        c.style.display = (!q || c.dataset.sym.includes(q)) ? '' : 'none';
+      });
+      // Also show/hide the group labels if all their chips are hidden.
+      box.querySelectorAll('.gw-ds-sim-target-group').forEach((g) => {
+        const anyVisible = [...g.querySelectorAll('.gw-ds-sim-chip')].some((c) => c.style.display !== 'none');
+        g.style.display = anyVisible ? '' : 'none';
+      });
     };
-  });
-  document.getElementById('gwDsSimSearch')?.addEventListener('click', () => {
+  }
+  document.getElementById('gwDsSimSearchBtn')?.addEventListener('click', () => {
     try { gwTkOpen('to'); } catch (_) {}
   });
 }
@@ -7337,15 +7378,18 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   let provider = wc || window.ethereum;
   const savedAddr = localStorage.getItem('gw_addr');
 
-  if (!provider && savedAddr && typeof connectWC === 'function') {
-    // Silent init — showQrModal: false prevents popup. If the browser
-    // already has a WC session in localStorage (`wc@2:*` keys), the
-    // provider will pick it up and be immediately ready for eth_sendTx.
+  if (!provider && savedAddr) {
+    // WC session was persisted (`wc@2:*` in localStorage) but our in-memory
+    // provider is null after a page refresh. Rebuild via connectWC with
+    // QR modal enabled — this way if the persisted session can't be
+    // restored (e.g. wallet was cleared on user's phone) they still get
+    // a way to reconnect. connectWC will short-circuit when the persisted
+    // session is intact — no QR shows in that case.
     try {
       gwToast('Restoring wallet session…', 'info');
       provider = await Promise.race([
-        connectWC({ showQrModal: false }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
+        typeof connectWC === 'function' ? connectWC({ showQrModal: true }) : Promise.reject(new Error('no connectWC')),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000)),
       ]);
     } catch (_) { provider = null; }
   }
@@ -7355,7 +7399,7 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
       if (typeof openConnectModal === 'function') openConnectModal();
       else if (typeof cnConnect === 'function') cnConnect();
     } catch (_) {}
-    throw new Error('Session lost — reconnect from the modal that just opened, then try again');
+    throw new Error('Wallet session lost — please reconnect from the modal, then try Swap again');
   }
   const accs = await provider.request({ method: 'eth_accounts' }).catch(() => []);
   const account = (accs && accs[0]) || savedAddr;

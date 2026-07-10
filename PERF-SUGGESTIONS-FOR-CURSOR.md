@@ -1,5 +1,143 @@
 # Performance suggestions — page-load 6.2 s → <1 s
 
+## Update 2026-07-10f — Комплексный аудит (Cursor, помоги!)
+
+Гевор ловит три класса регрессий, я закрыл со своей стороны что мог, дальше
+нужен твой глубокий full-stack audit. Ниже — список конкретных багов + куда
+смотреть.
+
+## 1. Disconnect неполный
+
+Юзер жмёт «Disconnect» в дропдауне chip'а → chip меняется на «Подключить
+кошелёк» (ЭТО РАБОТАЕТ, я вычистил `wc@2:*`, `WCM_*`, `wagmi.*`, JWT, label
+в v=20260710ah). Но **всё остальное на дашборде остаётся в подключённом
+состоянии** — stale данные:
+
+Скрин (chip = disconnected, всё остальное — стейт залогиненного):
+- `СТОИМОСТЬ ПОРТФЕЛЯ` = «—» ✅ (правильно)
+- `P&L ЗА 24Ч` = **+\$302.11** ❌ (осталось)
+- `ОТКРЫТЫЕ ПОЗИЦИИ` = **3** ❌
+- `WIN-RATE BINARY (7Д)` = **64%** ❌
+- Сайдбар «Впервые на GROM? 90-секундный тур» ❌ (должен появляться только
+  для НОВЫХ юзеров, а он торчит после logout)
+- Сайдбар «Выйти» кнопка ❌ (должна пропасть при disconnect)
+
+**Что нужно от тебя:**
+
+Слушай событие `wallet-disconnected` (я его диспатчу в `disconnect()`
+grom-wallet.js) и сбрасывай:
+- Stats-grid → «—» / «0» / «—»
+- `#refKpiTotalReferred`, `#refKpiActive30d`, `#refKpiTotalEarned`,
+  `#refKpiPendingPayout` → «—» (у меня есть `gwReferralPageMeta` который
+  это делает для нелогированных, но он не срабатывает при runtime disconnect)
+- Sidebar «Впервые на GROM?» → скрыть
+- Sidebar «Выйти» кнопка → скрыть
+
+```js
+window.addEventListener('wallet-disconnected', () => {
+  resetAllStats();
+  resetReferralKpis();
+  resetSidebar();
+  updateAuthUiPatched();
+});
+```
+
+## 2. Cache flash при hard-refresh (~500 ms)
+
+При Cmd+Shift+R на дашборде на долю секунды видно **старую версию HTML** —
+например «Впервые на GROM?» widget появляется потом пропадает. У меня уже
+есть `<style id="grom-cex-hide-critical">` в `<head>` который прячет
+«Депозит» пилюлю и CEX-текст в баннерах. Но твоих виджетов (welcome tour,
+demo P&L и т.д.) в этом крит-CSS нет.
+
+**Что нужно от тебя:**
+
+Расширь `#grom-cex-hide-critical` (или заведи собственный `<style>` блок
+в `<head>` СРАЗУ ПОСЛЕ `<meta viewport>`) чтобы прятать до JS boot:
+```css
+/* pre-hydration */
+#dashWelcomeTour,           /* «Впервые на GROM?» widget в сайдбаре */
+#dashboardLogoutBtn,        /* «Выйти» кнопка внизу сайдбара */
+.stats-grid .stat-card *[data-hydrate-only] { visibility: hidden; }
+```
+Плюс добавь `data-hydrate-only="1"` в те числовые ноды дашборда (P&L,
+positions, win-rate) которые должны показываться ТОЛЬКО когда JWT
+провалидирован. Тогда до валидации они скрыты, после — JS убирает
+`data-hydrate-only` и они появляются с реальными числами.
+
+Альтернативно (проще, но грубее): в `<head>` inline JS проверяет
+`localStorage.grom_jwt` и добавляет class на `<html>`:
+```html
+<script>
+  document.documentElement.classList.toggle(
+    'grom-authed',
+    !!localStorage.getItem('grom_jwt')
+  );
+</script>
+<style>
+  html:not(.grom-authed) [data-authed-only] { display: none !important; }
+</style>
+```
+Тогда пометь всё что требует auth: `data-authed-only="1"` — и это никогда
+не мигнёт на дизконнекте.
+
+## 3. Registration flow (Cursor territory)
+
+Юзер жалуется на несколько мелочей в регистрации/логине через Privy — я не
+вижу их напрямую, но раз ты владелец `grom-privy.js`, проверь на живом
+grom.exchange:
+
+- **Email OTP**: приходит письмо мгновенно? Если нет — throttling или
+  DKIM/SPF issue на стороне Privy dashboard.
+- **Google OAuth**: `redirect_uri` совпадает с whitelisted? Проверь
+  https://dashboard.privy.io/apps/cmobpd4kh006e0cl5zuziu36v/settings
+- **After signup**: user сразу получает JWT и chip обновляется? Или
+  требует ручной F5?
+- **Модалка после OTP submit**: закрывается автоматически? У меня были
+  жалобы что после подтверждения кода модалка висит с пустым инпутом.
+
+## 4. Swap полный audit (ты уже сделал v=20260710ag — спасибо!)
+
+Проверено через MCP:
+- ✅ `gwResolveSwapChainId` работает
+- ✅ `gwAggCanExec` фильтрует
+- ✅ `gwFindV2SwapPath` multi-hop
+- ✅ `wallet_switchEthereumChain` убран
+- ✅ Meta-exec logs включены
+- ✅ Approve на Arb приходит правильно (Trust popup показал 0.07\$ комиссии)
+
+Единственный последний user report — approve popup требует ETH на Arb для
+gas, у юзера 0.00000024 ETH < 0.00000409 нужно. Это НЕ баг — это user
+top-up. Свап логически рабочий.
+
+## 5. Cache-busting стратегия (мета-совет)
+
+Каждый деплой мы бампаем `?v=20260710aa/ab/ac/…/ah` вручную. При частых
+деплоях легко забыть. Идея на будущее:
+- В deploy.sh брать `git rev-parse --short HEAD` и подставлять в все
+  script src через простой sed
+- Или использовать content-hash от файла (Vite/Webpack style)
+
+Не срочно, но избавит от гадания «какая версия у юзера в браузере».
+
+---
+
+## TL;DR — что от тебя нужно (priority order)
+
+1. **Disconnect reset UX** — слушать `wallet-disconnected`, сбросить всё
+   что показывает stale user data (stats-grid, sidebar widgets)
+2. **Cache flash prevention** — inline `<script>` + `<style>` в `<head>`
+   с `data-authed-only` pattern
+3. **Registration end-to-end** — проверь Email OTP + Google OAuth + JWT
+   propagation
+4. **(nice-to-have)** Cache-bust automation в deploy.sh
+
+Я останавливаюсь на своей стороне (grom-wallet.js) и жду твоих правок,
+чтобы не создавать race conditions.
+
+---
+
+
 ## Update 2026-07-10e — Полный аудит свапа (Cursor, помоги!)
 
 Гевор ловит свап-ошибки уже полдня, я в тупике. Прошу тебя провести

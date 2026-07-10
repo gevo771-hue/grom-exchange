@@ -5969,7 +5969,7 @@ async function gwDsRefreshRate() {
     const rateStr = Number(q.ratio).toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
     routeEl.innerHTML = `
       <span class="k">${t.route}</span><span class="v">${mode === 'paper' ? 'GROM Convert' : 'LiFi meta-aggregator'}</span>
-      <span class="k">${t.fee}</span><span class="v">${q.feePct != null ? q.feePct + '%' : '0.10%'}</span>
+      <span class="k">${t.fee}</span><span class="v">${q.feePct != null ? q.feePct + '%' : (GW_LIFI_FEE_PCT * 100).toFixed(2) + '%'}</span>
       <span class="k">${t.slip}</span><span class="v">${mode === 'paper' ? '—' : '0.5%'}</span>
       <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${rateStr} ${to}</span>
     `;
@@ -7176,18 +7176,14 @@ async function gwDsSubmit() {
         if (wrap) { wrap.remove(); gwInjectDashSwapPanel(); }
       }, 800);
     } catch (e) {
-      // Graceful fallback: if inline path isn't supported for this pair/chain,
-      // give the user the 1inch escape hatch instead of a dead-end error.
-      const reason = String(e?.message || e || '').slice(0, 140);
-      const label = /unsupported|not supported/i.test(reason)
-        ? 'Route not available for this pair on this chain — open LiFi web app?'
-        : `Swap failed: ${reason}. Open LiFi web app instead?`;
-      const goExt = confirm(label);
-      if (goExt) {
-        // Fallback: LiFi's own hosted UI (also aggregates across chains).
-        // Ping our integrator so we still get analytic credit on external swap.
-        window.open(`https://jumper.exchange/?fromChain=1&fromToken=${from}&toChain=1&toToken=${to}`, '_blank', 'noopener,noreferrer');
-      }
+      // Stay in-site: DEX should never redirect users to external web apps.
+      // Show a helpful toast with the actual failure reason. If pair is
+      // truly unsupported, tell the user which chain/token to switch to.
+      const reason = String(e?.message || e || '').slice(0, 200);
+      const msg = /unsupported|not supported|no route|no routes/i.test(reason)
+        ? `No on-chain route ${from} → ${to} yet. Try USDT or USDC as an intermediary, or switch chain via the chip strip above.`
+        : `Swap failed: ${reason}`;
+      try { gwToast(msg, 'error'); } catch (_) {}
     } finally {
       if (cta) cta.classList.remove('busy');
     }

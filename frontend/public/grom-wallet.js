@@ -2001,6 +2001,7 @@ function hook() {
   }
 
   console.log('[grom-wallet] ready · project:', WC_PROJECT_ID.slice(0, 8) + '…');
+  try { gwInjectMobilePerfCss(); } catch (_) {}
   try { gwInjectDexPagesCss(); } catch (_) {}
 }
 
@@ -4258,8 +4259,8 @@ if (typeof window !== 'undefined') {
 }
 
 const GW_DS_TR = {
-  ru: { h: 'Мгновенный своп', sub: 'Мгновенный обмен · лучшая ставка · без комиссий сети.', from: 'ОТДАЁШЬ', to: 'ПОЛУЧАЕШЬ', est: 'Введи сумму, чтобы увидеть курс.', cta: 'Сделать своп', ctaOc: 'Свап через кошелёк', ctaLogin: 'Войди чтобы свопать', getting: 'Запрос курса…', bal: 'Баланс', modeT: 'Торговый счёт', modeO: 'On-chain кошелёк', slip: 'Slippage', route: 'Маршрут', priceImpact: 'Влияние на цену', fee: 'Комиссия GROM', recent: 'Недавние свопы', success: 'Своп выполнен', flip: 'Поменять местами', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAX' },
-  en: { h: 'Instant swap',    sub: 'Instant swaps · best rate · zero network fees.', from: 'YOU PAY', to: 'YOU GET', est: 'Enter an amount to see the live rate.', cta: 'Swap now', ctaOc: 'Swap via wallet', ctaLogin: 'Sign in to swap', getting: 'Fetching rate…', bal: 'Balance', modeT: 'Trading account', modeO: 'On-chain wallet', slip: 'Slippage', route: 'Route', priceImpact: 'Price impact', fee: 'GROM fee', recent: 'Recent swaps', success: 'Swap complete', flip: 'Flip', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAX' },
+  ru: { h: 'Мгновенный своп', sub: 'Лучший курс · без комиссий сети', from: 'ОТДАЁШЬ', to: 'ПОЛУЧАЕШЬ', est: 'Введи сумму, чтобы увидеть курс.', cta: 'Сделать своп', ctaOc: 'Свап через кошелёк', ctaLogin: 'Войди чтобы свопать', getting: 'Запрос курса…', bal: 'Баланс', modeT: 'Торговый счёт', modeO: 'On-chain кошелёк', slip: 'Slippage', route: 'Маршрут', priceImpact: 'Влияние на цену', fee: 'Комиссия GROM', recent: 'Недавние свопы', success: 'Своп выполнен', flip: 'Поменять местами', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAX', tabSimple: 'Простой', tabAdvanced: 'Продвинутый' },
+  en: { h: 'Instant swap',    sub: 'Best rate · zero network fees', from: 'YOU PAY', to: 'YOU GET', est: 'Enter an amount to see the live rate.', cta: 'Swap now', ctaOc: 'Swap via wallet', ctaLogin: 'Sign in to swap', getting: 'Fetching rate…', bal: 'Balance', modeT: 'Trading account', modeO: 'On-chain wallet', slip: 'Slippage', route: 'Route', priceImpact: 'Price impact', fee: 'GROM fee', recent: 'Recent swaps', success: 'Swap complete', flip: 'Flip', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAX', tabSimple: 'Simple', tabAdvanced: 'Advanced' },
   es: { h: 'Swap instantáneo', sub: 'Swaps al instante · mejor tasa · sin comisiones de red.', from: 'PAGAS', to: 'RECIBES', est: 'Introduce un importe para ver el tipo en vivo.', cta: 'Hacer swap', ctaOc: 'Swap con cartera', ctaLogin: 'Inicia sesión', getting: 'Obteniendo…', bal: 'Saldo', modeT: 'Cuenta trading', modeO: 'Cartera on-chain', slip: 'Slippage', route: 'Ruta', priceImpact: 'Impacto', fee: 'Comisión GROM', recent: 'Swaps recientes', success: 'Swap completado', flip: 'Voltear', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MÁX' },
   ar: { h: 'مبادلة فوريّة', sub: 'مبادلات فوريّة · أفضل سعر · بدون رسوم شبكة.', from: 'تدفع', to: 'تستلم', est: 'أدخل المبلغ لرؤية السعر.', cta: 'مبادلة', ctaOc: 'المبادلة عبر المحفظة', ctaLogin: 'سجّل الدخول', getting: 'جلب السعر…', bal: 'الرصيد', modeT: 'حساب التداول', modeO: 'محفظة على السلسلة', slip: 'الانزلاق', route: 'المسار', priceImpact: 'أثر السعر', fee: 'رسوم GROM', recent: 'مبادلات حديثة', success: 'تمّت المبادلة', flip: 'تبديل', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'الحد' },
   zh: { h: '极速兑换',       sub: '秒级兑换 · 最佳价格 · 零网络费。', from: '你支付', to: '你得到', est: '输入金额以查看实时汇率。', cta: '立即兑换', ctaOc: '通过钱包兑换', ctaLogin: '请先登录', getting: '获取报价…', bal: '余额', modeT: '交易账户', modeO: '链上钱包', slip: '滑点', route: '路径', priceImpact: '价格影响', fee: 'GROM 手续费', recent: '最近兑换', success: '兑换完成', flip: '交换', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: '最大' },
@@ -4296,11 +4297,11 @@ function gwSwapModeSet(m) { try { localStorage.setItem('gw_swap_mode', m); } cat
 function gwInjectSimpleModeCss() {
   if (document.getElementById('gw-ds-simple-css')) return;
   const css = `
-    .gw-ds-mode-tabs { display: inline-flex; gap: 4px; padding: 3px; border-radius: 10px;
-      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); }
-    .gw-ds-mode-tab { padding: 6px 14px; border: 0; background: transparent; color: #98a8c0;
-      font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
-      border-radius: 8px; cursor: pointer; transition: color .15s, background .15s; }
+    .gw-ds-mode-tabs { display: flex; gap: 3px; padding: 3px; border-radius: 10px; width: 100%;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); box-sizing: border-box; }
+    .gw-ds-mode-tab { flex: 1; padding: 8px 10px; border: 0; background: transparent; color: #98a8c0;
+      font-size: 11.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+      border-radius: 8px; cursor: pointer; transition: color .15s, background .15s; text-align: center; }
     .gw-ds-mode-tab.on { color: #04121f; background: linear-gradient(135deg, #00c2ff, #6e8dff); }
     /* Simple mode strip */
     .gw-ds-simple { display: none; margin: 10px 0 6px; }
@@ -4596,20 +4597,27 @@ function gwDsSimBuild() {
   });
 }
 
-/** Header toggle inserted into .gw-ds-head. */
+/** Header toggle inserted into .gw-ds-head-actions. */
 function gwDsSimBuildToggle() {
   const head = document.querySelector('.gw-ds-head');
   if (!head || head.querySelector('.gw-ds-mode-tabs')) return;
+  let actions = head.querySelector('.gw-ds-head-actions');
+  if (!actions) {
+    actions = document.createElement('div');
+    actions.className = 'gw-ds-head-actions';
+    head.appendChild(actions);
+  }
+  // Migrate tabs wrongly placed before LIVE badge (old layout).
+  head.querySelectorAll('.gw-ds-mode-tabs').forEach((el) => { if (el.parentElement !== actions) el.remove(); });
   const mode = gwSwapModeGet();
+  const t = gwDsLang();
   const tabs = document.createElement('div');
   tabs.className = 'gw-ds-mode-tabs';
   tabs.innerHTML = `
-    <button class="gw-ds-mode-tab ${mode === 'simple' ? 'on' : ''}" data-mode="simple">Simple</button>
-    <button class="gw-ds-mode-tab ${mode === 'advanced' ? 'on' : ''}" data-mode="advanced">Advanced</button>
+    <button class="gw-ds-mode-tab ${mode === 'simple' ? 'on' : ''}" data-mode="simple">${t.tabSimple || 'Simple'}</button>
+    <button class="gw-ds-mode-tab ${mode === 'advanced' ? 'on' : ''}" data-mode="advanced">${t.tabAdvanced || 'Advanced'}</button>
   `;
-  // Replace the LIVE badge with our toggle (badge stays as small hint below).
-  const badge = head.querySelector('.gw-ds-badge');
-  if (badge) badge.before(tabs); else head.appendChild(tabs);
+  actions.appendChild(tabs);
   tabs.querySelectorAll('button').forEach((b) => {
     b.onclick = () => {
       tabs.querySelectorAll('button').forEach(x => x.classList.remove('on'));
@@ -4621,18 +4629,22 @@ function gwDsSimBuildToggle() {
 }
 
 function gwDsSimSetup() {
-  // Wait for the swap panel to be mounted, then augment.
-  let n = 0; const id = setInterval(() => {
-    n++;
-    if (document.getElementById('gwDsCard')) {
-      clearInterval(id);
-      gwDsSimBuildToggle();
-      gwDsSimBuild();
-      const initMode = gwSwapModeGet();
-      document.querySelectorAll('.gw-ds-wrap').forEach(w => w.classList.toggle('gw-ds-mode-simple', initMode === 'simple'));
-      if (initMode === 'simple') gwDsSimRenderBalances();
-    } else if (n >= 30) { clearInterval(id); }
-  }, 500);
+  const boot = () => {
+    if (!document.getElementById('gwDsCard')) return false;
+    gwDsSimBuildToggle();
+    gwDsSimBuild();
+    const initMode = gwSwapModeGet();
+    document.querySelectorAll('.gw-ds-wrap').forEach(w => w.classList.toggle('gw-ds-mode-simple', initMode === 'simple'));
+    if (initMode === 'simple') requestAnimationFrame(() => gwDsSimRenderBalances());
+    return true;
+  };
+  if (!boot()) {
+    let n = 0;
+    const id = setInterval(() => {
+      n += 1;
+      if (boot() || n >= 25) clearInterval(id);
+    }, 120);
+  }
   window.addEventListener('grom:wallet-connected', () => gwDsSimRenderBalances());
   document.addEventListener('grom:wallet-address-known', () => gwDsSimRenderBalances());
   document.addEventListener('grom:wallet-disconnected', () => gwDsSimRenderBalances());
@@ -4641,6 +4653,38 @@ function gwDsSimSetup() {
       gwDsSimBuildToggle(); gwDsSimBuild(); gwDsSimRenderBalances();
     }
   }, 400));
+}
+
+function gwInjectMobilePerfCss() {
+  if (document.getElementById('gw-mobile-perf-css')) return;
+  const css = `
+    @media (max-width: 768px), (hover: none) and (pointer: coarse) {
+      .gw-ds-card::before,
+      .gw-mp-card::before,
+      .gw-dp-card::before { animation: none !important; opacity: 0.28 !important; }
+      .gw-ds-card,
+      .gw-mp-card,
+      .gw-dp-card,
+      .gw-sp-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+      .gw-ds-badge::before,
+      #gw-ai-fab .dot { animation: none !important; box-shadow: none !important; }
+      .gw-ds-sim-row:hover,
+      .gw-ds-cta:hover,
+      .gw-ds-chip:hover { transform: none !important; }
+      .gw-ds-sim-row,
+      .gw-ds-row,
+      .gw-ds-cta,
+      .gw-ds-chip,
+      .gw-mp-bar span { transition: none !important; }
+      .gw-ds-card,
+      .gw-mp-card { contain: layout style paint; }
+      .gw-sp-chart .skl span { animation: none !important; opacity: 0.45 !important; }
+    }
+  `;
+  const s = document.createElement('style');
+  s.id = 'gw-mobile-perf-css';
+  s.textContent = css;
+  document.head.appendChild(s);
 }
 
 function gwInjectDashSwapCss() {
@@ -4671,13 +4715,15 @@ function gwInjectDashSwapCss() {
       pointer-events: none; z-index: 0;
     }
 
-    .gw-ds-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; position: relative; z-index: 1; margin-bottom: 12px; }
-    .gw-ds-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 4px;
+    .gw-ds-head { display: flex; flex-direction: column; gap: 0; position: relative; z-index: 1; margin-bottom: 14px; }
+    .gw-ds-head-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 5px; }
+    .gw-ds-head-actions { margin-top: 10px; }
+    .gw-ds-title { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; margin: 0;
       background: linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-      display: inline-flex; align-items: center; gap: 8px; }
-    .gw-ds-sub { font-size: 12.5px; color: #98a8c0; line-height: 1.55; margin: 0; max-width: 480px; }
-    .gw-ds-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,194,255,0.15); color: #3ac2ff; padding: 5px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .14em; align-self: center; border: 1px solid rgba(0,194,255,0.25); }
-    .gw-ds-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #22c17c; box-shadow: 0 0 8px #22c17c; animation: gwDsDot 1.6s ease-in-out infinite; }
+      display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; white-space: nowrap; }
+    .gw-ds-sub { font-size: 12px; color: #7a8fa4; line-height: 1.4; margin: 0; }
+    .gw-ds-badge { display: inline-flex; align-items: center; gap: 5px; background: rgba(0,194,255,0.12); color: #3ac2ff; padding: 4px 9px; border-radius: 999px; font-size: 9px; font-weight: 800; letter-spacing: .12em; flex-shrink: 0; border: 1px solid rgba(0,194,255,0.22); }
+    .gw-ds-badge::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #22c17c; box-shadow: 0 0 6px #22c17c; animation: gwDsDot 1.6s ease-in-out infinite; }
     @keyframes gwDsDot { 50% { opacity: 0.35; } }
 
     /* Mode toggle */
@@ -4886,9 +4932,11 @@ function gwInjectDashSwapCss() {
     @keyframes gwDsPop { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
     @media (max-width: 600px) {
-      .gw-ds-card { padding: 18px 16px 16px; border-radius: 20px; }
-      .gw-ds-title { font-size: 18px; }
-      .gw-ds-sub { font-size: 12px; }
+      .gw-ds-card { padding: 16px 14px 14px; border-radius: 18px; }
+      .gw-ds-head { margin-bottom: 12px; }
+      .gw-ds-title { font-size: 16px; }
+      .gw-ds-sub { font-size: 11.5px; }
+      .gw-ds-head-actions { margin-top: 8px; }
       .gw-ds-select select { min-width: 110px; font-size: 13.5px; padding: 9px 26px 9px 10px; }
       .gw-ds-amt input { font-size: 20px; }
       .gw-ds-chip { font-size: 10.5px; padding: 6px 4px; }
@@ -6603,11 +6651,12 @@ function gwDsBuildPanel() {
   wrap.innerHTML = `
     <div class="gw-ds-card" id="gwDsCard">
       <div class="gw-ds-head">
-        <div>
+        <div class="gw-ds-head-top">
           <h3 class="gw-ds-title">⚡ ${t.h}</h3>
-          <p class="gw-ds-sub">${t.sub}</p>
+          <span class="gw-ds-badge">LIVE</span>
         </div>
-        <span class="gw-ds-badge">LIVE</span>
+        <p class="gw-ds-sub">${t.sub}</p>
+        <div class="gw-ds-head-actions"></div>
       </div>
       ${gwDsChainChipsHtml(null)}
       <div class="gw-ds-form">

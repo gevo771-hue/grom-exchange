@@ -11053,11 +11053,40 @@ function gwInjectLpPolishCss() {
 
     /* Chain grid + powered-by ribbon (replaces old BTC ticker) */
     .gw-lp-chains {
+      position: relative; isolation: isolate; overflow: hidden;
       padding: 28px 22px 30px; border-radius: 20px; box-sizing: border-box;
-      background: linear-gradient(180deg, rgba(11,18,32,.55), rgba(8,12,20,.35));
-      border: 1px solid rgba(122,162,199,.14);
+      background:
+        radial-gradient(110% 70% at 50% -10%, rgba(0,194,255,.10), transparent 58%),
+        radial-gradient(70% 50% at 100% 100%, rgba(34,193,124,.06), transparent 55%),
+        linear-gradient(180deg, rgba(11,18,32,.80), rgba(8,12,20,.52));
+      border: 1px solid rgba(0,194,255,.12);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.05),
+        0 20px 50px -24px rgba(0,0,0,.50),
+        0 0 0 1px rgba(122,162,199,.05);
       margin-bottom: 6px;
     }
+    .gw-lp-chains::before {
+      content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0;
+      padding: 1px;
+      background: linear-gradient(160deg,
+        rgba(0,194,255,.38) 0%,
+        rgba(122,162,199,.10) 38%,
+        rgba(34,193,124,.16) 72%,
+        rgba(122,162,199,.08) 100%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude;
+      opacity: 0.9;
+    }
+    .gw-lp-chains::after {
+      content: ''; position: absolute; top: 0; left: 10%; right: 10%; height: 1px; z-index: 0;
+      background: linear-gradient(90deg, transparent, rgba(93,213,255,.50), rgba(0,194,255,.22), transparent);
+      pointer-events: none;
+    }
+    .gw-lp-chains-h,
+    .gw-lp-chains-sub,
+    .gw-lp-chains-grid { position: relative; z-index: 1; }
     @media (max-width: 768px) {
       .gw-lp-chains { padding: 22px 16px 24px; border-radius: 16px; margin-bottom: 8px; }
     }
@@ -11078,10 +11107,17 @@ function gwInjectLpPolishCss() {
     .gw-lp-chain-cell {
       display: flex; flex-direction: column; align-items: center; gap: 5px;
       padding: 10px 4px; border-radius: 12px;
-      background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.05);
-      transition: transform .18s, border-color .18s, background .18s; min-width: 0;
+      background: rgba(255,255,255,.025);
+      border: 1px solid rgba(122,162,199,.10);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+      transition: transform .18s, border-color .18s, background .18s, box-shadow .18s; min-width: 0;
     }
-    .gw-lp-chain-cell:hover { transform: translateY(-2px); border-color: rgba(0,194,255,.32); background: rgba(255,255,255,.06); }
+    .gw-lp-chain-cell:hover {
+      transform: translateY(-2px);
+      border-color: rgba(0,194,255,.28);
+      background: rgba(0,194,255,.06);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 8px 20px -12px rgba(0,194,255,.25);
+    }
     .gw-lp-chain-cell .logo {
       width: 34px; height: 34px; border-radius: 50%; overflow: hidden;
       display: inline-flex; align-items: center; justify-content: center;

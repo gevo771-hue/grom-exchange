@@ -11014,55 +11014,90 @@ function gwInjectLpPolishCss() {
     .gw-lp-hi-h { margin: 0; font-size: 14px; font-weight: 800; color: #fff; letter-spacing: -0.01em; }
     .gw-lp-hi-p { margin: 4px 0 0; font-size: 12px; color: #cfdfee; line-height: 1.45; }
 
-    /* Chain grid — clean glass panel (matches lp-product-card, no gradient frame) */
+    /* Chain grid — glass panel with premium tile cells (2026-07-11 polish) */
     .gw-lp-chains {
       position: relative;
-      padding: 32px 26px 50px; border-radius: 20px; box-sizing: border-box;
-      background: linear-gradient(180deg, rgba(11,18,32,.72), rgba(8,12,20,.48));
-      border: 1px solid rgba(122,162,199,.16);
-      box-shadow: 0 20px 56px rgba(0,0,0,.32);
-      margin-bottom: 6px;
+      padding: 40px 32px 44px; border-radius: 22px; box-sizing: border-box;
+      background:
+        radial-gradient(120% 80% at 50% -10%, rgba(0,194,255,.10), transparent 55%),
+        linear-gradient(180deg, rgba(11,18,32,.78), rgba(8,12,20,.52));
+      border: 1px solid rgba(122,162,199,.20);
+      box-shadow: 0 24px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    /* Subtle top glow line to give the frame more depth */
+    .gw-lp-chains::before {
+      content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(0,194,255,.45), transparent);
+      pointer-events: none;
     }
     .gw-lp-chains-h,
     .gw-lp-chains-sub,
     .gw-lp-chains-grid { position: relative; }
     @media (max-width: 768px) {
-      .gw-lp-chains { padding: 26px 20px 44px; border-radius: 16px; margin-bottom: 8px; }
+      .gw-lp-chains { padding: 30px 20px 34px; border-radius: 18px; }
+    }
+    .gw-lp-chains-eyebrow {
+      display: block; text-align: center; margin: 0 0 10px;
+      color: #5dd5ff; font-size: 10.5px; font-weight: 800;
+      letter-spacing: .18em; text-transform: uppercase;
     }
     .gw-lp-chains-h {
-      text-align: center; margin: 0 0 4px; font-size: clamp(18px, 4.5vw, 22px);
-      font-weight: 900; color: #fff; letter-spacing: -0.01em; line-height: 1.2;
+      text-align: center; margin: 0 0 6px; font-size: clamp(20px, 5vw, 26px);
+      font-weight: 900; color: #fff; letter-spacing: -0.015em; line-height: 1.2;
     }
     .gw-lp-chains-sub {
-      text-align: center; margin: 0 0 18px; color: #98a8c0;
-      font-size: clamp(11px, 2.8vw, 12.5px); letter-spacing: .04em; line-height: 1.4;
+      text-align: center; margin: 0 0 24px; color: #98a8c0;
+      font-size: clamp(11.5px, 2.8vw, 13px); letter-spacing: .03em; line-height: 1.45;
     }
     .gw-lp-chains-grid {
       display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 10px;
     }
-    @media (max-width: 900px) { .gw-lp-chains-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; } }
-    @media (max-width: 480px) { .gw-lp-chains-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; } }
+    @media (max-width: 1100px) { .gw-lp-chains-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; } }
+    @media (max-width: 640px)  { .gw-lp-chains-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; } }
+    @media (max-width: 380px)  { .gw-lp-chains-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } }
 
     .gw-lp-chain-cell {
-      display: flex; flex-direction: column; align-items: center; gap: 5px;
-      padding: 10px 4px; border-radius: 12px;
-      background: transparent; border: none;
-      transition: background .18s; min-width: 0;
+      position: relative;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 14px 6px 12px; border-radius: 14px;
+      background:
+        linear-gradient(160deg, rgba(255,255,255,.045), rgba(255,255,255,.015)),
+        linear-gradient(180deg, rgba(11,18,32,.55), rgba(8,12,20,.35));
+      border: 1px solid rgba(122,162,199,.16);
+      transition: transform .2s cubic-bezier(.22,.61,.36,1), border-color .2s, box-shadow .2s, background .2s;
+      min-width: 0;
+      isolation: isolate;
+    }
+    .gw-lp-chain-cell::after {
+      content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: radial-gradient(90% 60% at 50% 0%, rgba(0,194,255,.14), transparent 60%);
+      opacity: 0; transition: opacity .22s;
+      z-index: -1;
     }
     .gw-lp-chain-cell:hover {
-      background: rgba(255,255,255,.05);
+      transform: translateY(-2px);
+      border-color: rgba(0,194,255,.42);
+      box-shadow: 0 12px 28px rgba(0,194,255,.14), 0 2px 0 rgba(255,255,255,.04) inset;
     }
+    .gw-lp-chain-cell:hover::after { opacity: 1; }
     .gw-lp-chain-cell .logo {
-      width: 34px; height: 34px; border-radius: 50%; overflow: hidden;
+      width: 42px; height: 42px; border-radius: 50%; overflow: hidden;
       display: inline-flex; align-items: center; justify-content: center;
-      background: rgba(255,255,255,.05); font-weight: 800; font-size: 11px; color: #e7eef8; flex-shrink: 0;
+      background: rgba(255,255,255,.06);
+      box-shadow: 0 4px 12px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.06) inset;
+      font-weight: 800; font-size: 11px; color: #e7eef8; flex-shrink: 0;
+      transition: transform .22s cubic-bezier(.22,.61,.36,1);
     }
-    @media (max-width: 480px) { .gw-lp-chain-cell .logo { width: 30px; height: 30px; } }
+    .gw-lp-chain-cell:hover .logo { transform: scale(1.06); }
+    @media (max-width: 480px) { .gw-lp-chain-cell .logo { width: 36px; height: 36px; } }
     .gw-lp-chain-cell img { width: 100%; height: 100%; object-fit: cover; }
     .gw-lp-chain-cell .lbl {
-      font-size: 10px; color: #cfdfee; font-weight: 700; letter-spacing: .02em;
+      font-size: 11.5px; color: #e2ecf7; font-weight: 700; letter-spacing: .01em;
       text-align: center; line-height: 1.2; word-break: break-word;
     }
+    @media (max-width: 480px) { .gw-lp-chain-cell .lbl { font-size: 10.5px; } }
 
     /* Aggregator ribbon — standalone card below chains */
     .gw-lp-agg {
@@ -11140,6 +11175,7 @@ const GW_LP_DEX_TR = {
       ['⚡', 'Лучшая цена', 'Meta-aggregator ищет маршрут по 7 источникам ликвидности одновременно.'],
       ['🕶', 'Без email', 'Подключил кошелёк — уже торгуешь. Никакого KYC для swap\'ов.'],
     ],
+    chainsEyebrow: 'Сети',
     chainsH: 'Все главные цепи в одной вкладке',
     chainsSub: '10 000+ токенов · динамический листинг · нативные транзакции',
     aggEyebrow: 'Работает поверх',
@@ -11153,6 +11189,7 @@ const GW_LP_DEX_TR = {
       ['⚡', 'Best price always', 'Meta-aggregator queries 7 liquidity sources in parallel — you pay the tightest quote.'],
       ['🕶', 'No email needed', 'Connect a wallet and trade. Zero KYC for on-chain swaps.'],
     ],
+    chainsEyebrow: 'Networks',
     chainsH: 'All the major chains in one tab',
     chainsSub: '10 000+ tokens · dynamic listing · native transactions',
     aggEyebrow: 'Powered by',
@@ -11209,6 +11246,7 @@ function gwRenderLandingPolish() {
   const chains = document.createElement('section');
   chains.className = 'gw-lp-chains';
   chains.innerHTML = `
+    <span class="gw-lp-chains-eyebrow">${d.chainsEyebrow || 'Networks'}</span>
     <h2 class="gw-lp-chains-h">${d.chainsH}</h2>
     <p class="gw-lp-chains-sub">${d.chainsSub}</p>
     <div class="gw-lp-chains-grid">

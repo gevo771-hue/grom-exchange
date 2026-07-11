@@ -11054,7 +11054,7 @@ function gwInjectLpPolishCss() {
     /* Chain grid + powered-by ribbon (replaces old BTC ticker) */
     .gw-lp-chains {
       position: relative; isolation: isolate; overflow: hidden;
-      padding: 28px 22px 30px; border-radius: 20px; box-sizing: border-box;
+      padding: 28px 22px 42px; border-radius: 20px; box-sizing: border-box;
       background:
         radial-gradient(110% 70% at 50% -10%, rgba(0,194,255,.10), transparent 58%),
         radial-gradient(70% 50% at 100% 100%, rgba(34,193,124,.06), transparent 55%),
@@ -11088,7 +11088,7 @@ function gwInjectLpPolishCss() {
     .gw-lp-chains-sub,
     .gw-lp-chains-grid { position: relative; z-index: 1; }
     @media (max-width: 768px) {
-      .gw-lp-chains { padding: 22px 16px 24px; border-radius: 16px; margin-bottom: 8px; }
+      .gw-lp-chains { padding: 22px 16px 36px; border-radius: 16px; margin-bottom: 8px; }
     }
     .gw-lp-chains-h {
       text-align: center; margin: 0 0 4px; font-size: clamp(18px, 4.5vw, 22px);

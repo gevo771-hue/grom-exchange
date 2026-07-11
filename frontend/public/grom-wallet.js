@@ -9994,50 +9994,13 @@ async function gwRenderRebalance() {
   };
 }
 
-/* Item #10 — NFT Trending via Reservoir */
-async function gwRenderNftHot() {
-  const page = document.getElementById('page-dashboard'); if (!page) return;
-  gwInjectMegaCss();
-  let wrap = document.getElementById('gwNftCard');
-  if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwNftCard'; wrap.className = 'gw-mg-wrap';
-    const yield_ = document.getElementById('gwYieldCard');
-    if (yield_) yield_.after(wrap); else page.appendChild(wrap);
-  }
-  wrap.innerHTML = `<div class="gw-mg-card nft">
-    <div class="gw-mg-head"><div>
-      <h3 class="gw-mg-h">🎨 NFT Hot Collections</h3>
-      <p class="gw-mg-sub">Топ по объёму 24ч через Reservoir (OpenSea + Blur + LooksRare)</p>
-    </div><span class="gw-mg-badge">MULTI-DEX</span></div>
-    <div id="gwNftList"><div style="color:#6b7a92;font-size:12.5px">Loading collections…</div></div>
-  </div>`;
-  try {
-    // CoinGecko public API — no key needed. Top NFTs by 24h volume.
-    const r = await fetch('https://api.coingecko.com/api/v3/nfts/markets?order=h24_volume_usd_desc&per_page=10&page=1');
-    if (!r.ok) throw 0;
-    const arr = await r.json();
-    const list = document.getElementById('gwNftList'); if (!list) return;
-    if (!Array.isArray(arr) || !arr.length) { list.innerHTML = '<div style="color:#98a8c0;font-size:12.5px">No data — try again in a minute</div>'; return; }
-    list.innerHTML = arr.slice(0, 10).map((c) => {
-      const floor = c.floor_price?.native_currency;
-      const currency = (c.native_currency || 'eth').toUpperCase();
-      const chg = Number(c.floor_price_24h_percentage_change?.native_currency || 0);
-      const chgCls = chg >= 0 ? 'up' : 'dn';
-      const chgSign = chg >= 0 ? '+' : '';
-      const img = c.image?.small || '';
-      return `<div class="gw-mg-row">
-        <span style="display:inline-flex;align-items:center;gap:10px">
-          ${img ? `<img src="${img}" style="width:24px;height:24px;border-radius:6px" onerror="this.style.display='none'" />` : ''}
-          ${c.name || ''}
-        </span>
-        <span>${floor ? floor.toFixed(3) + ' ' + currency : '—'} · <span class="${chgCls}">${chgSign}${chg.toFixed(1)}%</span></span>
-        <a href="${c.links?.homepage || 'https://opensea.io/'}" target="_blank" rel="noopener" style="color:#a855f7;text-decoration:none;font-weight:800">View →</a>
-      </div>`;
-    }).join('');
-  } catch (_) {
-    const list = document.getElementById('gwNftList');
-    if (list) list.innerHTML = '<div style="color:#98a8c0;font-size:12.5px">NFT feed temporarily unavailable</div>';
-  }
-}
+/* Item #10 — NFT Trending — REMOVED 2026-07-11.
+ * Reason: CoinGecko /nfts/markets moved behind Pro paywall ($129/mo),
+ * Reservoir/OpenSea/Blur all require paid API keys, and NFT-trending is
+ * peripheral to a DEX-aggregator's core value. Users see "temporarily
+ * unavailable" → bad signal. Removed cleanly (function + all render
+ * invocations). If NFT product ever comes back — new architecture needed
+ * (backend proxy + paid Reservoir tier + full trading UI). */
 
 /* Item #11 — Hyperliquid Perp live */
 async function gwRenderPerp() {
@@ -10045,8 +10008,8 @@ async function gwRenderPerp() {
   gwInjectMegaCss();
   let wrap = document.getElementById('gwPerpCard');
   if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwPerpCard'; wrap.className = 'gw-mg-wrap';
-    const nft = document.getElementById('gwNftCard');
-    if (nft) nft.after(wrap); else page.appendChild(wrap);
+    const anchor = document.getElementById('gwRebalanceCard');
+    if (anchor) anchor.after(wrap); else page.appendChild(wrap);
   }
   wrap.innerHTML = `<div class="gw-mg-card perp">
     <div class="gw-mg-head"><div>
@@ -10137,22 +10100,22 @@ function gwRenderReferral2() {
 }
 
 /* Trimmed 2026-07-09c — after user feedback:
- *   Dashboard keeps: Portfolio Rebalance + NFT Hot.
- *   Removed from dashboard: Perp, AI Bot.
+ *   Dashboard keeps: Portfolio Rebalance.
+ *   Removed from dashboard: Perp, AI Bot, NFT Hot (2026-07-11 — NFT feed
+ *     lost free API path, see comment above gwRenderPerp).
  *   Referral 2.0 moved to #page-referral (see gwSetupReferralPage2). */
 function gwSetupMegaCards() {
-  ['gwPerpCard','gwAiBotCard','gwRef2Card'].forEach(id => document.getElementById(id)?.remove());
+  ['gwPerpCard','gwAiBotCard','gwRef2Card','gwNftCard'].forEach(id => document.getElementById(id)?.remove());
   const run = gwDebounce(() => {
     if (!document.getElementById('page-dashboard')) return;
-    ['gwPerpCard','gwAiBotCard','gwRef2Card'].forEach(id => document.getElementById(id)?.remove());
+    ['gwPerpCard','gwAiBotCard','gwRef2Card','gwNftCard'].forEach(id => document.getElementById(id)?.remove());
     try { gwRenderRebalance(); } catch (_) {}
-    try { gwRenderNftHot(); } catch (_) {}
   }, 300);
   run();
-  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwNftCard') || n >= 20) clearInterval(id); else run(); }, 500);
+  let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwRebalanceCard') || n >= 20) clearInterval(id); else run(); }, 500);
   window.addEventListener('hashchange', run);
   const obs = new MutationObserver(() => run()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
-  window.addEventListener('grom:lang-change', () => { ['gwRebalanceCard','gwNftCard'].forEach(id => document.getElementById(id)?.remove()); run(); });
+  window.addEventListener('grom:lang-change', () => { document.getElementById('gwRebalanceCard')?.remove(); run(); });
 }
 
 /* ==========================================================================
@@ -11054,7 +11017,7 @@ function gwInjectLpPolishCss() {
     /* Chain grid — clean glass panel (matches lp-product-card, no gradient frame) */
     .gw-lp-chains {
       position: relative;
-      padding: 28px 22px 42px; border-radius: 20px; box-sizing: border-box;
+      padding: 32px 26px 50px; border-radius: 20px; box-sizing: border-box;
       background: linear-gradient(180deg, rgba(11,18,32,.72), rgba(8,12,20,.48));
       border: 1px solid rgba(122,162,199,.16);
       box-shadow: 0 20px 56px rgba(0,0,0,.32);
@@ -11064,7 +11027,7 @@ function gwInjectLpPolishCss() {
     .gw-lp-chains-sub,
     .gw-lp-chains-grid { position: relative; }
     @media (max-width: 768px) {
-      .gw-lp-chains { padding: 22px 16px 36px; border-radius: 16px; margin-bottom: 8px; }
+      .gw-lp-chains { padding: 26px 20px 44px; border-radius: 16px; margin-bottom: 8px; }
     }
     .gw-lp-chains-h {
       text-align: center; margin: 0 0 4px; font-size: clamp(18px, 4.5vw, 22px);

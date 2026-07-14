@@ -89,21 +89,29 @@ echo "▶ Pulling latest into /opt/grom-exchange on prod ..."
 $SSH "cd /opt/grom-exchange && git pull"
 
 # ---- Frontend ----
+# Both paths deploy frontend/dist (content-hashed build) — see
+# scripts/build-frontend.mjs. No more manual ?v= bumps.
+BUILD_CMD="node scripts/build-frontend.mjs"
 if $FRONTEND_CHANGED; then
   if $FRONTEND_STATIC_ONLY; then
     echo ""
-    echo "▶ ZERO-DOWNTIME frontend hot-swap:"
-    echo "    - docker cp frontend/public/. → running grom_frontend container"
+    echo "▶ ZERO-DOWNTIME frontend hot-swap (content-hash build):"
+    echo "    - node scripts/build-frontend.mjs → frontend/dist"
+    echo "    - docker cp frontend/dist/. → running grom_frontend container"
     echo "    - nginx -s reload (no restart, no 502)"
     $SSH "cd /opt/grom-exchange && \
-          docker cp frontend/public/. grom_frontend:/usr/share/nginx/html/ && \
+          $BUILD_CMD && \
+          docker cp frontend/dist/. grom_frontend:/usr/share/nginx/html/ && \
           docker exec grom_frontend nginx -s reload"
   else
     echo ""
     echo "▶ Frontend Dockerfile/nginx.conf changed — full rebuild required:"
     $SSH "cd /opt/grom-exchange && \
           docker compose build frontend && \
-          docker compose up -d --force-recreate --no-deps frontend"
+          docker compose up -d --force-recreate --no-deps frontend && \
+          $BUILD_CMD && \
+          docker cp frontend/dist/. grom_frontend:/usr/share/nginx/html/ && \
+          docker exec grom_frontend nginx -s reload"
   fi
 fi
 
@@ -125,6 +133,26 @@ if $FRONTEND_CHANGED && $FRONTEND_STATIC_ONLY && ! $BACKEND_CHANGED; then
   echo "✅ Zero-downtime deploy done.  https://grom.exchange/  (Cmd+Shift+R to verify)"
 else
   echo "✅ Deploy done.  https://grom.exchange/  (Cmd+Shift+R to verify)"
+fi
+
+# ---- Cloudflare purge: only / and /index.html (hashed assets are immutable) ----
+# Token: CF Dashboard → My Profile → API Tokens → Custom token, Zone.Cache Purge.
+# Env vars from shell or ./.env.deploy (git-ignored).
+if [ -f .env.deploy ]; then . ./.env.deploy; fi
+if [ -n "${CF_ZONE_ID:-}" ] && [ -n "${CF_API_TOKEN:-}" ]; then
+  echo ""
+  echo "▶ Purging Cloudflare cache for / + /index.html"
+  if curl -sS -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+    -H "Authorization: Bearer $CF_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"files":["https://grom.exchange/","https://grom.exchange/index.html"]}' \
+    | grep -q '"success":true'; then
+    echo "✅ CF purge OK"
+  else
+    echo "⚠ CF purge failed — users may see stale index.html until edge TTL expires"
+  fi
+else
+  echo "ℹ CF purge skipped (set CF_ZONE_ID + CF_API_TOKEN in env or .env.deploy)"
 fi
 
 # ---- Post-deploy smoke (Scenario A, ~30s) — never blocks static-only if k6 missing ----

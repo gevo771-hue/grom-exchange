@@ -60,6 +60,11 @@ jobs:
               docker compose up -d --build --wait --wait-timeout 300
               docker compose exec -T backend npm run migrate
 
+              # Content-hashed frontend build (cache-bust automation)
+              node scripts/build-frontend.mjs
+              docker cp frontend/dist/. grom_frontend:/usr/share/nginx/html/
+              docker exec grom_frontend nginx -s reload
+
               for attempt in 1 2 3 4 5 6 7 8 9 10; do
                 if curl -fsS http://127.0.0.1:4000/health >/dev/null; then
                   break

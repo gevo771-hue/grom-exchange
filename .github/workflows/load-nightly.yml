@@ -1,0 +1,116 @@
+name: Load tests (night window)
+
+# PERF §Update 2026-07-14 C — progressive load plan, 03:00-06:00 UTC only.
+#   Schedule  → night1 (smoke + load baseline; safe to repeat unattended)
+#   Dispatch  → pick night2 (stress), night3 (soak 2h), night4 (spike + WS)
+# Results: k6 summaries as artifacts + job summary table.
+# Paste numbers into LOAD-TEST-RESULTS.md after each night.
+
+on:
+  schedule:
+    - cron: '10 3 * * *'   # 03:10 UTC — low-traffic window (approved)
+  workflow_dispatch:
+    inputs:
+      plan:
+        description: 'Which night plan to run'
+        type: choice
+        default: night1
+        options: [night1, night2, night3, night4]
+
+concurrency:
+  group: grom-load-tests
+  cancel-in-progress: false
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 200   # night3 soak = 2h+
+    env:
+      BASE_URL: https://grom.exchange
+      GROM_JWT: ${{ secrets.GROM_LOAD_JWT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq k6
+
+      - name: Guard — night window only
+        run: |
+          H=$(date -u +%H)
+          if [ "$H" -lt 3 ] || [ "$H" -ge 6 ]; then
+            if [ "${{ github.event_name }}" = "schedule" ]; then
+              echo "Outside 03:00-06:00 UTC — abort scheduled run"; exit 1
+            fi
+            echo "⚠ Manual run outside night window — proceeding because a human asked."
+          fi
+
+      - name: Run plan
+        run: |
+          set -uo pipefail
+          PLAN="${{ github.event.inputs.plan || 'night1' }}"
+          mkdir -p out
+          run_one() { # scenario stage
+            local sc="$1" st="$2" name
+            name="$(basename "$sc" .js)-$st"
+            echo "▶ $name"
+            k6 run --summary-export="out/$name.json" -e BASE_URL="$BASE_URL" -e STAGE="$st" \
+              ${GROM_JWT:+-e GROM_JWT="$GROM_JWT"} "scripts/load/$sc" || echo "❌ $name FAILED (thresholds)" >> out/failures.txt
+          }
+          case "$PLAN" in
+            night1)
+              run_one A_landing.js smoke
+              run_one A_landing.js load
+              run_one D_orderbook.js load
+              ;;
+            night2)
+              run_one A_landing.js stress
+              run_one B_siwe.js stress
+              run_one C_swap_quote.js stress
+              [ -n "${GROM_JWT:-}" ] && run_one E_wallet_api.js stress || echo "E skipped (no GROM_LOAD_JWT secret)"
+              ;;
+            night3)
+              run_one A_landing.js soak
+              ;;
+            night4)
+              run_one A_landing.js spike
+              chmod +x scripts/load/F_ws_flood.sh
+              STAGE=load BASE_URL="$BASE_URL" ./scripts/load/F_ws_flood.sh || echo "❌ F failed" >> out/failures.txt
+              ;;
+          esac
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Load run — plan ${{ github.event.inputs.plan || 'night1' }} ($(date -u '+%Y-%m-%d %H:%M UTC'))"
+            echo ""
+            echo "| Run | p95 ms | error rate |"
+            echo "|---|---|---|"
+            for f in out/*.json; do
+              [ -e "$f" ] || continue
+              node -e "
+                const j=require('./$f');
+                const m=j.metrics||{};
+                const p95=m.http_req_duration?.values?.['p(95)']??m.http_req_duration?.['p(95)'];
+                const fail=m.http_req_failed?.values?.rate??m.http_req_failed?.rate??0;
+                console.log('| $(basename "$f" .json) | '+(p95==null?'—':p95.toFixed(1))+' | '+(fail*100).toFixed(2)+'% |');
+              "
+            done
+            if [ -f out/failures.txt ]; then echo ""; echo "### ❌ Threshold failures"; cat out/failures.txt; fi
+            echo ""
+            echo "→ Copy numbers into LOAD-TEST-RESULTS.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload k6 summaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-summaries-${{ github.run_id }}
+          path: out/
+          retention-days: 30
+
+      - name: Fail job on threshold breach
+        run: test ! -f out/failures.txt

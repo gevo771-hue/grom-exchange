@@ -109,14 +109,19 @@ if (localStorage.getItem('grom_app_ver') !== APP_VER) {
 }
 ```
 
-### A. Deliverables
+### A. Deliverables — ✅ Cursor 2026-07-14
 
-- [ ] `scripts/build-frontend.mjs` — build с content-hash
-- [ ] `deploy.sh` — вызывает build, CF purge в конце
-- [ ] `frontend/nginx.conf` — Cache-Control правила
-- [ ] `<head>` inline — auto APP_VER из hash
-- [ ] Deprecate manual `?v=` bumping в комментариях (оставить как fallback dev-mode)
-- [ ] Один test-deploy end-to-end чтобы убедиться что CDN и браузер оба берут свежий
+- [x] `scripts/build-frontend.mjs` — zero-dep content-hash build (sha256/8),
+      hash-твины + оригиналы-fallback, rewrite index.html + oauth-callback.html
+- [x] `deploy.sh` — build на проде (node v22 есть), docker cp `frontend/dist/`,
+      CF purge в конце (graceful skip без CF_ZONE_ID/CF_API_TOKEN; можно класть
+      в `.env.deploy` — git-ignored). CI `deploy.yml` делает то же после compose up
+- [x] `frontend/nginx.conf` — hashed → `max-age=31536000, immutable`;
+      un-hashed grom-*.js/css остались `no-cache` (fallback для старого HTML)
+- [x] `<head>` — `var APP_VER` подменяется build-хешем автоматически при билде
+- [x] Manual `?v=` в исходнике оставлен как dev-fallback, build его срезает
+- [ ] CF purge token: создать в CF Dashboard (Zone.Cache Purge) → положить
+      `CF_ZONE_ID`+`CF_API_TOKEN` в `.env.deploy` (нужен доступ Гевора)
 
 ### A. Acceptance criteria
 
@@ -214,15 +219,19 @@ app.use(Sentry.Handlers.errorHandler());
 1. **Error rate spike** → email/Slack при >20 errors/min
 2. **New issue** → уведомление на первое появление любой ошибки (early warning)
 
-### B. Deliverables
+### B. Deliverables — код готов (Cursor 2026-07-14), нужны DSN'ы
 
-- [ ] Sentry projects созданы (frontend + backend)
-- [ ] DSN'ы в env (backend в `.env`, frontend — inline)
-- [ ] Frontend init + `beforeSend` filter для noise
-- [ ] Backend init + Express middleware
-- [ ] Critical paths обёрнуты (swap exec, WC connect, SIWE, wallet balance)
-- [ ] Alert rules настроены в Sentry UI
-- [ ] Test error → появляется в Sentry dashboard
+- [ ] Sentry projects создать (frontend + backend) — **нужен аккаунт Гевора**
+- [ ] DSN'ы в прод `.env`: `SENTRY_DSN=` (backend) + `SENTRY_PUBLIC_DSN=` (frontend)
+- [x] Frontend: lazy-loader в `<head>` — берёт publicDsn из `/api/config`,
+      грузит SDK только если DSN задан; `beforeSend` фильтрует ResizeObserver
+      + user-rejected; window.onerror/unhandledrejection queued до загрузки SDK
+- [x] Backend: уже было готово — `utils/sentry.js` + init/middleware в server.js
+      (просто не активировано без `SENTRY_DSN`)
+- [x] Critical paths: `gwSentryCapture` в wallet-connect (failToast), SIWE
+      (gwSiweFailToast, кроме user-reject), swap exec (meta-agg + inline fallback)
+- [ ] Alert rules в Sentry UI (после создания projects): spike >20/min + new issue
+- [ ] Test error после DSN: `window.gwSentryCapture(new Error('sentry-test'))`
 
 ### B. Acceptance criteria
 
@@ -303,7 +312,14 @@ Cold-start behavior + WebSocket concurrent connections.
 
 ### C.4 Deliverables
 
+- [x] Инфра прогонов: `.github/workflows/load-nightly.yml` (Cursor 2026-07-14)
+      · cron 03:10 UTC → night1 (smoke+load baseline, безопасно повторять)
+      · workflow_dispatch → night2 (stress) / night3 (soak 2h) / night4 (spike+WS)
+      · guard: scheduled run абортится вне 03:00–06:00 UTC
+      · p95/error-rate таблица в job summary + k6 JSON артефакты (30 дней)
+      · Scenario E требует secret `GROM_LOAD_JWT` (иначе skip)
 - [ ] `LOAD-TEST-RESULTS.md` заполнена реальными цифрами по всем 4 stages
+      (первый night1 придёт по cron — забрать числа из Actions summary)
 - [ ] Каждый найденный bottleneck → commit с fix + retest подтверждение
 - [ ] Итоговый SLO checklist обновлён с зелёными ✓ или красными ✗
 - [ ] Если что-то критично не тянет — RFC в этот файл про архитектурный fix

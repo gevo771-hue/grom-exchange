@@ -360,6 +360,7 @@ function failToast(e) {
   const msg = (e && e.message) ? e.message : String(e);
   if (/cancel/i.test(msg)) return;
   console.error('[grom-wallet]', e);
+  try { window.gwSentryCapture?.(e, { tags: { flow: 'wallet-connect' } }); } catch (_) {}
   if (typeof window.toast === 'function') window.toast('Connection failed: ' + msg.slice(0, 80), 'error');
 }
 
@@ -777,6 +778,9 @@ function gwSiweFailToast(err) {
       ? 'Подпиши сообщение в кошельке (открой Trust) — без подписи вход не завершится.'
       : 'Sign the message in your wallet to finish signing in.')
     : 'Sign-in failed: ' + (err?.message || 'signature not verified');
+  if (!rejected) {
+    try { window.gwSentryCapture?.(err, { tags: { flow: 'siwe' } }); } catch (_) {}
+  }
   try { gwToast(msg, rejected ? 'warn' : 'error'); } catch (_) {}
 }
 
@@ -8290,11 +8294,20 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
       // with approve requests to every router.
       if (/user rejected|declined|rejected the request/i.test(em)) throw e;
       console.warn(`[GROM] ${q.aggregator} exec failed, trying next:`, em);
+      try { window.gwSentryCapture?.(e, { tags: { flow: 'swap-exec-agg', aggregator: q.aggregator }, extra: { chainId, fromSym, toSym, amtNum } }); } catch (_) {}
     }
   }
 
   // === 2. Everything failed — final fallback to hand-coded Uniswap/Pancake V2 ===
-  return await gwOnChainSwapExecInline({ fromSym, toSym, amtNum, provider, account, chainId });
+  try {
+    return await gwOnChainSwapExecInline({ fromSym, toSym, amtNum, provider, account, chainId });
+  } catch (e) {
+    const em = String(e?.message || e || '');
+    if (!/user rejected|declined|rejected the request/i.test(em)) {
+      try { window.gwSentryCapture?.(e, { tags: { flow: 'swap-exec' }, extra: { chainId, fromSym, toSym, amtNum } }); } catch (_) {}
+    }
+    throw e;
+  }
 }
 
 async function gwOnChainSwapExecInline({ fromSym, toSym, amtNum, provider, account, chainId }) {

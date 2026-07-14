@@ -23,6 +23,62 @@
   document.documentElement.classList.toggle('grom-authed', authed);
 })();
 </script>
+<script>
+/* Sentry (lazy) — activates only when backend /api/config returns a public DSN
+ * (SENTRY_PUBLIC_DSN env). Errors thrown before the SDK loads are queued. */
+(function () {
+  var q = [];
+  window.gwSentryCapture = function (err, ctx) {
+    try {
+      if (window.Sentry && window.Sentry.captureException) {
+        window.Sentry.captureException(err, ctx ? { tags: ctx.tags, extra: ctx.extra } : undefined);
+      } else if (q.length < 20) q.push([err, ctx]);
+    } catch (_) {}
+  };
+  window.addEventListener('error', function (e) {
+    if (e && e.error) window.gwSentryCapture(e.error, { tags: { flow: 'window-onerror' } });
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    if (e && e.reason) window.gwSentryCapture(e.reason, { tags: { flow: 'unhandled-rejection' } });
+  });
+  function boot() {
+    fetch('/api/config').then(function (r) { return r.json(); }).then(function (cfg) {
+      var dsn = (cfg && (cfg.sentryPublicDsn || (cfg.sentry && cfg.sentry.publicDsn))) || '';
+      if (!dsn) return;
+      var ver = 'dev';
+      try { ver = localStorage.getItem('grom_app_ver') || 'dev'; } catch (_) {}
+      var s = document.createElement('script');
+      s.src = 'https://browser.sentry-cdn.com/8.55.0/bundle.tracing.min.js';
+      s.crossOrigin = 'anonymous';
+      s.onload = function () {
+        if (!window.Sentry || !window.Sentry.init) return;
+        window.Sentry.init({
+          dsn: dsn,
+          environment: location.hostname === 'grom.exchange' ? 'prod' : 'dev',
+          release: ver,
+          integrations: window.Sentry.browserTracingIntegration ? [window.Sentry.browserTracingIntegration()] : [],
+          tracesSampleRate: 0.1,
+          beforeSend: function (event) {
+            var v = event && event.exception && event.exception.values && event.exception.values[0];
+            var msg = (v && v.value) || '';
+            if (msg.indexOf('ResizeObserver') !== -1) return null;
+            if (/user rejected|user denied|user cancel|rejected the request/i.test(msg)) return null;
+            return event;
+          },
+        });
+        window.Sentry.setTag('app_ver', ver);
+        while (q.length) {
+          var it = q.shift();
+          window.Sentry.captureException(it[0], it[1] ? { tags: it[1].tags, extra: it[1].extra } : undefined);
+        }
+      };
+      document.head.appendChild(s);
+    }).catch(function () {});
+  }
+  if (document.readyState === 'complete') setTimeout(boot, 800);
+  else window.addEventListener('load', function () { setTimeout(boot, 800); });
+})();
+</script>
 <style id="grom-authed-critical">
   html:not(.grom-authed) [data-authed-only] { display: none !important; }
   html:not(.grom-spot-ready) #spotChart { visibility: hidden !important; }

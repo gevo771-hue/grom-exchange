@@ -19,6 +19,7 @@ import {
   cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 
 const SRC = 'frontend/public';
 const OUT = 'frontend/dist';
@@ -68,5 +69,15 @@ rewriteHtml('oauth-callback.html');
 // Tiny version beacon — stale tabs poll this and self-reload when it changes.
 writeFileSync(join(OUT, 'version.json'), JSON.stringify({ v: buildVer }));
 
+// Pre-compress every .html/.js/.css → .gz twin for nginx `gzip_static on`
+// (887KB index.html gzipped on-the-fly was the night1 landing bottleneck).
+let gzCount = 0;
+for (const f of readdirSync(OUT)) {
+  if (!/\.(html|js|css)$/.test(f)) continue;
+  const content = readFileSync(join(OUT, f));
+  writeFileSync(join(OUT, f + '.gz'), gzipSync(content, { level: 9 }));
+  gzCount++;
+}
+
 console.log(JSON.stringify({ buildVer, files: map }, null, 2));
-console.log(`✅ Built ${OUT} · APP_VER=${buildVer}`);
+console.log(`✅ Built ${OUT} · APP_VER=${buildVer} · ${gzCount} gz twins`);

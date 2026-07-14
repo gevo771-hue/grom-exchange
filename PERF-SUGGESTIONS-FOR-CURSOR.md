@@ -1,5 +1,193 @@
 # Performance suggestions — page-load 6.2 s → <1 s
 
+## Update 2026-07-11 (evening) — TECH-DEBT AUDIT #2 (Cursor)
+
+Пользователь снял видео и три скрина, жалобы:
+
+1. **Старый кэш пробивается** — на секунду мелькают элементы которые мы
+   уже убрали (см. §1)
+2. **Connect-wallet возвращается к старому дизайну** — иногда открывается
+   не текущая версия модалки, а прошлая
+3. **Биржа подтупливает** — юзер это чувствует на iPhone (LTE)
+4. **Открытый вопрос:** что будет под нагрузкой?
+
+Цель: **сделать биржу технически идеальной**. Ниже — конкретика.
+
+### 1. Stale-UI regression list (нужно закрыть до нуля)
+
+**Мой fix уже деплоится (Claude, коммит по этому пункту):**
+
+- ✅ Кнопка `+ Пополнить` в Meta-Portfolio — удалена из моего рендера
+  `gwRenderMetaPortfolio` (grom-wallet.js). Заголовок empty-state теперь
+  «Пока пусто — подключи кошелёк чтобы увидеть балансы» (без «пополни счёт»).
+
+**Ещё бьёт (твоя территория — Cursor):**
+
+- **Диалог «Депозит» флешится на секунду при переходе на Settings**
+  (юзер снял видео). Скорее всего:
+  - Cursor'ский router монтирует старую разметку wallet-modal → JS через
+    пару кадров закрывает или скрывает. **Fix:** wallet-modal деполимо
+    с `display: none` в HTML по умолчанию, показывать только по явному
+    `openWalletModal(mode)` — никаких default-mounted состояний.
+  - Или в hash-роуте `#wallet` / `#settings` есть автотриггер модалки —
+    убрать.
+
+- **Старый connect-wallet layout возвращается** (юзер показал скрин
+  с длинным вертикальным списком wallet'ов — старый дизайн). Причина
+  скорее всего: **Cursor периодически перерендеривает модалку** и на
+  первый кадр показывает legacy HTML, потом JS переключает на новый.
+  **Fix:** Убрать legacy HTML модалки из index.html полностью — оставить
+  ТОЛЬКО текущий рендер. Или обернуть legacy в `[data-authed-only]` +
+  `data-cex-only` и добавить в `<head>` inline CSS-hide до JS boot.
+
+- **«+ Пополнить» в других местах** (найти grep'ом `Пополнить\|Deposit`
+  и убедиться что все точки убраны):
+  - Sidebar
+  - Wallet page CTAs
+  - Referral page
+  - Landing hero
+
+- **«Впервые на GROM?»** в сайдбаре при disconnect — статус проверен
+  09:00 UTC 2026-07-11, работает. Но снова напоминаю: `data-authed-only`
+  атрибут должен быть на этом виджете.
+
+### 2. Connect-modal — избавиться от дубликатов навсегда
+
+Причина рекурсивных «старых дизайнов»: **в repo сейчас 2 (возможно 3)
+разных wallet-picker модалки** в разных частях кода. При race-condition
+монтируется не та.
+
+**Что нужно от тебя:**
+
+1. **Инвентаризация**: `grep -rn 'wallet-modal\|walletModal\|connect-modal\|cnConnect\|openConnectModal'` — посчитать сколько версий
+2. **Одна источник правды**: выбрать самую свежую версию (та что на скрине юзера с 9 кошельками — Binance/Trust/WC/MetaMask/Phantom/TON/TronLink/OKX/Coinbase). Остальные варианты — удалить из HTML/JS
+3. **Guard в openConnectModal**: если модалка уже открыта — не пере-монтировать, а только re-focus. Сейчас похоже что каждый вызов заново создаёт DOM
+4. **Атомарный рендер**: сначала полностью создать нужный HTML в offscreen `<template>`, потом одним `.replaceChildren()` перекинуть в live DOM. Никаких partial states между кадрами
+5. **Кэш guard**: в top-level `<script>` в `<head>` добавить проверку старой версии в localStorage, при mismatch — force-purge session:
+   ```js
+   const APP_VER = '2026-07-11';
+   if (localStorage.getItem('grom_app_ver') !== APP_VER) {
+     // Purge everything that could contain legacy UI state
+     ['grom_wallet_label', 'grom_dashboard_layout', 'grom_ui_prefs', 'welcome_seen'].forEach(k => localStorage.removeItem(k));
+     localStorage.setItem('grom_app_ver', APP_VER);
+   }
+   ```
+
+### 3. Perf audit — «биржа подтупливает» на iPhone LTE
+
+Пойди по чек-листу с Lighthouse mobile emulation + real iPhone тестом:
+
+- **`index.html` весит сколько?** Юзер на LTE. Если файл >250KB gzipped —
+  критическая проблема
+- **Сколько inline `<script>`?** Каждый блокирует парсинг. Ideal — <5 блоков,
+  всё остальное external + async/defer
+- **MutationObserver конкуренция**: `grep -rn 'MutationObserver'`. У меня
+  наблюдатели через debounce, но их несколько. Если >5 одновременно →
+  агрегируй в один global-observer с channel-based routing
+- **Reflow storms**: слайдер banners перерисовывает 4 карточки на interval.
+  Meta-Portfolio делает setInterval force-position. Всё это дёргает layout.
+  **Fix:** используй `requestIdleCallback` + `content-visibility: auto` для
+  off-screen карточек
+- **CoinGecko/DexScreener API calls на dashboard init**: сейчас Trending
+  fetches 5 tokens при каждом mount. Кэшировать 30-60s в localStorage
+- **Image bytes**: 11 chain logos, 30+ token logos в picker, referral карт.
+  Каждый ~5-20KB. **Fix:** lazy-load с `loading="lazy"` (у меня уже есть),
+  плюс сжать до WebP/AVIF или использовать sprite
+
+**Ожидаемая целевая метрика:**
+- LCP < 2.5s на LTE (мобильный Lighthouse)
+- FID/INP < 200ms
+- Bundle total < 500KB gzipped
+- No console errors on first paint
+
+### 4. Load / scale readiness
+
+Юзер спросил: «что будет под нагрузкой?». Правда — сейчас **не тестировано**.
+
+**Что нужно замерить (через k6 / autocannon / Artillery):**
+
+- **Frontend static** (nginx через docker cp):
+  - Тест: 1000 concurrent req/s к `/index.html`, `/grom-wallet.js`
+  - Ожидание: nginx handled с cache, <10ms p95
+  - Риск: Cloudflare защитит если что
+
+- **Backend `/api/*`**:
+  - `/api/spot/orderbook` — hit rate?
+  - `/api/wallet/onchain-balance` — heavy (aggregates RPC calls)
+  - `/api/referral/summary` — DB heavy
+  - `/api/swap/*` — proxy
+  - Тест: 100 concurrent для each endpoint, 60s
+  - Ожидание: <500ms p95, no 5xx, no OOM
+  - Риск: если Node.js single-process + PostgreSQL single-conn pool
+    → упрётся в connection limit
+
+- **PostgreSQL**:
+  - Проверить connection pool size (default 10, надо 50-100 для прода)
+  - Slow query log включён?
+  - Индексы на: `spot_orders(user_id, status)`, `futures_positions(user_id)`,
+    `wallet_transfers(user_id, created_at DESC)`, `swap_events(user_id, created_at)`
+
+- **RPC quotas** (это внешний):
+  - Public RPCs (publicnode, Ankr, llama) не заявлены на high-throughput
+  - При росте — купить платный tier (Alchemy $199/mo / QuickNode $299/mo)
+  - **Circuit breaker**: если RPC #1 отдаёт 429 → autofallback на #2 без
+    error toast'а юзеру (у меня есть в `gwRpcTry`, проверь что везде вызывается)
+
+- **WalletConnect throughput**:
+  - На Reown Starter plan: 1M relay msgs/mo, ~30 concurrent WS
+  - При росте — Reown Pro ($99/mo, 10M msgs)
+
+**Что deploy `./deploy.sh` не делает и надо добавить:**
+- Backend rolling deploy с health-check gate (сейчас `docker restart`
+  роняет соединения на 15-25s)
+- Blue-green deploy для backend
+- Auto-scale docker-compose на CPU/RAM триггере
+
+### 5. Технический идеал — checklist от Cursor
+
+Формируем «зелёную линию»: если 20+ пунктов ниже зелёные, биржа реально
+production-grade. Пробей их и отчитайся:
+
+**Frontend perf:**
+- [ ] index.html ≤ 250KB gzipped (сейчас — измерить)
+- [ ] Lighthouse mobile score ≥ 85
+- [ ] No layout shifts (CLS < 0.1)
+- [ ] All fonts subset + preload
+- [ ] All images WebP/AVIF + responsive srcset
+- [ ] `content-visibility: auto` на off-screen cards
+- [ ] Service Worker для offline shell (optional but nice)
+
+**Cache/UI hygiene:**
+- [ ] Только ОДНА wallet-picker модалка в repo (legacy removed)
+- [ ] Все auth-gated элементы имеют `data-authed-only`
+- [ ] `.grom-authed` inline `<script>` в `<head>` до всех external
+- [ ] `grom_app_ver` bump force-purge стейтов
+- [ ] Нет `visibility: visible → hidden` flicker'а (только opacity/transform)
+
+**Connect flow:**
+- [ ] Chip disconnect → reload → Connect показывает WC QR, не silent-reconnect
+- [ ] Trust A → «Выйти» → Trust B → показывает адрес Trust B
+- [ ] Modal open→close→open не создаёт дубликаты в DOM
+- [ ] `openConnectModal()` idempotent
+
+**Backend perf:**
+- [ ] `/api/*` p95 < 500ms под 100 rps нагрузкой
+- [ ] Postgres connection pool 50-100
+- [ ] Slow query log включён
+- [ ] Индексы проверены (см. §4)
+- [ ] Sentry backend errors подключён
+- [ ] Health-check endpoint для deploy.sh gate
+
+**Ops:**
+- [ ] Blue-green backend deploy (zero-downtime)
+- [ ] Cloudflare rate-limit rules настроены
+- [ ] Postgres backup verified (restore-drill сделан)
+- [ ] Uptime monitor (StatusCake / UptimeRobot / Better Uptime)
+
+Пиши в этот файл прогресс с ✓ отметками, когда закроешь.
+
+---
+
 ## Update 2026-07-10g — КОМПЛЕКСНЫЙ АУДИТ (Cursor, ТВОЯ задача)
 
 Гевор ставит одну большую задачу — довести биржу до идеала. Пять

@@ -3629,9 +3629,9 @@ function gwMpPlural(n, t, key) {
   return t.plurals[key][2];
 }
 const GW_MP_TR = {
-  ru: { eyebrow: 'МЕТА-ПОРТФЕЛЬ', badge: 'ALL-IN-ONE', sub: 'Всё что у тебя есть в GROM — в одном месте', c1: 'Торговый счёт', c2: 'On-chain', c3: 'Прогнозы', c4: 'Акции', assets: 'активов', chains: 'сетей', posN: 'позиций', empty: 'Пока пусто — подключи кошелёк или пополни счёт', a1: 'Пополнить', a2: 'Свап', a3: 'Обновить', loading: 'Загружаем портфель…',
+  ru: { eyebrow: 'МЕТА-ПОРТФЕЛЬ', badge: 'ALL-IN-ONE', sub: 'Всё что у тебя есть в GROM — в одном месте', c1: 'Торговый счёт', c2: 'On-chain', c3: 'Прогнозы', c4: 'Акции', assets: 'активов', chains: 'сетей', posN: 'позиций', empty: 'Пока пусто — подключи кошелёк чтобы увидеть балансы', a1: 'Пополнить', a2: 'Свап', a3: 'Обновить', loading: 'Загружаем портфель…',
        plurals: { chains: ['сеть', 'сети', 'сетей'], assets: ['актив', 'актива', 'активов'], posN: ['позиция', 'позиции', 'позиций'] } },
-  en: { eyebrow: 'META-PORTFOLIO', badge: 'ALL-IN-ONE', sub: 'Everything you own on GROM — in one place', c1: 'Trading account', c2: 'On-chain', c3: 'Predictions', c4: 'Stocks', assets: 'assets', chains: 'chains', posN: 'positions', empty: "Nothing yet — connect a wallet or top up", a1: 'Deposit', a2: 'Swap', a3: 'Refresh', loading: 'Loading portfolio…' },
+  en: { eyebrow: 'META-PORTFOLIO', badge: 'ALL-IN-ONE', sub: 'Everything you own on GROM — in one place', c1: 'Trading account', c2: 'On-chain', c3: 'Predictions', c4: 'Stocks', assets: 'assets', chains: 'chains', posN: 'positions', empty: "Nothing yet — connect a wallet to see your balances", a1: 'Deposit', a2: 'Swap', a3: 'Refresh', loading: 'Loading portfolio…' },
   es: { eyebrow: 'META-PORTFOLIO', badge: 'ALL-IN-ONE', sub: 'Todo lo tuyo en GROM — en un lugar', c1: 'Cuenta trading', c2: 'On-chain', c3: 'Predicciones', c4: 'Acciones', assets: 'activos', chains: 'cadenas', posN: 'posiciones', empty: 'Nada aún — conecta una cartera', a1: 'Depositar', a2: 'Swap', a3: 'Refrescar', loading: 'Cargando…' },
   ar: { eyebrow: 'المحفظة الشاملة', badge: 'كل شيء', sub: 'كل ما تملك في GROM في مكان واحد', c1: 'حساب التداول', c2: 'على السلسلة', c3: 'التنبؤات', c4: 'الأسهم', assets: 'أصول', chains: 'شبكات', posN: 'مراكز', empty: 'لا شيء بعد', a1: 'إيداع', a2: 'مبادلة', a3: 'تحديث', loading: 'جارٍ التحميل…' },
   zh: { eyebrow: '组合总览', badge: '一站式', sub: '你在 GROM 的一切，尽在此处', c1: '交易账户', c2: '链上', c3: '预测', c4: '股票', assets: '资产', chains: '链', posN: '仓位', empty: '暂无', a1: '充值', a2: '兑换', a3: '刷新', loading: '加载中…' },
@@ -3753,14 +3753,12 @@ async function gwRenderMetaPortfolio() {
       ${cat('xstocks',   t.c4, xst.usd,  xst.positionsN ? `${xst.positionsN} ${gwMpPlural(xst.positionsN, t, 'posN')}` : '—')}
     </div>`}
     <div class="gw-mp-actions">
-      <button class="gw-mp-btn primary" id="gwMpDeposit">+ ${t.a1}</button>
-      ${isEmpty ? '' : `<button class="gw-mp-btn" id="gwMpSwap">${t.a2}</button>`}
+      <button class="gw-mp-btn primary" id="gwMpSwap">${t.a2}</button>
       <button class="gw-mp-btn" id="gwMpRefresh">↻ ${t.a3}</button>
     </div>
   `;
-  document.getElementById('gwMpDeposit')?.addEventListener('click', () => {
-    if (typeof window.openWalletModal === 'function') window.openWalletModal('deposit');
-  });
+  // Note: "+ Пополнить" button REMOVED 2026-07-11 — non-custodial DEX has
+  // no custodial deposit concept. Users fund their own wallets externally.
   document.getElementById('gwMpSwap')?.addEventListener('click', () => {
     document.querySelector('.gw-ds-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });

@@ -35,11 +35,20 @@ Paste k6 summary `http_req_duration{p(95)}` and `http_req_failed{rate}` into the
 
 | Stage | VUs / duration | p95 | Error rate | Notes |
 |---|---|---|---|---|
-| Smoke | ~5 × 30s | _run locally_ | _run locally_ | Post-deploy CI |
-| Load | 50 × 5m | — | — | |
-| Stress | →500–1000 | — | — | Breaking point: ___ |
+| Smoke | ~5 × 30s | night1 #1: 643ms ❌ → night1 #2: TTFB 515ms / dur 1027ms ❌ | 0.0% | Post-deploy CI |
+| Load | 50 × 5m | night1 #1: 1016ms ❌ → night1 #2: TTFB 707ms / dur 805ms ❌ | 0.0% | Blocked on CF Cache Rule (see bottlenecks) |
+| Stress | →500–1000 | — | — | Breaking point: ___ (hold night2 until CF rule) |
 | Soak | 100 × 2h | — | — | Watch heap |
 | Spike | 50→1000 / 5s | — | — | |
+
+**night1 #1 (2026-07-14, baseline)** — 0% errors/timeouts at all stages; `cf-cache-status: DYNAMIC` on `/`,
+every request hit origin which gzipped 887KB HTML per request.
+
+**night1 #2 (2026-07-14, after fix, run 29353848682)** — deployed: `s-maxage=60` on `/` + `index.html`,
+`gzip_static on` with pre-compressed `.gz` twins from `build-frontend.mjs` (887KB → 202KB, origin TTFB 1s → **11ms**).
+Load dur p95 improved 1016 → 805ms (−21%), but `/` is **still DYNAMIC**: Cloudflare never edge-caches
+HTML by default regardless of `s-maxage` — a dashboard **Cache Rule** is required (see bottlenecks table).
+Remaining p95 ≈ GH-runner→edge→origin round trips, not origin CPU.
 
 ## Scenario B — SIWE burst
 
@@ -61,6 +70,7 @@ Paste k6 summary `http_req_duration{p(95)}` and `http_req_failed{rate}` into the
 | Stage | p95 | Error rate | Cached? |
 |---|---|---|---|
 | Smoke | — | — | |
+| Load (50) | night1: 280ms → 292ms | 0.0% | No CF cache (API, DYNAMIC) — backend scales fine; p95 ≈ network RTT from GH runner |
 | Stress (500) | target <100ms | — | If >100ms → in-memory/redis 1–2s |
 
 ## Scenario E — Wallet API (needs `GROM_JWT`)
@@ -95,6 +105,8 @@ Paste k6 summary `http_req_duration{p(95)}` and `http_req_failed{rate}` into the
 | Meta-agg quote uncached under load | code review | TODO: Redis 5–10s quote cache | Pending C |
 | Backend recreate ~15–25s | deploy.sh | TODO: blue-green | Pending |
 | Docker name conflict on recreate | prod 2026-07-14 | Manual `docker rm -f` + recreate | Monitor |
+| `/` gzipped on-the-fly (887KB) per request | night1 #1: load p95 1016ms | ✅ Shipped 2026-07-14: `gzip_static on` + pre-built `.gz` twins; origin TTFB → 11ms | night1 #2: −21% dur p95 |
+| CF won't cache HTML by default — `s-maxage` alone is ignored, `/` stays DYNAMIC | night1 #2: `cf-cache-status: DYNAMIC` despite `s-maxage=60` | **USER ACTION (CF dashboard):** Caching → Cache Rules → new rule: hostname eq `grom.exchange`, Cache eligibility = *Eligible for cache*, Edge TTL = *Use cache-control header if present, bypass if not*. Origin header already sends `s-maxage=60`. | Re-run night1 after rule → expect A load p95 < 300ms |
 
 ---
 

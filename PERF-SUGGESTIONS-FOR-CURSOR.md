@@ -1,5 +1,216 @@
 # Performance suggestions — page-load 6.2 s → <1 s
 
+## Update 2026-07-14 (night2 findings) — 5 tunings after real stress data
+
+**Что мы измерили:** night1 baseline → CF Cache Rule + gzip_static + s-maxage
+задеплоено → night2 stress (100→1000 rps ramp × 15 min) прогнан на live prod.
+
+**Итог:** **0.00% errors везде** — прод НЕ упал. Но p95 сатурируется:
+
+| Scenario | Baseline (night1) | Stress peak (night2) |
+|---|---|---|
+| A_landing | 335ms | **2060ms** ⚠️ |
+| B_siwe | не тестили | **2099ms** ⚠️ |
+| C_swap_quote | не тестили | **1286ms** ⚠️ |
+
+Найденные bottlenecks (в порядке impact):
+
+1. **Node.js single-process** — SIWE + swap quote бьются об 1 CPU
+2. **PG pool 50** — burst-saturation при 300+ concurrent auth
+3. **External aggregator quotes без cache** — LiFi/Paraswap 429s под burst
+4. **HTTP/1.1 origin serving** — nginx serial connections под load
+5. **CF Argo (optional, paid)** — оптимизация edge→origin RT
+
+### Fix 1 — Node.js cluster mode (biggest impact, easiest)
+
+Сейчас `node src/server.js` — один процесс на одном CPU. Grom-prod-fra1
+DigitalOcean droplet имеет **4+ vCPU** (проверь `nproc` на сервере).
+Используется **25% ресурсов**.
+
+**Setup (pm2 — рекомендую):**
+
+```bash
+npm i -g pm2
+```
+
+Создать `ecosystem.config.cjs` в корне репо:
+
+```js
+module.exports = {
+  apps: [{
+    name: 'grom-backend',
+    script: 'backend/src/server.js',
+    instances: 'max',        // spawn N processes = N CPU cores
+    exec_mode: 'cluster',    // load-balance TCP connections между ними
+    max_memory_restart: '1G',
+    env_production: {
+      NODE_ENV: 'production',
+    },
+  }],
+};
+```
+
+**Обновить `docker-compose.yml`** (backend service):
+
+```yaml
+backend:
+  command: pm2-runtime start ecosystem.config.cjs --env production
+  # или npm install pm2 в Dockerfile
+```
+
+**Prerequisites:**
+- Проверь что нет in-memory state который must be single-instance
+  (например, WebSocket subscription map в heap — надо в Redis/Postgres)
+- `binary/ws.js` broadcaster — сейчас у каждого cluster worker будет своя
+  копия subscription state. Нужен **Redis pub/sub** для inter-worker WS
+  broadcast (иначе юзер подписался на worker A, ордер прошёл в worker B,
+  юзер не получит update)
+
+**Ожидаемый impact:** SIWE p95 **2099ms → ~500-600ms** (4x). Swap quote
+tail latency тоже упадёт (parallel aggregator calls на разных cores).
+
+### Fix 2 — Postgres connection pool 100 (5 min)
+
+Сейчас `max: 50` в config. Под burst 300+ concurrent auth queries будет
+saturation. Постгресу спокойно тянет 100-200 connections на mid-tier
+droplet.
+
+```js
+// backend/src/config/index.js
+max: Number(process.env.GROM_DB_POOL_MAX) || 100,  // было 50
+```
+
+Плюс проверить `postgresql.conf` на сервере:
+```
+max_connections = 200        # раньше был default 100
+shared_buffers = 512MB       # 25% RAM
+```
+
+**Impact:** убирает burst-saturation. p95 SIWE ~10-15% улучшится дополнительно.
+
+### Fix 3 — Redis для quote cache (biggest bang for swap quote)
+
+Meta-aggregator сейчас дёргает **6 external API** на КАЖДЫЙ swap-quote
+запрос. При 200 vus в secundu = **1200 outbound HTTPS-requests/sec** к
+LiFi/Paraswap/Kyber/Odos/CoW/Squid. Они (справедливо) отдают 429.
+
+**Fix — cache quote 5-10 секунд.** Юзер редко торгует один и тот же
+tokenpair в secundu, но 200 юзеров могут смотреть USDT→USDC на Arb
+одновременно.
+
+Setup Redis (self-hosted в docker-compose):
+```yaml
+redis:
+  image: redis:7-alpine
+  restart: unless-stopped
+  volumes:
+    - redis-data:/data
+  networks:
+    - grom_net
+  command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+```
+
+В backend:
+```bash
+npm i ioredis
+```
+
+В `backend/src/config/index.js`:
+```js
+redis: {
+  host: env('GROM_REDIS_HOST', 'redis'),
+  port: envInt('GROM_REDIS_PORT', 6379),
+},
+```
+
+Обёртка кэша (`backend/src/utils/quoteCache.js`):
+```js
+import Redis from 'ioredis';
+import { config } from '../config/index.js';
+const redis = new Redis(config.redis);
+
+export async function cachedQuote({ chainId, fromSym, toSym, amount }, fetcher) {
+  const key = `q:${chainId}:${fromSym}:${toSym}:${amount}`;
+  const hit = await redis.get(key);
+  if (hit) return JSON.parse(hit);
+  const fresh = await fetcher();
+  await redis.setex(key, 8, JSON.stringify(fresh));  // 8s TTL
+  return fresh;
+}
+```
+
+Использовать в `/api/swap/quote` route.
+
+**Impact:** swap quote p95 **1286ms → ~200-300ms** (6x). External API calls
+падают на 90%+ (только cold cache будет тянуть external).
+
+### Fix 4 — HTTP/2 в nginx (medium impact на landing burst)
+
+Landing serving под burst — HTTP/1.1 держит 1 TCP-соединение per request.
+HTTP/2 multiplexes → 100 concurrent на 1 TCP = меньше syscalls, меньше
+CPU на socket handling.
+
+```nginx
+# frontend/nginx.conf
+listen 443 ssl http2;    # добавь `http2`
+```
+
+TLS уже настроен через certbot, HTTP/2 автоматически негативно доступен
+после reload. **5 sec работы, потенциально 20-30% улучшение под burst.**
+
+Опционально HTTP/3 (QUIC) — уже experimental в nginx 1.25+:
+```nginx
+listen 443 quic reuseport;
+listen 443 ssl http2;
+add_header Alt-Svc 'h3=":443"; ma=86400';
+```
+
+### Fix 5 — Cloudflare Argo Smart Routing (paid, $5/mo)
+
+**Не срочно — это optional оптимизация.** Argo:
+- Routes через best CF network path (не через ближайший edge, а через
+  fastest в realtime)
+- Reduces edge→origin latency ~30% в среднем
+- Особенно помогает если origin далеко от юзера
+
+Включается в CF Dashboard → **Traffic → Argo Smart Routing → On** ($5/mo).
+
+Rough impact: p95 landing на 300-500 rps ~5-10% улучшится (маленький win).
+
+### Deliverables от Cursor (в порядке)
+
+- [ ] Fix 1 — pm2 cluster mode + ecosystem.config.cjs + docker-compose update + Redis pub/sub для WS (см. prerequisites)
+- [ ] Fix 2 — PG pool 100 + verify postgresql.conf max_connections
+- [ ] Fix 3 — Redis service в docker-compose + quoteCache wrapper + integrate в /api/swap/*
+- [ ] Fix 4 — nginx `listen 443 ssl http2;`
+- [ ] Fix 5 — оставляем pending, включим сами когда trafficи вырастет
+
+### Testing checklist после fixes
+
+Триггерни через GH Actions:
+- night1 (baseline) — убедиться что все p95 остались зелёными или улучшились
+- night2 (stress) — target цифры:
+  - A_landing stress p95 < 800ms
+  - B_siwe stress p95 < 700ms
+  - C_swap_quote stress p95 < 400ms
+  - Error rate = 0%
+
+Если 3/3 SLO зелёные — прод-grade достигнут.
+
+### После этих 5 фиксов — стрим SLO
+
+Realistic prod capacity после всех fix'ов:
+
+| Concurrent users | Ожидаемый UX |
+|---|---|
+| 1-100 | Летает (<200ms) |
+| 100-500 | Норм (<500ms) |
+| 500-1500 | Заметная нагрузка но ok (<800ms) |
+| 1500-3000 | Начинает саадиться (>1s) — время думать про horizontal scale |
+| 3000+ | Второй backend node + load balancer |
+
+---
+
 ## Update 2026-07-14 — 3 parallel next-tasks (Cursor)
 
 После prod-grade audit + load-suite (`50437ba`) остались три independent-задачи.

@@ -2066,6 +2066,17 @@ function hook() {
   // Disconnect при повторном клике на чип
   window.disconnectWallet = disconnect;
 
+  // Bridge: disconnect() fires 'wallet-disconnected' on WINDOW, but every
+  // injected widget (Meta-Portfolio, Simple-swap balances, Referral) listens
+  // for 'grom:wallet-disconnected' on DOCUMENT. Without this bridge the
+  // on-chain balance stays on screen until a full page refresh.
+  window.addEventListener('wallet-disconnected', () => {
+    try { gwInvalidateMpCache(); } catch (_) {}
+    try { document.dispatchEvent(new CustomEvent('grom:wallet-disconnected')); } catch (_) {}
+    try { gwRenderMetaPortfolio(); } catch (_) {}
+    try { gwDsSimRenderBalances(); } catch (_) {}
+  });
+
   // Boot: sync stale UI immediately; warm-restore WC async before first swap.
   gwSyncRestoredIdentityUi();
   gwPrefetchWc();

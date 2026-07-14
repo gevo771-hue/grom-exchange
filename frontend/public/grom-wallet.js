@@ -157,6 +157,9 @@ function gwClearWcPending() {
 function gwAbortPendingWc(reason) {
   const reject = _wcPendingReject;
   gwClearWcPending();
+  // Explicit user cancel — also drop the mobile resume state so a later
+  // approval in the wallet doesn't silently reconnect a cancelled flow.
+  try { gwClearMobileWcState(); } catch (_) {}
   if (reject) {
     try { reject(new Error(reason || 'Connection cancelled')); } catch (_) {}
   }
@@ -292,22 +295,10 @@ function openWalletWcApp(walletKey, wcUri) {
     } catch (_) {}
     return;
   }
-  try {
-    const a = document.createElement('a');
-    a.href = link;
-    a.rel = 'noopener';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { try { a.remove(); } catch (_) {} }, 80);
-  } catch (_) {}
-  // Safari sometimes needs location for custom schemes when <a>.click is ignored.
-  try {
-    setTimeout(() => {
-      if (document.visibilityState !== 'visible') return;
-      try { window.location.href = link; } catch (_) {}
-    }, 280);
-  } catch (_) {}
+  // Custom scheme (trust:// metamask:// …) — SINGLE navigation only.
+  // A retry timer here re-fires while iOS shows the "Open in app?" dialog
+  // and dismisses it, so the wallet never opens. One shot, no repeats.
+  try { window.location.href = link; } catch (_) {}
 }
 /** @deprecated use gwHideWcModal */
 function gwHideTrustWcModal() { gwHideWcModal(); }
@@ -690,10 +681,26 @@ function gwClearMobileWcState() { _gwMobileWcState = null; }
 async function gwTryResumeMobileWc() {
   if (_gwMobileWcResolving) return false;
   const st = _gwMobileWcState;
-  if (!st?.client || !window.__gromConnecting) return false;
+  // NOTE: do not require __gromConnecting — when iOS kills the relay socket,
+  // approval() rejects and the connect flow's finally block already reset the
+  // flag. The 180s freshness window below is the real guard.
+  if (!st?.client) return false;
   if (Date.now() - st.startedAt > 180000) return false;
   _gwMobileWcResolving = true;
   try {
+    // iOS kills the relay websocket during app-switch; the wallet's approval
+    // never arrives on the dead socket. Restart transport so pending session
+    // messages get delivered, then give the relay a beat to sync.
+    try {
+      const relayer = st.client.core?.relayer;
+      if (relayer && typeof relayer.restartTransport === 'function') {
+        await Promise.race([
+          relayer.restartTransport(),
+          new Promise((r) => setTimeout(r, 3000)),
+        ]);
+        await new Promise((r) => setTimeout(r, 700));
+      }
+    } catch (e) { console.log('[GROM] relay restart:', e?.message || e); }
     const sessions = (st.client.session.getAll() || []).filter(
       (s) => s?.active !== false && s?.namespaces?.eip155?.accounts?.length
     );
@@ -723,7 +730,13 @@ async function gwTryResumeMobileWc() {
 function gwInstallMobileWcHandlers() {
   if (gwInstallMobileWcHandlers._done) return;
   gwInstallMobileWcHandlers._done = true;
-  const kick = () => { setTimeout(() => { gwTryResumeMobileWc(); }, 600); };
+  // Approval may land a few seconds after transport restart — poll a few
+  // times instead of a single shot (0.6s / 2.5s / 5s / 9s after return).
+  const kick = () => {
+    [600, 2500, 5000, 9000].forEach((ms) => {
+      setTimeout(() => { gwTryResumeMobileWc(); }, ms);
+    });
+  };
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) kick();
   });
@@ -1741,16 +1754,26 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
     return await finalizeWcConnection(wcProvider, accs[0]);
   } catch (err) {
     gwClearWcPending();
-    gwHideWcModalOnly();
-    gwClearMobileWcState();
+    const em = String(err?.message || err || '');
+    const userCancelled = /cancel|rejected|declined|denied/i.test(em);
+    // _gwMobileWcState is nulled right before finalizeWcConnection — if it's
+    // gone, the session was established and this is a SIWE failure: close.
+    if (isMobileUA() && !userCancelled && _gwMobileWcState) {
+      // iOS app-switch killed the relay socket → approval() rejected even
+      // though the wallet may have approved. KEEP _gwMobileWcState so the
+      // visibilitychange/pageshow resume handler can pick the session up
+      // (it self-expires after 180s). Keep the modal too — the user is mid-flow.
+      console.log('[GROM] WC connect interrupted, resume armed:', em);
+    } else {
+      gwHideWcModalOnly();
+      gwClearMobileWcState();
+    }
     throw err;
   } finally {
     if (_wcPendingKillTimer) { clearInterval(_wcPendingKillTimer); _wcPendingKillTimer = null; }
     gwSetWcFlowActive(false);
     _wcPendingReject = null;
     window.__gromConnecting = false;
-    // Keep mobile state only while approval was in-flight; always clear here after settle.
-    gwClearMobileWcState();
   }
 }
 

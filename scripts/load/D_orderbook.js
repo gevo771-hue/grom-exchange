@@ -1,16 +1,24 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { baseUrl, progressiveStages, thresholds } from './_helpers.js';
 
-const BASE = __ENV.BASE_URL || 'https://grom.exchange';
-
+/**
+ * Scenario D — Orderbook flood (must be cached)
+ * Target (stress): 500 vus, p95 < 100ms
+ */
 export const options = {
-  vus: 50,
-  duration: '1m',
-  thresholds: { http_req_duration: ['p(95)<300'] },
+  stages: progressiveStages('public'),
+  thresholds: thresholds(100, 0.02),
 };
 
+const PAIRS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];
+
 export default function () {
-  const r = http.get(`${BASE}/api/spot/orderbook?pair=BTC/USDT&depth=25`);
-  check(r, { 'orderbook responded': (res) => res.status < 500 });
-  sleep(0.2);
+  const BASE = baseUrl();
+  const pair = PAIRS[Math.floor(Math.random() * PAIRS.length)];
+  const r = http.get(`${BASE}/api/spot/orderbook?pair=${encodeURIComponent(pair)}&depth=25`, {
+    tags: { name: 'orderbook' },
+  });
+  check(r, { 'orderbook <500': (res) => res.status < 500 });
+  sleep(0.05 + Math.random() * 0.15);
 }

@@ -126,3 +126,18 @@ if $FRONTEND_CHANGED && $FRONTEND_STATIC_ONLY && ! $BACKEND_CHANGED; then
 else
   echo "✅ Deploy done.  https://grom.exchange/  (Cmd+Shift+R to verify)"
 fi
+
+# ---- Post-deploy smoke (Scenario A, ~30s) — never blocks static-only if k6 missing ----
+echo ""
+echo "▶ Post-deploy load smoke (Scenario A)…"
+if command -v k6 >/dev/null 2>&1; then
+  chmod +x scripts/load/smoke.sh scripts/load/F_ws_flood.sh 2>/dev/null || true
+  if BASE_URL=https://grom.exchange ./scripts/load/smoke.sh; then
+    echo "✅ Load smoke passed"
+  else
+    echo "⚠ Load smoke FAILED (p95>500ms or errors>1%) — investigate before traffic spike"
+    exit 1
+  fi
+else
+  echo "⚠ k6 not installed locally — skip smoke (CI workflow still runs it)"
+fi

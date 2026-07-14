@@ -235,35 +235,24 @@ export default async function () {
 
 ### 6. Deliverables от Cursor
 
-1. **k6 скрипты** в `scripts/load/`:
+1. **k6 скрипты** в `scripts/load/`: ✅ **2026-07-14**
    - `A_landing.js`, `B_siwe.js`, `C_swap_quote.js`, `D_orderbook.js`,
-     `E_wallet_api.js`, `F_ws_flood.sh`, `G_e2e.js`
-   - README с инструкцией запуска
+     `E_wallet_api.js`, `F_ws_flood.sh`, `G_e2e.js` + `_helpers.js` (`STAGE`)
+   - README: `scripts/load/README.md`
 
-2. **`LOAD-TEST-RESULTS.md`** — таблицы p95/p99/error-rate per scenario
-   при разных load stages. Формат:
-   ```
-   | Scenario | 5 rps | 50 rps | 500 rps | Breaking point |
-   | A landing | 45ms/0.0% | 60ms/0.0% | 120ms/0.1% | 2000 rps (nginx worker limit) |
-   ```
+2. **`LOAD-TEST-RESULTS.md`** ✅ template + smoke log; stress/soak cells = pending
+   (smoke-only vs prod; full matrix = staging / 03:00–06:00 UTC)
 
-3. **Identified bottlenecks** — список найденных проблем + PRs с фиксами
-   (сначала все, потом retest → обновить таблицу)
+3. **Identified bottlenecks** ✅ seed list in `LOAD-TEST-RESULTS.md`
+   (PG pool 50, indexes 017, quote-cache TODO, blue-green TODO)
 
-4. **CI smoke test** — в `.github/workflows/*.yml` или через deploy.sh:
-   после каждого прод-деплоя автоматически прогон Scenario A × 30s.
-   Если p95 > 500ms или error rate > 1% → alert (Slack/email/Sentry)
+4. **CI smoke test** ✅ `.github/workflows/deploy.yml` post-deploy Scenario A
+   + `deploy.sh` local gate via `scripts/load/smoke.sh`
+   (fail if p95 > 500ms or errors > 1%)
 
-5. **Runbook `docs/LOAD-INCIDENT-RUNBOOK.md`** — что делать когда прод
-   упирается в потолок в real-time:
-   - Как быстро увеличить PG pool (без даунтайма)
-   - Как выкатить emergency Cloudflare rate-limit
-   - Кого поднимать (on-call rotation, если есть)
-   - Как отключить heavy endpoints (feature-flag)
+5. **Runbook `docs/LOAD-INCIDENT-RUNBOOK.md`** ✅
 
-### 7. Целевые SLO для prod (что «выдержим»)
-
-Определяем формально что значит «работает под нагрузкой»:
+### 7. Целевые SLO для prod (что «выдержим») ✅ documented
 
 - **Landing / public:** до **5000 concurrent users** без деградации
 - **API (authenticated):** до **500 rps sustained**, p95 < 800ms
@@ -314,7 +303,8 @@ export default async function () {
 - PG pool default **20 → 50** (`GROM_DB_POOL_MAX` override)
 - Migration `017_load_indexes.sql` — `wallet_transfers(user_id, created_at)`,
   `swap_events` if table exists. Spot/futures indexes already in `016_*`
-- k6 scripts: `scripts/load/{A_landing,B_siwe,C_swap_quote,D_orderbook}.js`
+- k6 full suite A–G + `smoke.sh` + README; CI + deploy.sh post-deploy smoke
+- `LOAD-TEST-RESULTS.md` + `docs/LOAD-INCIDENT-RUNBOOK.md`
 - Blue-green backend: **not done** (deploy.sh still recreate ≈15–25s API window)
 
 #### 5. Checklist status

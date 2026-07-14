@@ -124,8 +124,13 @@ function wcExcludeIdsFor(walletKey) {
 function trustWcDeepLink(uri) {
   return 'trust://wc?uri=' + encodeURIComponent(uri);
 }
+/** Desktop QR only — never navigate the Safari tab here (opens marketing site). */
 function trustWcUniversalLink(uri) {
   return 'https://link.trustwallet.com/wc?uri=' + encodeURIComponent(uri);
+}
+/** Hard rule: connect flow must never leave grom.exchange for https wallet hops. */
+function gwIsHttpsWalletHop(link) {
+  return typeof link === 'string' && /^https?:\/\//i.test(link);
 }
 function setWalletWcDeepLinkChoice(walletKey) {
   const href = GW_WALLET_WC[walletKey]?.nativeScheme || 'trust://';
@@ -188,7 +193,7 @@ function gwShowWcModal(walletKey, wcUri, opts) {
   const cfg = gwWalletCfg(walletKey);
   if (!cfg) return;
   const mobile = opts?.mobile ?? isMobileUA();
-  const qrPayload = mobile ? null : cfg.desktopQrLink(wcUri);
+  const qrPayload = (mobile || !wcUri) ? null : cfg.desktopQrLink(wcUri);
   let modal = document.getElementById('gwWcModal');
   if (!modal) {
     modal = document.createElement('div');
@@ -244,41 +249,65 @@ function gwShowWcModal(walletKey, wcUri, opts) {
   const backBtn = modal.querySelector('.gw-wc-back');
   if (backBtn) backBtn.style.display = '';
   if (mobile) {
-    lead.textContent = 'Подтверди подключение в ' + cfg.label;
     qrWrap.style.display = 'none';
-    openBtn.textContent = 'Открыть ' + cfg.label;
-    openBtn.style.display = '';
-    hint.textContent = 'После подтверждения в кошельке вернись в браузер — не закрывай эту вкладку.';
+    if (!wcUri || opts?.pending) {
+      lead.textContent = 'Готовим подключение к ' + cfg.label + '…';
+      openBtn.style.display = 'none';
+      hint.textContent = 'Не закрывай вкладку. Сейчас откроем приложение кошелька.';
+    } else {
+      lead.textContent = 'Подтверди подключение в ' + cfg.label + '. После подтверждения вернись сюда — вкладку не закрывай.';
+      openBtn.textContent = 'Открыть ' + cfg.label;
+      openBtn.style.display = '';
+      hint.textContent = 'Если приложение не открылось — нажми кнопку ещё раз.';
+    }
   } else {
     lead.textContent = '';
-    qrWrap.style.display = '';
+    qrWrap.style.display = qrPayload ? '' : 'none';
     openBtn.style.display = 'none';
-    hint.textContent = 'Scan this QR code with your phone camera or inside the ' + cfg.label + ' app.';
+    hint.textContent = qrPayload
+      ? 'Scan this QR code with your phone camera or inside the ' + cfg.label + ' app.'
+      : 'Готовим подключение к ' + cfg.label + '…';
     if (qrPayload) gwRenderQr(qrBox, qrPayload);
   }
   modal.style.display = 'flex';
   if (typeof window.closeConnectModal === 'function') window.closeConnectModal();
-  // Auto-open wallet on mobile — user already tapped a wallet row (gesture).
-  if (mobile && wcUri) {
-    setTimeout(() => openWalletWcApp(walletKey, wcUri), 350);
+  // Auto-open custom-scheme deep link only (never https — that replaces this tab).
+  if (mobile && wcUri && !opts?.pending) {
+    setTimeout(() => openWalletWcApp(walletKey, wcUri), 180);
   }
 }
 function openWalletWcApp(walletKey, wcUri) {
   const cfg = gwWalletCfg(walletKey) || GW_WALLET_WC.generic;
-  const link = cfg.mobileScheme(wcUri);
+  let link = typeof cfg.mobileScheme === 'function' ? cfg.mobileScheme(wcUri) : null;
   if (!link) return;
-  try {
-    window.location.href = link;
-  } catch (_) {
+  if (walletKey === 'trust' && gwIsHttpsWalletHop(link)) link = trustWcDeepLink(wcUri);
+  try { setWalletWcDeepLinkChoice(walletKey); } catch (_) {}
+  // https universal links must NEVER replace this tab: if the app isn't
+  // installed (or iOS UL hand-off fails) the wallet's website loads over
+  // grom.exchange and the pending WC session dies. New tab keeps us alive.
+  if (gwIsHttpsWalletHop(link)) {
     try {
-      const a = document.createElement('a');
-      a.href = link;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { try { a.remove(); } catch (_) {} }, 0);
-    } catch (__) {}
+      const w = window.open(link, '_blank', 'noopener');
+      if (!w) window.location.href = link; // popup blocked — last resort
+    } catch (_) {}
+    return;
   }
+  try {
+    const a = document.createElement('a');
+    a.href = link;
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { try { a.remove(); } catch (_) {} }, 80);
+  } catch (_) {}
+  // Safari sometimes needs location for custom schemes when <a>.click is ignored.
+  try {
+    setTimeout(() => {
+      if (document.visibilityState !== 'visible') return;
+      try { window.location.href = link; } catch (_) {}
+    }, 280);
+  } catch (_) {}
 }
 /** @deprecated use gwHideWcModal */
 function gwHideTrustWcModal() { gwHideWcModal(); }
@@ -808,13 +837,10 @@ const GW_WALLET_WC = {
     label: 'Trust Wallet',
     icon: '/assets/wallets/trust.svg',
     nativeScheme: 'trust://',
-    mobileScheme: (uri) => {
-      const ua = navigator.userAgent || '';
-      // iOS Safari opens Trust more reliably via universal link than trust://
-      if (/iPhone|iPad|iPod/i.test(ua)) return trustWcUniversalLink(uri);
-      return trustWcDeepLink(uri);
-    },
-    desktopQrLink: (uri) => 'https://link.trustwallet.com/wc?uri=' + encodeURIComponent(uri),
+    // ALWAYS trust:// — https://link.trustwallet.com dumps Safari onto Trust's
+    // download/marketing site when Universal Links don't hand off to the app.
+    mobileScheme: (uri) => trustWcDeepLink(uri),
+    desktopQrLink: (uri) => trustWcUniversalLink(uri),
     installUrl: 'https://trustwallet.com/download',
     injectCheck: resolveTrustProvider,
   },
@@ -1629,9 +1655,26 @@ async function connectViaReownExplorer() {
 }
 
 /**
- * Named wallets: SignClient + Binance-style QR with wallet-specific universal link
- * (never raw wc: — avoids MetaMask hijack on iOS / Chrome).
+ * Named wallets: SignClient + Binance-style QR with wallet-specific deep link
+ * (never raw wc: — avoids MetaMask hijack; never https UL in the Safari tab).
  */
+let _gwSignClientMod = null;
+function gwPrefetchSignClient() {
+  if (_gwSignClientMod) return;
+  const kick = () => {
+    import('https://esm.sh/@walletconnect/sign-client@2.18.0')
+      .then((m) => { _gwSignClientMod = m; })
+      .catch(() => {});
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(kick, { timeout: 2500 });
+  else setTimeout(kick, 1200);
+}
+async function gwLoadSignClient() {
+  if (_gwSignClientMod?.default) return _gwSignClientMod;
+  _gwSignClientMod = await import('https://esm.sh/@walletconnect/sign-client@2.18.0');
+  return _gwSignClientMod;
+}
+
 async function connectViaSignClientCustomQr(walletKey, opts) {
   const cfg = gwWalletCfg(walletKey);
   if (!cfg) throw new Error('Unknown wallet: ' + walletKey);
@@ -1643,7 +1686,11 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
   gwAbortPendingWc();
   gwSetWcFlowActive(true);
   gwKillReownModals();
-  _wcPendingKillTimer = setInterval(gwKillReownModals, 400);
+  // Soft poll — 400ms was burning main thread on mobile ("connect modal тупит").
+  _wcPendingKillTimer = setInterval(gwKillReownModals, 1200);
+
+  // Show modal immediately so the UI doesn't feel frozen while esm.sh loads.
+  gwShowWcModal(walletKey, '', { mobile: isMobileUA(), pending: true, fromExplorer: !!opts?.fromExplorer });
 
   try {
     if (wcProvider) {
@@ -1652,7 +1699,7 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
       wcRecommendedForKey = null;
     }
 
-    const { default: SignClient } = await import('https://esm.sh/@walletconnect/sign-client@2.18.0');
+    const { default: SignClient } = await gwLoadSignClient();
     const client = await SignClient.init({
       projectId: WC_PROJECT_ID,
       metadata: walletMetadata(),
@@ -1698,6 +1745,7 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
     gwSetWcFlowActive(false);
     _wcPendingReject = null;
     window.__gromConnecting = false;
+    // Keep mobile state only while approval was in-flight; always clear here after settle.
     gwClearMobileWcState();
   }
 }
@@ -1994,6 +2042,7 @@ function hook() {
   // Boot: sync stale UI immediately; warm-restore WC async before first swap.
   gwSyncRestoredIdentityUi();
   gwPrefetchWc();
+  gwPrefetchSignClient();
 
   // Подписка на сетевые ивенты window.ethereum (если юзер подключал ранее)
   if (window.ethereum && window.ethereum.selectedAddress) {
@@ -3843,15 +3892,15 @@ function gwInjectConnectModalCss() {
       color: #eaecef !important;
     }
     #connectModal .cn-list button.cn-row:hover {
-      background: rgba(240,185,11,.06) !important;
-      border-color: rgba(240,185,11,.28) !important;
+      background: rgba(14,165,233,.08) !important;
+      border-color: rgba(14,165,233,.35) !important;
     }
     #connectModal .cn-list button.cn-row.primary {
-      background: rgba(240,185,11,.1) !important;
-      border-color: rgba(240,185,11,.35) !important;
+      background: rgba(14,165,233,.12) !important;
+      border-color: rgba(14,165,233,.4) !important;
     }
     #connectModal .cn-foot { color: #848e9c !important; }
-    #connectModal .cn-foot a { color: #f0b90b !important; }
+    #connectModal .cn-foot a { color: #0ea5e9 !important; }
     html.gw-wc-flow w3m-modal,
     html.gw-wc-flow wcm-modal,
     html.gw-wc-flow w3m-container,
@@ -3911,10 +3960,10 @@ function gwInjectConnectModalCss() {
     .gw-wc-open {
       display: block; width: calc(100% - 40px); margin: 16px auto 0;
       text-align: center; padding: 13px 14px; border-radius: 10px;
-      background: #f0b90b; color: #181a20; border: 0;
+      background: #0ea5e9; color: #041018; border: 0;
       font-weight: 700; cursor: pointer; font-size: 15px;
     }
-    .gw-wc-open:hover { filter: brightness(1.05); }
+    .gw-wc-open:hover { filter: brightness(1.06); }
     .gw-expl-search {
       margin: 12px 16px 8px; padding: 12px 14px; border-radius: 10px;
       border: 1px solid rgba(234,236,239,.12); background: #0b0e11;

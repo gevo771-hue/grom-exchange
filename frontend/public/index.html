@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content" />
 <script>
 (function () {
-  var APP_VER = '2026-07-14a';
+  var APP_VER = '2026-07-14b';
   try {
     if (localStorage.getItem('grom_app_ver') !== APP_VER) {
       ['grom_dashboard_layout', 'grom_ui_prefs', 'welcome_seen', 'grom_page'].forEach(function (k) {
@@ -7571,7 +7571,7 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260714a';
+  walletModule.src = '/grom-wallet.js?v=20260714b';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');

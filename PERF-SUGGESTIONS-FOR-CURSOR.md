@@ -1,5 +1,332 @@
 # Performance suggestions — page-load 6.2 s → <1 s
 
+## Update 2026-07-14 — 3 parallel next-tasks (Cursor)
+
+После prod-grade audit + load-suite (`50437ba`) остались три independent-задачи.
+Все три можно вести параллельно — они не блокируют друг друга. Приоритет
+в порядке важности: **A → B → C**.
+
+---
+
+## A. Cache-bust automation (game-changer, боль уйдёт навсегда)
+
+**Проблема:** сейчас ручной `?v=YYYYMMDDx` bump. Легко забыть. Cloudflare
+игнорирует query strings в edge-кэше. Юзер видит старую версию,
+дизайнер плачет, dev пушит `20260714b`, `c`, `d`… ad infinitum.
+
+**Решение — 3 слоя:**
+
+### A.1 Content-hash filenames через esbuild
+
+Раз внедрил — забыл. Каждый deploy → content-hash в имени файла →
+CDN обязан отдать новый.
+
+**Setup:**
+```bash
+npm i -D esbuild
+```
+
+**`scripts/build-frontend.mjs`:**
+```js
+import { build } from 'esbuild';
+import { readFileSync, writeFileSync, cpSync } from 'fs';
+import crypto from 'crypto';
+
+const SRC = 'frontend/public';
+const OUT = 'frontend/dist';
+const files = ['grom-wallet.js', 'grom-privy.js', 'grom-i18n.js',
+                'grom-i18n-extra.js', 'grom-instruments.js'];
+
+const hashes = {};
+for (const f of files) {
+  const content = readFileSync(`${SRC}/${f}`);
+  const hash = crypto.createHash('sha256').update(content).digest('hex').slice(0, 8);
+  hashes[f] = hash;
+  writeFileSync(`${OUT}/${f.replace('.js', `.${hash}.js`)}`, content);
+}
+
+// Rewrite index.html script src's with hashed names
+let html = readFileSync(`${SRC}/index.html`, 'utf8');
+for (const [orig, hash] of Object.entries(hashes)) {
+  const hashed = orig.replace('.js', `.${hash}.js`);
+  html = html.replace(new RegExp(`${orig}\\?v=[^"'>]+`, 'g'), hashed);
+  html = html.replace(new RegExp(`${orig}(?![.a-f0-9])`, 'g'), hashed);
+}
+writeFileSync(`${OUT}/index.html`, html);
+
+// Copy static assets as-is (icon-512.png, assets/, .well-known/, etc.)
+cpSync(`${SRC}/assets`, `${OUT}/assets`, { recursive: true });
+cpSync(`${SRC}/.well-known`, `${OUT}/.well-known`, { recursive: true });
+// etc.
+```
+
+**Update `deploy.sh`** — перед rsync/docker cp запускать `node scripts/build-frontend.mjs`,
+использовать `frontend/dist/` вместо `frontend/public/`.
+
+**Update `nginx.conf`:**
+```nginx
+# Hashed JS/CSS — immutable, 1 year cache
+location ~ ^/[^/]+\.[a-f0-9]{8}\.(js|css)$ {
+    add_header Cache-Control "public, max-age=31536000, immutable";
+}
+# index.html — always revalidate
+location = /index.html {
+    add_header Cache-Control "no-cache";
+}
+```
+
+### A.2 Cloudflare purge on deploy
+
+`index.html` не имеет хеша (single entry point). После каждого deploy —
+purge only `/` и `/index.html`. Остальное CDN держит по хешу.
+
+Добавить в конец `deploy.sh` (нужны `$CF_ZONE_ID` и `$CF_API_TOKEN` в env):
+```bash
+if [ -n "$CF_ZONE_ID" ] && [ -n "$CF_API_TOKEN" ]; then
+  echo "▶ Purging Cloudflare cache for /"
+  curl -sS -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+    -H "Authorization: Bearer $CF_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"files":["https://grom.exchange/","https://grom.exchange/index.html"]}' \
+    | grep -q '"success":true' && echo "✅ CF purge OK" || echo "⚠ CF purge failed"
+fi
+```
+
+Токен создаётся в CF Dashboard → My Profile → API Tokens → Custom token
+с permission `Zone.Cache Purge`.
+
+### A.3 Keep `grom_app_ver` guard (уже есть)
+
+Ничего не трогай — это third-layer defense если A.1 или A.2 промахнулись.
+Единственное — брать значение автоматически из хеша, чтобы не бампать вручную:
+
+```js
+// В <head> (inline)
+var APP_VER = document.querySelector('script[src*="grom-wallet"]')?.src.match(/\.([a-f0-9]{8})\.js/)?.[1] || 'dev';
+if (localStorage.getItem('grom_app_ver') !== APP_VER) {
+  ['grom_wallet_label', 'grom_dashboard_layout', 'grom_ui_prefs', 'welcome_seen'].forEach(k => localStorage.removeItem(k));
+  localStorage.setItem('grom_app_ver', APP_VER);
+}
+```
+
+### A. Deliverables
+
+- [ ] `scripts/build-frontend.mjs` — build с content-hash
+- [ ] `deploy.sh` — вызывает build, CF purge в конце
+- [ ] `frontend/nginx.conf` — Cache-Control правила
+- [ ] `<head>` inline — auto APP_VER из hash
+- [ ] Deprecate manual `?v=` bumping в комментариях (оставить как fallback dev-mode)
+- [ ] Один test-deploy end-to-end чтобы убедиться что CDN и браузер оба берут свежий
+
+### A. Acceptance criteria
+
+- После `./deploy.sh`: hard-refresh на прод показывает новую версию **всегда**
+- Никаких ручных bumps в PR больше не появляется
+- Cache-Control в DevTools для hashed files = `max-age=31536000, immutable`
+- CF purge в deploy.sh — работает или skip'ается gracefully без токенов
+
+---
+
+## B. Sentry integration (visibility into errors)
+
+**Проблема:** сейчас ошибки frontend и backend **невидимы**. Юзер ловит
+BigInt crash, WC handshake fail, PostgreSQL timeout — мы узнаём только
+если он напишет в поддержку. Real error rate — ноль visibility.
+
+**Решение:** Sentry (бесплатный tier — 5k events/mo, хватит на первые
+месяцы).
+
+### B.1 Setup
+
+1. Регистрация на https://sentry.io (или self-hosted, но free tier ок для старта)
+2. Создать 2 проекта: `grom-frontend` (browser) + `grom-backend` (node)
+3. DSN'ы положить в env:
+   - Frontend DSN — публичный, можно inline в index.html
+   - Backend DSN — в `.env` на сервере
+
+### B.2 Frontend integration
+
+В `<head>` (после APP_VER guard, до других scripts):
+
+```html
+<script src="https://browser.sentry-cdn.com/8.x/bundle.tracing.min.js" crossorigin="anonymous"></script>
+<script>
+  window.Sentry?.init({
+    dsn: 'https://xxx@ingest.sentry.io/xxx',
+    environment: location.hostname === 'grom.exchange' ? 'prod' : 'dev',
+    release: APP_VER,
+    integrations: [ Sentry.browserTracingIntegration() ],
+    tracesSampleRate: 0.1,          // 10% of transactions
+    replaysSessionSampleRate: 0,    // don't record every session
+    replaysOnErrorSampleRate: 1.0,  // record only sessions where error happened
+    beforeSend(event) {
+      // Filter out known noise
+      if (event.exception?.values?.[0]?.value?.includes('ResizeObserver')) return null;
+      return event;
+    },
+  });
+  window.Sentry?.setTag('app_ver', APP_VER);
+</script>
+```
+
+**Также обернуть critical paths** — где мы уже ловим ошибки в try/catch:
+
+```js
+// В gwOnChainSwapExecInline / gwOnChainSwapExecMeta и т.д.:
+} catch (err) {
+  window.__gromLastSwapErr = err;
+  window.Sentry?.captureException(err, { tags: { flow: 'swap-exec' }, extra: { chainId, fromSym, toSym, amtNum } });
+  throw err;
+}
+```
+
+### B.3 Backend integration
+
+```bash
+npm i @sentry/node @sentry/profiling-node
+```
+
+В `backend/src/server.js` — **самый первый import**:
+
+```js
+import * as Sentry from '@sentry/node';
+import { nodeProfilingIntegration } from '@sentry/profiling-node';
+
+Sentry.init({
+  dsn: process.env.GROM_SENTRY_DSN,
+  environment: process.env.NODE_ENV || 'dev',
+  release: process.env.GROM_APP_VER || 'unknown',
+  integrations: [ nodeProfilingIntegration() ],
+  tracesSampleRate: 0.1,
+  profilesSampleRate: 0.1,
+});
+
+// Middleware wire-up (before routes)
+app.use(Sentry.Handlers.requestHandler());
+app.use(Sentry.Handlers.tracingHandler());
+// … routes …
+app.use(Sentry.Handlers.errorHandler());
+```
+
+### B.4 Alerting
+
+В Sentry UI создать 2 alert rules:
+1. **Error rate spike** → email/Slack при >20 errors/min
+2. **New issue** → уведомление на первое появление любой ошибки (early warning)
+
+### B. Deliverables
+
+- [ ] Sentry projects созданы (frontend + backend)
+- [ ] DSN'ы в env (backend в `.env`, frontend — inline)
+- [ ] Frontend init + `beforeSend` filter для noise
+- [ ] Backend init + Express middleware
+- [ ] Critical paths обёрнуты (swap exec, WC connect, SIWE, wallet balance)
+- [ ] Alert rules настроены в Sentry UI
+- [ ] Test error → появляется в Sentry dashboard
+
+### B. Acceptance criteria
+
+- Throwing `new Error('sentry-test')` в консоли — появляется в UI через ~30s
+- Backend 500 error на `/api/*` — трекается с request context
+- No PII leaks (wallet addresses OK, secrets NEVER)
+- Free tier hits (5k events/mo) — мониторим первую неделю, tune sampling если приближаемся
+
+---
+
+## C. Stress / soak load tests (execute the plan)
+
+**Что уже есть:** k6 скрипты A–G + smoke gate + runbook.
+**Что нужно:** реально прогнать полные scenarios и заполнить
+`LOAD-TEST-RESULTS.md`.
+
+### C.1 Prerequisites (Cursor чекает before running)
+
+- [ ] Prometheus метрики на backend видны (`curl :3000/metrics`)
+- [ ] Postgres `slow_query_log` включён
+- [ ] `docker stats grom_backend grom_postgres` — консоль открыта в отдельном окне
+- [ ] Sentry live (см. §B) — чтобы ловить errors в реальном времени
+- [ ] User approval для окна — **03:00-06:00 UTC** (низкий трафик)
+
+### C.2 Progressive execution — по одному в ночь
+
+Пиши в `LOAD-TEST-RESULTS.md` после каждого прогона.
+
+**Ночь 1 — Baseline + Load:**
+```bash
+STAGE=smoke BASE_URL=https://grom.exchange k6 run scripts/load/A_landing.js
+STAGE=load  BASE_URL=https://grom.exchange k6 run scripts/load/A_landing.js
+STAGE=load  BASE_URL=https://grom.exchange k6 run scripts/load/D_orderbook.js
+```
+
+Записать p95/p99/error rate. Смотреть `docker stats` во время прогона.
+Если backend >80% CPU или PG connections >40 — стопать, тюнить.
+
+**Ночь 2 — Stress (find breaking point):**
+```bash
+STAGE=stress BASE_URL=https://grom.exchange k6 run scripts/load/A_landing.js
+STAGE=stress BASE_URL=https://grom.exchange k6 run scripts/load/B_siwe.js
+STAGE=stress BASE_URL=https://grom.exchange k6 run scripts/load/C_swap_quote.js
+STAGE=stress BASE_URL=https://grom.exchange k6 run scripts/load/E_wallet_api.js
+```
+
+Ищем момент когда p95 > threshold. Записать в результаты «breaking point:
+XYZ rps». Найти bottleneck (PG? RPC? CPU?) — record in `LOAD-INCIDENT-RUNBOOK.md` playbook.
+
+**Ночь 3 — Soak (memory leaks):**
+```bash
+STAGE=soak BASE_URL=https://grom.exchange k6 run scripts/load/A_landing.js
+```
+
+2 часа непрерывного load. Смотреть Node heap через `docker exec -it grom_backend node -e "console.log(process.memoryUsage())"` каждые 20 минут.
+Растёт линейно после ~30 min → leak. Heap snapshot → diff → find culprit.
+
+**Ночь 4 — Spike + WS:**
+```bash
+STAGE=spike BASE_URL=https://grom.exchange k6 run scripts/load/A_landing.js
+BASE_URL=wss://grom.exchange bash scripts/load/F_ws_flood.sh
+```
+
+Cold-start behavior + WebSocket concurrent connections.
+
+### C.3 After each night — fix bottlenecks
+
+Каждый найденный bottleneck → commit fix → retest в следующее окно.
+Обновлять таблицу в `LOAD-TEST-RESULTS.md`.
+
+Типичные fix'ы (см. `LOAD-INCIDENT-RUNBOOK.md`):
+- PG pool exhausted → tune `GROM_DB_POOL_MAX`
+- Slow query → add index (проверить `pg_stat_statements`)
+- RPC 429 → добавить paid provider в fallback chain
+- Meta-agg quote 429 → cache quote 5-10s в Redis
+- Node event loop lag → move heavy sync work в worker_threads
+- Static asset slow → nginx tune, Cloudflare TTL
+
+### C.4 Deliverables
+
+- [ ] `LOAD-TEST-RESULTS.md` заполнена реальными цифрами по всем 4 stages
+- [ ] Каждый найденный bottleneck → commit с fix + retest подтверждение
+- [ ] Итоговый SLO checklist обновлён с зелёными ✓ или красными ✗
+- [ ] Если что-то критично не тянет — RFC в этот файл про архитектурный fix
+
+### C. Acceptance criteria
+
+- Все 4 SLO из LOAD-TEST-RESULTS.md либо ✅ pass, либо ❌ с чётким планом fix
+- No regressions в prod во время тестирования (юзеры не жалуются на следующее утро)
+- Smoke gate в CI/deploy.sh продолжает проходить (5 rps × 30s baseline)
+
+---
+
+## Timeline suggestion
+
+- **A (cache-bust automation)**: 2-3 дня работы (build script + CF purge + nginx conf)
+- **B (Sentry)**: 1 день (setup + wire-up + alerts)
+- **C (stress/soak)**: растянуть на 1 неделю — по 1 ночи на stage + фиксы
+
+Cursor может брать A и B параллельно (independent). C — по мере готовности
+инфры и наличия ночных окон.
+
+---
+
 ## Update 2026-07-11 (late evening) — LOAD-TESTING BRIEF (Cursor)
 
 Гевор спросил: **«как тестировать биржу на нагрузку, выдержит ли под

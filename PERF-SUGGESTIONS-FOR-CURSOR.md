@@ -279,6 +279,83 @@ export default async function () {
 
 ## Update 2026-07-11 (evening) — TECH-DEBT AUDIT #2 (Cursor)
 
+### ✅ Cursor progress — 2026-07-14 (`?v=20260714a`)
+
+**Deployed via `./deploy.sh` after this write-up.**
+
+#### 1. Stale-UI flashes — FIXED
+- `#walletModal` / `#connectModal` ship with `hidden` + critical CSS
+  `#…:not(.open) { display:none !important }` in `<head>` — Deposit never
+  paints before JS / on Settings navigation
+- `openWalletModal` marks `.gw-user-opened`; any spontaneous `.open`
+  without that flag is force-closed
+- `show()` / `hashchange` always dismiss walletModal (fixes Settings Deposit flash)
+- Removed Wallet-page Deposit + Trading-account «Top up» CTAs from HTML
+- Critical CSS hides any leftover `openWalletModal('deposit')` buttons
+- Settings demo placeholders (`Trader` / `you@mail.com` / `0x7a3f…`) → `—`
+
+#### 2. Connect-modal — ONE source of truth
+- Inventory: **1** live picker in `index.html#connectModal` (9 wallets).
+  WC «More wallets» explorer is a separate QR/explorer overlay (intentional).
+  No second parallel remount of the main list.
+- `openConnectModal()` idempotent: if already `.open`, re-focus + return
+- `grom_app_ver = 2026-07-14a` in `<head>` — mismatch purges
+  `grom_dashboard_layout` / `grom_ui_prefs` / `welcome_seen` / `grom_page`
+
+#### 3. Perf (iPhone LTE)
+- `index.html` gzip ≈ **200 KB** (≤250 KB target ✓)
+- DexScreener trending cached **45s** in `localStorage` (`grom:trending:v1`)
+- `content-visibility: auto` on Meta-Portfolio / Swap / Trending / banners
+- Mobile GPU kill CSS already present (`gw-mobile-perf-css`)
+- MutationObservers: still multiple (debounce already); full aggregation
+  deferred (not blocking ship)
+
+#### 4. Load / scale readiness
+- PG pool default **20 → 50** (`GROM_DB_POOL_MAX` override)
+- Migration `017_load_indexes.sql` — `wallet_transfers(user_id, created_at)`,
+  `swap_events` if table exists. Spot/futures indexes already in `016_*`
+- k6 scripts: `scripts/load/{A_landing,B_siwe,C_swap_quote,D_orderbook}.js`
+- Blue-green backend: **not done** (deploy.sh still recreate ≈15–25s API window)
+
+#### 5. Checklist status
+
+**Frontend perf:**
+- [x] index.html ≤ 250KB gzipped (~200KB)
+- [ ] Lighthouse mobile ≥ 85 — run on staging after deploy
+- [ ] CLS < 0.1 — measure
+- [ ] Fonts subset + preload
+- [ ] All images WebP/AVIF + srcset
+- [x] `content-visibility: auto` on off-screen cards
+- [ ] Service Worker (optional)
+
+**Cache/UI hygiene:**
+- [x] One wallet-picker implementation (`#connectModal`)
+- [x] `data-authed-only` + `.grom-authed` inline in `<head>`
+- [x] `grom_app_ver` bump force-purge
+- [x] Modals: no FOUC (hidden until `.open`)
+
+**Connect flow:**
+- [x] Logout → Connect shows fresh WC (prior audit)
+- [ ] Trust A → Выйти → Trust B — re-verify on device after this deploy
+- [x] `openConnectModal()` idempotent
+- [x] Modal open→close→open does not remount list HTML
+
+**Backend perf:**
+- [ ] `/api/*` p95 < 500ms @ 100 rps — run k6 on staging
+- [x] PG pool 50
+- [ ] Slow query log — ops enable `log_min_duration_statement=100`
+- [x] Indexes (016 + 017)
+- [ ] Sentry — confirm env key on prod
+- [x] Health-check exists (`/health` via server.js)
+
+**Ops:**
+- [ ] Blue-green backend
+- [ ] Cloudflare rate-limit rules
+- [ ] Postgres restore-drill
+- [ ] Uptime monitor
+
+---
+
 Пользователь снял видео и три скрина, жалобы:
 
 1. **Старый кэш пробивается** — на секунду мелькают элементы которые мы

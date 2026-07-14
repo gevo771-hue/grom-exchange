@@ -4018,7 +4018,10 @@ function gwOpenSignIn() {
   // survived from a previous visit but the JWT expired).
   const modal = document.getElementById('connectModal');
   if (modal) {
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
     modal.classList.add('open');
+    try { if (typeof window.gwEnsureConnectWalletRows === 'function') window.gwEnsureConnectWalletRows(); } catch (_) {}
     return;
   }
   // Fallbacks — Cursor's helper, then the visible Sign-in button.
@@ -9740,8 +9743,18 @@ function gwDsPickToken(sym, which, meta) {
 window.gwDsPickToken = gwDsPickToken;
 
 async function gwFetchTrending() {
-  // DexScreener token-boosts/latest returns tokens ordered by boost. We
-  // pull their pair data so we get real price/change/volume.
+  // DexScreener token-boosts/latest — cache 45s in localStorage to cut LTE churn.
+  const CACHE_KEY = 'grom:trending:v1';
+  const TTL = 45_000;
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (raw) {
+      const cached = JSON.parse(raw);
+      if (cached && Array.isArray(cached.rows) && (Date.now() - (cached.at || 0)) < TTL) {
+        return cached.rows;
+      }
+    }
+  } catch (_) {}
   try {
     const b = await fetch('https://api.dexscreener.com/token-boosts/latest/v1').then((r) => r.json());
     if (!Array.isArray(b) || b.length === 0) return [];
@@ -9776,7 +9789,9 @@ async function gwFetchTrending() {
         tokenAddress: dedup[i].tokenAddress,
       });
     }
-    return rows.sort((a, b) => b.volumeUsd - a.volumeUsd).slice(0, 20);
+    const out = rows.sort((a, b) => b.volumeUsd - a.volumeUsd).slice(0, 20);
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), rows: out })); } catch (_) {}
+    return out;
   } catch (_) { return []; }
 }
 
@@ -10241,22 +10256,33 @@ function gwSetupCexCleanup() {
   window.addEventListener('hashchange', debounced);
   window.addEventListener('grom:lang-change', debounced);
 
-  // Guard: on wallet/referral route, close any spontaneously-opened walletModal.
-  const closeDepositIfStrayed = () => {
-    const route = (location.hash || '').replace(/^#/, '').split('?')[0];
-    if (route !== 'wallet' && route !== 'referral') return;
+  // Guard: close walletModal on every navigation so Settings never flashes Deposit.
+  // User-opened sessions are still dismissed on route change (intentional).
+  const forceCloseWalletModal = () => {
     const modal = document.getElementById('walletModal');
-    if (modal && !modal.hidden && !modal.classList.contains('gw-user-opened')) {
-      // Was the modal opened by an explicit user click on the Deposit button?
-      // The button carries data-gw-user-opened when clicked. Otherwise treat
-      // it as accidental and dismiss.
-      modal.hidden = true;
-      modal.style.display = 'none';
-    }
+    if (!modal) return;
+    modal.classList.remove('open', 'gw-user-opened');
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    modal.style.display = '';
   };
-  window.addEventListener('hashchange', closeDepositIfStrayed);
-  // Also monitor when modal becomes visible.
-  const modObs = new MutationObserver(closeDepositIfStrayed);
+  window.addEventListener('hashchange', forceCloseWalletModal);
+  const _prevShowWm = window.show;
+  if (typeof _prevShowWm === 'function' && !_prevShowWm.__gwWmGuard) {
+    window.show = function (page) {
+      forceCloseWalletModal();
+      return _prevShowWm.apply(this, arguments);
+    };
+    window.show.__gwWmGuard = true;
+  }
+  // Kill spontaneous open without gw-user-opened (legacy auto-open races).
+  const modObs = new MutationObserver(() => {
+    const modal = document.getElementById('walletModal');
+    if (!modal) return;
+    if (modal.classList.contains('open') && !modal.classList.contains('gw-user-opened')) {
+      forceCloseWalletModal();
+    }
+  });
   const mm = document.getElementById('walletModal');
   if (mm) modObs.observe(mm, { attributes: true, attributeFilter: ['hidden', 'style', 'class'] });
 }

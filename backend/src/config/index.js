@@ -24,7 +24,7 @@ function parseDbConfig() {
         database: decodeURIComponent(u.pathname.replace(/^\//, '') || 'grom'),
         user: decodeURIComponent(u.username || 'grom'),
         password: decodeURIComponent(u.password || ''),
-        max: 20,
+        max: Number(process.env.GROM_DB_POOL_MAX) || 50,
         idleTimeoutMillis: 30_000,
       };
     } catch {
@@ -37,7 +37,7 @@ function parseDbConfig() {
     database: env('GROM_DB_NAME', 'grom'),
     user: env('GROM_DB_USER', 'grom'),
     password: env('GROM_DB_PASSWORD', ''),
-    max: 20,
+    max: Number(process.env.GROM_DB_POOL_MAX) || 50,
     idleTimeoutMillis: 30_000,
   };
 }

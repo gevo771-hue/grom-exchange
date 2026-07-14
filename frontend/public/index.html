@@ -6,6 +6,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content" />
 <script>
 (function () {
+  var APP_VER = '2026-07-14a';
+  try {
+    if (localStorage.getItem('grom_app_ver') !== APP_VER) {
+      ['grom_dashboard_layout', 'grom_ui_prefs', 'welcome_seen', 'grom_page'].forEach(function (k) {
+        try { localStorage.removeItem(k); } catch (_) {}
+      });
+      localStorage.setItem('grom_app_ver', APP_VER);
+    }
+  } catch (_) {}
   var authed = false;
   try {
     authed = !!(localStorage.getItem('grom_jwt') || localStorage.getItem('grom_wallet_label'));
@@ -18,6 +27,18 @@
   html:not(.grom-authed) [data-authed-only] { display: none !important; }
   html:not(.grom-spot-ready) #spotChart { visibility: hidden !important; }
   html:not(.grom-spot-ready) .spot-chart-shell .chart-wrap { min-height: 280px; background: rgba(122,162,199,.06); border-radius: 12px; }
+  /* Modals: never paint until explicit .open — kills Deposit FOUC on Settings */
+  #walletModal:not(.open),
+  #connectModal:not(.open) {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+  /* Off-screen cards — skip layout/paint until scrolled into view */
+  .gw-tr-wrap, .gw-mp-wrap, .gw-ds-wrap, .gw-yield-wrap, .dash-banners-wrap {
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 320px;
+  }
 </style>
 <script>
 (function () {
@@ -55,7 +76,10 @@
   .header-actions .deposit-btn,
   .header .deposit-cta,
   .hub-header button[data-action="deposit"],
-  button.deposit-cta { display: none !important; }
+  button.deposit-cta,
+  #page-wallet .wallet-hero .actions button[onclick*="deposit"],
+  #page-wallet button[onclick*="openWalletModal('deposit')"],
+  button[onclick*="openWalletModal('deposit')"] { display: none !important; }
 </style>
 <style id="grom-route-boot-css">
   /* Prevent landing flash on refresh — overridden once JS router is ready */
@@ -6071,7 +6095,6 @@
           <div class="delta" id="walletTotalDelta" style="color:var(--silver5)">Sign in to view balance</div>
         </div>
         <div class="actions">
-          <button type="button" class="btn-ghost" onclick="openWalletModal('deposit')"><svg width="14" height="14"><use href="#i-deposit"/></svg> Deposit</button>
           <button type="button" class="btn-ghost" onclick="openWalletModal('send')"><svg width="14" height="14"><use href="#i-send"/></svg> Send</button>
           <button type="button" class="btn-primary" onclick="openWalletModal('swap')">Swap</button>
         </div>
@@ -6105,9 +6128,9 @@
           <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
             <div class="set-row" style="border:none;padding:4px 0"><div class="set-lbl">Active balance</div><div class="mono" id="walletTradingBal">—</div></div>
             <div class="set-row" style="border:none;padding:4px 0"><div class="set-lbl">Locked in orders</div><div class="mono" id="walletLockedBal">—</div></div>
-            <p style="color:var(--silver5);font-size:12px;margin:6px 0 8px">Funds here power Spot, Futures and Binary execution. Recommend keeping only what you actively trade.</p>
+            <p style="color:var(--silver5);font-size:12px;margin:6px 0 8px">Non-custodial DEX — fund your own wallet externally, then swap here.</p>
             <div class="boff-actions" style="margin:0">
-              <button class="btn-ghost" onclick="openWalletModal('deposit')">Top up</button>
+              <button class="btn-ghost" onclick="show('dashboard'); setTimeout(function(){ document.querySelector('.gw-ds-wrap')?.scrollIntoView({behavior:'smooth',block:'center'}); }, 120)">Go to swap</button>
               <button class="btn-ghost" id="walletMoveToOwnBtn" onclick="moveBalanceToConnectedWallet()" style="display:none">Move excess → my wallet</button>
             </div>
           </div>
@@ -6932,9 +6955,9 @@
       <div class="card">
         <div class="card-head"><h3 data-i18n="set_profile_title">Profile</h3></div>
         <div class="card-body">
-          <div class="set-row"><div class="set-lbl" data-i18n="set_display_name">Display name</div><input class="set-input" type="text" id="setName" value="Trader"/></div>
-          <div class="set-row"><div class="set-lbl" data-i18n="set_email">Email</div><input class="set-input" type="email" id="setEmail" placeholder="you@mail.com"/></div>
-          <div class="set-row"><div class="set-lbl" data-i18n="set_wallet">Wallet</div><div class="set-val mono" id="setWalletAddr">0x7a3f…c9e1</div></div>
+          <div class="set-row"><div class="set-lbl" data-i18n="set_display_name">Display name</div><input class="set-input" type="text" id="setName" value="" placeholder="—"/></div>
+          <div class="set-row"><div class="set-lbl" data-i18n="set_email">Email</div><input class="set-input" type="email" id="setEmail" placeholder="optional"/></div>
+          <div class="set-row"><div class="set-lbl" data-i18n="set_wallet">Wallet</div><div class="set-val mono" id="setWalletAddr">—</div></div>
           <div class="set-actions"><button type="button" class="btn-primary" onclick="saveSettings()" data-i18n="set_save">Save changes</button></div>
         </div>
       </div>
@@ -7165,8 +7188,8 @@
 
 <div class="toasts" id="toasts"></div>
 
-<!-- Connect modal (Polymarket / Hyperliquid style) -->
-<div class="wm-overlay" id="connectModal" role="dialog" aria-modal="true" aria-labelledby="cnTitle" onclick="if(event.target===this) closeConnectModal()">
+<!-- Connect modal — single source of truth (9 wallets). Hidden until openConnectModal() -->
+<div class="wm-overlay" id="connectModal" role="dialog" aria-modal="true" aria-labelledby="cnTitle" aria-hidden="true" hidden onclick="if(event.target===this) closeConnectModal()">
   <div class="wm" style="max-width:420px">
     <div class="wm-head">
       <h3 id="cnTitle">Connect wallet</h3>
@@ -7338,8 +7361,8 @@
 }
 </style>
 
-<!-- Wallet modal (deposit / send / swap) -->
-<div class="wm-overlay" id="walletModal" role="dialog" aria-modal="true" aria-labelledby="wmTitle" onclick="if(event.target===this) closeWalletModal()">
+<!-- Wallet modal (deposit / send / swap) — hidden until openWalletModal() -->
+<div class="wm-overlay" id="walletModal" role="dialog" aria-modal="true" aria-labelledby="wmTitle" aria-hidden="true" hidden onclick="if(event.target===this) closeWalletModal()">
   <div class="wm">
     <div class="wm-head">
       <h3 id="wmTitle" data-i18n="wallet_deposit">Deposit</h3>
@@ -7548,12 +7571,12 @@
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260711j';
+  walletModule.src = '/grom-wallet.js?v=20260714a';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = '/grom-privy.js?v=20260711a';
+  privyModule.src = '/grom-privy.js?v=20260714a';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -7929,6 +7952,12 @@ function disconnectWallet() {
   if (typeof applyI18n === 'function') applyI18n();
 }
 function openConnectModal() {
+  var ov = document.getElementById('connectModal');
+  // Idempotent: already open → re-focus, do not remount / reset mid-flow hard
+  if (ov && ov.classList.contains('open') && !ov.hidden) {
+    try { ov.focus?.(); } catch (_) {}
+    return;
+  }
   var inWcFlow = document.documentElement.classList.contains('gw-wc-flow');
   try {
     if (!inWcFlow) {
@@ -7945,8 +7974,11 @@ function openConnectModal() {
       return;
     }
   } catch (_) {}
-  var ov = document.getElementById('connectModal');
-  if (ov) ov.classList.add('open');
+  if (ov) {
+    ov.hidden = false;
+    ov.setAttribute('aria-hidden', 'false');
+    ov.classList.add('open');
+  }
   // Reset modal state: Privy's showEmailForm() hides main rows (wallets)
   // and shows its inline OTP form. If the user closed the modal mid-flow and reopens it,
   // we need to restore the main rows so they can pick a different provider.
@@ -7966,7 +7998,11 @@ function openConnectModal() {
 window.openConnectModal = openConnectModal;
 function closeConnectModal() {
   var ov = document.getElementById('connectModal');
-  if (ov) ov.classList.remove('open');
+  if (ov) {
+    ov.classList.remove('open');
+    ov.hidden = true;
+    ov.setAttribute('aria-hidden', 'true');
+  }
 }
 function cnShowEmail(ev) {
   // Block synthetic clicks (Chrome autofill / focus-as-click / .click() calls
@@ -13284,12 +13320,19 @@ function openHelpTopic(topic) {
 function openWalletModal(mode) {
   var ov = document.getElementById('walletModal');
   if (!ov) return;
-  ov.classList.add('open');
+  // Mark as user-opened so route guards don't auto-dismiss
+  ov.classList.add('gw-user-opened', 'open');
+  ov.hidden = false;
+  ov.setAttribute('aria-hidden', 'false');
   switchWalletPane(mode || 'deposit');
 }
 function closeWalletModal() {
   var ov = document.getElementById('walletModal');
-  if (ov) ov.classList.remove('open');
+  if (ov) {
+    ov.classList.remove('open', 'gw-user-opened');
+    ov.hidden = true;
+    ov.setAttribute('aria-hidden', 'true');
+  }
 }
 function switchWalletPane(mode) {
   var i18n = typeof t === 'function' ? t : function (k, fb) { return fb || k; };

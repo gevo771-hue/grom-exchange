@@ -3905,6 +3905,14 @@ function gwInjectConnectModalCss() {
     document.head.appendChild(style);
   }
   const css = `
+    /* Hard overlay guarantee — if base .wm-overlay styles are missing/stale,
+     * the wallet list must never flow into the page as a full-screen "form". */
+    #connectModal.open {
+      position: fixed !important; inset: 0 !important; z-index: 2400 !important;
+      display: flex !important; align-items: center !important; justify-content: center !important;
+      background: rgba(0, 0, 0, .72); padding: 16px;
+    }
+    #connectModal.open .wm { width: min(420px, 100%); }
     #connectModal .wm {
       max-height: min(90dvh, 720px);
       overflow-x: hidden;

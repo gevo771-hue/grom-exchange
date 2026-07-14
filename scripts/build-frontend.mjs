@@ -65,5 +65,8 @@ function rewriteHtml(file) {
 rewriteHtml('index.html');
 rewriteHtml('oauth-callback.html');
 
+// Tiny version beacon — stale tabs poll this and self-reload when it changes.
+writeFileSync(join(OUT, 'version.json'), JSON.stringify({ v: buildVer }));
+
 console.log(JSON.stringify({ buildVer, files: map }, null, 2));
 console.log(`✅ Built ${OUT} · APP_VER=${buildVer}`);

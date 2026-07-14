@@ -21,6 +21,32 @@
     if (localStorage.getItem('grom:logged_out') === '1') authed = false;
   } catch (_) {}
   document.documentElement.classList.toggle('grom-authed', authed);
+
+  /* Self-heal stale tabs: Safari restores old pages from bfcache after a
+   * deploy and the user sees the previous UI until a manual refresh.
+   * Poll the tiny version beacon and reload once when it changes — but
+   * never mid wallet-connect flow and not more than once per beacon. */
+  var lastCheck = 0;
+  function gwVersionCheck() {
+    var now = Date.now();
+    if (now - lastCheck < 60000) return;
+    lastCheck = now;
+    if (APP_VER === 'dev' || !/^[a-f0-9]{6,}$/.test(APP_VER)) return; // un-built HTML
+    fetch('/version.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.v || j.v === APP_VER) return;
+      var midFlow = false;
+      try {
+        midFlow = document.documentElement.classList.contains('gw-wc-flow')
+          || !!document.querySelector('#connectModal.open')
+          || (document.getElementById('gwWcModal') || {}).style?.display === 'flex';
+      } catch (_) {}
+      if (midFlow) return;
+      try { sessionStorage.setItem('grom_reloaded_for', j.v); } catch (_) {}
+      location.reload();
+    }).catch(function () {});
+  }
+  window.addEventListener('pageshow', function (ev) { if (ev.persisted) gwVersionCheck(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) gwVersionCheck(); });
 })();
 </script>
 <script>

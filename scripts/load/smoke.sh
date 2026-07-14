@@ -25,20 +25,25 @@ k6 run \
   -e STAGE=smoke \
   "$ROOT/scripts/load/A_landing.js"
 
-# Parse summary via node for portable threshold check
+# Parse summary via node for portable threshold check.
+# Gate on TTFB (http_req_waiting) not full duration: the CI runner sits far
+# from the origin and index.html is ~200KB gzip, so transfer time reflects
+# runner bandwidth, not backend health. TTFB p95 > 500ms = origin is slow.
 node - <<'NODE'
 const fs = require('fs');
 const j = JSON.parse(fs.readFileSync('/tmp/grom-load-smoke.json', 'utf8'));
 const m = j.metrics || {};
-const p95 = m.http_req_duration?.values?.['p(95)'] ?? m.http_req_duration?.['p(95)'];
+const pick = (name) => m[name]?.values?.['p(95)'] ?? m[name]?.['p(95)'];
+const ttfb = pick('http_req_waiting') ?? pick('http_req_duration');
+const full = pick('http_req_duration');
 const fail = m.http_req_failed?.values?.rate ?? m.http_req_failed?.rate ?? 0;
-console.log(`p95=${p95}ms fail_rate=${(fail * 100).toFixed(2)}%`);
-if (p95 == null) {
+console.log(`ttfb_p95=${ttfb}ms full_p95=${full}ms fail_rate=${(fail * 100).toFixed(2)}%`);
+if (ttfb == null) {
   console.error('Could not read p95 from k6 summary');
   process.exit(1);
 }
-if (p95 > 500) {
-  console.error(`ALERT: p95 ${p95}ms > 500ms`);
+if (ttfb > 500) {
+  console.error(`ALERT: TTFB p95 ${ttfb}ms > 500ms`);
   process.exit(1);
 }
 if (fail > 0.01) {

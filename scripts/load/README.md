@@ -52,6 +52,12 @@ chmod +x scripts/load/smoke.sh
 ./scripts/load/smoke.sh
 ```
 
+## Metric note
+
+Thresholds gate on **TTFB** (`http_req_waiting` p95), not full
+`http_req_duration` — full duration includes body transfer and measures the
+load-generator's bandwidth rather than origin health.
+
 ## Safety
 
 - **Do not** run `stress` / `spike` / `soak` against prod in peak hours.

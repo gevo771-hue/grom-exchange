@@ -61,9 +61,12 @@ export function progressiveStages(profile = 'public') {
 
 export function thresholds(p95Ms, failRate = 0.01) {
   // Smoke thresholds are looser so flaky cold-starts don't false-fail CI.
+  // Gate on TTFB (http_req_waiting): full http_req_duration includes body
+  // transfer, which measures the load-generator's bandwidth (GH runner is
+  // far from the origin), not backend health.
   const smoke = stage() === 'smoke';
   return {
-    http_req_duration: [`p(95)<${smoke ? Math.max(p95Ms, 500) : p95Ms}`],
+    http_req_waiting: [`p(95)<${smoke ? Math.max(p95Ms, 500) : p95Ms}`],
     http_req_failed: [`rate<${smoke ? 0.05 : failRate}`],
   };
 }

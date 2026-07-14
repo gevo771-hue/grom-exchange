@@ -82,11 +82,14 @@ echo "    frontend changed:         $FRONTEND_CHANGED"
 echo "    frontend static-only:     $FRONTEND_STATIC_ONLY"
 
 SSH="ssh -i $HOME/.ssh/grom_do -p 2222 root@134.122.69.161"
+# Same lock as GitHub Actions deploy — manual and CI deploys must not race
+# (a race on 2026-07-14 rebuilt the frontend mid-hot-swap and 502'd prod).
+LOCK="exec 9>/tmp/grom-deploy.lock; flock -w 300 9;"
 
 # ---- Always start with git pull on prod ----
 echo ""
 echo "▶ Pulling latest into /opt/grom-exchange on prod ..."
-$SSH "cd /opt/grom-exchange && git pull"
+$SSH "$LOCK cd /opt/grom-exchange && git pull"
 
 # ---- Frontend ----
 # Both paths deploy frontend/dist (content-hashed build) — see
@@ -99,14 +102,14 @@ if $FRONTEND_CHANGED; then
     echo "    - node scripts/build-frontend.mjs → frontend/dist"
     echo "    - docker cp frontend/dist/. → running grom_frontend container"
     echo "    - nginx -s reload (no restart, no 502)"
-    $SSH "cd /opt/grom-exchange && \
+    $SSH "$LOCK cd /opt/grom-exchange && \
           $BUILD_CMD && \
           docker cp frontend/dist/. grom_frontend:/usr/share/nginx/html/ && \
           docker exec grom_frontend nginx -s reload"
   else
     echo ""
     echo "▶ Frontend Dockerfile/nginx.conf changed — full rebuild required:"
-    $SSH "cd /opt/grom-exchange && \
+    $SSH "$LOCK cd /opt/grom-exchange && \
           docker compose build frontend && \
           docker compose up -d --force-recreate --no-deps frontend && \
           $BUILD_CMD && \
@@ -119,7 +122,7 @@ fi
 if $BACKEND_CHANGED; then
   echo ""
   echo "▶ Rebuilding backend (frontend nginx keeps serving throughout):"
-  $SSH "cd /opt/grom-exchange && \
+  $SSH "$LOCK cd /opt/grom-exchange && \
         docker compose build backend && \
         docker compose up -d --force-recreate --no-deps backend"
 fi

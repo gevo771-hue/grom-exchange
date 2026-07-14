@@ -1,5 +1,282 @@
 # Performance suggestions — page-load 6.2 s → <1 s
 
+## Update 2026-07-11 (late evening) — LOAD-TESTING BRIEF (Cursor)
+
+Гевор спросил: **«как тестировать биржу на нагрузку, выдержит ли под
+большой нагрузкой?»** Правда — сейчас **не тестировано вообще**. Пишу
+готовый план: инструменты, сценарии, метрики, что делать с результатами.
+
+**Цель:** знать точно на каком уровне трафика биржа умирает и что
+конкретно ломается первым.
+
+### 0. Prerequisites — до первого теста
+
+- **Staging environment** — либо отдельный сервер (клон prod с другой БД),
+  либо тестировать prod ночью в 03:00-06:00 UTC (низкий трафик)
+  - Категорически **не** тестировать прод в час пик — риск уложить работу для реальных юзеров
+- **Observability включена**:
+  - Prometheus метрики backend (уже есть, проверь `/metrics` endpoint)
+  - Postgres `slow_query_log = on` (queries >100ms логируем)
+  - `pg_stat_statements` включён
+  - Sentry backend errors подключён (если ещё нет)
+  - `htop` / `docker stats` мониторит CPU/RAM в реальном времени
+- **Baseline** — с 1 пользователем измерь p50/p95/p99 всех endpoints.
+  Без baseline не поймёшь стало ли хуже под нагрузкой
+
+### 1. Инструменты
+
+Рекомендую **k6** от Grafana Labs — best-in-class для нашего кейса:
+- JS-based скрипты (пишем как обычный JS)
+- Хорошая интеграция с CI/CD
+- HTML/JSON репорт из коробки
+- Cloud dashboard бесплатно на 50 vusers
+
+```bash
+brew install k6          # macOS
+# или docker: docker run --rm -i grafana/k6 run - <script.js
+```
+
+Альтернативы (для конкретных задач):
+- **autocannon** (npm, super quick benchmark) — для быстрого прогона одного endpoint
+- **Artillery** (Node.js, YAML+JS) — если нужны сложные распределения
+- **wrk** (C) — если нужна максимальная скорость генерации
+- **websocat + xargs** — для WebSocket concurrent connections тестов
+
+### 2. Сценарии (что реально тестируем)
+
+#### Scenario A — Landing + публичные страницы (unauthenticated)
+
+Самая тяжёлая по количеству — большинство трафика это анонимные посетители.
+
+```js
+// scripts/load/A_landing.js
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+
+export const options = {
+  stages: [
+    { duration: '1m', target: 100 },   // ramp up
+    { duration: '5m', target: 500 },   // sustained load
+    { duration: '1m', target: 0 },     // ramp down
+  ],
+  thresholds: {
+    http_req_duration: ['p(95)<200'],
+    http_req_failed: ['rate<0.01'],
+  },
+};
+
+export default function () {
+  http.get('https://grom.exchange/');
+  sleep(1);
+  http.get('https://grom.exchange/#markets');
+  sleep(1);
+  http.get('https://grom.exchange/#predict');
+  sleep(2);
+}
+```
+
+**Ожидание:** p95 < 200ms, 0% errors. Cloudflare + nginx кэш должны справиться.
+
+#### Scenario B — Login burst (SIWE)
+
+Аутентификация — узкое место потому что каждый вызов дергает PostgreSQL.
+
+```js
+// scripts/load/B_siwe_burst.js
+export const options = {
+  vus: 100,             // 100 concurrent
+  duration: '2m',
+  thresholds: { http_req_duration: ['p(95)<500'] },
+};
+
+export default function () {
+  const nonce = http.post('https://grom.exchange/api/auth/nonce').json();
+  http.post('https://grom.exchange/api/auth/siwe', JSON.stringify({
+    address: '0x' + 'a'.repeat(40),
+    signature: '0x' + 'b'.repeat(130),  // mock — тест не проходит верификацию, но нагружает эндпоинт
+    nonce: nonce.nonce,
+  }), { headers: { 'Content-Type': 'application/json' } });
+}
+```
+
+**Ожидание:** p95 < 500ms, no PostgreSQL connection exhaustion (проверь
+`SELECT count(*) FROM pg_stat_activity`).
+
+#### Scenario C — Swap quote storm
+
+Meta-aggregator обращается к 6 внешним API. Тестируем что не убивается
+внешними rate-limits.
+
+```js
+export default function () {
+  http.get('https://grom.exchange/api/swap/quote?chainId=42161&src=USDT&dst=USDC&amount=100');
+}
+export const options = { vus: 200, duration: '5m', thresholds: { http_req_duration: ['p(95)<1500'] } };
+```
+
+**Ожидание:** p95 < 1.5s (external aggregator latency dominates).
+**Watch:** rate limits от LiFi/Paraswap. Если 429 pops — надо кэшировать
+quotes на 5-10s.
+
+#### Scenario D — Orderbook flood (public, must be cached)
+
+```js
+export default function () {
+  http.get('https://grom.exchange/api/spot/orderbook?pair=BTC/USDT&depth=25');
+}
+export const options = { vus: 500, duration: '3m', thresholds: { http_req_duration: ['p(95)<100'] } };
+```
+
+**Ожидание:** p95 < 100ms. Если больше — orderbook не закэширован,
+хардим redis или in-memory cache на 1-2s.
+
+#### Scenario E — Auth'd wallet API (тяжёлый — RPC aggregation)
+
+```js
+// Требует валидный JWT — вначале логинишься 1 раз, потом reuse token
+export const options = { vus: 100, duration: '5m', thresholds: { http_req_duration: ['p(95)<800'] } };
+```
+
+**Watch:** RPC quotas (publicnode / Ankr / llama). Circuit-breaker
+через `gwRpcTry` уже есть — проверь везде вызывается.
+
+#### Scenario F — WebSocket concurrent connections
+
+```bash
+# Простой bash-скрипт
+for i in $(seq 1 1000); do
+  websocat -n1 "wss://grom.exchange/ws?token=$JWT" &
+done
+wait
+```
+
+**Ожидание:** 1000 stable connections, no dropped, memory stable
+(проверь `docker stats grom_backend`).
+
+#### Scenario G — End-to-end (реалистичный юзер)
+
+Самый важный — воспроизводит реальный сценарий: land → connect → get
+quote → sign → swap. Используй k6 `browser` module (Playwright integration).
+
+```js
+import { browser } from 'k6/browser';
+export const options = {
+  scenarios: {
+    ui: { executor: 'shared-iterations', vus: 50, iterations: 500,
+          options: { browser: { type: 'chromium' } } }
+  }
+};
+export default async function () {
+  const page = await browser.newPage();
+  await page.goto('https://grom.exchange');
+  await page.locator('[data-page="swap"]').click();
+  // ... etc
+}
+```
+
+**Watch:** E2E latency, backend saturation, RPC quotas одновременно.
+
+### 3. Метрики что снимаем
+
+**HTTP layer:**
+- p50, p95, p99 latency per endpoint
+- Requests/second sustained
+- Error rate (%)
+- Bytes transferred
+
+**PostgreSQL:**
+- Active connections (`SELECT count(*) FROM pg_stat_activity`)
+- Waiting queries (`SELECT * FROM pg_stat_activity WHERE wait_event IS NOT NULL`)
+- Slow queries (`pg_stat_statements ORDER BY total_time DESC LIMIT 20`)
+- Lock waits (`pg_locks JOIN pg_stat_activity`)
+
+**Node.js backend:**
+- Heap size (`process.memoryUsage()`)
+- Event loop lag (`perf_hooks.monitorEventLoopDelay`)
+- GC pauses (via `--trace-gc`)
+- Open FDs (`lsof -p $PID | wc -l`)
+
+**External:**
+- RPC provider status (429 rate, latency)
+- LiFi/Paraswap rate-limit headers
+
+**Инфра:**
+- Docker container CPU %, RAM %
+- Disk I/O (`iostat`)
+- Network throughput (`iftop`)
+
+### 4. Progressive load pattern
+
+Начинай с малого, наращивай:
+
+| Stage | Load | Duration | Goal |
+|---|---|---|---|
+| **Smoke** | 5 rps | 30s | Нет ошибок, всё работает |
+| **Load** | 50 rps | 5 min | Baseline established |
+| **Stress** | 100→1000 rps | 15 min ramp | Найти breaking point |
+| **Soak** | 100 rps | 2 hours | Memory leaks, resource growth |
+| **Spike** | 50→1000 rps за 5s | 5 min | Cold-start / auto-scale поведение |
+
+Каждый stage → capture метрики → сравнить с предыдущим → искать деградацию.
+
+### 5. Bottleneck playbook — что делать когда поймали
+
+| Симптом | Причина | Fix |
+|---|---|---|
+| CPU 100% на backend | Single-process Node.js | `pm2 -i max` кластеризация |
+| PG connections exhausted | Pool size default 10 | Пул до 50-100 или PGBouncer |
+| Slow query > 1s | Missing index | `EXPLAIN ANALYZE` + create index |
+| RPC 429 всплывает | Public tier limits | Paid Alchemy/QuickNode + fallback chain |
+| Heap растёт бесконечно | Memory leak | Heap snapshot diff + code fix |
+| WS connections dropping | max clients hit | Sticky routing + horizontal scale |
+| Static assets slow | Nginx bottleneck | Cloudflare cache TTL ↑, brotli |
+| Meta-agg quote 429 | External limit | Cache quote 5-10s в Redis |
+| Event loop lag > 100ms | Sync code блокирует | worker_threads для heavy work |
+
+### 6. Deliverables от Cursor
+
+1. **k6 скрипты** в `scripts/load/`:
+   - `A_landing.js`, `B_siwe.js`, `C_swap_quote.js`, `D_orderbook.js`,
+     `E_wallet_api.js`, `F_ws_flood.sh`, `G_e2e.js`
+   - README с инструкцией запуска
+
+2. **`LOAD-TEST-RESULTS.md`** — таблицы p95/p99/error-rate per scenario
+   при разных load stages. Формат:
+   ```
+   | Scenario | 5 rps | 50 rps | 500 rps | Breaking point |
+   | A landing | 45ms/0.0% | 60ms/0.0% | 120ms/0.1% | 2000 rps (nginx worker limit) |
+   ```
+
+3. **Identified bottlenecks** — список найденных проблем + PRs с фиксами
+   (сначала все, потом retest → обновить таблицу)
+
+4. **CI smoke test** — в `.github/workflows/*.yml` или через deploy.sh:
+   после каждого прод-деплоя автоматически прогон Scenario A × 30s.
+   Если p95 > 500ms или error rate > 1% → alert (Slack/email/Sentry)
+
+5. **Runbook `docs/LOAD-INCIDENT-RUNBOOK.md`** — что делать когда прод
+   упирается в потолок в real-time:
+   - Как быстро увеличить PG pool (без даунтайма)
+   - Как выкатить emergency Cloudflare rate-limit
+   - Кого поднимать (on-call rotation, если есть)
+   - Как отключить heavy endpoints (feature-flag)
+
+### 7. Целевые SLO для prod (что «выдержим»)
+
+Определяем формально что значит «работает под нагрузкой»:
+
+- **Landing / public:** до **5000 concurrent users** без деградации
+- **API (authenticated):** до **500 rps sustained**, p95 < 800ms
+- **WebSocket:** до **10 000 concurrent connections**
+- **Swap E2E:** до **200 quote+exec/min** без 429 от aggregators
+- **Zero downtime deploys** для frontend (уже есть); backend blue-green
+- **Uptime SLO:** 99.5% (позволяет ~3.6h downtime в месяц)
+
+Когда все чек-марки в §5 (Update 2026-07-11 evening) закрыты, а load-тесты
+показывают что мы держим SLO — тогда биржа **prod-grade**.
+
+---
+
 ## Update 2026-07-11 (evening) — TECH-DEBT AUDIT #2 (Cursor)
 
 Пользователь снял видео и три скрина, жалобы:

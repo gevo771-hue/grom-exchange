@@ -4747,11 +4747,12 @@ function gwDsSimBuild() {
           last = cur;
           gwDsSimUpdatePreview();
         }
-        // Fallback: user changed pair but no fresh quote arrived within 1.5s
-        // (fetch aborted by prior AbortController, or silent failure).
-        const lastQ = window.__gwLastAggQuotes;
-        const stillStale = lastQ && (lastQ.fromSym !== cur.from || lastQ.toSym !== cur.to || Math.abs(Number(lastQ.amtNum || 0) - Number(cur.amt || 0)) > 1e-12);
-        if (stillStale && changedAt && Date.now() - changedAt > 1500 && Number(cur.amt) > 0) {
+        // Fallback: user changed pair but outEl still stamped for OLD pair
+        // (fetch aborted, chip onclick didn't wire a refresh, silent failure).
+        const stampedPair = document.getElementById('gwDsOut')?.dataset?.pair || '';
+        const currentPair = cur.from + '|' + cur.to;
+        const stillStale = stampedPair !== currentPair;
+        if (stillStale && changedAt && Date.now() - changedAt > 400 && Number(cur.amt) > 0) {
           changedAt = 0; // debounce so we only nudge once per input change
           try { gwDsRefreshRate(); } catch (_) {}
         }
@@ -4765,13 +4766,15 @@ function gwDsSimBuild() {
 /* Update the Simple mode "You get" preview.
  *
  * The tricky part: after a user picks a new "to" token, the DOM value of
- * #gwDsTo changes IMMEDIATELY but the underlying quote (window.__gwLastAggQuotes)
- * is still the OLD pair. Naïvely reading (outEl.value + gwDsTo.value) would
- * show "3.54 USDT" while the quote was actually for BUSD. That's a real
- * safety issue — the user might click Swap thinking they're getting USDT.
+ * #gwDsTo changes IMMEDIATELY but the underlying quote (outEl.value) is
+ * still the OLD pair. Naïvely reading (outEl.value + gwDsTo.value) would
+ * show "1.85 ADA" while the quote was actually for BUSD. That's a real
+ * safety issue — the user might click Swap thinking they're getting ADA.
  *
- * Fix: cross-check the current from/to/amt against the last quote's args.
- * If they diverge, the outEl is stale → show pending until quote catches up.
+ * Fix: every code path that writes outEl.value ALSO stamps
+ * outEl.dataset.pair with 'from|to'. Here we require the stamp to match
+ * the current dropdown state — otherwise show "Fetching rate…" until the
+ * next refresh catches up.
  */
 function gwDsSimUpdatePreview() {
   const outVal = document.getElementById('gwDsSimOutVal');
@@ -4784,18 +4787,12 @@ function gwDsSimUpdatePreview() {
   const toSym = document.getElementById('gwDsTo')?.value || '';
   const outN = Number(outEl?.value || 0);
   const amtN = Number(amtEl?.value || 0);
-  // Detect stale quote: last quote's args differ from current dropdown state.
-  // Note: gwDsRefreshRate clears __gwLastAggQuotes at the top of every run,
-  // so if it's non-null here it must correspond to the LATEST successful
-  // meta-agg run. If it's null (fallback ran, or no run yet), we trust
-  // outEl.value alongside the current dropdown state — cross-rate fallback
-  // populates outEl for the same pair the user is looking at.
-  const lastQ = window.__gwLastAggQuotes;
-  const isStale = !!lastQ && (
-    lastQ.fromSym !== fromSym ||
-    lastQ.toSym !== toSym ||
-    Math.abs(Number(lastQ.amtNum || 0) - amtN) > 1e-12
-  );
+  // Pair-stamp check: outEl.value is trustworthy ONLY if it was written for
+  // exactly (fromSym, toSym). Any chip switch invalidates the stamp until
+  // the next gwDsRefreshRate re-populates outEl and re-stamps.
+  const stampedPair = outEl?.dataset?.pair || '';
+  const currentPair = fromSym + '|' + toSym;
+  const isStale = !stampedPair || stampedPair !== currentPair;
   const canShow = outN > 0 && toSym && !isStale;
   if (canShow) {
     outVal.classList.remove('pending');
@@ -7026,6 +7023,7 @@ async function gwDsRefreshRate() {
 
   if (amt <= 0) {
     outEl.value = '';
+    delete outEl.dataset.pair;
     if (amtUsd) amtUsd.textContent = '';
     if (outUsd) outUsd.textContent = '';
     rateLine.textContent = t.est;
@@ -7035,6 +7033,7 @@ async function gwDsRefreshRate() {
     routeEl.className = 'gw-ds-route warn';
     rateLine.textContent = '⚠ ' + (from === to ? 'Choose different assets' : '');
     outEl.value = '';
+    delete outEl.dataset.pair;
     return;
   }
 
@@ -7069,6 +7068,7 @@ async function gwDsRefreshRate() {
         // Guard: clear the previous quote first so a partial failure never
         // leaves stale (from an older token pair) values in the input.
         outEl.value = '';
+        delete outEl.dataset.pair;
         window.__gwLastAggQuotes = null;
         const quotes = await gwMetaAggQuoteAll({ chainId, fromSym: from, toSym: to, amtNum: amt, account });
         console.log('[GROM swap] quotes', quotes.length, quotes.map(q => q.aggregator + '=' + q.toAmount).slice(0, 6));
@@ -7080,6 +7080,7 @@ async function gwDsRefreshRate() {
           const outDec = GW_OC_SWAP[chainId]?.decimals?.[to] ?? 18;
           const winnerOut = Number(winner.toAmount) / 10 ** outDec;
           outEl.value = Number(winnerOut.toFixed(8));
+          outEl.dataset.pair = from + '|' + to;
           const rate = amt > 0 ? (winnerOut / amt).toFixed(8).replace(/0+$/, '').replace(/\.$/, '') : '';
           const gasUsd = Number(winner.gasUsd || 0).toFixed(2);
           // Compact comparison strip — winner first, then losers sorted.
@@ -7154,15 +7155,18 @@ async function gwDsRefreshRate() {
       if (pf && pt) {
         const est = (amt * pf) / pt;
         outEl.value = Number(est.toFixed(8));
+        outEl.dataset.pair = from + '|' + to;
         rateLine.textContent = `1 ${from} ≈ ${(pf / pt).toFixed(6)} ${to}`;
       } else {
         routeEl.className = 'gw-ds-route warn';
         rateLine.textContent = q.error;
         outEl.value = '';
+        delete outEl.dataset.pair;
       }
       return;
     }
     outEl.value = q.toAmount;
+    outEl.dataset.pair = from + '|' + to;
     // Rich route info
     const rateStr = Number(q.ratio).toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
     routeEl.innerHTML = `

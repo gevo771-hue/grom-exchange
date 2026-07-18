@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content" />
 <script>
 (function () {
-  var APP_VER = '2026-07-14b';
+  var APP_VER = '2026-07-14c';
   try {
     if (localStorage.getItem('grom_app_ver') !== APP_VER) {
       ['grom_dashboard_layout', 'grom_ui_prefs', 'welcome_seen', 'grom_page'].forEach(function (k) {
@@ -158,10 +158,7 @@
   .header-actions .deposit-btn,
   .header .deposit-cta,
   .hub-header button[data-action="deposit"],
-  button.deposit-cta,
-  #page-wallet .wallet-hero .actions button[onclick*="deposit"],
-  #page-wallet button[onclick*="openWalletModal('deposit')"],
-  button[onclick*="openWalletModal('deposit')"] { display: none !important; }
+  button.deposit-cta { display: none !important; }
 </style>
 <style id="grom-route-boot-css">
   /* Prevent landing flash on refresh — overridden once JS router is ready */
@@ -6177,6 +6174,7 @@
           <div class="delta" id="walletTotalDelta" style="color:var(--silver5)">Sign in to view balance</div>
         </div>
         <div class="actions">
+          <button type="button" class="btn-ghost" onclick="openWalletModal('deposit')"><svg width="14" height="14"><use href="#i-deposit"/></svg> Deposit</button>
           <button type="button" class="btn-ghost" onclick="openWalletModal('send')"><svg width="14" height="14"><use href="#i-send"/></svg> Send</button>
           <button type="button" class="btn-primary" onclick="openWalletModal('swap')">Swap</button>
         </div>
@@ -6210,9 +6208,9 @@
           <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
             <div class="set-row" style="border:none;padding:4px 0"><div class="set-lbl">Active balance</div><div class="mono" id="walletTradingBal">—</div></div>
             <div class="set-row" style="border:none;padding:4px 0"><div class="set-lbl">Locked in orders</div><div class="mono" id="walletLockedBal">—</div></div>
-            <p style="color:var(--silver5);font-size:12px;margin:6px 0 8px">Non-custodial DEX — fund your own wallet externally, then swap here.</p>
+            <p style="color:var(--silver5);font-size:12px;margin:6px 0 8px">Funds here power Spot, Futures and Binary execution. Recommend keeping only what you actively trade.</p>
             <div class="boff-actions" style="margin:0">
-              <button class="btn-ghost" onclick="show('dashboard'); setTimeout(function(){ document.querySelector('.gw-ds-wrap')?.scrollIntoView({behavior:'smooth',block:'center'}); }, 120)">Go to swap</button>
+              <button class="btn-ghost" onclick="openWalletModal('deposit')">Top up</button>
               <button class="btn-ghost" id="walletMoveToOwnBtn" onclick="moveBalanceToConnectedWallet()" style="display:none">Move excess → my wallet</button>
             </div>
           </div>

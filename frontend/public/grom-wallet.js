@@ -4469,6 +4469,24 @@ function gwInjectSimpleModeCss() {
     .gw-ds-sim-hint { color: #98a8c0; font-size: 12px; padding: 10px 12px; border-radius: 10px;
       background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.08); text-align: center;
       margin-top: 8px; }
+    /* Simple mode — live output preview (you get + rate). */
+    .gw-ds-sim-preview { margin-top: 10px; padding: 14px 14px 12px; border-radius: 14px;
+      background: linear-gradient(180deg, rgba(34,193,124,0.06), rgba(0,194,255,0.03));
+      border: 1px solid rgba(34,193,124,0.20); }
+    .gw-ds-sim-out-lbl { color: #6b7a92; font-size: 10.5px; letter-spacing: .14em; font-weight: 800;
+      text-transform: uppercase; margin: 0 0 4px; }
+    .gw-ds-sim-out-val { color: #22c17c; font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums;
+      line-height: 1.15; word-break: break-all; }
+    .gw-ds-sim-out-val.pending { color: #98a8c0; font-size: 14px; font-weight: 700; }
+    .gw-ds-sim-rate { display: flex; justify-content: space-between; gap: 8px;
+      margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08);
+      color: #cfdfee; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+    .gw-ds-sim-rate .lbl { color: #98a8c0; font-weight: 700; }
+    .gw-ds-sim-rate .val { color: #e7eef8; font-weight: 800; }
+    .gw-ds-sim-meta { display: flex; justify-content: center; gap: 10px; margin-top: 8px;
+      color: #6b7a92; font-size: 11.5px; letter-spacing: .04em; }
+    .gw-ds-sim-meta span { white-space: nowrap; }
+    .gw-ds-sim-meta .b { color: #98a8c0; font-weight: 700; }
   `;
   const s = document.createElement('style'); s.id = 'gw-ds-simple-css'; s.textContent = css;
   document.head.appendChild(s);
@@ -4666,7 +4684,21 @@ function gwDsSimBuild() {
       </div>
       <button class="max" id="gwDsSimMax">MAX</button>
     </div>
-    <div class="gw-ds-sim-hint">GROM fee 0.20% · slippage 0.5% · Non-custodial</div>
+    <div class="gw-ds-sim-preview">
+      <p class="gw-ds-sim-out-lbl">You get</p>
+      <div class="gw-ds-sim-out-val pending" id="gwDsSimOutVal">Enter amount to see rate</div>
+      <div class="gw-ds-sim-rate" id="gwDsSimRateRow" style="display:none">
+        <span class="lbl">Rate</span>
+        <span class="val" id="gwDsSimRateVal">—</span>
+      </div>
+      <div class="gw-ds-sim-meta">
+        <span><span class="b">GROM fee</span> 0.20%</span>
+        <span>·</span>
+        <span><span class="b">Slippage</span> 0.5%</span>
+        <span>·</span>
+        <span>Non-custodial</span>
+      </div>
+    </div>
   `;
   // Insert Simple strip AFTER the head+chains but BEFORE the classic form.
   const chains = card.querySelector('.gw-ds-chains');
@@ -4691,6 +4723,48 @@ function gwDsSimBuild() {
       try { gwDsRefreshRate(); } catch (_) {}
     }
   });
+  // Poll underlying #gwDsOut for changes (updated by gwDsRefreshRate through
+  // multiple return paths). Cheaper than patching the whole function.
+  if (!window.__gwDsSimPollerOn) {
+    window.__gwDsSimPollerOn = true;
+    let lastOut = '';
+    setInterval(() => {
+      try {
+        const cur = String(document.getElementById('gwDsOut')?.value || '');
+        if (cur !== lastOut) { lastOut = cur; gwDsSimUpdatePreview(); }
+      } catch (_) {}
+    }, 400);
+  }
+  // Also run once immediately so initial state is correct.
+  try { gwDsSimUpdatePreview(); } catch (_) {}
+}
+
+/* Update the Simple mode "You get" preview from the underlying quote fields
+ * (#gwDsOut and #gwDsAmt). Called by gwDsRefreshRate after each quote pass. */
+function gwDsSimUpdatePreview() {
+  const outVal = document.getElementById('gwDsSimOutVal');
+  const rateRow = document.getElementById('gwDsSimRateRow');
+  const rateVal = document.getElementById('gwDsSimRateVal');
+  if (!outVal) return;
+  const outEl = document.getElementById('gwDsOut');
+  const amtEl = document.getElementById('gwDsAmt');
+  const fromSym = document.getElementById('gwDsFrom')?.value || '';
+  const toSym = document.getElementById('gwDsTo')?.value || '';
+  const outN = Number(outEl?.value || 0);
+  const amtN = Number(amtEl?.value || 0);
+  if (outN > 0 && toSym) {
+    outVal.classList.remove('pending');
+    outVal.textContent = outN.toLocaleString('en-US', { maximumFractionDigits: 8 }) + ' ' + toSym;
+    if (amtN > 0 && fromSym && rateRow && rateVal) {
+      const rate = outN / amtN;
+      rateVal.textContent = '1 ' + fromSym + ' ≈ ' + rate.toLocaleString('en-US', { maximumFractionDigits: 6 }) + ' ' + toSym;
+      rateRow.style.display = 'flex';
+    }
+  } else {
+    outVal.classList.add('pending');
+    outVal.textContent = amtN > 0 ? 'Fetching rate…' : 'Enter amount to see rate';
+    if (rateRow) rateRow.style.display = 'none';
+  }
 }
 
 /** Header toggle inserted into .gw-ds-head-actions. */

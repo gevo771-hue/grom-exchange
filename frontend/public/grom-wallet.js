@@ -4723,24 +4723,56 @@ function gwDsSimBuild() {
       try { gwDsRefreshRate(); } catch (_) {}
     }
   });
-  // Poll underlying #gwDsOut for changes (updated by gwDsRefreshRate through
-  // multiple return paths). Cheaper than patching the whole function.
+  // Poll underlying quote inputs for changes — track #gwDsOut, #gwDsFrom,
+  // #gwDsTo AND #gwDsAmt so we catch symbol switches even when outEl.value
+  // hasn't caught up yet (common race after chip click before quote returns).
+  // Also: if from/to/amt changed but the last quote didn't refetch within
+  // 1.5s, force gwDsRefreshRate — belt-and-suspenders against aborted fetches.
   if (!window.__gwDsSimPollerOn) {
     window.__gwDsSimPollerOn = true;
-    let lastOut = '';
+    let last = { out: '', from: '', to: '', amt: '' };
+    let changedAt = 0;
     setInterval(() => {
       try {
-        const cur = String(document.getElementById('gwDsOut')?.value || '');
-        if (cur !== lastOut) { lastOut = cur; gwDsSimUpdatePreview(); }
+        const cur = {
+          out: String(document.getElementById('gwDsOut')?.value || ''),
+          from: String(document.getElementById('gwDsFrom')?.value || ''),
+          to: String(document.getElementById('gwDsTo')?.value || ''),
+          amt: String(document.getElementById('gwDsAmt')?.value || ''),
+        };
+        const inputsChanged = cur.from !== last.from || cur.to !== last.to || cur.amt !== last.amt;
+        const outChanged = cur.out !== last.out;
+        if (inputsChanged || outChanged) {
+          if (inputsChanged) changedAt = Date.now();
+          last = cur;
+          gwDsSimUpdatePreview();
+        }
+        // Fallback: user changed pair but no fresh quote arrived within 1.5s
+        // (fetch aborted by prior AbortController, or silent failure).
+        const lastQ = window.__gwLastAggQuotes;
+        const stillStale = lastQ && (lastQ.fromSym !== cur.from || lastQ.toSym !== cur.to || Math.abs(Number(lastQ.amtNum || 0) - Number(cur.amt || 0)) > 1e-12);
+        if (stillStale && changedAt && Date.now() - changedAt > 1500 && Number(cur.amt) > 0) {
+          changedAt = 0; // debounce so we only nudge once per input change
+          try { gwDsRefreshRate(); } catch (_) {}
+        }
       } catch (_) {}
-    }, 400);
+    }, 250);
   }
   // Also run once immediately so initial state is correct.
   try { gwDsSimUpdatePreview(); } catch (_) {}
 }
 
-/* Update the Simple mode "You get" preview from the underlying quote fields
- * (#gwDsOut and #gwDsAmt). Called by gwDsRefreshRate after each quote pass. */
+/* Update the Simple mode "You get" preview.
+ *
+ * The tricky part: after a user picks a new "to" token, the DOM value of
+ * #gwDsTo changes IMMEDIATELY but the underlying quote (window.__gwLastAggQuotes)
+ * is still the OLD pair. Naïvely reading (outEl.value + gwDsTo.value) would
+ * show "3.54 USDT" while the quote was actually for BUSD. That's a real
+ * safety issue — the user might click Swap thinking they're getting USDT.
+ *
+ * Fix: cross-check the current from/to/amt against the last quote's args.
+ * If they diverge, the outEl is stale → show pending until quote catches up.
+ */
 function gwDsSimUpdatePreview() {
   const outVal = document.getElementById('gwDsSimOutVal');
   const rateRow = document.getElementById('gwDsSimRateRow');
@@ -4752,7 +4784,15 @@ function gwDsSimUpdatePreview() {
   const toSym = document.getElementById('gwDsTo')?.value || '';
   const outN = Number(outEl?.value || 0);
   const amtN = Number(amtEl?.value || 0);
-  if (outN > 0 && toSym) {
+  // Detect stale quote: last quote's args differ from current dropdown state.
+  const lastQ = window.__gwLastAggQuotes;
+  const isStale = !!lastQ && (
+    lastQ.fromSym !== fromSym ||
+    lastQ.toSym !== toSym ||
+    Math.abs(Number(lastQ.amtNum || 0) - amtN) > 1e-12
+  );
+  const canShow = outN > 0 && toSym && !isStale;
+  if (canShow) {
     outVal.classList.remove('pending');
     outVal.textContent = outN.toLocaleString('en-US', { maximumFractionDigits: 8 }) + ' ' + toSym;
     if (amtN > 0 && fromSym && rateRow && rateVal) {

@@ -4785,6 +4785,11 @@ function gwDsSimUpdatePreview() {
   const outN = Number(outEl?.value || 0);
   const amtN = Number(amtEl?.value || 0);
   // Detect stale quote: last quote's args differ from current dropdown state.
+  // Note: gwDsRefreshRate clears __gwLastAggQuotes at the top of every run,
+  // so if it's non-null here it must correspond to the LATEST successful
+  // meta-agg run. If it's null (fallback ran, or no run yet), we trust
+  // outEl.value alongside the current dropdown state — cross-rate fallback
+  // populates outEl for the same pair the user is looking at.
   const lastQ = window.__gwLastAggQuotes;
   const isStale = !!lastQ && (
     lastQ.fromSym !== fromSym ||
@@ -6996,6 +7001,12 @@ async function gwDsAutoPickFromToken() {
 let gwDsQuoteAbort = null;
 let gwDsQuoteTimer = null;
 async function gwDsRefreshRate() {
+  // Any refresh invalidates the last quote — clear it here so that if the
+  // on-chain path is skipped (WC hiccup) or returns 0 quotes, the Simple
+  // mode 'You get' preview can safely display whatever the fallback
+  // (cross-rate) puts into outEl instead of staying on "Fetching rate…"
+  // because it thinks the previous pair's cached quote is still fresh.
+  try { window.__gwLastAggQuotes = null; } catch (_) {}
   const t = gwDsLang();
   const routeEl = document.getElementById('gwDsRoute');
   const outEl   = document.getElementById('gwDsOut');

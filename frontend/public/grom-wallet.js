@@ -7040,10 +7040,27 @@ async function gwDsRefreshRate() {
         ? window.gromWallet.wcProvider
         : window.ethereum;
       if (account && provider) {
-        let walletChainId = 42161;
-        try { walletChainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16); } catch (_) {}
-        const chainId = gwResolveSwapChainId(walletChainId);
+        // Prefer UI chip's chainId (source of truth). Only ask the provider
+        // as a fallback — and race it with a 500ms timeout so a hung
+        // WalletConnect session never freezes the quote flow.
+        let chainId = (typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : null);
+        if (!chainId) {
+          try {
+            const hex = await Promise.race([
+              provider.request({ method: 'eth_chainId' }),
+              new Promise((_, rej) => setTimeout(() => rej(new Error('wc-timeout')), 500)),
+            ]);
+            chainId = parseInt(hex, 16);
+          } catch (_) {}
+          chainId = gwResolveSwapChainId(chainId || 42161);
+        }
+        console.log('[GROM swap] refresh', { chainId, from, to, amt });
+        // Guard: clear the previous quote first so a partial failure never
+        // leaves stale (from an older token pair) values in the input.
+        outEl.value = '';
+        window.__gwLastAggQuotes = null;
         const quotes = await gwMetaAggQuoteAll({ chainId, fromSym: from, toSym: to, amtNum: amt, account });
+        console.log('[GROM swap] quotes', quotes.length, quotes.map(q => q.aggregator + '=' + q.toAmount).slice(0, 6));
         if (quotes.length > 0) {
           // Cache for gwOnChainSwapExec so it doesn't refetch.
           window.__gwLastAggQuotes = { chainId, fromSym: from, toSym: to, amtNum: amt, quotes, at: Date.now() };

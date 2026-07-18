@@ -7855,13 +7855,21 @@ function gwAggCanExec(q) {
 }
 
 async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account }) {
+  // 4s hard cap per aggregator. If any single upstream (Squid, CoW…) hangs
+  // with no resolve/reject, Promise.allSettled would freeze the whole quote
+  // flow and the user sees 'Fetching rate…' forever. Race each promise so
+  // slow/broken aggregators just drop out.
+  const withTimeout = (p, name, ms = 4000) => Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(name + ' timeout ' + ms + 'ms')), ms)),
+  ]);
   const jobs = [
-    gwAggQuoteLifi({ chainId, fromSym, toSym, amtNum, account }),
-    gwAggQuoteParaswap({ chainId, fromSym, toSym, amtNum, account }),
-    gwAggQuoteKyber({ chainId, fromSym, toSym, amtNum, account }),
-    gwAggQuoteOdos({ chainId, fromSym, toSym, amtNum, account }),
-    gwAggQuoteCow({ chainId, fromSym, toSym, amtNum, account }),
-    gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account }),
+    withTimeout(gwAggQuoteLifi({ chainId, fromSym, toSym, amtNum, account }), 'LiFi'),
+    withTimeout(gwAggQuoteParaswap({ chainId, fromSym, toSym, amtNum, account }), 'Paraswap'),
+    withTimeout(gwAggQuoteKyber({ chainId, fromSym, toSym, amtNum, account }), 'KyberSwap'),
+    withTimeout(gwAggQuoteOdos({ chainId, fromSym, toSym, amtNum, account }), 'Odos'),
+    withTimeout(gwAggQuoteCow({ chainId, fromSym, toSym, amtNum, account }), 'CoWSwap'),
+    withTimeout(gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account }), 'Squid'),
   ];
   const settled = await Promise.allSettled(jobs);
   const aggNames = ['LiFi', 'Paraswap', 'KyberSwap', 'Odos', 'CoWSwap', 'Squid'];

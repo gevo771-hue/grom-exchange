@@ -1,18 +1,8 @@
 name: GROM Production Deploy
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      # CI/docs-only changes must NEVER rebuild prod (2026-07-20 incident)
-      - 'scripts/load/**'
-      - '.github/workflows/load-nightly.yml'
-      - '.github/workflows/ci.yml'
-      - '.github/workflows/deploy.yml'
-      - 'LOAD-TEST-RESULTS.md'
-      - 'PERF-SUGGESTIONS-FOR-CURSOR.md'
-      - '**/*.md'
-      - '.gitignore'
+  # MANUAL ONLY (2026-07-20): auto-push deploy twice raced with live FE
+  # and nearly replaced the production bundle. Run from Actions → Deploy.
   workflow_dispatch:
 
 concurrency:

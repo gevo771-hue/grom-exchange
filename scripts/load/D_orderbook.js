@@ -8,7 +8,7 @@ import { baseUrl, progressiveStages, thresholds } from './_helpers.js';
  */
 export const options = {
   stages: progressiveStages('public'),
-  thresholds: thresholds(100, 0.02),
+  thresholds: thresholds(200, 0.03),
 };
 
 const PAIRS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'];

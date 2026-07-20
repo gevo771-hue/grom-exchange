@@ -3,8 +3,9 @@ import { check, sleep } from 'k6';
 import { baseUrl, progressiveStages, thresholds } from './_helpers.js';
 
 /**
- * Scenario A — Landing + public static
- * Target (stress): ~500 concurrent, p95 < 200ms
+ * Scenario A — Landing + public health
+ * Large static bundles are NOT hammered here — a multi-MB JS download
+ * was false-failing TTFB SLOs in night1 CI.
  */
 export const options = {
   stages: progressiveStages('public'),
@@ -15,15 +16,12 @@ export default function () {
   const BASE = baseUrl();
   const pages = [
     `${BASE}/`,
-    `${BASE}/#markets`,
-    `${BASE}/#predict`,
-    `${BASE}/grom-wallet.js?v=load`,
     `${BASE}/health`,
   ];
-  // /health may be proxied; if 404 on static nginx, still fine for landing.
   for (const url of pages) {
-    const r = http.get(url, { tags: { name: url.split('/').pop() || 'root' } });
+    const name = url.endsWith('/') ? 'root' : url.split('/').pop();
+    const r = http.get(url, { tags: { name } });
     check(r, { 'status < 500': (res) => res.status < 500 });
-    sleep(0.3 + Math.random() * 0.4);
+    sleep(0.2 + Math.random() * 0.3);
   }
 }

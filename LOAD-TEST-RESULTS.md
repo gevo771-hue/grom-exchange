@@ -117,3 +117,8 @@ Remaining p95 ≈ GH-runner→edge→origin round trips, not origin CPU.
 | 2026-07-14 | grom.exchange | `smoke.sh` / A | _(fill after first CI/local run)_ | | |
 
 > **Rule:** never run STAGE=stress against prod at peak. Night window 03:00–06:00 UTC or staging only.
+
+
+## 2026-07-20 — night1 false-fail note
+
+Scheduled night1 failed on GH→prod RTT (tight p95), not origin outage. Schedule disabled; thresholds loosened; soft-fail kept for future cron.

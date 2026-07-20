@@ -7,6 +7,7 @@
 import axios from 'axios';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
+import { cachedQuote, quoteCacheKey } from '../utils/quoteCache.js';
 
 const ONEINCH_V6 = (chainId) => `https://api.1inch.dev/swap/v6.0/${chainId}/quote`;
 const ODOS_QUOTE = () => `${config.liquidity.odosUrl}/sor/quote/v2`;
@@ -20,6 +21,11 @@ export class DexAggregator {
 
   /** @param params {chainId, src, dst, amount, userAddress?} */
   async quote(params) {
+    const key = quoteCacheKey(params);
+    return cachedQuote(key, () => this._fetchQuote(params));
+  }
+
+  async _fetchQuote(params) {
     const [oneinch, odos] = await Promise.allSettled([
       this._oneinch(params),
       this._odos(params),

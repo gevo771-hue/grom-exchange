@@ -74,6 +74,9 @@ export const config = {
   },
   db: parseDbConfig(),
   redis: parseRedisConfig(),
+  quoteCache: {
+    ttlSec: envInt('GROM_QUOTE_CACHE_TTL_SEC', 8),
+  },
   auth: {
     jwtSecret: env('GROM_JWT_SECRET', env('JWT_SECRET', 'insecure-dev-secret-change-me')),
     jwtTtl: envInt('GROM_JWT_TTL', 86400),

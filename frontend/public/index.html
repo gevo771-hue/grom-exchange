@@ -5032,7 +5032,6 @@
   </div>
   <nav class="hub-nav" aria-label="Main">
     <button type="button" class="hub-link" data-page="dashboard" data-i18n="nav_dashboard">Dashboard</button>
-    <button type="button" class="hub-link" data-page="spot" data-i18n="nav_spot">Spot</button>
     <button type="button" class="hub-link" data-page="binary" data-i18n="nav_binary">Binary</button>
     <button type="button" class="hub-link" data-page="futures" data-i18n="nav_futures">Futures</button>
     <button type="button" class="hub-link" data-page="markets" data-i18n="nav_markets">Markets</button>
@@ -5086,7 +5085,6 @@
 <div class="shell">
   <aside class="sidebar">
     <div class="nav-item" data-page="dashboard"><span class="ico"><svg width="18" height="18"><use href="#i-dashboard"/></svg></span><span class="nav-label" data-i18n="nav_dashboard">Dashboard</span></div>
-    <div class="nav-item" data-page="spot"><span class="ico"><svg width="18" height="18"><use href="#i-spot"/></svg></span><span class="nav-label" data-i18n="nav_spot">Spot</span></div>
     <div class="nav-item" data-page="binary"><span class="ico"><svg width="18" height="18"><use href="#i-binary"/></svg></span><span class="nav-label" data-i18n="nav_binary">Binary</span><span class="badge new" data-i18n="badge_hot">HOT</span></div>
     <div class="nav-item" data-page="futures"><span class="ico" style="font-weight:800;font-size:13px;color:var(--steel1)">Ƒ</span><span class="nav-label" data-i18n="nav_futures">Futures</span><span class="badge new" data-i18n="badge_new">NEW</span></div>
     <div class="nav-item" data-page="markets"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="nav-label" data-i18n="nav_markets">Markets</span></div>
@@ -7783,6 +7781,12 @@ window.addEventListener('resize', function () {
 /* Navigation — robust event delegation */
 function show(page) {
   if (!page) return;
+  // Spot/Swap page retired — Instant Swap lives on dashboard only (2026-07-19, re-pinned 2026-07-22)
+  if (page === 'spot') {
+    try { history.replaceState(null, '', '#dashboard'); } catch (_) {}
+    try { localStorage.setItem('grom_page', 'dashboard'); } catch (_) {}
+    return show('dashboard');
+  }
   // Admin route guard — backoffice is admin-only.
   // Non-admins (including anonymous) get redirected to dashboard. The page HTML
   // exists in the DOM but is never shown without role=admin in JWT.
@@ -7895,6 +7899,7 @@ var _logoHome = document.getElementById('logoHome');
 if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefault(); show('landing'); });
 (function () {
   var fromHash = (location.hash || '').replace(/^#/, '').split('?')[0];
+  if (fromHash === 'spot') fromHash = 'dashboard';
   var fromStore = '';
   try { fromStore = localStorage.getItem('grom_page') || ''; } catch (_) {}
   var fromBoot = document.documentElement.getAttribute('data-grom-route') || '';

@@ -158,7 +158,10 @@
   .header-actions .deposit-btn,
   .header .deposit-cta,
   .hub-header button[data-action="deposit"],
-  button.deposit-cta { display: none !important; }
+  button.deposit-cta,
+  #page-wallet .wallet-hero .actions button[onclick*="deposit"],
+  #page-wallet button[onclick*="openWalletModal('deposit')"],
+  button[onclick*="openWalletModal('deposit')"] { display: none !important; }
 </style>
 <style id="grom-route-boot-css">
   /* Prevent landing flash on refresh — overridden once JS router is ready */
@@ -6131,170 +6134,51 @@
 
     <!-- WALLET -->
     <section class="page" id="page-wallet">
-      <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Wallet</span></div>
+      <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now" data-i18n="nav_wallet">Wallet</span></div>
       <h1 class="page-title"><span data-i18n="pg_wallet_title">Your wallet</span> <span class="tag">Non-custodial · DEX</span></h1>
-      <p class="page-subtitle">On-chain portfolio across 20+ networks. Swap, send and bridge directly from your connected wallet — your keys, your signatures.</p>
+      <p class="page-subtitle" data-i18n="pg_wallet_sub">On-chain assets across connected networks. Swap and buy with card — your keys, your signatures.</p>
 
       <div class="wallet-hero">
         <div>
-          <div class="total">Total balance</div>
+          <div class="total">Total on-chain</div>
           <div class="val mono" id="walletTotalBalance">—</div>
-          <div class="delta" id="walletTotalDelta" style="color:var(--silver5)">Sign in to view balance</div>
+          <div class="delta" id="walletTotalDelta" style="color:var(--silver5)">Connect wallet to view balance</div>
         </div>
         <div class="actions">
-          <button type="button" class="btn-ghost" onclick="openWalletModal('deposit')"><svg width="14" height="14"><use href="#i-deposit"/></svg> Deposit</button>
-          <button type="button" class="btn-ghost" onclick="openWalletModal('send')"><svg width="14" height="14"><use href="#i-send"/></svg> Send</button>
-          <button type="button" class="btn-primary" onclick="openWalletModal('swap')">Swap</button>
+          <button type="button" class="btn-ghost" id="walletCashBtn" onclick="openWalletModal('buy')">Cash</button>
+          <button type="button" class="btn-primary" id="walletSwapBtn" onclick="show('dashboard'); setTimeout(function(){ try{ document.querySelector('.gw-ds-wrap')?.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){} }, 200);">Swap</button>
         </div>
       </div>
 
-      <div class="ops-grid">
-        <div class="ops-mini">
-          <div class="k">On-chain balance</div>
-          <div class="v mono" id="walletAvailableValue">—</div>
-          <div class="s" id="walletAvailableMeta">Connect wallet to view</div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-head">
+          <h3>Connected wallet</h3>
+          <span class="sub">Self-custody · your keys</span>
         </div>
-        <div class="ops-mini">
-          <div class="k">Pending transfers</div>
-          <div class="v mono" id="walletPendingCount">0</div>
-          <div class="s" id="walletPendingMeta">No pending transfers</div>
-        </div>
-        <div class="ops-mini">
-          <div class="k">Bridge routes</div>
-          <div class="v mono" id="walletRouteCount">6 active</div>
-          <div class="s" id="walletRouteMeta">ERC-20, TRC-20, Solana, Base, Arbitrum, BNB Chain</div>
-        </div>
-      </div>
-
-      <!-- Custody split: Trading (custodial) vs Self-custody (BYOW) -->
-      <div class="grid-2" style="gap:14px;margin-top:14px">
-        <div class="card">
-          <div class="card-head">
-            <h3>Trading account</h3>
-            <span class="sub" style="color:var(--accent)">Custodial · instant fills</span>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
+          <div id="walletConnectedList" style="display:flex;flex-direction:column;gap:6px;min-height:48px">
+            <div style="color:var(--silver5);font-size:12px">No external wallet connected yet.</div>
           </div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
-            <div class="set-row" style="border:none;padding:4px 0"><div class="set-lbl">Active balance</div><div class="mono" id="walletTradingBal">—</div></div>
-            <div class="set-row" style="border:none;padding:4px 0"><div class="set-lbl">Locked in orders</div><div class="mono" id="walletLockedBal">—</div></div>
-            <p style="color:var(--silver5);font-size:12px;margin:6px 0 8px">Funds here power Spot, Futures and Binary execution. Recommend keeping only what you actively trade.</p>
-            <div class="boff-actions" style="margin:0">
-              <button class="btn-ghost" onclick="openWalletModal('deposit')">Top up</button>
-              <button class="btn-ghost" id="walletMoveToOwnBtn" onclick="moveBalanceToConnectedWallet()" style="display:none">Move excess → my wallet</button>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-head">
-            <h3>Connected wallets</h3>
-            <span class="sub">Self-custody · your keys</span>
-          </div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
-            <div id="walletConnectedList" style="display:flex;flex-direction:column;gap:6px;min-height:60px">
-              <div style="color:var(--silver5);font-size:12px">No external wallet connected yet.</div>
-            </div>
-            <p style="color:var(--silver5);font-size:12px;margin:6px 0 8px">Bring your own wallet — Trust, MetaMask, Binance Web3 Wallet — and swap directly on-chain via 1inch when you want full self-custody.</p>
-            <div class="boff-actions" style="margin:0">
-              <button class="btn-primary" onclick="openConnectModal && openConnectModal()">Connect wallet</button>
-              <button class="btn-ghost" onclick="openWalletModal('swap')">Swap on-chain</button>
-            </div>
+          <div class="boff-actions" style="margin:0">
+            <button type="button" class="btn-primary" onclick="typeof openConnectModal==='function'&&openConnectModal()">Connect wallet</button>
+            <button type="button" class="btn-ghost" onclick="openWalletModal('buy')">Buy with card</button>
           </div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-head"><h3>Assets</h3><span class="sub" id="walletAssetCount">4 tokens</span></div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-head"><h3>Assets</h3><span class="sub" id="walletAssetCount">—</span></div>
         <div class="asset-row" style="background:rgba(11,18,32,0.4);font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">
-          <div></div><div>Asset</div><div style="text-align:right">Balance</div><div style="text-align:right">Price</div><div style="text-align:right">Value</div>
+          <div></div><div>Asset</div><div style="text-align:right">Balance</div><div style="text-align:right">Network</div><div style="text-align:right">Value</div>
         </div>
         <div id="walletAssetsList">
-          <div class="asset-row"><span class="coin-ico btc">₿</span><div class="nm">Bitcoin<small>BTC</small></div><div class="col">0.09842 BTC</div><div class="col">$63,903</div><div class="col" style="color:var(--silver1);font-weight:700">$6,289.37</div></div>
-          <div class="asset-row"><span class="coin-ico eth">Ξ</span><div class="nm">Ethereum<small>ETH</small></div><div class="col">0.4820 ETH</div><div class="col">$3,684</div><div class="col" style="color:var(--silver1);font-weight:700">$1,775.76</div></div>
-          <div class="asset-row"><span class="coin-ico usdt">$</span><div class="nm">Tether<small>USDT</small></div><div class="col">564.33 USDT</div><div class="col">$1.0002</div><div class="col" style="color:var(--silver1);font-weight:700">$564.44</div></div>
-          <div class="asset-row"><span class="coin-ico sol">S</span><div class="nm">Solana<small>SOL</small></div><div class="col">1.3600 SOL</div><div class="col">$182.27</div><div class="col" style="color:var(--silver1);font-weight:700">$247.89</div></div>
-        </div>
-      </div>
-
-      <div class="wallet-grid">
-        <div class="wallet-stack">
-          <div class="card">
-            <div class="card-head"><h3>Recent transfers</h3><span class="sub">Last 24h</span></div>
-            <div class="card-body" id="walletTransfersList">
-              <div class="transfer-row">
-                <span class="st ok">confirmed</span>
-                <div><div class="nm">USDT deposit · Tron (TRC-20)</div><div class="meta">14m ago · hash 0xa28f…71ce · 20/20 confirmations</div></div>
-                <div class="mono">250.00 USDT</div>
-                <button class="mini-btn" type="button" onclick="toast('Demo transfer — connect wallet for live explorer links','info')">Details</button>
-              </div>
-              <div class="transfer-row">
-                <span class="st warn">pending</span>
-                <div><div class="nm">BTC withdrawal · Bitcoin</div><div class="meta">8m ago · batching with fee optimizer · ETA 3 min</div></div>
-                <div class="mono">0.012 BTC</div>
-                <button class="mini-btn" onclick="openWithdrawalDetails(this)" data-w="w_dev_001">Details</button>
-              </div>
-              <div class="transfer-row">
-                <span class="st ok">settled</span>
-                <div><div class="nm">USDC bridge-in · Arbitrum One</div><div class="meta">2h ago · internal credit mirrored to trading balance</div></div>
-                <div class="mono">800.00 USDC</div>
-                <button class="mini-btn" onclick="copyBridgeReceipt(this)" data-tx="0xab12cd34...f0ee">Receipt</button>
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-head"><h3>Operational routing</h3><span class="sub pill-dot">Healthy</span></div>
-            <div class="card-body">
-              <div class="policy-row">
-                <div><div class="title">Embedded wallet</div><div class="meta">Privy-backed account with passkey recovery</div></div>
-                <div class="mono">Active</div>
-                <div class="pill-dot">Ready</div>
-                <button class="mini-btn" onclick="show('settings')">Manage</button>
-              </div>
-              <div class="policy-row">
-                <div><div class="title">Fiat on-ramp</div><div class="meta">MoonPay / Transak / Ramp routing available</div></div>
-                <div class="mono">3 providers</div>
-                <div class="pill-dot">Online</div>
-                <button class="mini-btn" onclick="openWalletModal('buy')">Open</button>
-              </div>
-              <div class="policy-row">
-                <div><div class="title">Withdrawal policy</div><div class="meta">Velocity checks, destination screening, daily limits</div></div>
-                <div class="mono">$25k/day</div>
-                <div class="pill-dot warn">Reviewable</div>
-                <button class="mini-btn" onclick="openHelpTopic('kyc')">Limits</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="wallet-stack">
-          <div class="card">
-            <div class="card-head"><h3>Portfolio allocation</h3><span class="sub">By NAV</span></div>
-            <div class="card-body">
-              <div class="portfolio-slice"><div class="mono">BTC</div><div class="bar"><span style="--w:79.8%"></span></div><div class="mono">79.8%</div></div>
-              <div class="portfolio-slice"><div class="mono">ETH</div><div class="bar"><span style="--w:13.8%"></span></div><div class="mono">13.8%</div></div>
-              <div class="portfolio-slice"><div class="mono">USDT</div><div class="bar"><span style="--w:4.4%"></span></div><div class="mono">4.4%</div></div>
-              <div class="portfolio-slice"><div class="mono">SOL</div><div class="bar"><span style="--w:1.9%"></span></div><div class="mono">1.9%</div></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-head"><h3>Wallet security</h3><span class="sub">Session controls</span></div>
-            <div class="card-body">
-              <div class="policy-row">
-                <div><div class="title">Primary signer</div><div class="meta">Email login + embedded wallet + device binding</div></div>
-                <div class="mono">MacBook Pro</div>
-                <div class="pill-dot">Verified</div>
-                <button class="mini-btn" onclick="show('settings')">Open</button>
-              </div>
-              <div class="policy-row">
-                <div><div class="title">Parallel wallet connections</div><div class="meta">Binance Web3 · Trust · MetaMask · OKX · Coinbase · WalletConnect</div></div>
-                <div class="mono">6 enabled</div>
-                <div class="pill-dot">Ready</div>
-                <button class="mini-btn" onclick="connectWallet()">Connect</button>
-              </div>
-            </div>
-          </div>
+          <div style="padding:20px;color:var(--silver5)">Connect a wallet to load on-chain balances.</div>
         </div>
       </div>
     </section>
 
-    <!-- HISTORY -->
+    
+<!-- HISTORY -->
     <section class="page" id="page-history">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">History</span></div>
       <h1 class="page-title" data-i18n="pg_history_title">Trade history</h1>

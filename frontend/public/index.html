@@ -6166,15 +6166,6 @@
         </div>
       </div>
 
-      <div class="card" style="margin-top:14px">
-        <div class="card-head"><h3>Assets</h3><span class="sub" id="walletAssetCount">—</span></div>
-        <div class="asset-row" style="background:rgba(11,18,32,0.4);font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">
-          <div></div><div>Asset</div><div style="text-align:right">Balance</div><div style="text-align:right">Network</div><div style="text-align:right">Value</div>
-        </div>
-        <div id="walletAssetsList">
-          <div style="padding:20px;color:var(--silver5)">Connect a wallet to load on-chain balances.</div>
-        </div>
-      </div>
     </section>
 
     
@@ -7297,19 +7288,16 @@
 <div class="wm-overlay" id="walletModal" role="dialog" aria-modal="true" aria-labelledby="wmTitle" aria-hidden="true" hidden onclick="if(event.target===this) closeWalletModal()">
   <div class="wm">
     <div class="wm-head">
-      <h3 id="wmTitle" data-i18n="wallet_deposit">Deposit</h3>
+      <h3 id="wmTitle" data-i18n="wallet_cash">Cash</h3>
       <button type="button" class="wm-close" aria-label="Close" onclick="closeWalletModal()">✕</button>
     </div>
     <div class="wm-body">
-      <div class="wm-tabs" id="wmTabs">
-        <button type="button" data-mode="deposit" class="active" data-i18n="wallet_deposit">Deposit</button>
-        <button type="button" data-mode="buy" data-i18n="wallet_cash">Cash</button>
-        <button type="button" data-mode="send" data-i18n="wallet_send">Send</button>
-        <button type="button" data-mode="swap" data-i18n="wallet_swap">Swap</button>
+      <div class="wm-tabs" id="wmTabs" style="display:none" aria-hidden="true">
+        <button type="button" data-mode="buy" class="active" data-i18n="wallet_cash">Cash</button>
       </div>
 
       <!-- DEPOSIT (multi-step flow) -->
-      <div class="wm-pane dep-flow" data-pane="deposit">
+      <div class="wm-pane dep-flow" data-pane="deposit" style="display:none">
         <div class="dep-steps" id="depSteps">
           <span class="dep-step active" data-step="coin">Coin</span>
           <span class="dep-step" data-step="network">Network</span>
@@ -7396,7 +7384,7 @@
       </div>
 
       <!-- BUY (fiat on-ramp) -->
-      <div class="wm-pane" data-pane="buy" style="display:none">
+      <div class="wm-pane" data-pane="buy">
         <div class="fiat-card">
           <h4>Buy crypto with card</h4>
           <p>Fiat goes directly from the provider to your GROM wallet. KYC is handled by the on-ramp — we never touch your bank data.</p>
@@ -13263,7 +13251,8 @@ function openWalletModal(mode) {
   ov.classList.add('gw-user-opened', 'open');
   ov.hidden = false;
   ov.setAttribute('aria-hidden', 'false');
-  switchWalletPane(mode || 'deposit');
+  // Wallet modal is Cash-only (Deposit/Send/Swap tabs removed 2026-07-22)
+  switchWalletPane('buy');
 }
 function closeWalletModal() {
   var ov = document.getElementById('walletModal');
@@ -13274,29 +13263,26 @@ function closeWalletModal() {
   }
 }
 function switchWalletPane(mode) {
-  var i18n = typeof t === 'function' ? t : function (k, fb) { return fb || k; };
-  var titles = {
-    deposit: i18n('wallet_deposit', 'Deposit'),
-    buy: i18n('wallet_cash', 'Cash'),
-    send: i18n('wallet_send', 'Send'),
-    swap: i18n('wallet_swap', 'Swap')
-  };
-  var titleEl = document.getElementById('wmTitle'); if (titleEl) titleEl.textContent = titles[mode] || 'Wallet';
+  // Cash-only modal — ignore other modes
+  mode = 'buy';
+  var titleEl = document.getElementById('wmTitle');
+  if (titleEl) {
+    var cashLabel = 'Cash';
+    try {
+      if (typeof t === 'function') {
+        var tr = t('wallet_cash');
+        if (tr && tr !== 'wallet_cash') cashLabel = tr;
+      }
+    } catch (_) {}
+    titleEl.textContent = cashLabel;
+  }
   document.querySelectorAll('#wmTabs button').forEach(function (b) {
-    b.classList.toggle('active', b.dataset.mode === mode);
+    b.classList.toggle('active', b.dataset.mode === 'buy');
   });
   document.querySelectorAll('.wm-pane').forEach(function (p) {
-    p.style.display = (p.dataset.pane === mode) ? '' : 'none';
+    p.style.display = (p.dataset.pane === 'buy') ? '' : 'none';
   });
-  if (mode === 'deposit') {
-    if (typeof loadConfigNetworks === 'function') {
-      loadConfigNetworks().then(function () { gromDepFlowOpen(); }, function () { gromDepFlowOpen(); });
-    } else {
-      gromDepFlowOpen();
-    }
-  }
-  if (mode === 'buy') updateFiatQuote();
-  if (mode === 'swap') { try { gromSwapDedupe('wmSwapFrom'); refreshSwapEstimate(); } catch (_) {} }
+  if (typeof updateFiatQuote === 'function') updateFiatQuote();
 }
 (function wireWalletModal() {
   var tabs = document.getElementById('wmTabs');

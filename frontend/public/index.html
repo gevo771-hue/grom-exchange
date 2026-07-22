@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content" />
 <script>
 (function () {
-  var APP_VER = '2026-07-18f';
+  var APP_VER = '00a9702062';
   try {
     if (localStorage.getItem('grom_app_ver') !== APP_VER) {
       ['grom_dashboard_layout', 'grom_ui_prefs', 'welcome_seen', 'grom_page'].forEach(function (k) {
@@ -217,7 +217,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Oxanium:wght@600;700;800&family=Rajdhani:wght@600;700&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/grom-banners.css?v=20260620a" />
+<link rel="stylesheet" href="/grom-banners.72759417.css" />
 <link rel="manifest" href="/manifest.webmanifest" />
 <link rel="icon" type="image/png" href="/icon-192.png?v=20260608a" sizes="192x192" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260608a" sizes="180x180" />
@@ -5697,40 +5697,10 @@
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-head"><h3 data-i18n="dash_qa_title">Quick actions</h3><span class="sub" data-i18n-html="dash_qa_sub">Press <span class="kbd">⌘K</span> to search any action</span></div>
-        <div class="qa-grid">
-          <button class="qa" onclick="show('predict')"><span class="ico">🎯</span><span class="t" data-i18n="qa_predict_t">Prediction markets</span><span class="d" data-i18n="qa_predict_d">Live probabilities · demo bets</span></button>
-          <button class="qa" onclick="show('binary')"><span class="ico"><svg width="18" height="18"><use href="#i-binary"/></svg></span><span class="t" data-i18n="qa_bo_t">Place binary option</span><span class="d" data-i18n="qa_bo_d">60s UP/DOWN with fixed payout</span></button>
-          <button class="qa" onclick="show('spot')"><span class="ico"><svg width="18" height="18"><use href="#i-spot"/></svg></span><span class="t" data-i18n="qa_spot_t">Spot trade</span><span class="d" data-i18n="qa_spot_d">Limit, market, stop orders</span></button>
-          <button class="qa" onclick="show('wallet')"><span class="ico"><svg width="18" height="18"><use href="#i-deposit"/></svg></span><span class="t" data-i18n="qa_dep_t">Deposit crypto</span><span class="d" data-i18n="qa_dep_d">BTC, ETH, USDT, USDC</span></button>
-          <button class="qa" onclick="show('markets')"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="t" data-i18n="qa_mkt_t">Browse markets</span><span class="d" data-i18n="qa_mkt_d">10 000+ tokens live</span></button>
-          <button class="qa" onclick="show('history')"><span class="ico"><svg width="18" height="18"><use href="#i-history"/></svg></span><span class="t" data-i18n="qa_hist_t">View history</span><span class="d" data-i18n="qa_hist_d">All trades &amp; transfers</span></button>
-          <button class="qa" onclick="startTour()"><span class="ico"><svg width="18" height="18"><use href="#i-help"/></svg></span><span class="t" data-i18n="qa_tour_t">Take the tour</span><span class="d" data-i18n="qa_tour_d">90-second walkthrough</span></button>
-        </div>
-      </div>
+            <!-- removed 2026-07-22 dashboard Quick actions leftover -->
 
-      <div class="card spot-ai-card dash-ai-card">
-        <div class="card-head">
-          <h3>AI market brief</h3>
-          <span class="sub" id="dashAiStamp">model v2.4 · live</span>
-        </div>
-        <div class="card-body">
-          <div class="spot-ai-grid">
-            <div class="ai-thesis">
-              <div class="ai-k">Session bias</div>
-              <div class="ai-v" id="dashAiBias">Neutral bullish</div>
-              <div class="ai-p" id="dashAiText">BTC holds above local value with bids reloading under VWAP. Prefer pullback entries over breakout chase.</div>
-            </div>
-            <div class="spot-ai-list">
-              <div class="spot-ai-row"><span>Top mover</span><strong id="dashAiMover">DOGE +4.8%</strong></div>
-              <div class="spot-ai-row"><span>Risk mode</span><strong id="dashAiRisk">Normal size</strong></div>
-              <div class="spot-ai-row"><span>Desk focus</span><strong id="dashAiFocus">Spot · BTC</strong></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+            <!-- removed 2026-07-22 dashboard AI market brief (Cursor; note for Claude: dashboard declutter) -->
+</section>
 
     <!-- BINARY -->
     <section class="page" id="page-binary">
@@ -7644,19 +7614,19 @@
   </div>
 </div>
 
-<script src="/grom-instruments.js?v=20260424x"></script>
-<script src="/grom-i18n.js?v=20260710c"></script>
-<script src="/grom-i18n-extra.js?v=20260710x"></script>
+<script src="/grom-instruments.953b43a8.js"></script>
+<script src="/grom-i18n.8dc7654c.js"></script>
+<script src="/grom-i18n-extra.3e03b84b.js"></script>
 <script>
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
   walletModule.type = 'module';
-  walletModule.src = '/grom-wallet.js?v=20260714b';
+  walletModule.src = '/grom-wallet.js';
   document.head.appendChild(walletModule);
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = '/grom-privy.js?v=20260714a';
+  privyModule.src = '/grom-privy.990a8eb6.js';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -8089,11 +8059,11 @@ function cnShowEmail(ev) {
   // from extensions or assistive tech). Only a real user mouse/keyboard click
   // has event.isTrusted === true.
   if (ev && ev.isTrusted === false) return;
-  // Mark this as an explicit user click so the modal-open guard in grom-privy.js
+  // Mark this as an explicit user click so the modal-open guard in grom-privy.990a8eb6.js
   // does NOT roll back to main rows. Without this flag, the 150ms cleanup would
   // undo the user's choice of opening the email form.
   window.__gromUserClickedEmail = true;
-  // Real Privy email OTP flow (grom-privy.js exposes window.privyLogin).
+  // Real Privy email OTP flow (grom-privy.990a8eb6.js exposes window.privyLogin).
   if (typeof window.privyLogin === 'function') {
     // Hide the legacy fake-email form so it doesn't sit next to Privy's UI.
     var ef = document.getElementById('cnEmailForm');
@@ -8101,7 +8071,7 @@ function cnShowEmail(ev) {
     window.privyLogin('email');
     return;
   }
-  // Fallback if grom-privy.js hasn't loaded yet — show a brief notice and try again.
+  // Fallback if grom-privy.990a8eb6.js hasn't loaded yet — show a brief notice and try again.
   toast('Sign-in client loading… try again in a moment.', 'info');
   setTimeout(function () {
     if (typeof window.privyLogin === 'function') window.privyLogin('email');
@@ -8144,7 +8114,7 @@ function cnConnect(name, kind, ev) {
   if (ev && ev.isTrusted === false) return;
   // Real provider dispatch.
   // External wallets (MetaMask / WalletConnect / Trust / Phantom / TON / Tron / OKX / Coinbase)
-  // are handled by grom-wallet.js (window.gromWalletConnect when present).
+  // are handled by grom-wallet.84845dfe.js (window.gromWalletConnect when present).
   if (typeof window.gromWalletConnect === 'function') {
     window.gromWalletConnect(kind, name);
     return;
@@ -13656,9 +13626,9 @@ function openFiatProvider() {
 // On-ramp providers (MoonPay etc.) render their widget low on their own hosted
 // page when opened as a full tab. We open them in a focused, centered popup
 // window so the widget sits in the middle of the screen. We briefly wrap
-// window.open so the real opener (grom-wallet.js gwOpenFiatProvider, which
+// window.open so the real opener (grom-wallet.84845dfe.js gwOpenFiatProvider, which
 // builds the signed provider URL) lands in our centered popup — without
-// touching grom-wallet.js.
+// touching grom-wallet.84845dfe.js.
 function gromFiatContinue() {
   var realOpen = window.open;
   var w = 460, h = 760;
@@ -13697,7 +13667,7 @@ function copyDepAddr() {
  * Deposit flow (5-screen, Binance/Bybit-style).
  * UI + navigation owned here (index.html). The backend hydration
  * (real address / QR / balances / recent deposits) is owned by
- * grom-wallet.js → gwHydrateDepositPane(), which fills these IDs:
+ * grom-wallet.84845dfe.js → gwHydrateDepositPane(), which fills these IDs:
  *   #depCoinSearch #depCoinList #depNetworkList #depAddrQr
  *   #depAddrText #depMemoCard #depRecentList
  * We render functional defaults from the local registry + DEP_NETS
@@ -13918,7 +13888,7 @@ async function gromDepLoadAddress() {
   gromDepState.address = ''; gromDepState.memo = '';
 
   // Try the legit backend endpoint. If unavailable (503 / not provisioned),
-  // keep the honest pending state for grom-wallet.js to hydrate.
+  // keep the honest pending state for grom-wallet.84845dfe.js to hydrate.
   var realAddr = '', memo = '';
   if (window.gromApiFetch) {
     try {
@@ -14066,7 +14036,7 @@ function gromUsdPx(coin) {
   return (px != null && isFinite(px) && px > 0) ? px : null;
 }
 // Universal live estimate — works for every pair in the dropdown (not just the
-// 4 Arbitrum tokens). The actual execution is handled by grom-wallet.js.
+// 4 Arbitrum tokens). The actual execution is handled by grom-wallet.84845dfe.js.
 function refreshSwapEstimate() {
   var from = document.getElementById('wmSwapFrom')?.value;
   var to   = document.getElementById('wmSwapTo')?.value;
@@ -14148,7 +14118,7 @@ window.refreshSwapEstimate = refreshSwapEstimate;
 
 /* ============================================================
  * Prediction Markets + Tokenized Stocks — owned end-to-end here.
- * grom-wallet.js handed these pages to index.html, so we render real
+ * grom-wallet.84845dfe.js handed these pages to index.html, so we render real
  * first-class `.page` sections (#page-predict / #page-xstocks) wired into
  * the app's own show() router — fixes both click + direct-URL rendering.
  * Functional on demo balance (shared window.boState): live stock prices,

@@ -424,10 +424,33 @@ function gromReferralPayload() {
   } catch (_) { return {}; }
 }
 
+/** Translate via window.t (grom-i18n), with {var} interpolation. */
+function gwTx(key, vars, fallback) {
+  let s = null;
+  try { if (typeof window.t === 'function') s = window.t(key); } catch (_) {}
+  if (!s || s === key) s = fallback || key;
+  if (vars && typeof vars === 'object') {
+    Object.keys(vars).forEach((k) => { s = String(s).split('{' + k + '}').join(String(vars[k])); });
+  }
+  return s;
+}
+
 async function authenticateWithSIWE(address, provider) {
   if (!address || !provider) throw new Error('SIWE: missing address or provider');
-
-  // 1. Server-issued nonce
+  const __addr = String(address).toLowerCase();
+  try {
+    const jwt = localStorage.getItem('grom_jwt');
+    const label = (localStorage.getItem('grom_wallet_label') || '').toLowerCase();
+    if (jwt && label && label === __addr) {
+      console.log('[GROM] SIWE skipped — already authed');
+      return jwt;
+    }
+  } catch (_) {}
+  if (window.__gwSiweInflight && window.__gwSiweInflightAddr === __addr) {
+    return window.__gwSiweInflight;
+  }
+  const __siweWork = (async () => {
+// 1. Server-issued nonce
   const nonceRes = await fetch('/auth/nonce', { method: 'POST' });
   const nonceJson = await nonceRes.json().catch(() => ({}));
   if (!nonceRes.ok || !nonceJson.nonce) {
@@ -501,6 +524,17 @@ Issued At: ${issuedAt}`;
   try { document.dispatchEvent(new CustomEvent('grom:wallet-connected', { detail: { address } })); } catch (_) {}
 
   return verifyJson;
+
+  })();
+  window.__gwSiweInflight = __siweWork;
+  window.__gwSiweInflightAddr = __addr;
+  try { return await __siweWork; }
+  finally {
+    if (window.__gwSiweInflight === __siweWork) {
+      window.__gwSiweInflight = null;
+      window.__gwSiweInflightAddr = null;
+    }
+  }
 }
 
 /* ----- EIP-6963 + multi-wallet provider pickers -----
@@ -659,18 +693,51 @@ async function connectViaEthereumProvider(walletKey, uriHandler) {
 async function finalizeWcConnection(provider, account) {
   window.__gromConnecting = true;
   try {
-    if (isMobileUA()) {
-      try { gwToast('Вернись в браузер и подпиши сообщение в кошельке для входа', 'info'); } catch (_) {}
+    const key = String(account || '').toLowerCase();
+    if (window.__gwFinalizeWcInflight && window.__gwFinalizeWcAddr === key) {
+      await window.__gwFinalizeWcInflight;
+      return account;
     }
-    await authenticateWithSIWE(account, provider);
-    updateChip(account);
+    const work = (async () => {
+      try {
+        const jwt = localStorage.getItem('grom_jwt');
+        const label = (localStorage.getItem('grom_wallet_label') || '').toLowerCase();
+        if (jwt && label && label === key) {
+          updateChip(account);
+          return account;
+        }
+      } catch (_) {}
+      if (isMobileUA()) {
+        try {
+          const msg = gwTx('wc_toast_sign_siwe', null,
+            'Return to the browser and sign the message in your wallet to log in');
+          const now = Date.now();
+          if (!(window.__gwSiweToastAt && (now - window.__gwSiweToastAt) < 8000 && window.__gwSiweToastMsg === msg)) {
+            window.__gwSiweToastAt = now;
+            window.__gwSiweToastMsg = msg;
+            gwToast(msg, 'info');
+          }
+        } catch (_) {}
+      }
+      await authenticateWithSIWE(account, provider);
+      updateChip(account);
+      return account;
+    })();
+    window.__gwFinalizeWcInflight = work;
+    window.__gwFinalizeWcAddr = key;
+    try { return await work; }
+    finally {
+      if (window.__gwFinalizeWcInflight === work) {
+        window.__gwFinalizeWcInflight = null;
+        window.__gwFinalizeWcAddr = null;
+      }
+    }
   } catch (err) {
     gwSiweFailToast(err);
     throw err;
   } finally {
     window.__gromConnecting = false;
   }
-  return account;
 }
 
 /** Pending SignClient state — resume WC after iOS app-switch. */
@@ -730,18 +797,31 @@ async function gwTryResumeMobileWc() {
 function gwInstallMobileWcHandlers() {
   if (gwInstallMobileWcHandlers._done) return;
   gwInstallMobileWcHandlers._done = true;
-  // Approval may land a few seconds after transport restart — poll a few
-  // times instead of a single shot (0.6s / 2.5s / 5s / 9s after return).
-  const kick = () => {
-    [600, 2500, 5000, 9000].forEach((ms) => {
-      setTimeout(() => { gwTryResumeMobileWc(); }, ms);
-    });
+  // One debounced resume per return-to-browser. Old 4-timer × focus+visibility
+  // storm could start multiple finalize/SIWE flows → 3–4 Trust confirms.
+  let kickTimer = null;
+  let _wcHiddenAt = 0;
+  const kick = (delay) => {
+    if (kickTimer) clearTimeout(kickTimer);
+    kickTimer = setTimeout(() => {
+      kickTimer = null;
+      // Skip WC resume storm if no pending mobile flow — idle return shouldn't hammer Trust
+      if (!_gwMobileWcState && !window.__gromConnecting) return;
+      gwTryResumeMobileWc().then((ok) => {
+        if (!ok && _gwMobileWcState) {
+          setTimeout(() => { gwTryResumeMobileWc(); }, 2800);
+        }
+      }).catch(() => {});
+    }, delay != null ? delay : 900);
   };
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) kick();
+    if (document.hidden) { _wcHiddenAt = Date.now(); return; }
+    const slept = _wcHiddenAt ? (Date.now() - _wcHiddenAt) : 0;
+    _wcHiddenAt = 0;
+    // Longer background → later soft resume (lets Safari finish paints first)
+    kick(slept > 20000 ? 1400 : slept > 5000 ? 1000 : 700);
   });
-  window.addEventListener('pageshow', (ev) => { if (ev.persisted) kick(); });
-  window.addEventListener('focus', kick);
+  window.addEventListener('pageshow', (ev) => { if (ev.persisted) kick(1000); });
 }
 /** @deprecated */
 async function connectTrustViaEthereumProvider(uriHandler) {
@@ -788,8 +868,8 @@ function gwSiweFailToast(err) {
     err?.code === 4001 || err?.code === -32000;
   const msg = rejected
     ? (isMobileUA()
-      ? 'Подпиши сообщение в кошельке (открой Trust) — без подписи вход не завершится.'
-      : 'Sign the message in your wallet to finish signing in.')
+      ? gwTx('wc_toast_siwe_rejected_mobile', null, 'Sign the message in your wallet (open Trust) — sign-in cannot finish without it.')
+      : gwTx('wc_toast_siwe_rejected_desktop', null, 'Sign the message in your wallet to finish signing in.'))
     : 'Sign-in failed: ' + (err?.message || 'signature not verified');
   if (!rejected) {
     try { window.gwSentryCapture?.(err, { tags: { flow: 'siwe' } }); } catch (_) {}
@@ -1704,7 +1784,10 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
   gwSetWcFlowActive(true);
   gwKillReownModals();
   // Soft poll — 400ms was burning main thread on mobile ("connect modal тупит").
-  _wcPendingKillTimer = setInterval(gwKillReownModals, 1200);
+  _wcPendingKillTimer = setInterval(function () {
+    if (document.hidden) return;
+    gwKillReownModals();
+  }, 1200);
 
   // Show modal immediately so the UI doesn't feel frozen while esm.sh loads.
   gwShowWcModal(walletKey, '', { mobile: isMobileUA(), pending: true, fromExplorer: !!opts?.fromExplorer });
@@ -1727,7 +1810,7 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
     _gwMobileWcState = { walletKey, client, uri, startedAt: Date.now() };
     gwShowWcModal(walletKey, uri, { mobile: isMobileUA(), fromExplorer: !!opts?.fromExplorer });
     if (isMobileUA()) {
-      try { gwToast('Подтверди в ' + cfg.label + ', затем вернись в браузер', 'info'); } catch (_) {}
+      try { gwToast(gwTx('wc_toast_confirm_wallet', { wallet: cfg.label }, 'Confirm in {wallet}, then return to the browser'), 'info'); } catch (_) {}
     }
 
     const session = await Promise.race([
@@ -1843,6 +1926,7 @@ async function disconnect() {
     localStorage.removeItem('grom_ref_code');
   } catch (_) {}
   try { currentAccount = null; currentChainId = null; } catch (_) {}
+  try { window.__gwDsUserPickedFrom = null; } catch (_) {}
   updateChip(null);
   try { window.dispatchEvent(new CustomEvent('wallet-disconnected')); } catch (_) {}
   console.log('[grom-wallet] full disconnect — session + storage cleared');
@@ -1918,7 +2002,8 @@ const ONCHAIN_TOKENS = {
     USDC: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
   },
   8453: {
-    USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    USDC: '0x833589fCD6eDb6E08f4c7C32D6f7b9bD686120e3',
+    USDT: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
     USDT: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
   },
   56: {
@@ -2113,6 +2198,28 @@ function gwInjectDexPagesCss() {
 
     /* DEX-styled cards for Wallet + Settings + Referral extensions */
     .gw-dp-wrap { margin: 18px 0; }
+    #gwRefTopRow {
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.9fr);
+      gap: 14px;
+      margin: 18px 0;
+      align-items: stretch;
+    }
+    @media (max-width: 980px) {
+      #gwRefTopRow { grid-template-columns: 1fr; }
+    }
+    #gwRefTopRow > .gw-dp-wrap { margin: 0; height: 100%; }
+    #gwRefTopRow > .gw-dp-wrap > .gw-dp-card { height: 100%; box-sizing: border-box; }
+    #gwRefCommissionSlot { min-width: 0; }
+    #gwRefCommissionSlot > .card {
+      margin: 0;
+      height: 100%;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+    }
+    #gwRefCommissionSlot > .card > .card-body { flex: 1; }
+    #page-referral .ref-workbench.gw-ref-wb-emptied { display: none !important; }
     .gw-dp-card {
       padding: 22px 24px; border-radius: 22px; color: #e7eef8; position: relative; overflow: hidden;
       background: radial-gradient(140% 200% at 100% 0%, rgba(0,194,255,.08), transparent 55%),
@@ -2211,23 +2318,72 @@ function setText(id, text) {
   if (el && text != null) el.textContent = text;
 }
 
+function gwInviteCodeFromSeed(seed) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const s = String(seed || '').toLowerCase();
+  if (!s) return null;
+  // FNV-1a 32-bit — stable, dependency-free, matches product feel of GROM-XXXXXX
+  let h = 0x811c9dc5;
+  const key = 'grom-invite:' + s;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  let code = '';
+  let x = h >>> 0;
+  for (let i = 0; i < 6; i++) {
+    code += alphabet[x % alphabet.length];
+    x = Math.imul(x ^ (x >>> 13), 0x5bd1e995) >>> 0;
+  }
+  return 'GROM-' + code;
+}
+function gwReferralWalletSeed() {
+  try {
+    const a = window.gromWallet?.state?.()?.account
+      || window.ethereum?.selectedAddress
+      || localStorage.getItem('gw_addr')
+      || (window.GROM_CONN && window.GROM_CONN.label);
+    if (!a) return null;
+    const m = String(a).match(/0x[a-fA-F0-9]{40}/);
+    return (m ? m[0] : String(a)).toLowerCase();
+  } catch (_) { return null; }
+}
+function gwApplyLocalInviteIdentity(codeEl, linkEl) {
+  const seed = gwReferralWalletSeed();
+  const code = gwInviteCodeFromSeed(seed);
+  if (!code) return false;
+  const short = code.replace(/^GROM-/, '');
+  const link = 'https://grom.exchange/r/' + short;
+  if (codeEl) codeEl.textContent = code;
+  if (linkEl) linkEl.textContent = link;
+  try { localStorage.setItem('grom_ref_code', short); } catch (_) {}
+  return true;
+}
+
 async function hydrateReferralSlice(force) {
   try {
     const codeEl = document.getElementById('refCode');
     const linkEl = document.getElementById('refLink');
     if (!codeEl && !linkEl) return; // not on referral page
     const jwt = localStorage.getItem('grom_jwt');
-    if (!jwt) return; // require auth — backend won't answer otherwise
+    if (!jwt) {
+      gwApplyLocalInviteIdentity(codeEl, linkEl);
+      return;
+    }
     const r = await fetch('/api/referral/summary', {
       headers: { Authorization: `Bearer ${jwt}` },
       cache: force ? 'no-store' : 'default',
     });
-    if (!r.ok) return;
+    if (!r.ok) {
+      gwApplyLocalInviteIdentity(codeEl, linkEl);
+      return;
+    }
     const data = await r.json();
 
     // Identity
     if (codeEl && data.code) codeEl.textContent = data.code;
     if (linkEl && data.link) linkEl.textContent = data.link;
+    else gwApplyLocalInviteIdentity(codeEl, linkEl);
 
     const t = data.totals || {};
     const f = data.funnel || {};
@@ -2282,14 +2438,33 @@ function gwZeroRefStatsPlaceholders() {
     'refKpiTotalReferredDelta', 'refKpiActive30dDelta', 'refKpiTotalEarnedDelta',
     'refFunnelClicksDelta',
   ];
-  const jwt = (function () { try { return localStorage.getItem('grom_jwt'); } catch (_) { return null; } })();
-  const val = jwt ? '—' : '—'; // no user data yet either way
+  const val = '—';
   let touched = 0;
   for (const id of ids) {
     const el = document.getElementById(id);
     if (el && el.textContent && el.textContent.trim() !== val && !el.dataset.gwZeroed) {
       el.textContent = val;
       el.dataset.gwZeroed = '1';
+      touched++;
+    }
+  }
+  // Replace Cursor demo referral rows with an empty state
+  const page = document.getElementById('page-referral');
+  if (page && !page.dataset.gwRefRowsCleared) {
+    const rows = page.querySelectorAll('.ref-row');
+    const fake = Array.from(rows).filter((r) => /@crypto_sam|@jane\.eth|@flowtrader|@mila_22|@degenhq/i.test(r.textContent || ''));
+    if (fake.length) {
+      fake.forEach((r) => r.remove());
+      const head = page.querySelector('.ref-table-head');
+      if (head && !page.querySelector('.ref-row')) {
+        const empty = document.createElement('div');
+        empty.className = 'ref-row';
+        empty.id = 'refEmptyState';
+        empty.style.cssText = 'grid-column:1/-1;color:var(--silver5);padding:16px 14px';
+        empty.textContent = 'No referrals yet — share your link to start earning.';
+        head.after(empty);
+      }
+      page.dataset.gwRefRowsCleared = '1';
       touched++;
     }
   }
@@ -2388,7 +2563,7 @@ const GROM_ERC20 = {
   ARBITRUM: { USDT: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', USDC: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' },
   OPTIMISM: { USDT: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58', USDC: '0x0b2c639c533813f4aa9d7837caf62653d097ff85' },
   POLYGON:  { USDT: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', USDC: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359' },
-  BASE:     { USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
+  BASE:     { USDC: '0x833589fCD6eDb6E08f4c7C32D6f7b9bD686120e3', USDT: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2' },
   BSC:      { USDT: '0x55d398326f99059fF775485246999027B3197955', USDC: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d' },
   AVAXC:    { USDT: '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', USDC: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E' },
 };
@@ -3179,10 +3354,13 @@ const GW_OC_CHAIN_META = {
   56:    { label: 'BSC',       native: 'BNB',   tickerSym: 'BNBUSDT' },
   10:    { label: 'Optimism',  native: 'ETH',   tickerSym: 'ETHUSDT' },
   43114: { label: 'Avalanche', native: 'AVAX',  tickerSym: 'AVAXUSDT' },
+  59144: { label: 'Linea',     native: 'ETH',   tickerSym: 'ETHUSDT' },
+  250:   { label: 'Fantom',    native: 'FTM',   tickerSym: 'FTMUSDT' },
+  728126428: { label: 'TRON',  native: 'TRX',   tickerSym: 'TRXUSDT' },
 };
 
 async function gwOcFetchPrices() {
-  const symbols = new Set(['ETHUSDT', 'BNBUSDT', 'MATICUSDT', 'AVAXUSDT']);
+  const symbols = new Set(['ETHUSDT', 'BNBUSDT', 'MATICUSDT', 'AVAXUSDT', 'TRXUSDT', 'FTMUSDT']);
   const out = { USDT: 1, USDC: 1 };
   await Promise.all([...symbols].map(async (s) => {
     try {
@@ -3453,14 +3631,10 @@ function gwInjectMetaPortfolioCss() {
       overflow: hidden; color: #e7eef8;
     }
     .gw-mp-card::before {
-      content: ""; position: absolute; inset: -2px;
-      padding: 1.5px; border-radius: inherit;
-      background: conic-gradient(from 90deg, #a855f7 0%, transparent 25%, #22c17c 50%, transparent 75%, #a855f7 100%);
-      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      -webkit-mask-composite: xor; mask-composite: exclude;
-      opacity: 0.5; animation: gwBnSpin 24s linear infinite;
-      pointer-events: none; z-index: 0;
+      display: none !important;
+      content: none !important;
+      animation: none !important;
+      opacity: 0 !important;
     }
     .gw-mp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; position: relative; z-index: 1; margin-bottom: 14px; }
     .gw-mp-eyebrow { font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: #6b7a92; font-weight: 800; margin: 0 0 4px; }
@@ -3863,6 +4037,73 @@ function gwDebounce(fn, ms) {
     t = setTimeout(() => { fn.apply(ctx, args); }, ms);
   };
 }
+
+/** setInterval that sleeps while the tab is hidden (critical for iOS Safari —
+ *  backgrounded tabs queue timers; on return they fire in a storm and freeze UI). */
+function gwVisibleInterval(fn, ms, opts) {
+  const minMs = Math.max(50, Number(ms) || 1000);
+  const bgMs = Math.max(minMs, Number(opts && opts.bgMs) || minMs * 8);
+  let id = null;
+  const tick = () => {
+    try {
+      if (document.hidden) return;
+      if (typeof window.gromPageActive === 'function' && !window.gromPageActive()) return;
+      fn();
+    } catch (_) {}
+  };
+  const arm = () => {
+    if (id) clearInterval(id);
+    id = setInterval(tick, document.hidden ? bgMs : minMs);
+  };
+  arm();
+  document.addEventListener('visibilitychange', () => {
+    arm();
+    if (!document.hidden) {
+      // one catch-up tick after resume, not a burst
+      setTimeout(tick, 120);
+    }
+  });
+  return () => { if (id) clearInterval(id); };
+}
+window.gwVisibleInterval = gwVisibleInterval;
+
+/** Soft resume after Safari unfreezes a tab — stagger expensive work. */
+(function gwSetupSafariSoftResume() {
+  if (window.__gwSafariSoftResume) return;
+  window.__gwSafariSoftResume = true;
+  let hiddenAt = 0;
+  let resumeTimer = null;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      try { if (window.__dashBannerAutoTimer) { clearInterval(window.__dashBannerAutoTimer); window.__dashBannerAutoTimer = null; } } catch (_) {}
+      return;
+    }
+    const slept = hiddenAt ? (Date.now() - hiddenAt) : 0;
+    hiddenAt = 0;
+    if (resumeTimer) clearTimeout(resumeTimer);
+    // Short background (<=3s): almost nothing to do
+    if (slept < 3000) return;
+    resumeTimer = setTimeout(() => {
+      resumeTimer = null;
+      try {
+        if (typeof window.startDashBannerAuto === 'function') window.startDashBannerAuto();
+        else if (document.getElementById('page-dashboard')?.classList.contains('active') && typeof window.goBanner === 'function') {
+          /* banner auto starts via its own path */
+        }
+      } catch (_) {}
+      // Defer heavy dashboard refresh so first paint after unlock stays smooth
+      setTimeout(() => {
+        try {
+          if (document.getElementById('page-dashboard')?.classList.contains('active') || document.getElementById('page-dashboard')?.offsetParent) {
+            if (typeof window.gwRenderMetaPortfolio === 'function') window.gwRenderMetaPortfolio();
+          }
+        } catch (_) {}
+      }, slept > 30000 ? 900 : 350);
+    }, 180);
+  });
+})();
+
 function gwSetupMetaPortfolio() {
   const tryRender = gwDebounce(() => { if (document.getElementById('page-dashboard')) { try { gwRenderMetaPortfolio(); console.log('[GROM] meta-portfolio rendered'); } catch (e) { console.warn('[GROM] meta-portfolio', e); } } }, 200);
   window.addEventListener('grom:lang-change', () => { const el = document.getElementById('gwMetaPortfolio'); if (el) el.remove(); tryRender(); });
@@ -3880,6 +4121,7 @@ function gwSetupMetaPortfolio() {
   bodyObs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
   // Auto-refresh every 60s while dashboard is visible
   setInterval(() => {
+    if (document.hidden) return;
     const dash = document.getElementById('page-dashboard');
     if (dash && dash.offsetParent !== null) gwRenderMetaPortfolio();
   }, 60000);
@@ -4099,9 +4341,11 @@ function gwOpenSignIn() {
     let provider = window.ethereum;
     try { if (window.gromWallet?.wcProvider?.accounts?.[0]) provider = window.gromWallet.wcProvider; } catch (_) {}
     if (provider) {
-      // Fire and forget — SIWE handler shows its own toast on reject.
       (async () => {
-        try { await window.gromWallet?.signSiweAndVerify?.(addr, provider); } catch (_) {}
+        try {
+          if (window.__gwSiweInflight) { await window.__gwSiweInflight; return; }
+          await window.gromWallet?.signSiweAndVerify?.(addr, provider);
+        } catch (_) {}
       })();
       return;
     }
@@ -4266,57 +4510,186 @@ const GW_DS_ASSETS = [
  * so the swap dropdown offers every asset the user sees in Рынки.
  * Runs once when window.gromInstrumentsByType is exposed (grom-instruments.js
  * loads a bit after us). Kept idempotent — repeat calls are a no-op. */
-/**
- * Bulk-fetch LiFi's token list — 10 000+ tokens across every chain
- * LiFi supports. Cached in localStorage for 24 h so cold reload doesn't
- * pay 200 kB every time. Runs in background so it doesn't slow boot.
- */
+/* Full LiFi catalog — per-chain (thousands of tokens). Memory cache only
+ * (ETH list alone is ~2.5 MB; localStorage cannot hold the global dump). */
+window.__gwLifiCatalog = window.__gwLifiCatalog || {}; // cid → { at, list }
+window.__gwLifiBySym   = window.__gwLifiBySym   || {}; // cid → Map(sym → token[])
+window.__gwLifiByAddr  = window.__gwLifiByAddr  || {}; // cid → Map(addr → token)
+
+const GW_LIFI_PREFETCH_CHAINS = [1, 56, 137, 42161, 8453, 10, 43114, 59144, 250];
+const GW_LIFI_ZERO = '0x0000000000000000000000000000000000000000';
+
+function gwLifiEndpoint() {
+  return (typeof GW_LIFI_ENDPOINT !== 'undefined' && GW_LIFI_ENDPOINT)
+    ? GW_LIFI_ENDPOINT
+    : 'https://li.quest/v1';
+}
+
+function gwLifiIndexChain(chainId, list) {
+  const cid = Number(chainId);
+  const bySym = new Map();
+  const byAddr = new Map();
+  for (const t of list) {
+    if (!t || !t.sym) continue;
+    const sym = String(t.sym).toUpperCase();
+    const addr = String(t.address || '').toLowerCase();
+    if (!bySym.has(sym)) bySym.set(sym, []);
+    bySym.get(sym).push(t);
+    if (addr) byAddr.set(addr, t);
+  }
+  // Prefer verified tokens first within each symbol bucket
+  for (const [, arr] of bySym) {
+    arr.sort((a, b) => Number(!!b.verified) - Number(!!a.verified));
+  }
+  window.__gwLifiCatalog[cid] = { at: Date.now(), list };
+  window.__gwLifiBySym[cid] = bySym;
+  window.__gwLifiByAddr[cid] = byAddr;
+}
+
+function gwLifiNormalizeToken(t, chainId) {
+  const sym = String(t.symbol || '').toUpperCase();
+  if (!sym) return null;
+  const addr = t.address || GW_LIFI_ZERO;
+  const verified = String(t.verificationStatus || '').toLowerCase() === 'verified'
+    || (Array.isArray(t.verificationStatusBreakdown)
+      && t.verificationStatusBreakdown.some((x) => String(x?.result || '').toLowerCase() === 'verified'));
+  return {
+    sym,
+    name: t.name || sym,
+    logo: t.logoURI || '',
+    address: addr,
+    decimals: Number(t.decimals ?? 18),
+    chainId: Number(chainId),
+    verified: !!verified,
+    priceUSD: t.priceUSD != null ? Number(t.priceUSD) : null,
+  };
+}
+
+async function gwLifiEnsureChainTokens(chainId, { force } = {}) {
+  const cid = Number(chainId);
+  if (!cid || cid === 728126428) return [];
+  const hit = window.__gwLifiCatalog[cid];
+  if (!force && hit && Array.isArray(hit.list) && Date.now() - hit.at < 86_400_000) {
+    return hit.list;
+  }
+  // Deduplicate in-flight fetches per chain
+  window.__gwLifiInflight = window.__gwLifiInflight || {};
+  if (window.__gwLifiInflight[cid]) return window.__gwLifiInflight[cid];
+  window.__gwLifiInflight[cid] = (async () => {
+    try {
+      const r = await fetch(`${gwLifiEndpoint()}/tokens?chains=${cid}`, {
+        headers: { accept: 'application/json' },
+      });
+      if (!r.ok) throw new Error('lifi tokens ' + r.status);
+      const j = await r.json();
+      const raw = (j.tokens && (j.tokens[cid] || j.tokens[String(cid)])) || [];
+      const list = [];
+      const seen = new Set();
+      for (const t of raw) {
+        const n = gwLifiNormalizeToken(t, cid);
+        if (!n) continue;
+        const key = (n.address || '').toLowerCase() + '|' + n.sym;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        list.push(n);
+      }
+      // Popular / higher-priced first for empty-search browsing
+      list.sort((a, b) => {
+        const pv = Number(!!b.verified) - Number(!!a.verified);
+        if (pv) return pv;
+        return (b.priceUSD || 0) - (a.priceUSD || 0);
+      });
+      gwLifiIndexChain(cid, list);
+      // Merge unique symbols into GW_DS_ASSETS for logos / selects (cap growth)
+      try {
+        const have = new Set(GW_DS_ASSETS.map((a) => a.sym));
+        let added = 0;
+        for (const t of list) {
+          if (have.has(t.sym)) continue;
+          if (added >= 400) break;
+          GW_DS_ASSETS.push({ sym: t.sym, name: t.name, logo: t.logo });
+          have.add(t.sym);
+          added++;
+        }
+      } catch (_) {}
+      console.log('[GROM] LiFi catalog chain', cid, '→', list.length, 'tokens');
+      return list;
+    } catch (e) {
+      console.warn('[GROM] LiFi catalog failed', cid, e);
+      return (window.__gwLifiCatalog[cid] && window.__gwLifiCatalog[cid].list) || [];
+    } finally {
+      try { delete window.__gwLifiInflight[cid]; } catch (_) {}
+    }
+  })();
+  return window.__gwLifiInflight[cid];
+}
+
+function gwLifiPickToken(chainId, sym) {
+  const cid = Number(chainId);
+  const s = String(sym || '').toUpperCase();
+  if (!cid || !s) return null;
+  // Explicit user pick wins (stores exact contract)
+  try {
+    const pickedTo = window.__gwDsUserPickedTo;
+    if (pickedTo && String(pickedTo.sym).toUpperCase() === s
+      && Number(pickedTo.chainId) === cid && pickedTo.address) {
+      return {
+        sym: s,
+        address: pickedTo.address,
+        decimals: pickedTo.decimals ?? 18,
+        name: pickedTo.name || s,
+        logo: pickedTo.logo || '',
+        chainId: cid,
+      };
+    }
+    const pickedFrom = window.__gwDsUserPickedFrom;
+    if (pickedFrom && String(pickedFrom.sym).toUpperCase() === s
+      && Number(pickedFrom.chainId) === cid && pickedFrom.address) {
+      return {
+        sym: s,
+        address: pickedFrom.address,
+        decimals: pickedFrom.decimals ?? 18,
+        name: pickedFrom.name || s,
+        logo: pickedFrom.logo || '',
+        chainId: cid,
+      };
+    }
+  } catch (_) {}
+  const bySym = window.__gwLifiBySym[cid];
+  if (!bySym) return null;
+  const arr = bySym.get(s);
+  if (!arr || !arr.length) return null;
+  // Prefer non-zero (ERC-20) unless native symbol
+  const cfg = (typeof GW_OC_SWAP !== 'undefined') ? GW_OC_SWAP[cid] : null;
+  if (cfg && s === cfg.native) {
+    const native = arr.find((t) => String(t.address).toLowerCase() === GW_LIFI_ZERO)
+      || arr[0];
+    return native;
+  }
+  // Prefer curated GW_OC_SWAP address when present
+  if (cfg && cfg.tokens && cfg.tokens[s]) {
+    const want = String(cfg.tokens[s]).toLowerCase();
+    const hit = arr.find((t) => String(t.address).toLowerCase() === want);
+    if (hit) return hit;
+  }
+  return arr.find((t) => String(t.address).toLowerCase() !== GW_LIFI_ZERO) || arr[0];
+}
+
+function gwLifiTokenDecimals(chainId, sym) {
+  const t = gwLifiPickToken(chainId, sym);
+  return t && t.decimals != null ? Number(t.decimals) : null;
+}
+
 async function gwDsFetchLifiTokens() {
   if (gwDsFetchLifiTokens._done) return;
   gwDsFetchLifiTokens._done = true;
-  const CK = 'gw_lifi_tokens_v1';
+  // Only warm the UI-selected chain — full multi-chain prefetch triggered LiFi 429.
+  let cid = 56;
   try {
-    const raw = localStorage.getItem(CK);
-    if (raw) {
-      const obj = JSON.parse(raw);
-      if (obj && obj.at && Date.now() - obj.at < 86_400_000 && Array.isArray(obj.list)) {
-        gwDsMergeLifiTokens(obj.list);
-        return;
-      }
-    }
+    cid = (typeof gwGetActiveUiChainId === 'function' && gwGetActiveUiChainId())
+      || Number(window.currentChainId) || 56;
   } catch (_) {}
-  try {
-    const r = await fetch(`${GW_LIFI_ENDPOINT}/tokens`);
-    if (!r.ok) return;
-    const j = await r.json();
-    const list = [];
-    for (const cid of Object.keys(j.tokens || {})) {
-      for (const t of j.tokens[cid]) {
-        if (t.symbol && t.name) list.push({ sym: t.symbol, name: t.name, logo: t.logoURI || '' });
-      }
-    }
-    try { localStorage.setItem(CK, JSON.stringify({ at: Date.now(), list })); } catch (_) {}
-    gwDsMergeLifiTokens(list);
-  } catch (_) {}
-}
-function gwDsMergeLifiTokens(list) {
-  const have = new Set(GW_DS_ASSETS.map((a) => a.sym));
-  let added = 0;
-  for (const t of list) {
-    if (!t.sym || have.has(t.sym)) continue;
-    GW_DS_ASSETS.push(t);
-    have.add(t.sym);
-    added++;
-  }
-  if (added > 0) {
-    console.log('[GROM] LiFi tokens merged +' + added + ' → total ' + GW_DS_ASSETS.length);
-    // If picker is open, re-render with new list + refresh count.
-    try {
-      const inp = document.getElementById('gwTkSearch');
-      if (inp) inp.placeholder = `Search ${GW_DS_ASSETS.length}+ tokens…`;
-      if (document.getElementById('gw-tk-overlay')?.classList.contains('open')) gwTkRender(inp?.value || '');
-    } catch (_) {}
-  }
+  try { await gwLifiEnsureChainTokens(cid); } catch (_) {}
 }
 if (typeof window !== 'undefined') { setTimeout(gwDsFetchLifiTokens, 2500); }
 
@@ -4406,6 +4779,8 @@ function gwInjectSimpleModeCss() {
     .gw-ds-mode-simple .gw-ds-row { display: none; }
     .gw-ds-mode-simple .gw-ds-flip { display: none; }
     .gw-ds-mode-simple .gw-ds-pct { display: none; }
+    .gw-ds-mode-simple .gw-ds-route { display: none; }
+    .gw-ds-mode-simple .gw-ds-flip-wrap { display: none; }
     .gw-ds-sim-lbl { font-size: 10.5px; letter-spacing: .14em; color: #6b7a92;
       font-weight: 800; text-transform: uppercase; margin: 0 0 8px; }
     .gw-ds-sim-bal { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
@@ -4458,6 +4833,10 @@ function gwInjectSimpleModeCss() {
     .gw-ds-sim-chip .chip-sym { line-height: 1; }
     .gw-ds-sim-more { color: #5dd5ff; font-size: 12.5px; font-weight: 800; cursor: pointer; padding: 10px 0 4px; }
     .gw-ds-sim-more:hover { color: #99e8ff; }
+    .gw-ds-sim-target-group[data-group="results"] .chip-list {
+      max-height: 240px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start;
+    }
     .gw-ds-sim-amt { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end;
       padding: 14px; border-radius: 14px; background: rgba(255,255,255,0.03);
       border: 1px solid rgba(255,255,255,0.06); }
@@ -4494,13 +4873,15 @@ function gwInjectSimpleModeCss() {
 
 /** Same-chain popular tokens for a given chainId — enriched, 15+ each. */
 const GW_SIM_SAME_CHAIN = {
-  1:     ['ETH', 'USDC', 'USDT', 'WBTC', 'DAI', 'LINK', 'UNI', 'AAVE', 'PEPE', 'SHIB', 'MKR', 'CRV', 'LDO', 'ARB', 'MATIC'],
+  1:     ['ETH', 'USDC', 'USDT', 'WBTC', 'DAI', 'LINK', 'UNI', 'AAVE', 'MKR', 'CRV', 'LDO', 'PEPE', 'SHIB'],
   42161: ['ETH', 'USDC', 'USDT', 'WBTC', 'ARB', 'DAI', 'LINK', 'UNI', 'AAVE', 'GMX', 'MAGIC', 'JOE', 'GRAIL', 'RDNT', 'PENDLE'],
-  137:   ['MATIC', 'USDC', 'USDT', 'ETH', 'WBTC', 'DAI', 'LINK', 'AAVE', 'QUICK', 'CRV', 'BAL', 'STG', 'GNS'],
-  8453:  ['ETH', 'USDC', 'DAI', 'AERO', 'DEGEN', 'TOSHI', 'BRETT', 'HIGHER'],
-  56:    ['BNB', 'USDT', 'USDC', 'BUSD', 'CAKE', 'DAI', 'ETH', 'BTCB', 'DOGE', 'ADA', 'XRP'],
+  137:   ['MATIC', 'USDC', 'USDT', 'ETH', 'WBTC', 'DAI', 'LINK', 'AAVE'],
+  8453:  ['ETH', 'USDC', 'USDT', 'DAI', 'AERO', 'DEGEN', 'TOSHI', 'BRETT'],
+  56:    ['BNB', 'USDT', 'USDC', 'BUSD', 'CAKE', 'ETH', 'BTC', 'DOGE', 'ADA', 'SHIB'],
   10:    ['ETH', 'USDC', 'USDT', 'OP', 'DAI', 'WBTC', 'LINK', 'SNX', 'VELO'],
   43114: ['AVAX', 'USDC', 'USDT', 'ETH', 'WBTC', 'JOE', 'PNG', 'GMX', 'DAI', 'LINK'],
+  59144: ['ETH', 'USDC', 'USDT'],
+  250:   ['FTM', 'USDC', 'USDT', 'WETH'],
 };
 /** Cross-chain popular targets — 15+ options. */
 const GW_SIM_CROSS_CHAIN = ['BTC', 'SOL', 'TRX', 'TON', 'MATIC', 'AVAX', 'BNB', 'ETH', 'ARB', 'OP', 'BASE', 'LINEA', 'FTM', 'DOGE', 'XRP'];
@@ -4548,6 +4929,25 @@ async function gwDsSimRenderBalances() {
         rows.push({ chainId: c.chainId, chain: c.meta.label, sym, amt, usd: amt * (prices[sym] || 1) });
       }
     }
+    try {
+      let tAddr = window.__gwTronAddr || localStorage.getItem('grom_tron_addr') || window.tronWeb?.defaultAddress?.base58 || '';
+      if (tAddr) {
+        const trxAmt = await gwTronFetchNativeBalance(tAddr);
+        if (trxAmt > 0.0001) {
+          const px = prices.TRX || ((typeof gwDsPriceUsd === 'function') ? (await gwDsPriceUsd('TRX').catch(() => 0)) : 0);
+          rows.push({ chainId: 728126428, chain: 'TRON', sym: 'TRX', amt: trxAmt, usd: trxAmt * (px || 0) });
+        }
+      } else if (typeof gwTronProviderReady === 'function' && gwTronProviderReady()) {
+        try {
+          const a = await gwTronConnect();
+          const trxAmt = await gwTronFetchNativeBalance(a);
+          if (trxAmt > 0.0001) {
+            const px = prices.TRX || 0;
+            rows.push({ chainId: 728126428, chain: 'TRON', sym: 'TRX', amt: trxAmt, usd: trxAmt * (px || 0) });
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
     rows.sort((a, b) => b.usd - a.usd);
     if (!rows.length) {
       list.innerHTML = `<div class="gw-ds-sim-empty">No balance yet — bridge or receive to your wallet, then swap here</div>`;
@@ -4577,6 +4977,14 @@ async function gwDsSimRenderBalances() {
 }
 
 function gwDsSimPickFrom(sym, chainId, availAmt) {
+  // User explicitly chose this balance row — AutoPick must not override.
+  try {
+    window.__gwDsUserPickedFrom = {
+      sym: String(sym || '').toUpperCase(),
+      chainId: Number(chainId) || null,
+      at: Date.now(),
+    };
+  } catch (_) {}
   // Wire underlying gwDsFrom + chain chip
   const from = document.getElementById('gwDsFrom'); if (from) from.value = sym;
   try { gwDsEnsureTokenOption(sym, { sym }); gwTkSyncButton('from'); } catch (_) {}
@@ -4586,14 +4994,18 @@ function gwDsSimPickFrom(sym, chainId, availAmt) {
   if (chip) chip.classList.add('on');
   currentChainId = chainId;
   const amtEl = document.getElementById('gwDsSimAmt');
+  const dsAmt = document.getElementById('gwDsAmt');
   if (amtEl) {
     amtEl.max = availAmt;
     amtEl.dataset.max = String(availAmt);
     amtEl.placeholder = `Max ${availAmt.toLocaleString('en-US', { maximumFractionDigits: 6 })}`;
+    // Clear previous pair's amount so we never quote a stale gwDsAmt (e.g. 0.02 ETH
+    // while the user is looking at 0.0062 BNB max).
+    amtEl.value = '';
     amtEl.focus();
   }
-  const dsAmt = document.getElementById('gwDsAmt');
-  if (amtEl && dsAmt && amtEl.value) dsAmt.value = amtEl.value;
+  if (dsAmt) dsAmt.value = '';
+  try { gwDsInvalidateQuoteUi('pick-from'); } catch (_) {}
   try { gwDsRefreshRate(); } catch (_) {}
   gwDsSimRenderTargets(chainId, sym);
 }
@@ -4601,60 +5013,202 @@ function gwDsSimPickFrom(sym, chainId, availAmt) {
 function gwDsSimRenderTargets(chainId, fromSym) {
   const box = document.getElementById('gwDsSimTarget');
   if (!box) return;
-  const chainMeta = GW_OC_CHAIN_META[chainId] || { label: '' };
-  const same = (GW_SIM_SAME_CHAIN[chainId] || []).filter((s) => s !== fromSym);
-  const cross = GW_SIM_CROSS_CHAIN.filter((s) => s !== fromSym && !same.includes(s));
+  const cid = Number(chainId) || 56;
+  const from = String(fromSym || '').toUpperCase();
+  const chainMeta = GW_OC_CHAIN_META[cid] || { label: '' };
+  const same = (GW_SIM_SAME_CHAIN[cid] || []).filter((s) => s !== from);
+  const cross = (typeof GW_SIM_CROSS_CHAIN !== 'undefined' ? GW_SIM_CROSS_CHAIN : [])
+    .filter((s) => s !== from && !same.includes(s) && !['BASE', 'LINEA'].includes(s));
   const findLogo = (sym) => (GW_DS_ASSETS.find((a) => a.sym === sym)?.logo) || '';
-  const chip = (sym, group) => {
-    const logo = findLogo(sym);
+  const chip = (tok, group) => {
+    const sym = typeof tok === 'string' ? tok : tok.sym;
+    const logo = (typeof tok === 'object' && tok.logo) || findLogo(sym);
+    const addr = (typeof tok === 'object' && tok.address) || '';
+    const dec = (typeof tok === 'object' && tok.decimals != null) ? tok.decimals : '';
+    const name = (typeof tok === 'object' && tok.name) || '';
     const ico = logo
       ? `<img src="${logo}" alt="" onerror="this.outerHTML='<span class=&quot;chip-ico&quot;>${sym.slice(0, 3)}</span>'" />`
       : `<span class="chip-ico">${sym.slice(0, 3)}</span>`;
-    return `<span class="gw-ds-sim-chip" data-sym="${sym}" data-group="${group}">${ico}<span class="chip-sym">${sym}</span></span>`;
+    return `<span class="gw-ds-sim-chip" data-sym="${sym}" data-group="${group}" data-addr="${addr}" data-dec="${dec}" title="${name || sym}">${ico}<span class="chip-sym">${sym}</span></span>`;
   };
   const moreChip = `<span class="gw-ds-sim-chip gw-ds-sim-more-chip" data-more="1"><span class="chip-ico" style="background:linear-gradient(135deg,rgba(93,213,255,0.30),rgba(110,141,255,0.20));border-color:rgba(93,213,255,0.45);color:#5dd5ff">···</span><span class="chip-sym">More</span></span>`;
   box.innerHTML = `
-    <input type="text" class="gw-ds-sim-search" id="gwDsSimSearchInput" placeholder="Search token symbol or name…" />
-    <div class="gw-ds-sim-target-group" data-group="same">
+    <input type="text" class="gw-ds-sim-search" id="gwDsSimSearchInput" placeholder="Search all tokens on ${chainMeta.label || 'chain'}…" autocomplete="off" spellcheck="false" />
+    <div class="gw-ds-sim-target-group" data-group="results" id="gwDsSimSearchResults" style="display:none">
+      <p class="gw-ds-sim-target-group-lbl" id="gwDsSimSearchResultsLbl">Search results</p>
+      <div class="chip-list" id="gwDsSimSearchResultsList"></div>
+    </div>
+    <div class="gw-ds-sim-target-group" data-group="same" id="gwDsSimPopularSame">
       <p class="gw-ds-sim-target-group-lbl">Same chain (${chainMeta.label}) · cheap · fast</p>
       <div class="chip-list">${same.map((s) => chip(s, 'same')).join('') || '<span style="color:#6b7a92;font-size:12px">No same-chain routes</span>'}${same.length ? moreChip : ''}</div>
     </div>
-    <div class="gw-ds-sim-target-group" data-group="cross">
+    <div class="gw-ds-sim-target-group" data-group="cross" id="gwDsSimPopularCross">
       <p class="gw-ds-sim-target-group-lbl">Cross-chain (bridge · takes 1-5 min)</p>
       <div class="chip-list">${cross.map((s) => chip(s, 'cross')).join('')}${cross.length ? moreChip.replace('data-more="1"', 'data-more="cross"') : ''}</div>
     </div>
-    <div class="gw-ds-sim-more" id="gwDsSimSearchBtn">🔍 Full search — all 10 000+ tokens →</div>
+    <div class="gw-ds-sim-more" id="gwDsSimSearchBtn">🔍 Open full catalog picker →</div>
   `;
-  const pickTarget = (sym) => {
-    box.querySelectorAll('.gw-ds-sim-chip.on').forEach(x => x.classList.remove('on'));
-    box.querySelector(`.gw-ds-sim-chip[data-sym="${sym}"]`)?.classList.add('on');
-    const to = document.getElementById('gwDsTo'); if (to) to.value = sym;
-    try { gwDsEnsureTokenOption(sym, { sym }); gwTkSyncButton('to'); } catch (_) {}
+
+  const pickTarget = (sym, meta) => {
+    const symN = (typeof gwDsNormSym === 'function') ? gwDsNormSym(sym) : String(sym || '').toUpperCase();
+    const addr = meta?.address || '';
+    const dec = meta?.decimals != null ? Number(meta.decimals) : null;
+    try { gwDsEnsureTokenOption(symN, { sym: symN, address: addr, decimals: dec, chainId: cid }); } catch (_) {}
+    const to = document.getElementById('gwDsTo');
+    if (to) to.value = symN;
+    try {
+      window.__gwDsUserPickedTo = {
+        sym: symN, chainId: cid, address: addr || null,
+        decimals: dec, name: meta?.name || symN, logo: meta?.logo || '', at: Date.now(),
+      };
+    } catch (_) {}
+    try { gwTkSyncButton('to'); } catch (_) {}
+    box.querySelectorAll('.gw-ds-sim-chip.on').forEach((x) => x.classList.remove('on'));
+    try { gwDsInvalidateQuoteUi('pick-to'); } catch (_) {}
     try { gwDsRefreshRate(); } catch (_) {}
   };
-  box.querySelectorAll('.gw-ds-sim-chip').forEach((c) => {
-    c.onclick = () => {
-      if (c.dataset.more) { try { gwTkOpen('to'); } catch (_) {} return; }
-      pickTarget(c.dataset.sym);
-    };
-  });
 
-  // Inline live-filter over the chip lists.
+  const wireChips = (root) => {
+    (root || box).querySelectorAll('.gw-ds-sim-chip').forEach((c) => {
+      if (c._wired) return;
+      c._wired = true;
+      c.onclick = (ev) => {
+        if (c.dataset.more) {
+          try { ev?.preventDefault?.(); ev?.stopPropagation?.(); } catch (_) {}
+          try { if (typeof gwLifiEnsureChainTokens === 'function') gwLifiEnsureChainTokens(cid); } catch (_) {}
+          try { gwTkOpen('to'); } catch (_) {}
+          return;
+        }
+        pickTarget(c.dataset.sym, {
+          address: c.dataset.addr || '',
+          decimals: c.dataset.dec !== '' ? Number(c.dataset.dec) : null,
+        });
+      };
+    });
+  };
+  wireChips(box);
+
+  const resultsWrap = document.getElementById('gwDsSimSearchResults');
+  const resultsList = document.getElementById('gwDsSimSearchResultsList');
+  const resultsLbl = document.getElementById('gwDsSimSearchResultsLbl');
+  const popularSame = document.getElementById('gwDsSimPopularSame');
+  const popularCross = document.getElementById('gwDsSimPopularCross');
+
+  const catalogCount = () => {
+    try { return (window.__gwLifiCatalog?.[cid]?.list || []).length; } catch (_) { return 0; }
+  };
+
+  const updatePlaceholder = () => {
+    const inp = document.getElementById('gwDsSimSearchInput');
+    if (!inp) return;
+    const n = catalogCount();
+    inp.placeholder = n
+      ? `Search ${n.toLocaleString()}+ tokens on ${chainMeta.label || 'chain'}…`
+      : `Search all tokens on ${chainMeta.label || 'chain'}…`;
+  };
+
+  const runCatalogSearch = (qRaw) => {
+    const q = String(qRaw || '').trim().toUpperCase();
+    if (!resultsWrap || !resultsList) return;
+    if (!q) {
+      resultsWrap.style.display = 'none';
+      resultsList.innerHTML = '';
+      if (popularSame) popularSame.style.display = '';
+      if (popularCross) popularCross.style.display = '';
+      return;
+    }
+    // Hide popular shortcuts while searching the full catalog
+    if (popularSame) popularSame.style.display = 'none';
+    if (popularCross) popularCross.style.display = 'none';
+    resultsWrap.style.display = '';
+
+    const list = (window.__gwLifiCatalog?.[cid]?.list) || [];
+    if (!list.length) {
+      resultsLbl.textContent = 'Loading full catalog…';
+      resultsList.innerHTML = '<span style="color:#98a8c0;font-size:12.5px;padding:6px 2px">Fetching tokens for this network…</span>';
+      if (typeof gwLifiEnsureChainTokens === 'function') {
+        gwLifiEnsureChainTokens(cid).then(() => {
+          const inp = document.getElementById('gwDsSimSearchInput');
+          if (inp && inp.value.trim().toUpperCase() === q) runCatalogSearch(q);
+          updatePlaceholder();
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    const isAddr = q.startsWith('0X') && q.length >= 6;
+    const hits = [];
+    for (const t of list) {
+      if (!t || !t.sym || t.sym === from) continue;
+      const sym = String(t.sym).toUpperCase();
+      const name = String(t.name || '').toUpperCase();
+      const addr = String(t.address || '').toUpperCase();
+      let ok = false;
+      if (isAddr) ok = addr.includes(q);
+      else ok = sym.includes(q) || name.includes(q) || sym.startsWith(q);
+      if (!ok) continue;
+      // Prefer exact symbol matches first
+      hits.push({ t, score: (sym === q ? 0 : sym.startsWith(q) ? 1 : name.startsWith(q) ? 2 : 3) });
+      if (hits.length >= 400) break; // hard cap scan early for UX; score-sort below
+    }
+    // Full pass if we capped early without enough ranked — re-scan scored
+    if (hits.length < 80) {
+      hits.length = 0;
+      for (const t of list) {
+        if (!t || !t.sym || t.sym === from) continue;
+        const sym = String(t.sym).toUpperCase();
+        const name = String(t.name || '').toUpperCase();
+        const addr = String(t.address || '').toUpperCase();
+        let ok = false;
+        if (isAddr) ok = addr.includes(q);
+        else ok = sym.includes(q) || name.includes(q);
+        if (!ok) continue;
+        hits.push({ t, score: (sym === q ? 0 : sym.startsWith(q) ? 1 : name.startsWith(q) ? 2 : 3) });
+      }
+    }
+    hits.sort((a, b) => a.score - b.score || (b.t.verified ? 1 : 0) - (a.t.verified ? 1 : 0));
+    const shown = hits.slice(0, 60).map((h) => h.t);
+    resultsLbl.textContent = shown.length
+      ? `${hits.length.toLocaleString()} match${hits.length === 1 ? '' : 'es'} · showing ${shown.length} of ${list.length.toLocaleString()}`
+      : `No matches for «${qRaw.trim()}» in ${list.length.toLocaleString()} tokens`;
+    resultsList.innerHTML = shown.length
+      ? shown.map((t) => chip(t, 'search')).join('')
+      : `<span style="color:#98a8c0;font-size:12.5px;padding:6px 2px">Try another symbol, name, or 0x address</span>`;
+    wireChips(resultsList);
+  };
+
+  // Warm catalog in background so first keystroke is instant
+  try {
+    if (typeof gwLifiEnsureChainTokens === 'function') {
+      gwLifiEnsureChainTokens(cid).then(updatePlaceholder).catch(() => {});
+    }
+  } catch (_) {}
+  updatePlaceholder();
+
   const searchInp = document.getElementById('gwDsSimSearchInput');
   if (searchInp) {
+    let timer = null;
     searchInp.oninput = () => {
-      const q = searchInp.value.trim().toUpperCase();
-      box.querySelectorAll('.gw-ds-sim-chip').forEach((c) => {
-        c.style.display = (!q || c.dataset.sym.includes(q)) ? '' : 'none';
-      });
-      // Also show/hide the group labels if all their chips are hidden.
-      box.querySelectorAll('.gw-ds-sim-target-group').forEach((g) => {
-        const anyVisible = [...g.querySelectorAll('.gw-ds-sim-chip')].some((c) => c.style.display !== 'none');
-        g.style.display = anyVisible ? '' : 'none';
-      });
+      const q = searchInp.value;
+      clearTimeout(timer);
+      // Debounce slightly on mobile keyboard
+      timer = setTimeout(() => runCatalogSearch(q), 120);
     };
+    // Keep keyboard focus after re-render if user was typing
+    try {
+      if (box.dataset.keepSearch != null) {
+        searchInp.value = box.dataset.keepSearch;
+        delete box.dataset.keepSearch;
+        runCatalogSearch(searchInp.value);
+        searchInp.focus();
+        const len = searchInp.value.length;
+        try { searchInp.setSelectionRange(len, len); } catch (_) {}
+      }
+    } catch (_) {}
   }
+
   document.getElementById('gwDsSimSearchBtn')?.addEventListener('click', () => {
+    try { if (typeof gwLifiEnsureChainTokens === 'function') gwLifiEnsureChainTokens(cid); } catch (_) {}
     try { gwTkOpen('to'); } catch (_) {}
   });
 }
@@ -4711,7 +5265,15 @@ function gwDsSimBuild() {
   const dsAmt = document.getElementById('gwDsAmt');
   if (simAmt && dsAmt) {
     simAmt.addEventListener('input', () => {
-      dsAmt.value = simAmt.value;
+      const n = gwDsParseAmt(simAmt.value);
+      // If user typed a comma decimal, normalize the field so subsequent
+      // Number()/quotes never see NaN.
+      if (simAmt.value && /[,\s]/.test(simAmt.value) && n > 0) {
+        const cur = simAmt.selectionStart;
+        simAmt.value = String(n);
+        try { simAmt.setSelectionRange(String(n).length, String(n).length); } catch (_) {}
+      }
+      dsAmt.value = n > 0 ? String(n) : '';
       try { gwDsRefreshRate(); } catch (_) {}
     });
     dsAmt.addEventListener('input', () => { if (dsAmt.value !== simAmt.value) simAmt.value = dsAmt.value; });
@@ -4732,8 +5294,10 @@ function gwDsSimBuild() {
     window.__gwDsSimPollerOn = true;
     let last = { out: '', from: '', to: '', amt: '' };
     let changedAt = 0;
-    setInterval(() => {
+    const pollMs = (window.GROM_MOBILE ? 800 : 400);
+    const runPoll = () => {
       try {
+        if (document.hidden) return;
         const cur = {
           out: String(document.getElementById('gwDsOut')?.value || ''),
           from: String(document.getElementById('gwDsFrom')?.value || ''),
@@ -4747,17 +5311,19 @@ function gwDsSimBuild() {
           last = cur;
           gwDsSimUpdatePreview();
         }
-        // Fallback: user changed pair but outEl still stamped for OLD pair
-        // (fetch aborted, chip onclick didn't wire a refresh, silent failure).
         const stampedPair = document.getElementById('gwDsOut')?.dataset?.pair || '';
         const currentPair = cur.from + '|' + cur.to;
         const stillStale = stampedPair !== currentPair;
-        if (stillStale && changedAt && Date.now() - changedAt > 400 && Number(cur.amt) > 0) {
-          changedAt = 0; // debounce so we only nudge once per input change
-          try { gwDsRefreshRate(); } catch (_) {}
+        if (stillStale && changedAt && Date.now() - changedAt > 600 && Number(cur.amt) > 0) {
+          if (!window.__gwDsStaleNudgeAt || Date.now() - window.__gwDsStaleNudgeAt > 2500) {
+            window.__gwDsStaleNudgeAt = Date.now();
+            try { gwDsRefreshRate(); } catch (_) {}
+          }
         }
       } catch (_) {}
-    }, 250);
+    };
+    if (typeof gwVisibleInterval === 'function') gwVisibleInterval(runPoll, pollMs, { bgMs: 15000 });
+    else setInterval(runPoll, pollMs);
   }
   // Also run once immediately so initial state is correct.
   try { gwDsSimUpdatePreview(); } catch (_) {}
@@ -4782,25 +5348,37 @@ function gwDsSimUpdatePreview() {
   const rateVal = document.getElementById('gwDsSimRateVal');
   if (!outVal) return;
   const outEl = document.getElementById('gwDsOut');
+  const simAmt = document.getElementById('gwDsSimAmt');
   const amtEl = document.getElementById('gwDsAmt');
-  const fromSym = document.getElementById('gwDsFrom')?.value || '';
-  const toSym = document.getElementById('gwDsTo')?.value || '';
-  const outN = Number(outEl?.value || 0);
-  const amtN = Number(amtEl?.value || 0);
-  // Pair-stamp check: outEl.value is trustworthy ONLY if it was written for
-  // exactly (fromSym, toSym). Any chip switch invalidates the stamp until
-  // the next gwDsRefreshRate re-populates outEl and re-stamps.
+  const norm = (s) => (typeof gwDsNormSym === 'function' ? gwDsNormSym(s) : String(s || '').toUpperCase());
+  const fromSym = norm(document.getElementById('gwDsFrom')?.value || '');
+  const toSym = norm(document.getElementById('gwDsTo')?.value || '');
+  const amtN = (typeof gwDsReadSwapAmt === 'function')
+    ? gwDsReadSwapAmt()
+    : Math.max(gwDsParseAmt(simAmt?.value), gwDsParseAmt(amtEl?.value));
+  const currentPair = fromSym && toSym ? (fromSym + '|' + toSym) : '';
+
+  // Prefer the last published simple quote (set atomically with the route).
+  const pub = window.__gwLastSimpleQuote;
+  const pubFresh = pub && pub.from === fromSym && pub.to === toSym && (Date.now() - (pub.at || 0)) < 60_000 && pub.out > 0;
+
   const stampedPair = outEl?.dataset?.pair || '';
-  const currentPair = fromSym + '|' + toSym;
-  const isStale = !stampedPair || stampedPair !== currentPair;
-  const canShow = outN > 0 && toSym && !isStale;
+  const stampedNorm = stampedPair.includes('|')
+    ? norm(stampedPair.split('|')[0]) + '|' + norm(stampedPair.split('|')[1])
+    : '';
+  const outN = pubFresh ? Number(pub.out) : gwDsParseAmt(outEl?.value);
+  const stampOk = pubFresh || (stampedNorm && stampedNorm === currentPair);
+  const canShow = outN > 0 && !!toSym && stampOk;
+
   if (canShow) {
     outVal.classList.remove('pending');
     outVal.textContent = outN.toLocaleString('en-US', { maximumFractionDigits: 8 }) + ' ' + toSym;
     if (amtN > 0 && fromSym && rateRow && rateVal) {
-      const rate = outN / amtN;
+      const rate = (pubFresh && pub.rate > 0) ? pub.rate : (outN / amtN);
       rateVal.textContent = '1 ' + fromSym + ' ≈ ' + rate.toLocaleString('en-US', { maximumFractionDigits: 6 }) + ' ' + toSym;
       rateRow.style.display = 'flex';
+    } else if (rateRow) {
+      rateRow.style.display = 'none';
     }
   } else {
     outVal.classList.add('pending');
@@ -4808,6 +5386,7 @@ function gwDsSimUpdatePreview() {
     if (rateRow) rateRow.style.display = 'none';
   }
 }
+
 
 /** Header toggle inserted into .gw-ds-head-actions. */
 function gwDsSimBuildToggle() {
@@ -4848,6 +5427,8 @@ function gwDsSimSetup() {
     const initMode = gwSwapModeGet();
     document.querySelectorAll('.gw-ds-wrap').forEach(w => w.classList.toggle('gw-ds-mode-simple', initMode === 'simple'));
     if (initMode === 'simple') requestAnimationFrame(() => gwDsSimRenderBalances());
+    try { document.addEventListener('grom:route', () => gwDsEnsureSimpleUi()); } catch (_) {}
+    try { if (!window.__gwDsEnsureVis) { window.__gwDsEnsureVis = true; document.addEventListener('visibilitychange', () => { if (!document.hidden) gwDsEnsureSimpleUi(); }); } } catch (_) {}
     return true;
   };
   if (!boot()) {
@@ -4873,7 +5454,7 @@ function gwInjectMobilePerfCss() {
     @media (max-width: 768px), (hover: none) and (pointer: coarse) {
       .gw-ds-card::before,
       .gw-mp-card::before,
-      .gw-dp-card::before { animation: none !important; opacity: 0.28 !important; }
+      .gw-dp-card::before { display: none !important; animation: none !important; opacity: 0 !important; }
       .gw-ds-card,
       .gw-mp-card,
       .gw-dp-card,
@@ -4917,14 +5498,10 @@ function gwInjectDashSwapCss() {
       overflow: hidden; color: #e7eef8;
     }
     .gw-ds-card::before {
-      content: ""; position: absolute; inset: -2px;
-      padding: 1.5px; border-radius: inherit;
-      background: conic-gradient(from 0deg, #00c2ff 0%, transparent 25%, #a855f7 50%, transparent 75%, #00c2ff 100%);
-      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      -webkit-mask-composite: xor; mask-composite: exclude;
-      opacity: 0.55; animation: gwBnSpin 20s linear infinite;
-      pointer-events: none; z-index: 0;
+      display: none !important;
+      content: none !important;
+      animation: none !important;
+      opacity: 0 !important;
     }
 
     .gw-ds-head { display: flex; flex-direction: column; gap: 0; position: relative; z-index: 1; margin-bottom: 14px; }
@@ -5058,6 +5635,11 @@ function gwInjectDashSwapCss() {
       background: linear-gradient(135deg, rgba(0,194,255,0.14), rgba(110,141,255,0.10)); border: 1px solid rgba(0,194,255,0.20); color: #5dd5ff; overflow: hidden; }
     .gw-tk-row img.ico { object-fit: cover; background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.10); }
     .gw-tk-row .body { flex: 1; }
+
+    .gw-tk-bal { text-align: right; font-variant-numeric: tabular-nums; }
+    .gw-tk-bal .amt { font-weight: 800; font-size: 13px; color: #e7eef8; }
+    .gw-tk-bal .usd { font-size: 11px; color: #6b7a92; margin-top: 2px; }
+    .gw-tk-group { padding: 12px 12px 6px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #6b7a92; font-weight: 800; }
     .gw-tk-row .sym { font-weight: 800; font-size: 13.5px; }
     .gw-tk-row .name { font-size: 11.5px; color: #98a8c0; }
     .gw-tk-empty { padding: 30px 16px; text-align: center; color: #6b7a92; font-size: 13px; }
@@ -5245,25 +5827,93 @@ const GW_TRON_TOKENS = {
 };
 const GW_TRON_DECIMALS = { TRX: 6, USDT: 6, USDC: 6, SUN: 18, BTT: 18, JST: 18, WIN: 6 };
 
+function gwTronProviderReady() {
+  try {
+    if (window.tronWeb?.ready || window.tronWeb?.defaultAddress?.base58) return true;
+    if (window.tronLink) return true;
+    // Trust Wallet mobile DApp browser often injects these:
+    if (window.trustwallet?.tronLink || window.trustwallet?.tronWeb) return true;
+  } catch (_) {}
+  return false;
+}
+
+function gwTronOpenInTrust() {
+  try {
+    const url = encodeURIComponent(location.href.split('#')[0] + '#dashboard');
+    // coin_id 195 = Tron
+    location.href = 'https://link.trustwallet.com/open_url?coin_id=195&url=' + url;
+  } catch (_) {}
+}
+
 async function gwTronConnect() {
-  const tw = window.tronWeb;
-  const link = window.tronLink;
+  // Prefer whatever Tron provider is already injected (TronLink OR Trust DApp browser).
+  let tw = window.tronWeb;
+  let link = window.tronLink || window.trustwallet?.tronLink || null;
+  if (!tw && window.trustwallet?.tronWeb) tw = window.trustwallet.tronWeb;
+
   if (!tw && !link) {
-    // Yes — opening tronlink.org is the expected install-prompt flow,
-    // same pattern Phantom / Tonkeeper / MetaMask use. Toast the user
-    // so it doesn't feel like an accidental redirect.
-    gwToast('TronLink is required for Tron swaps — opening install page…', 'info');
+    if (typeof isMobileUA === 'function' && isMobileUA()) {
+      gwToast(gwTx('tk_tron_open_trust', null,
+        'Open GROM inside Trust Wallet (Tron) to swap TRX — redirecting…'), 'info');
+      setTimeout(gwTronOpenInTrust, 500);
+      throw new Error('Open this page in Trust Wallet to use TRX');
+    }
+    gwToast(gwTx('tk_tron_need_wallet', null,
+      'Install TronLink or open this site in Trust Wallet to swap TRX'), 'info');
     setTimeout(() => window.open('https://www.tronlink.org/', '_blank', 'noopener'), 400);
-    throw new Error('TronLink not installed');
+    throw new Error('Tron wallet not available');
   }
-  // Some TronLink builds require an explicit permission grant.
   if (link?.request) {
     try { await link.request({ method: 'tron_requestAccounts' }); } catch (_) {}
   }
-  const addr = window.tronWeb?.defaultAddress?.base58;
-  if (!addr) throw new Error('TronLink locked or no account');
+  tw = window.tronWeb || window.trustwallet?.tronWeb || tw;
+  const addr = tw?.defaultAddress?.base58;
+  if (!addr) throw new Error('Tron wallet locked or no account');
+  try {
+    localStorage.setItem('grom_tron_addr', addr);
+    window.__gwTronAddr = addr;
+  } catch (_) {}
   return addr;
 }
+
+function gwIsTronAsset(sym) {
+  const s = String(sym || '').toUpperCase();
+  return s === 'TRX' || Object.prototype.hasOwnProperty.call(GW_TRON_TOKENS, s);
+}
+
+function gwIsTronPair(fromSym, toSym) {
+  return gwIsTronAsset(fromSym) && gwIsTronAsset(toSym);
+}
+
+async function gwTronFetchNativeBalance(addr) {
+  if (!addr) return 0;
+  try {
+    const r = await fetch('https://api.trongrid.io/v1/accounts/' + encodeURIComponent(addr), {
+      headers: { accept: 'application/json' },
+    });
+    if (!r.ok) return 0;
+    const j = await r.json();
+    const sun = Number(j?.data?.[0]?.balance || 0);
+    return sun > 0 ? sun / 1e6 : 0;
+  } catch (_) { return 0; }
+}
+
+async function gwTronQuoteHuman(fromSym, toSym, amtHuman) {
+  // Live SunSwap when provider present; otherwise Binance mid (TRXUSDT etc.).
+  try {
+    if (window.tronWeb?.defaultAddress?.base58 || window.tronWeb?.ready) {
+      const q = await gwTronQuote({ fromSym, toSym, amtHuman });
+      return Number(q.amountsOut[1]) / 10 ** q.outDec;
+    }
+  } catch (e) {
+    console.warn('[GROM] tron quote', e?.message || e);
+  }
+  const mid = (typeof gwDsMidEstimate === 'function')
+    ? await gwDsMidEstimate(fromSym, toSym, amtHuman)
+    : null;
+  return mid?.est || 0;
+}
+
 
 /** SunSwap V2 quote — router.getAmountsOut(amountIn, path). */
 async function gwTronQuote({ fromSym, toSym, amtHuman }) {
@@ -5311,7 +5961,7 @@ async function gwTronSwapExec({ fromSym, toSym, amtHuman }) {
   const deadline = Math.floor(Date.now() / 1000) + 20 * 60;
   gwToast('Sending 0.20 % fee to GROM…', 'info');
   try { await gwTronSendFee({ fromSym, amtHuman }); } catch (_) {}
-  gwToast(`SunSwap route · you get ~${expected.toFixed(6)} ${toSym} · confirm in TronLink`, 'info');
+  gwToast(`SunSwap · ~${expected.toFixed(6)} ${toSym} · confirm in Trust/TronLink`, 'info');
   const router = await tw.contract().at(GW_TRON_ROUTER);
   const path = [q.inTok, q.outTok];
   const amountIn = BigInt(Math.floor(amtHuman * 10 ** q.inDec)).toString();
@@ -6057,81 +6707,184 @@ const GW_SP_INTERVALS = ['5m', '15m', '1h', '4h', '1d'];
 
 function gwInjectSpotDexCss() {
   if (document.getElementById('gw-sp-css')) return;
-  const css = `
-    /* Hide Cursor's paper Spot-Trade UI — DEX terminal fully replaces it. */
+  const s = document.createElement('style'); s.id = 'gw-sp-css';
+  s.textContent = `
     #page-spot > *:not(#gwSpotDex):not(script):not(style):not(link) { display: none !important; }
-    .gw-sp-wrap { margin: 12px 0 20px; }
-    .gw-sp-hint { margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; font-size: 13px; color: #98a8c0;
-      background: rgba(0,194,255,0.06); border: 1px dashed rgba(0,194,255,0.22); }
-    .gw-sp-hint strong { color: #e7eef8; }
-    .gw-sp-card { border-radius: 22px; padding: 18px; color: #e7eef8;
-      background: linear-gradient(160deg, rgba(13,22,38,0.78), rgba(8,14,26,0.94));
-      border: 1px solid rgba(0,194,255,0.20); box-shadow: 0 20px 60px -20px rgba(0,0,0,0.5); }
-    .gw-sp-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-    .gw-sp-head h3 { margin: 0; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
-    .gw-sp-head .badge { padding: 4px 8px; border-radius: 999px; background: rgba(34,193,124,0.14); color: #22c17c; font-size: 10px; font-weight: 800; letter-spacing: .14em; border: 1px solid rgba(34,193,124,0.28); }
-    .gw-sp-head select { padding: 6px 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #e7eef8; font-size: 13px; font-family: inherit; font-weight: 700; }
-    .gw-sp-head .ivs { display: flex; gap: 4px; }
-    .gw-sp-head .iv { padding: 4px 8px; border-radius: 8px; font-size: 11.5px; font-weight: 700; color: #98a8c0; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); cursor: pointer; }
-    .gw-sp-head .iv.on { color: #e7eef8; background: rgba(0,194,255,0.14); border-color: rgba(0,194,255,0.3); }
-    .gw-sp-head .last { margin-left: auto; font-variant-numeric: tabular-nums; }
-    .gw-sp-head .last .p { font-weight: 800; font-size: 16px; }
-    .gw-sp-head .last .c { font-size: 11.5px; }
-    .gw-sp-head .last .c.up { color: #22c17c; } .gw-sp-head .last .c.down { color: #f87171; }
-    .gw-sp-main { display: grid; grid-template-columns: 1fr 320px; gap: 14px; }
-    @media (max-width: 900px) { .gw-sp-main { grid-template-columns: 1fr; } }
-    .gw-sp-chart { position: relative; height: 380px; border-radius: 16px; overflow: hidden; background: rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.05); }
-    .gw-sp-chart .skl { position: absolute; inset: 20px; display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; align-items: end; opacity: .4; pointer-events: none; }
-    .gw-sp-chart .skl span { display: block; background: linear-gradient(180deg, rgba(0,194,255,.14), rgba(0,194,255,.04)); border-radius: 2px; animation: gw-sp-pulse 1.4s ease-in-out infinite; }
-    @keyframes gw-sp-pulse { 0%,100% { opacity: .35 } 50% { opacity: .85 } }
-    .gw-sp-chart .skl-hidden { display: none; }
-    .gw-sp-form { padding: 14px; border-radius: 16px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 12px; }
-    .gw-sp-tabs { display: flex; gap: 6px; }
-    .gw-sp-tab { flex: 1; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.03); color: #98a8c0; border: 1px solid rgba(255,255,255,0.06); font-weight: 800; font-size: 13px; cursor: pointer; }
-    .gw-sp-tab.buy.on  { background: rgba(34,193,124,0.16); color: #22c17c; border-color: rgba(34,193,124,0.3); }
-    .gw-sp-tab.sell.on { background: rgba(232,87,107,0.16); color: #f87171; border-color: rgba(232,87,107,0.3); }
-    .gw-sp-modes { display: flex; gap: 4px; font-size: 11.5px; }
-    .gw-sp-mode { flex: 1; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.03); color: #98a8c0; border: 1px solid rgba(255,255,255,0.05); font-weight: 700; cursor: pointer; text-align: center; }
-    .gw-sp-mode.on { background: rgba(0,194,255,0.12); color: #5dd5ff; border-color: rgba(0,194,255,0.28); }
-    .gw-sp-inp { display: flex; flex-direction: column; gap: 4px; }
-    .gw-sp-inp label { font-size: 10.5px; letter-spacing: .12em; color: #98a8c0; font-weight: 800; }
-    .gw-sp-inp input { padding: 10px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #e7eef8; font-size: 16px; outline: none; font-variant-numeric: tabular-nums; font-family: inherit; }
-    .gw-sp-inp input:focus { border-color: rgba(0,194,255,0.35); }
-    .gw-sp-inp .hint { font-size: 11px; color: #6b7a92; }
-    .gw-sp-cta { padding: 12px 14px; border-radius: 12px; border: 0; font-weight: 800; font-size: 14px; cursor: pointer; }
-    .gw-sp-cta.buy  { background: linear-gradient(135deg, #22c17c, #10a06a); color: #04160a; }
-    .gw-sp-cta.sell { background: linear-gradient(135deg, #f87171, #d94f4f); color: #200a0a; }
-    .gw-sp-cta[disabled] { opacity: 0.6; cursor: not-allowed; }
-
-    .gw-sp-depth { margin-top: 14px; padding: 14px; border-radius: 14px; background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.05); }
-    .gw-sp-depth h4 { margin: 0 0 10px; font-size: 11.5px; letter-spacing: .16em; color: #98a8c0; font-weight: 800; text-transform: uppercase; }
-    .gw-sp-depth .row { display: grid; grid-template-columns: 90px 1fr auto auto; gap: 10px; padding: 4px 6px; font-size: 12.5px; font-variant-numeric: tabular-nums; align-items: center; }
-    .gw-sp-depth .row .lvl { color: #6b7a92; font-size: 11px; }
-    .gw-sp-depth .row.ask .px { color: #f87171; font-weight: 700; }
-    .gw-sp-depth .row.bid .px { color: #22c17c; font-weight: 700; }
-    .gw-sp-depth .row.mid { border-top: 1px dashed rgba(255,255,255,0.10); border-bottom: 1px dashed rgba(255,255,255,0.10); margin: 4px 0; padding-top: 6px; padding-bottom: 6px; color: #e7eef8; font-weight: 800; }
-    .gw-sp-depth .bar { height: 6px; border-radius: 3px; }
-    .gw-sp-depth .ask .bar { background: linear-gradient(90deg, rgba(232,87,107,0.28), rgba(232,87,107,0.08)); }
-    .gw-sp-depth .bid .bar { background: linear-gradient(90deg, rgba(34,193,124,0.28), rgba(34,193,124,0.08)); }
-    .gw-sp-depth .row .impact { color: #6b7a92; font-size: 10.5px; }
+    body:has(#page-spot.active) .mobile-dock--spot { display: none !important; }
+    .gw-sw-hub { margin: 8px 0 28px; color: #e8eef7; font-family: "DM Sans", "Segoe UI", system-ui, sans-serif; }
+    .gw-sw-hero {
+      position: relative; overflow: hidden; border-radius: 28px; padding: 28px 26px 24px;
+      background:
+        radial-gradient(120% 140% at 0% 0%, rgba(0, 212, 170, 0.18), transparent 55%),
+        radial-gradient(100% 120% at 100% 0%, rgba(0, 160, 255, 0.16), transparent 50%),
+        linear-gradient(155deg, #0b1524 0%, #071018 55%, #0a121c 100%);
+      border: 1px solid rgba(120, 200, 255, 0.14);
+      box-shadow: 0 24px 70px -28px rgba(0,0,0,0.65);
+      margin-bottom: 16px;
+    }
+    .gw-sw-hero::after {
+      content: ""; position: absolute; inset: auto -20% -40% 40%; height: 70%;
+      background: radial-gradient(circle, rgba(0,212,170,0.12), transparent 70%);
+      pointer-events: none; animation: gwSwGlow 8s ease-in-out infinite alternate;
+    }
+    @keyframes gwSwGlow { from { transform: translateX(0); opacity: .7; } to { transform: translateX(-12%); opacity: 1; } }
+    .gw-sw-brand {
+      font-family: "Syne", "DM Sans", sans-serif; font-weight: 800; font-size: clamp(28px, 5vw, 40px);
+      letter-spacing: -0.03em; line-height: 1; margin: 0 0 8px;
+      background: linear-gradient(100deg, #f4fbff 10%, #7ef0d0 45%, #5db8ff 90%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .gw-sw-tagline { margin: 0; max-width: 34ch; font-size: 14px; line-height: 1.45; color: #9aadc4; }
+    .gw-sw-hero-row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; flex-wrap: wrap; position: relative; z-index: 1; }
+    .gw-sw-pill {
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); font-size: 12px; color: #b7c8db;
+    }
+    .gw-sw-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c17c; box-shadow: 0 0 0 3px rgba(34,193,124,0.2); }
+    .gw-sw-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr); gap: 16px; align-items: start; }
+    @media (max-width: 1100px) { .gw-sw-grid { grid-template-columns: 1fr; } }
+    .gw-sw-max {
+      border: 0; margin-left: 6px; padding: 3px 8px; border-radius: 8px; cursor: pointer;
+      font-size: 10px; font-weight: 800; letter-spacing: .06em;
+      color: #7ef0d0; background: rgba(0,212,170,0.12); border: 1px solid rgba(0,212,170,0.28);
+    }
+    .gw-sw-leg .top { flex-wrap: wrap; }
+    .gw-sw-card {
+      border-radius: 24px; padding: 18px; position: relative;
+      background: linear-gradient(165deg, rgba(14,24,38,0.92), rgba(7,12,20,0.96));
+      border: 1px solid rgba(120,190,255,0.12);
+    }
+    .gw-sw-dock {
+      border-radius: 24px; padding: 16px; min-height: 180px;
+      background: linear-gradient(165deg, rgba(12,20,32,0.9), rgba(8,12,20,0.95));
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+    .gw-sw-dock h4 { margin: 0 0 4px; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: #7f93ab; font-weight: 800; }
+    .gw-sw-dock .sub { margin: 0 0 12px; font-size: 12.5px; color: #8fa3bb; }
+    .gw-sw-bal-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow: auto; -webkit-overflow-scrolling: touch; }
+    .gw-sw-bal {
+      display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+      padding: 11px 12px; border-radius: 14px; cursor: pointer;
+      background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05);
+      transition: border-color .15s, background .15s, transform .12s;
+    }
+    .gw-sw-bal:hover { background: rgba(0,194,255,0.06); border-color: rgba(0,194,255,0.25); transform: translateY(-1px); }
+    .gw-sw-bal.on { border-color: rgba(0,212,170,0.45); background: rgba(0,212,170,0.08); }
+    .gw-sw-bal .ico {
+      width: 34px; height: 34px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+      background: linear-gradient(135deg, rgba(0,194,255,0.2), rgba(0,212,170,0.12));
+      font-size: 10px; font-weight: 800; color: #7ef0d0;
+    }
+    .gw-sw-bal .ico img { width: 100%; height: 100%; object-fit: cover; }
+    .gw-sw-bal .sym { font-weight: 800; font-size: 14px; }
+    .gw-sw-bal .meta { font-size: 11.5px; color: #8fa3bb; }
+    .gw-sw-bal .amt { text-align: right; font-variant-numeric: tabular-nums; }
+    .gw-sw-bal .amt .a { font-weight: 800; font-size: 13.5px; }
+    .gw-sw-bal .amt .u { font-size: 11px; color: #8fa3bb; }
+    .gw-sw-chains { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin: 0 0 14px; scrollbar-width: none; }
+    .gw-sw-chains::-webkit-scrollbar { display: none; }
+    .gw-sw-ch {
+      flex: 0 0 auto; padding: 7px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 750;
+      color: #a9bbd0; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); cursor: pointer;
+    }
+    .gw-sw-ch.on { color: #eaf4ff; border-color: rgba(0,194,255,0.4); background: rgba(0,194,255,0.12); }
+    .gw-sw-leg {
+      border-radius: 18px; padding: 14px; margin-bottom: 8px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .gw-sw-leg .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+    .gw-sw-leg .lbl { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #7f93ab; font-weight: 800; }
+    .gw-sw-leg .bal { font-size: 12px; color: #9eb1c7; cursor: pointer; }
+    .gw-sw-leg .bal b { color: #dff6ff; }
+    .gw-sw-leg .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+    .gw-sw-leg input {
+      width: 100%; background: transparent; border: 0; outline: none; color: #f2f7fc;
+      font-size: 28px; font-weight: 750; font-variant-numeric: tabular-nums; font-family: inherit;
+    }
+    .gw-sw-tok {
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px 8px 8px; border-radius: 999px;
+      background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); cursor: pointer; font-weight: 800;
+    }
+    .gw-sw-tok .ti {
+      width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; overflow: hidden;
+      background: rgba(0,194,255,0.15); font-size: 10px; color: #7ef0d0;
+    }
+    .gw-sw-tok .ti img { width: 100%; height: 100%; object-fit: cover; }
+    .gw-sw-flip-wrap { display: flex; justify-content: center; margin: -4px 0; position: relative; z-index: 2; }
+    .gw-sw-flip {
+      width: 42px; height: 42px; border-radius: 14px; border: 1px solid rgba(120,190,255,0.25);
+      background: linear-gradient(160deg, #123041, #0c1a26); color: #7ef0d0; cursor: pointer;
+      font-size: 18px; display: grid; place-items: center; transition: transform .18s ease;
+    }
+    .gw-sw-flip:hover { transform: rotate(180deg); }
+    .gw-sw-usd { margin-top: 4px; font-size: 12px; color: #8094ab; }
+    .gw-sw-route {
+      margin: 10px 0 12px; padding: 10px 12px; border-radius: 14px; min-height: 42px;
+      background: rgba(0,194,255,0.04); border: 1px solid rgba(0,194,255,0.12);
+      font-size: 12.5px; color: #9eb3c9; line-height: 1.45;
+    }
+    .gw-sw-route.ok { color: #cfe8ff; }
+    .gw-sw-route.err { color: #f87171; border-color: rgba(248,113,113,0.25); background: rgba(248,113,113,0.06); }
+    .gw-sw-cta {
+      width: 100%; border: 0; border-radius: 16px; padding: 16px 18px; cursor: pointer;
+      font-size: 15px; font-weight: 800; letter-spacing: 0.01em; font-family: inherit;
+      color: #04141a; background: linear-gradient(110deg, #7ef0d0, #5db8ff 55%, #7aa7ff);
+      box-shadow: 0 12px 30px -12px rgba(93,184,255,0.55); transition: filter .15s, transform .12s;
+    }
+    .gw-sw-cta:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    .gw-sw-cta:disabled { opacity: .55; cursor: not-allowed; transform: none; filter: none; }
+    .gw-sw-cta.busy { opacity: .75; }
+    .gw-sw-empty { padding: 18px 8px; text-align: center; color: #8fa3bb; font-size: 13px; line-height: 1.5; }
+    .gw-sw-empty button {
+      margin-top: 10px; border: 0; border-radius: 12px; padding: 10px 14px; cursor: pointer; font-weight: 800;
+      background: rgba(0,194,255,0.14); color: #9fe7ff; border: 1px solid rgba(0,194,255,0.28);
+    }
+    /* —— Mobile / compact —— */
+    @media (max-width: 1100px) {
+      .gw-sw-hub { margin: 4px 0 20px; padding-bottom: 12px; }
+      .gw-sw-hero { padding: 18px 16px 16px; border-radius: 20px; margin-bottom: 12px; }
+      .gw-sw-brand { font-size: 26px; }
+      .gw-sw-tagline { font-size: 13px; max-width: none; }
+      .gw-sw-grid { gap: 12px; }
+      .gw-sw-card, .gw-sw-dock { border-radius: 20px; padding: 14px; }
+      .gw-sw-dock { order: 2; min-height: 0; }
+      .gw-sw-card { order: 1; }
+      .gw-sw-bal-list { max-height: 220px; }
+      .gw-sw-chains { gap: 8px; margin-bottom: 12px; padding-bottom: 2px; }
+      .gw-sw-ch { padding: 10px 14px; font-size: 12.5px; min-height: 40px; }
+      .gw-sw-leg { padding: 12px; border-radius: 16px; }
+      .gw-sw-leg .row {
+        grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center;
+      }
+      .gw-sw-leg input { font-size: 24px; min-width: 0; width: 100%; }
+      .gw-sw-tok {
+        flex-shrink: 0; max-width: 42vw; padding: 8px 10px 8px 6px;
+        white-space: nowrap; overflow: hidden;
+      }
+      .gw-sw-tok .ti { width: 26px; height: 26px; flex-shrink: 0; }
+      .gw-sw-flip { width: 40px; height: 40px; }
+      .gw-sw-cta { min-height: 52px; font-size: 15px; border-radius: 14px; }
+      .gw-sw-route { font-size: 12px; }
+      .gw-sw-bal { padding: 12px; min-height: 52px; }
+    }
+    @media (max-width: 420px) {
+      .gw-sw-brand { font-size: 22px; }
+      .gw-sw-leg input { font-size: 22px; }
+      .gw-sw-tok { max-width: 46vw; font-size: 13px; }
+    }
   `;
-  const s = document.createElement('style'); s.id = 'gw-sp-css'; s.textContent = css; document.head.appendChild(s);
+  document.head.appendChild(s);
+  // Syne + DM Sans for expressive swap branding
+  if (!document.getElementById('gw-sw-fonts')) {
+    const l = document.createElement('link'); l.id = 'gw-sw-fonts'; l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700;800&family=Syne:wght@700;800&display=swap';
+    document.head.appendChild(l);
+  }
 }
 
-/** Fetch Binance klines. Returns array of {time, open, high, low, close, volume}. */
-async function gwSpFetchKlines(symbol, interval, limit) {
-  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit || 200}`;
-  const r = await fetch(url);
-  const j = await r.json();
-  return j.map((k) => ({ time: Math.floor(k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5] }));
-}
-async function gwSpFetchLastPrice(symbol) {
-  const r = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
-  const j = await r.json();
-  return { last: Number(j.lastPrice), change: Number(j.priceChangePercent) };
-}
-
-let gwSpState = { pair: 'BTC/USDT', iv: '1h', side: 'buy', mode: 'market' };
+window.__gwSwState = window.__gwSwState || {
+  from: 'ETH', to: 'USDT', chainId: 1, amt: '', quoteSeq: 0,
+};
 
 async function gwRenderSpotDex() {
   const page = document.getElementById('page-spot');
@@ -6139,329 +6892,457 @@ async function gwRenderSpotDex() {
   gwInjectSpotDexCss();
   let wrap = document.getElementById('gwSpotDex');
   if (!wrap) {
-    wrap = document.createElement('div'); wrap.id = 'gwSpotDex'; wrap.className = 'gw-sp-wrap';
+    wrap = document.createElement('div'); wrap.id = 'gwSpotDex'; wrap.className = 'gw-sw-hub';
     page.prepend(wrap);
   }
-  const st = gwSpState;
-  const pair = GW_SP_PAIRS.find((p) => p.sym === st.pair) || GW_SP_PAIRS[0];
+  const tx = (k, fb) => (typeof gwTx === 'function' ? gwTx(k, null, fb) : (fb || k));
+  const st = window.__gwSwState;
+  const chains = (typeof GW_DS_CHAINS !== 'undefined' && GW_DS_CHAINS)
+    ? GW_DS_CHAINS.filter((c) => c.chainId)
+    : [
+      { chainId: 1, short: 'ETH', color: '#627EEA' },
+      { chainId: 56, short: 'BSC', color: '#F0B90B' },
+      { chainId: 42161, short: 'ARB', color: '#28A0F0' },
+      { chainId: 137, short: 'POL', color: '#8247E5' },
+      { chainId: 8453, short: 'BASE', color: '#0052FF' },
+      { chainId: 10, short: 'OP', color: '#FF0420' },
+      { chainId: 43114, short: 'AVAX', color: '#E84142' },
+    ];
+  if (!chains.find((c) => Number(c.chainId) === Number(st.chainId))) st.chainId = Number(chains[0].chainId) || 1;
+
+  const logoOf = (sym) => (typeof GW_DS_ASSETS !== 'undefined' && GW_DS_ASSETS.find((a) => a.sym === sym)?.logo) || '';
+  const tokBtn = (which, sym) => {
+    const logo = logoOf(sym);
+    const ico = logo
+      ? `<img src="${logo}" alt="" onerror="this.parentElement.textContent='${sym.slice(0,3)}'" />`
+      : sym.slice(0, 3);
+    return `<button type="button" class="gw-sw-tok" data-which="${which}"><span class="ti">${ico}</span>${sym}<span style="opacity:.55;font-weight:700">▾</span></button>`;
+  };
+
+  let addr = '';
+  try { addr = (typeof gwDisplayAddress === 'function' && gwDisplayAddress()) || ''; } catch (_) {}
+
   wrap.innerHTML = `
-    <div class="gw-sp-hint"><strong>Как свопнуть:</strong> ① Выбери пару → ② введи amount → ③ нажми Buy/Sell (нужен подключённый кошелёк)</div>
-    <div class="gw-sp-card">
-      <div class="gw-sp-head">
-        <h3>⚡ DEX Terminal</h3>
-        <span class="badge">LIVE ON-CHAIN</span>
-        <select id="gwSpPair">${GW_SP_PAIRS.map((p) => `<option value="${p.sym}" ${p.sym === st.pair ? 'selected' : ''}>${p.sym}</option>`).join('')}</select>
-        <div class="ivs">${GW_SP_INTERVALS.map((iv) => `<button class="iv ${iv === st.iv ? 'on' : ''}" data-iv="${iv}">${iv}</button>`).join('')}</div>
-        <div class="last" id="gwSpLast"><div class="p">…</div><div class="c">—</div></div>
-      </div>
-      <div class="gw-sp-main">
-        <div class="gw-sp-chart" id="gwSpChart">
-          <div class="skl" id="gwSpSkl">${Array.from({ length: 20 }, (_, i) => `<span style="height:${20 + Math.random() * 60}%"></span>`).join('')}</div>
+    <div class="gw-sw-hero">
+      <div class="gw-sw-hero-row">
+        <div>
+          <p class="gw-sw-brand">${tx('sw_brand', 'GROM Swap')}</p>
+          <p class="gw-sw-tagline">${tx('sw_tagline', 'One screen: wallet balances → best route → sign.')}</p>
         </div>
-        <div class="gw-sp-form">
-          <div class="gw-sp-tabs">
-            <button class="gw-sp-tab buy ${st.side === 'buy' ? 'on' : ''}" data-side="buy">Buy ${pair.base}</button>
-            <button class="gw-sp-tab sell ${st.side === 'sell' ? 'on' : ''}" data-side="sell">Sell ${pair.base}</button>
-          </div>
-          <div class="gw-sp-modes">
-            <button class="gw-sp-mode ${st.mode === 'market' ? 'on' : ''}" data-mode="market">Market</button>
-            <button class="gw-sp-mode ${st.mode === 'limit'  ? 'on' : ''}" data-mode="limit">Limit</button>
-          </div>
-          <div class="gw-sp-inp">
-            <label>Amount (${pair.base}) · <span id="gwSpBal" style="color:#98a8c0">Balance: —</span></label>
-            <input id="gwSpAmt" type="number" step="any" min="0" placeholder="0.00" />
-            <div class="hint" id="gwSpAmtUsd">≈ $0</div>
-          </div>
-          <div class="gw-sp-inp" id="gwSpLimitPriceWrap" style="${st.mode === 'limit' ? '' : 'display:none'}">
-            <label>Limit price (${pair.quote})</label>
-            <input id="gwSpLimitPx" type="number" step="any" min="0" placeholder="Target price" />
-          </div>
-          <div class="gw-sp-inp">
-            <label>You get / spend</label>
-            <input id="gwSpTotal" type="text" readonly placeholder="—" />
-            <div class="hint" id="gwSpTotalRoute">Route: LiFi meta-aggregator · 0.20% GROM fee</div>
-          </div>
-          <button class="gw-sp-cta ${st.side}" id="gwSpCta">${st.side === 'buy' ? 'Buy' : 'Sell'} ${pair.base} →</button>
-        </div>
-      </div>
-      <div class="gw-sp-depth">
-        <h4>Depth · live from meta-aggregator</h4>
-        <div id="gwSpDepth"><div style="color:#6b7a92;font-size:12px;padding:6px">Loading depth ladder…</div></div>
+        <div class="gw-sw-pill"><span class="dot"></span>${addr ? (addr.slice(0, 6) + '…' + addr.slice(-4)) : tx('sw_wallet_off', 'Wallet not connected')}</div>
       </div>
     </div>
+    <div class="gw-sw-grid">
+      <div class="gw-sw-card">
+        <div class="gw-sw-chains" id="gwSwChains">
+          ${chains.map((c) => `<button type="button" class="gw-sw-ch ${Number(c.chainId) === Number(st.chainId) ? 'on' : ''}" data-cid="${c.chainId}" style="--ch:${c.color || '#5db8ff'}">${c.short || c.name || c.chainId}</button>`).join('')}
+        </div>
+        <div class="gw-sw-leg" data-leg="from">
+          <div class="top"><span class="lbl">${tx('sw_you_pay', 'You pay')}</span><span class="bal" id="gwSwBalFrom">${tx('sw_balance', 'Balance')}: —</span><button type="button" class="gw-sw-max" id="gwSwMax">MAX</button></div>
+          <div class="row">
+            <div>
+              <input id="gwSwAmt" type="text" inputmode="decimal" placeholder="0.0" value="${st.amt || ''}" />
+              <div class="gw-sw-usd" id="gwSwAmtUsd"></div>
+            </div>
+            ${tokBtn('from', st.from)}
+          </div>
+        </div>
+        <div class="gw-sw-flip-wrap"><button type="button" class="gw-sw-flip" id="gwSwFlip" title="Swap sides">⇅</button></div>
+        <div class="gw-sw-leg" data-leg="to">
+          <div class="top"><span class="lbl">${tx('sw_you_get', 'You receive')}</span><span class="bal" id="gwSwBalTo">${tx('sw_balance', 'Balance')}: —</span></div>
+          <div class="row">
+            <div>
+              <input id="gwSwOut" type="text" readonly placeholder="0.0" />
+              <div class="gw-sw-usd" id="gwSwOutUsd"></div>
+            </div>
+            ${tokBtn('to', st.to)}
+          </div>
+        </div>
+        <div class="gw-sw-route" id="gwSwRoute">${tx('sw_hint', 'Enter an amount — we’ll show the best on-chain rate')}</div>
+        <button type="button" class="gw-sw-cta" id="gwSwCta">${addr ? tx('sw_cta_swap', 'Swap via wallet →') : tx('sw_cta_connect', 'Connect wallet →')}</button>
+      </div>
+      <aside class="gw-sw-dock">
+        <h4>${tx('sw_dock', 'Wallet')}</h4>
+        <p class="sub" id="gwSwDockSub">${tx('sw_dock_sub', 'Tap a token to pay with it')}</p>
+        <div class="gw-sw-bal-list" id="gwSwBalList"><div class="gw-sw-empty">${tx('sw_loading', 'Loading on-chain balances…')}</div></div>
+      </aside>
+    </div>
   `;
-  // Wire pair change
-  document.getElementById('gwSpPair').onchange = (e) => {
-    st.pair = e.target.value;
-    document.documentElement.classList.remove('grom-spot-ready');
+
+
+  // Bridge selects for Instant Swap / token-picker helpers (hidden; one per document)
+  try {
+    if (!document.getElementById('gwDsFrom')) {
+      const h = document.createElement('div');
+      h.id = 'gwSwSelectBridge';
+      h.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
+      h.innerHTML = '<select id="gwDsFrom"><option value="' + st.from + '">' + st.from + '</option></select>'
+        + '<select id="gwDsTo"><option value="' + st.to + '">' + st.to + '</option></select>';
+      document.body.appendChild(h);
+    } else {
+      const fromEl = document.getElementById('gwDsFrom');
+      const toEl = document.getElementById('gwDsTo');
+      try { if (typeof gwDsEnsureTokenOption === 'function') { gwDsEnsureTokenOption(st.from, { sym: st.from }); gwDsEnsureTokenOption(st.to, { sym: st.to }); } } catch (_) {}
+      if (fromEl) fromEl.value = st.from;
+      if (toEl) toEl.value = st.to;
+    }
+  } catch (_) {}
+
+  // Wire chains
+  wrap.querySelectorAll('.gw-sw-ch').forEach((b) => {
+    b.onclick = () => {
+      const prev = Number(st.chainId);
+      st.chainId = Number(b.dataset.cid);
+      try { currentChainId = st.chainId; } catch (_) {}
+      // Remap exclusive natives (BNB on ETH, ETH stuck when leaving ETH, etc.)
+      try {
+        const cfg = (typeof GW_OC_SWAP !== 'undefined') ? GW_OC_SWAP[st.chainId] : null;
+        const exclusive = { BNB: 56, MATIC: 137, AVAX: 43114, FTM: 250 };
+        const natives = new Set(['ETH', 'BNB', 'MATIC', 'AVAX', 'FTM', 'POL']);
+        if (cfg) {
+          if (exclusive[st.from] && exclusive[st.from] !== st.chainId) st.from = cfg.native;
+          else if (natives.has(st.from) && st.from !== cfg.native) st.from = cfg.native;
+          if (exclusive[st.to] && exclusive[st.to] !== st.chainId) st.to = 'USDT';
+          if (st.from === st.to) st.to = (st.from === 'USDT') ? (cfg.native || 'ETH') : 'USDT';
+        }
+      } catch (_) {}
+      try {
+        document.querySelectorAll('.gw-ds-chain.on').forEach((x) => x.classList.remove('on'));
+        document.querySelector(`.gw-ds-chain[data-cid="${st.chainId}"]`)?.classList.add('on');
+      } catch (_) {}
+      try { if (typeof gwLifiEnsureChainTokens === 'function') gwLifiEnsureChainTokens(st.chainId); } catch (_) {}
+      if (prev !== st.chainId) { st.quoteSeq++; }
+      gwRenderSpotDex();
+    };
+  });
+
+  const pickTok = (which) => {
+    try {
+      if (typeof gwTkOpen !== 'function') return;
+      // Keep Instant Swap selects in sync when present (dashboard)
+      const fromEl = document.getElementById('gwDsFrom');
+      const toEl = document.getElementById('gwDsTo');
+      if (fromEl) {
+        try { gwDsEnsureTokenOption(st.from, { sym: st.from }); } catch (_) {}
+        fromEl.value = st.from;
+      }
+      if (toEl) {
+        try { gwDsEnsureTokenOption(st.to, { sym: st.to }); } catch (_) {}
+        toEl.value = st.to;
+      }
+      try { currentChainId = st.chainId; } catch (_) {}
+      // Selection is applied via grom:sw-token-picked (see gwTkRender)
+      const onPick = () => {
+        window.removeEventListener('grom:sw-token-picked', onPick);
+        try { gwRenderSpotDex(); } catch (_) {}
+      };
+      window.addEventListener('grom:sw-token-picked', onPick);
+      gwTkOpen(which);
+      // Fallback poll if event missed (older picker path)
+      const before = which === 'from' ? st.from : st.to;
+      let n = 0;
+      const id = setInterval(() => {
+        n++;
+        const ov = document.getElementById('gw-tk-overlay');
+        const open = ov?.classList.contains('open');
+        const v = (which === 'from') ? st.from : st.to;
+        if (v && v !== before) { clearInterval(id); window.removeEventListener('grom:sw-token-picked', onPick); gwRenderSpotDex(); return; }
+        if ((!open && n > 3) || n > 100) { clearInterval(id); window.removeEventListener('grom:sw-token-picked', onPick); }
+      }, 200);
+    } catch (_) {}
+  };
+  wrap.querySelectorAll('.gw-sw-tok').forEach((b) => {
+    b.onclick = () => pickTok(b.dataset.which);
+  });
+
+  document.getElementById('gwSwFlip').onclick = () => {
+    const t = st.from; st.from = st.to; st.to = t;
     gwRenderSpotDex();
   };
-  // Interval buttons
-  wrap.querySelectorAll('.iv').forEach((b) => b.onclick = () => { st.iv = b.dataset.iv; gwSpLoadChart(); });
-  // Side / mode tabs
-  wrap.querySelectorAll('.gw-sp-tab').forEach((b) => b.onclick = () => { st.side = b.dataset.side; gwRenderSpotDex(); });
-  wrap.querySelectorAll('.gw-sp-mode').forEach((b) => b.onclick = () => { st.mode = b.dataset.mode; gwRenderSpotDex(); });
-  // Amount input → refresh quote
-  const amtEl = document.getElementById('gwSpAmt');
-  if (amtEl) amtEl.oninput = () => gwSpRefreshTotal();
-  // CTA — market goes via meta-agg swap; limit stores an intent.
-  document.getElementById('gwSpCta').onclick = () => gwSpSubmitOrder();
 
-  gwSpLoadChart();
-  gwSpRefreshLast();
-  gwSpRefreshDepth();
-  gwSpRefreshBalance();
-}
+  const amtInp = document.getElementById('gwSwAmt');
+  amtInp.oninput = () => {
+    st.amt = amtInp.value;
+    gwSwScheduleQuote();
+  };
 
-/** Read wallet balance for the current side's spent asset and show it. */
-async function gwSpRefreshBalance() {
-  const el = document.getElementById('gwSpBal');
-  if (!el) return;
-  const st = gwSpState;
-  const pair = GW_SP_PAIRS.find((p) => p.sym === st.pair);
-  const asset = st.side === 'buy' ? pair.quote : pair.base;
-  try {
-    const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
-      ? window.gromWallet.wcProvider : window.ethereum;
-    if (!provider) { el.textContent = 'Connect wallet'; return; }
-    const [account] = await provider.request({ method: 'eth_accounts' });
-    if (!account) { el.textContent = 'Connect wallet'; return; }
-    const chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
-    const cfg = GW_OC_SWAP[chainId];
-    if (!cfg) { el.textContent = 'Switch to a supported chain'; return; }
-    if (asset === cfg.native) {
-      // Route read-only balance query through public RPC — some WC wallets
-      // reject eth_getBalance since it's not in the session methods list.
-      const hex = await gwRpcTry(chainId, 'eth_getBalance', [account, 'latest']);
-      const wei = BigInt(hex);
-      const eth = Number(wei) / 1e18;
-      el.textContent = `Balance: ${eth.toFixed(4)} ${asset}`;
-    } else if (cfg.tokens[asset]) {
-      // erc20.balanceOf(account) → 0x70a08231 + 32-byte padded account
-      const data = '0x70a08231' + account.slice(2).toLowerCase().padStart(64, '0');
-      const hex = await gwRpcTry(chainId, 'eth_call', [{ to: cfg.tokens[asset], data }, 'latest']);
-      const dec = cfg.decimals[asset] ?? 18;
-      const val = Number(BigInt(hex || '0x0')) / 10 ** dec;
-      el.textContent = `Balance: ${val.toFixed(4)} ${asset}`;
-    } else {
-      el.textContent = `${asset} not on this chain`;
-    }
-  } catch (_) { el.textContent = 'Balance —'; }
-}
-
-let gwSpChart = null, gwSpSeries = null;
-async function gwSpLoadChart() {
-  document.documentElement.classList.remove('grom-spot-ready');
-  // The Cursor page loads `lightweight-charts.standalone.production.js`
-  // as an async <script> — it may still be parsing when we first render.
-  // Poll a few times (2 s cap) then bail. Also cover the case where
-  // #gwSpChart was rebuilt by a re-render and lost its previous chart.
-  if (typeof window.LightweightCharts === 'undefined') {
-    // Wait up to 8 s in 200 ms ticks — lightweight-charts is a big
-    // sync script Cursor loads async, so on slow networks it can lag.
-    if ((gwSpLoadChart._tries |= 0) >= 40) return;
-    gwSpLoadChart._tries += 1;
-    setTimeout(gwSpLoadChart, 200);
-    // Also hook window.load once — resolves the race even faster.
-    if (!gwSpLoadChart._hooked) {
-      gwSpLoadChart._hooked = true;
-      window.addEventListener('load', () => { gwSpLoadChart._tries = 0; gwSpLoadChart(); }, { once: true });
-    }
-    return;
-  }
-  gwSpLoadChart._tries = 0;
-  const container = document.getElementById('gwSpChart');
-  if (!container) return;
-  // ALWAYS reset if the container node is different (navigation
-  // Markets→Spot rebuilds the DOM tree). Previously we compared to
-  // __container, but the old chart node is orphaned and the new
-  // one is a fresh instance — so we must recreate every time we
-  // detect a new container.
-  if (gwSpChart && (!container.contains(gwSpChart.__container) || gwSpChart.__container !== container)) {
-    try { gwSpChart.remove(); } catch (_) {}
-    gwSpChart = null; gwSpSeries = null;
-  }
-  const pair = GW_SP_PAIRS.find((p) => p.sym === gwSpState.pair);
-  if (!pair) return;
-  if (!gwSpChart) {
-    gwSpChart = window.LightweightCharts.createChart(container, {
-      layout: { background: { color: 'transparent' }, textColor: '#98a8c0' },
-      grid: { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
-      rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
-      timeScale: { borderColor: 'rgba(255,255,255,0.08)', timeVisible: true, secondsVisible: false },
-      crosshair: { mode: window.LightweightCharts.CrosshairMode.Magnet },
-      height: container.clientHeight || 380,
-    });
-    gwSpSeries = gwSpChart.addCandlestickSeries({
-      upColor: '#22c17c', downColor: '#f87171', wickUpColor: '#22c17c', wickDownColor: '#f87171', borderVisible: false,
-    });
-    gwSpChart.__container = container;
-    window.addEventListener('resize', () => { try { gwSpChart.resize(container.clientWidth, container.clientHeight); } catch (_) {} });
-  }
-  try {
-    const bars = await gwSpFetchKlines(pair.bn, gwSpState.iv, 200);
-    gwSpSeries.setData(bars);
-    gwSpChart.timeScale().fitContent();
-    document.documentElement.classList.add('grom-spot-ready');
-    // Hide skeleton loader now that real candles are drawn.
-    const skl = document.getElementById('gwSpSkl');
-    if (skl) skl.remove();
-  } catch (e) { console.warn('[GROM] spot chart klines', e); }
-}
-async function gwSpRefreshLast() {
-  const pair = GW_SP_PAIRS.find((p) => p.sym === gwSpState.pair);
-  if (!pair) return;
-  try {
-    const { last, change } = await gwSpFetchLastPrice(pair.bn);
-    const box = document.getElementById('gwSpLast');
-    if (!box) return;
-    box.innerHTML = `<div class="p">${last.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${pair.quote}</div>
-      <div class="c ${change >= 0 ? 'up' : 'down'}">${change >= 0 ? '+' : ''}${change.toFixed(2)}% · 24h</div>`;
-  } catch (_) {}
-}
-async function gwSpRefreshDepth() {
-  const pair = GW_SP_PAIRS.find((p) => p.sym === gwSpState.pair);
-  const el = document.getElementById('gwSpDepth');
-  if (!pair || !el) return;
-  const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
-    ? window.gromWallet.wcProvider : window.ethereum;
-  let account = null, chainId = 1;
-  try {
-    if (provider) {
-      [account] = await provider.request({ method: 'eth_accounts' });
-      chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
-    }
-  } catch (_) {}
-  if (!account) {
-    // Fallback: fetch a real orderbook from Binance public API so the ladder
-    // isn't empty for anonymous users. Once wallet connects, LiFi takes over.
+  const fillMax = () => {
+    const max = Number(document.getElementById('gwSwBalFrom')?.dataset.max || 0);
+    if (!(max > 0)) return;
+    // Leave a tiny native gas buffer on native-token swaps
+    let use = max;
     try {
-      const r = await fetch(`https://api.binance.com/api/v3/depth?symbol=${pair.bn}&limit=10`);
-      const j = await r.json();
-      const asks = (j.asks || []).slice(0, 5).reverse().map((a) => ({ px: Number(a[0]), sz: Number(a[1]) }));
-      const bids = (j.bids || []).slice(0, 5).map((b) => ({ px: Number(b[0]), sz: Number(b[1]) }));
-      const mid = asks.length && bids.length ? (asks[asks.length - 1].px + bids[0].px) / 2 : null;
-      const askHtml = asks.map((a) => `<div class="row ask"><span class="lvl">Ask ${a.sz.toFixed(4)}</span><span class="bar"></span><span class="px">${a.px.toLocaleString('en-US')}</span><span class="impact">${mid ? '+' + (((a.px - mid) / mid) * 100).toFixed(2) + '%' : ''}</span></div>`).join('');
-      const bidHtml = bids.map((b) => `<div class="row bid"><span class="lvl">Bid ${b.sz.toFixed(4)}</span><span class="bar"></span><span class="px">${b.px.toLocaleString('en-US')}</span><span class="impact">${mid ? '−' + (((mid - b.px) / mid) * 100).toFixed(2) + '%' : ''}</span></div>`).join('');
-      el.innerHTML = `${askHtml}<div class="row mid"><span>MID</span><span></span><span>${mid ? mid.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</span><span></span></div>${bidHtml}
-        <div style="color:#6b7a92;font-size:11px;margin-top:8px;text-align:center">Connect a wallet to see live DEX depth</div>`;
-    } catch (_) {
-      el.innerHTML = `<div style="color:#6b7a92;font-size:12px;padding:6px">Connect a wallet to see live DEX depth</div>`;
+      const cfg = (typeof GW_OC_SWAP !== 'undefined') ? GW_OC_SWAP[st.chainId] : null;
+      if (cfg && st.from === cfg.native) use = Math.max(0, max - (st.chainId === 1 ? 0.00015 : 0.001));
+    } catch (_) {}
+    st.amt = String(Number(use.toPrecision(8)));
+    amtInp.value = st.amt;
+    gwSwScheduleQuote();
+  };
+  document.getElementById('gwSwBalFrom').onclick = fillMax;
+  document.getElementById('gwSwMax')?.addEventListener('click', (e) => { e.preventDefault(); fillMax(); });
+
+  document.getElementById('gwSwCta').onclick = async () => {
+    const cta = document.getElementById('gwSwCta');
+    let a = '';
+    try { a = (typeof gwDisplayAddress === 'function' && gwDisplayAddress()) || ''; } catch (_) {}
+    if (!a) {
+      try {
+        if (typeof openConnectModal === 'function') openConnectModal();
+        else if (typeof cnConnect === 'function') cnConnect();
+        else if (typeof window.gromWalletConnect === 'function') window.gromWalletConnect();
+      } catch (_) {}
+      return;
     }
+    const amt = (typeof gwDsParseAmt === 'function') ? gwDsParseAmt(st.amt) : Number(String(st.amt).replace(',', '.'));
+    if (!(amt > 0)) { try { gwToast(tx('sw_enter_amt', 'Enter an amount'), 'warn'); } catch (_) {} return; }
+    if (st.from === st.to) { try { gwToast(tx('sw_pick_diff', 'Pick different tokens'), 'warn'); } catch (_) {} return; }
+    cta.disabled = true; cta.classList.add('busy'); cta.textContent = tx('sw_confirm', 'Confirm in wallet…');
+    try {
+      try { currentChainId = st.chainId; } catch (_) {}
+      const hash = await gwOnChainSwapExec(st.from, st.to, amt);
+      try { gwToast('Swap sent' + (hash ? ': ' + String(hash).slice(0, 10) + '…' : ''), 'success'); } catch (_) {}
+      st.amt = '';
+      gwRenderSpotDex();
+    } catch (e) {
+      const msg = String(e?.message || e || '').slice(0, 160);
+      try { gwToast(msg || 'Swap failed', 'error'); } catch (_) {}
+      cta.disabled = false; cta.classList.remove('busy');
+      cta.textContent = tx('sw_cta_swap', 'Swap via wallet →');
+    }
+  };
+
+  gwSwLoadBalances();
+  gwSwScheduleQuote();
+  try { if (typeof gwLifiEnsureChainTokens === 'function') gwLifiEnsureChainTokens(st.chainId); } catch (_) {}
+}
+
+async function gwSwLoadBalances() {
+  const list = document.getElementById('gwSwBalList');
+  const sub = document.getElementById('gwSwDockSub');
+  if (!list) return;
+  const tx = (k, fb) => (typeof gwTx === 'function' ? gwTx(k, null, fb) : (fb || k));
+  let addr = '';
+  try { addr = (typeof gwDisplayAddress === 'function' && gwDisplayAddress()) || ''; } catch (_) {}
+  if (!addr) {
+    list.innerHTML = `<div class="gw-sw-empty">${tx('sw_wallet_off', 'Wallet not connected')}<br><button type="button" id="gwSwConnectBtn">${tx('sw_connect_btn', 'Connect')}</button></div>`;
+    document.getElementById('gwSwConnectBtn')?.addEventListener('click', () => {
+      try {
+        if (typeof openConnectModal === 'function') openConnectModal();
+        else if (typeof cnConnect === 'function') cnConnect();
+      } catch (_) {}
+    });
     return;
   }
-  // Fetch quotes at 5 sizes on each side
-  const sizes = [0.01, 0.05, 0.25, 1, 5]; // in base asset
-  const asks = []; const bids = [];
-  await Promise.all(sizes.flatMap((size) => [
-    gwAggQuoteLifi({ chainId, fromSym: pair.quote, toSym: pair.base, amtNum: size * (asks._midHint || 65000), account })
-      .then((q) => { if (q?.toAmount) asks.push({ size, quote: q }); }).catch(() => {}),
-    gwAggQuoteLifi({ chainId, fromSym: pair.base,  toSym: pair.quote, amtNum: size, account })
-      .then((q) => { if (q?.toAmount) bids.push({ size, quote: q }); }).catch(() => {}),
-  ]));
-  const cfg = GW_OC_SWAP[chainId] || { decimals: {} };
-  const baseDec  = cfg.decimals[pair.base]  ?? 18;
-  const quoteDec = cfg.decimals[pair.quote] ?? 6;
-  // Compute mid-price from smallest bid+ask if available
-  let mid = null;
-  const midAsk = asks[0], midBid = bids[0];
-  if (midAsk && midBid) {
-    const askPx = (midAsk.size) / (Number(midAsk.quote.toAmount) / 10 ** baseDec);
-    const bidPx = (Number(midBid.quote.toAmount) / 10 ** quoteDec) / midBid.size;
-    void askPx; mid = (askPx + bidPx) / 2;
-  }
-  const rowsAsk = asks.sort((a, b) => b.size - a.size).map((r) => {
-    const gotBase = Number(r.quote.toAmount) / 10 ** baseDec;
-    const px = r.size / gotBase; // quote per base
-    const impact = mid ? ((px - mid) / mid) * 100 : 0;
-    return `<div class="row ask">
-      <span class="lvl">Ask ${r.size} ${pair.base}</span>
-      <span class="bar"></span>
-      <span class="px">${px.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
-      <span class="impact">+${Math.abs(impact).toFixed(2)}%</span>
-    </div>`;
-  }).join('');
-  const rowsBid = bids.sort((a, b) => a.size - b.size).map((r) => {
-    const gotQuote = Number(r.quote.toAmount) / 10 ** quoteDec;
-    const px = gotQuote / r.size; // quote per base
-    const impact = mid ? ((mid - px) / mid) * 100 : 0;
-    return `<div class="row bid">
-      <span class="lvl">Bid ${r.size} ${pair.base}</span>
-      <span class="bar"></span>
-      <span class="px">${px.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
-      <span class="impact">−${Math.abs(impact).toFixed(2)}%</span>
-    </div>`;
-  }).join('');
-  el.innerHTML = `${rowsAsk}
-    <div class="row mid"><span>MID</span><span></span><span>${mid ? mid.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</span><span></span></div>
-    ${rowsBid}`;
-}
-function gwSpRefreshTotal() {
-  const st = gwSpState;
-  const pair = GW_SP_PAIRS.find((p) => p.sym === st.pair);
-  const amt = Number(document.getElementById('gwSpAmt')?.value || 0);
-  const totalEl = document.getElementById('gwSpTotal');
-  if (!totalEl || !pair) return;
-  gwSpFetchLastPrice(pair.bn).then((p) => {
-    const px = st.mode === 'limit' ? Number(document.getElementById('gwSpLimitPx')?.value || p.last) : p.last;
-    const total = st.side === 'buy' ? amt * px : amt * px;
-    totalEl.value = `${total.toFixed(2)} ${pair.quote}`;
-    const usdEl = document.getElementById('gwSpAmtUsd');
-    if (usdEl) usdEl.textContent = `≈ $${(amt * px).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
-  }).catch(() => {});
-}
-async function gwSpSubmitOrder() {
-  const st = gwSpState;
-  const pair = GW_SP_PAIRS.find((p) => p.sym === st.pair);
-  const amt = Number(document.getElementById('gwSpAmt')?.value || 0);
-  if (!(amt > 0)) return gwToast('Enter amount', 'warn');
-  if (st.mode === 'limit') {
-    const px = Number(document.getElementById('gwSpLimitPx')?.value || 0);
-    if (!(px > 0)) return gwToast('Enter limit price', 'warn');
-    const list = gwOrdLoad();
-    list.push({ id: 'lim_' + Date.now().toString(36), type: 'limit',
-      from: st.side === 'buy' ? pair.quote : pair.base,
-      to:   st.side === 'buy' ? pair.base  : pair.quote,
-      price: px, amt: st.side === 'buy' ? amt * px : amt, createdAt: Date.now(), state: 'watching' });
-    gwOrdSave(list);
-    gwToast(`Limit ${st.side} ${amt} ${pair.base} at ${px} added — will fire when hit`, 'success');
-    return;
-  }
-  // Market — route through meta-agg swap
-  const from = st.side === 'buy' ? pair.quote : pair.base;
-  const to   = st.side === 'buy' ? pair.base  : pair.quote;
-  const swapAmt = st.side === 'buy'
-    ? amt * Number((await gwSpFetchLastPrice(pair.bn)).last)
-    : amt;
-  const cta = document.getElementById('gwSpCta');
-  if (cta) { cta.disabled = true; cta.textContent = 'Submitting…'; }
+  list.innerHTML = `<div class="gw-sw-empty">${tx('sw_loading', 'Loading on-chain balances…')}</div>`;
   try {
-    await gwOnChainSwapExec(from, to, swapAmt);
-    gwToast(`${st.side.toUpperCase()} ${amt} ${pair.base} filled via meta-aggregator`, 'success');
-    document.getElementById('gwSpAmt').value = '';
-    gwSpRefreshDepth();
+    let rows = [];
+    if (typeof gwTkLoadHoldings === 'function') rows = await gwTkLoadHoldings(true);
+    // Prefer active chain first
+    const st = window.__gwSwState;
+    const cid = Number(st.chainId);
+    rows = (rows || []).filter((r) => r.amt > 0).sort((a, b) => {
+      const ac = Number(a.chainId) === cid ? 0 : 1;
+      const bc = Number(b.chainId) === cid ? 0 : 1;
+      if (ac !== bc) return ac - bc;
+      return (b.usd || 0) - (a.usd || 0);
+    });
+    if (!rows.length) {
+      list.innerHTML = `<div class="gw-sw-empty">${tx('sw_no_tokens', 'No visible tokens.')}</div>`;
+      if (sub) sub.textContent = addr.slice(0, 6) + '…' + addr.slice(-4);
+      return;
+    }
+    if (sub) sub.textContent = `${tx('sw_assets', '{n} assets').replace('{n}', String(rows.length))} · ${addr.slice(0, 6)}…${addr.slice(-4)}`;
+    const logoOf = (sym) => (typeof GW_DS_ASSETS !== 'undefined' && GW_DS_ASSETS.find((a) => a.sym === sym)?.logo) || '';
+    list.innerHTML = rows.slice(0, 40).map((r) => {
+      const logo = logoOf(r.sym) || r.logo || '';
+      const on = (r.sym === st.from && Number(r.chainId) === cid) ? 'on' : '';
+      const ico = logo
+        ? `<img src="${logo}" alt="" onerror="this.parentElement.textContent='${r.sym.slice(0,3)}'" />`
+        : r.sym.slice(0, 3);
+      const amt = Number(r.amt);
+      const amtStr = amt >= 1 ? amt.toLocaleString('en-US', { maximumFractionDigits: 6 }) : amt.toPrecision(4);
+      const usd = r.usd > 0 ? '$' + Number(r.usd).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
+      return `<div class="gw-sw-bal ${on}" data-sym="${r.sym}" data-cid="${r.chainId}" data-amt="${r.amt}">
+        <span class="ico">${ico}</span>
+        <div><div class="sym">${r.sym}</div><div class="meta">${r.chain || r.chainId}</div></div>
+        <div class="amt"><div class="a">${amtStr}</div><div class="u">${usd}</div></div>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.gw-sw-bal').forEach((row) => {
+      row.onclick = () => {
+        const sym = row.dataset.sym;
+        const chainId = Number(row.dataset.cid);
+        let amt = Number(row.dataset.amt) || 0;
+        st.from = sym;
+        if (chainId) st.chainId = chainId;
+        try {
+          const cfg = (typeof GW_OC_SWAP !== 'undefined') ? GW_OC_SWAP[st.chainId] : null;
+          if (cfg && sym === cfg.native) amt = Math.max(0, amt - (st.chainId === 1 ? 0.00015 : 0.001));
+        } catch (_) {}
+        st.amt = amt > 0 ? String(Number(amt.toPrecision(8))) : '';
+        try { currentChainId = st.chainId; } catch (_) {}
+        gwRenderSpotDex();
+      };
+    });
+    // Update FROM/TO balance labels for active chain
+    gwSwUpdateLegBalances(rows);
   } catch (e) {
-    gwToast(`Swap failed: ${e?.message || e}`, 'error');
-  } finally {
-    if (cta) { cta.disabled = false; cta.textContent = `${st.side === 'buy' ? 'Buy' : 'Sell'} ${pair.base} →`; }
+    list.innerHTML = `<div class="gw-sw-empty">${tx('sw_load_fail', 'Could not load balances')}<br>${String(e?.message || e).slice(0, 100)}</div>`;
+  }
+}
+
+function gwSwUpdateLegBalances(rows) {
+  const st = window.__gwSwState;
+  const cid = Number(st.chainId);
+  const find = (sym) => (rows || []).find((r) => r.sym === sym && Number(r.chainId) === cid);
+  const set = (id, hit) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const tx = (k, fb) => (typeof gwTx === 'function' ? gwTx(k, null, fb) : (fb || k));
+    if (!hit) { el.textContent = tx('sw_balance_zero', 'Balance: 0'); el.dataset.max = '0'; return; }
+    const a = Number(hit.amt) || 0;
+    const s = a >= 1 ? a.toLocaleString('en-US', { maximumFractionDigits: 6 }) : Number(a.toPrecision(4));
+    el.innerHTML = `${tx('sw_balance', 'Balance')}: <b>${s} ${hit.sym}</b>`;
+    el.dataset.max = String(a);
+  };
+  set('gwSwBalFrom', find(st.from));
+  set('gwSwBalTo', find(st.to));
+}
+
+function gwSwScheduleQuote() {
+  clearTimeout(window.__gwSwQuoteTimer);
+  window.__gwSwQuoteTimer = setTimeout(gwSwRefreshQuote, 280);
+}
+
+async function gwSwRefreshQuote() {
+  const st = window.__gwSwState;
+  const tx = (k, fb) => (typeof gwTx === 'function' ? gwTx(k, null, fb) : (fb || k));
+  const route = document.getElementById('gwSwRoute');
+  const outEl = document.getElementById('gwSwOut');
+  const amtUsd = document.getElementById('gwSwAmtUsd');
+  const outUsd = document.getElementById('gwSwOutUsd');
+  if (!route || !outEl) return;
+  const amt = (typeof gwDsParseAmt === 'function') ? gwDsParseAmt(st.amt) : Number(String(st.amt || '').replace(',', '.'));
+  const seq = ++st.quoteSeq;
+  if (!(amt > 0) || st.from === st.to) {
+    outEl.value = '';
+    route.className = 'gw-sw-route';
+    route.textContent = st.from === st.to ? tx('sw_pick_diff', 'Pick different tokens') : tx('sw_hint', 'Enter an amount — we’ll show the best on-chain rate');
+    if (amtUsd) amtUsd.textContent = '';
+    if (outUsd) outUsd.textContent = '';
+    return;
+  }
+  route.className = 'gw-sw-route';
+  route.textContent = tx('sw_searching', 'Finding the best route…');
+  outEl.value = '';
+
+  try {
+    if (typeof gwDsPriceUsd === 'function') {
+      const p = await gwDsPriceUsd(st.from);
+      if (seq !== st.quoteSeq) return;
+      if (amtUsd) amtUsd.textContent = p ? '≈ $' + (amt * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
+    }
+  } catch (_) {}
+
+  try {
+    try { currentChainId = st.chainId; } catch (_) {}
+    let account = '0x0000000000000000000000000000000000000001';
+    try {
+      const a = (typeof gwDisplayAddress === 'function' && gwDisplayAddress()) || '';
+      if (a) account = a;
+    } catch (_) {}
+    if (typeof gwLifiEnsureChainTokens === 'function') {
+      try { await gwLifiEnsureChainTokens(st.chainId); } catch (_) {}
+    }
+    if (seq !== st.quoteSeq) return;
+
+    let mid = null;
+    try {
+      if (typeof gwDsMidEstimate === 'function') mid = await gwDsMidEstimate(st.from, st.to, amt);
+    } catch (_) {}
+
+    if (typeof gwMetaAggQuoteAll !== 'function') throw new Error('Aggregator unavailable');
+    const quotes = await gwMetaAggQuoteAll({
+      chainId: st.chainId, fromSym: st.from, toSym: st.to, amtNum: amt, account,
+    });
+    if (seq !== st.quoteSeq) return;
+    const outDec = (typeof gwOcCanonicalDecimals === 'function')
+      ? gwOcCanonicalDecimals(st.chainId, st.to)
+      : ((typeof GW_OC_SWAP !== 'undefined' && GW_OC_SWAP[st.chainId]?.decimals?.[st.to]) || 18);
+    const scored = (quotes || []).map((q) => {
+      const qDec = Number(q.outDecimals) > 0 ? Number(q.outDecimals) : outDec;
+      const out = Number(q.toAmount) / 10 ** qDec;
+      return { q, out, qDec };
+    }).filter((x) => x.out > 0);
+    scored.sort((a, b) => b.out - a.out);
+    let winner = scored[0];
+    if (winner && mid && mid.est > 0 && typeof gwDsQuoteSane === 'function' && !gwDsQuoteSane(winner.out, mid)) {
+      const sane = scored.find((x) => gwDsQuoteSane(x.out, mid));
+      if (sane) winner = sane;
+      else if (mid.est > 0) {
+        // fall back to mid display only
+        outEl.value = Number(mid.est.toFixed(8));
+        route.className = 'gw-sw-route ok';
+        route.textContent = `≈ mid · 1 ${st.from} ≈ ${(mid.rate || 0).toFixed(6)} ${st.to}`;
+        return;
+      }
+    }
+    if (!winner) {
+      if (mid && mid.est > 0) {
+        outEl.value = Number(mid.est.toFixed(8));
+        route.className = 'gw-sw-route ok';
+        route.textContent = `Estimate · 1 ${st.from} ≈ ${(mid.rate || 0).toFixed(6)} ${st.to}`;
+        return;
+      }
+      route.className = 'gw-sw-route err';
+      route.textContent = tx('sw_no_route', 'No route for this pair on the selected network');
+      return;
+    }
+    outEl.value = Number(winner.out.toFixed(8));
+    const rate = winner.out / amt;
+    route.className = 'gw-sw-route ok';
+    route.innerHTML = `<b style="color:#dff6ff">${winner.q.aggregator}</b> · ${winner.q.tool || 'best'} · 1 ${st.from} ≈ ${rate.toFixed(6)} ${st.to}`;
+    window.__gwLastAggQuotes = {
+      chainId: st.chainId, fromSym: st.from, toSym: st.to, amtNum: amt,
+      quotes: scored.map((x) => x.q), at: Date.now(),
+    };
+    try {
+      if (typeof gwDsPriceUsd === 'function') {
+        const p = await gwDsPriceUsd(st.to);
+        if (seq !== st.quoteSeq) return;
+        if (outUsd) outUsd.textContent = p ? '≈ $' + (winner.out * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
+      }
+    } catch (_) {}
+  } catch (e) {
+    if (seq !== st.quoteSeq) return;
+    route.className = 'gw-sw-route err';
+    route.textContent = tx('sw_rate_fail', 'Rate unavailable: ') + String(e?.message || e).slice(0, 100);
   }
 }
 
 function gwSetupSpotDex() {
-  const tryRender = gwDebounce(() => {
-    if (document.getElementById('page-spot')) {
-      try { gwRenderSpotDex(); console.log('[GROM] spot DEX terminal rendered'); }
-      catch (e) { console.warn('[GROM] spot DEX', e); }
-    }
-  }, 250);
+  const tryRender = (typeof gwDebounce === 'function')
+    ? gwDebounce(() => {
+      if (document.getElementById('page-spot')) {
+        try { gwRenderSpotDex(); console.log('[GROM] Swap Hub rendered'); }
+        catch (e) { console.warn('[GROM] Swap Hub', e); }
+      }
+    }, 250)
+    : () => { try { if (document.getElementById('page-spot')) gwRenderSpotDex(); } catch (_) {} };
   tryRender();
   let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwSpotDex') || n >= 20) clearInterval(id); else tryRender(); }, 500);
   window.addEventListener('hashchange', tryRender);
-  const obs = new MutationObserver(() => tryRender()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  try {
+    const obs = new MutationObserver(() => tryRender());
+    obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
+  } catch (_) {}
   window.addEventListener('grom:lang-change', tryRender);
-  // Refresh live last-price + depth every 30 s
-  setInterval(() => { if (document.getElementById('gwSpotDex') && document.getElementById('page-spot')?.offsetParent) { gwSpRefreshLast(); gwSpRefreshDepth(); } }, 30_000);
+  window.addEventListener('grom:wallet-connected', () => { try { if (document.getElementById('gwSpotDex')) gwSwLoadBalances(); } catch (_) {} });
+  document.addEventListener('grom:wallet-address-known', () => { try { if (document.getElementById('gwSpotDex')) gwSwLoadBalances(); } catch (_) {} });
+  document.addEventListener('grom:wallet-disconnected', () => { try { if (document.getElementById('gwSpotDex')) gwRenderSpotDex(); } catch (_) {} });
 }
+
 
 /* ==========================================================================
  * PHASE 7 — Premium swap panel
@@ -6687,6 +7568,188 @@ function gwCustomTokenOpenModal() {
   ov.onclick = (e) => { if (e.target === ov) ov.style.display = 'none'; };
 }
 
+
+/** Advanced token picker — FROM = wallet holdings only; TO = swappable targets. */
+window.__gwTkHoldingsCache = window.__gwTkHoldingsCache || { at: 0, rows: [] };
+
+async function gwTkLoadHoldings(force) {
+  const cache = window.__gwTkHoldingsCache;
+  if (!force && cache.rows?.length && Date.now() - cache.at < 20000) return cache.rows;
+  let addr = null;
+  try { addr = (typeof gwDisplayAddress === 'function') ? gwDisplayAddress() : null; } catch (_) {}
+  if (!addr) {
+    cache.rows = [];
+    cache.at = Date.now();
+    return [];
+  }
+  try {
+    const [prices, chains] = await Promise.all([
+      typeof gwOcFetchPrices === 'function' ? gwOcFetchPrices() : Promise.resolve({ USDT: 1, USDC: 1 }),
+      typeof gwOcFetchAllChains === 'function' ? gwOcFetchAllChains(addr) : Promise.resolve([]),
+    ]);
+    const rows = [];
+    for (const c of chains || []) {
+      if (!c?.data) continue;
+      const meta = c.meta || GW_OC_CHAIN_META[c.chainId] || {};
+      if (c.data.nativeEth > 0.0000001) {
+        const sym = meta.native || 'ETH';
+        const usd = c.data.nativeEth * (prices[sym] || 0);
+        rows.push({
+          sym, chainId: c.chainId, chain: meta.label || String(c.chainId),
+          amt: c.data.nativeEth, usd, name: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).name || sym,
+          logo: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).logo || '',
+        });
+      }
+      for (const [sym, amt] of Object.entries(c.data.tokens || {})) {
+        if (!(amt > 0.0001)) continue;
+        rows.push({
+          sym, chainId: c.chainId, chain: meta.label || String(c.chainId),
+          amt, usd: amt * (prices[sym] || (sym === 'USDT' || sym === 'USDC' || sym === 'BUSD' ? 1 : 0)),
+          name: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).name || sym,
+          logo: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).logo || '',
+        });
+      }
+    }
+    // Append TRX if we know a Tron address (Trust DApp / TronLink / saved).
+    try {
+      let tAddr = window.__gwTronAddr || localStorage.getItem('grom_tron_addr') || '';
+      if (!tAddr && (window.tronWeb?.defaultAddress?.base58)) {
+        tAddr = window.tronWeb.defaultAddress.base58;
+      }
+      if (tAddr) {
+        const trxAmt = await gwTronFetchNativeBalance(tAddr);
+        if (trxAmt > 0.0001) {
+          const px = (typeof gwDsPriceUsd === 'function') ? (await gwDsPriceUsd('TRX').catch(() => 0)) : 0;
+          rows.push({
+            sym: 'TRX', chainId: 728126428, chain: 'TRON',
+            amt: trxAmt, usd: trxAmt * (px || 0),
+            name: 'TRON', logo: (GW_DS_ASSETS.find((a) => a.sym === 'TRX') || {}).logo || '',
+          });
+        }
+      }
+    } catch (_) {}
+    rows.sort((a, b) => b.usd - a.usd);
+    cache.rows = rows;
+    cache.at = Date.now();
+    return rows;
+  } catch (e) {
+    console.warn('[GROM] tk holdings', e?.message || e);
+    return cache.rows || [];
+  }
+}
+
+function gwTkGetFromContext() {
+  let fromSym = '';
+  try {
+    const onSpot = !!(document.getElementById('page-spot')?.classList.contains('active')
+      || /(?:^|#)spot\b/.test(String(location.hash || '')));
+    if (onSpot && window.__gwSwState?.from) fromSym = window.__gwSwState.from;
+  } catch (_) {}
+  if (!fromSym) {
+    fromSym = (typeof gwDsNormSym === 'function')
+      ? gwDsNormSym(document.getElementById('gwDsFrom')?.value || '')
+      : String(document.getElementById('gwDsFrom')?.value || '').toUpperCase();
+  }
+  if (typeof gwDsNormSym === 'function') fromSym = gwDsNormSym(fromSym);
+  else fromSym = String(fromSym || '').toUpperCase();
+  let chainId = (typeof gwGetActiveUiChainId === 'function') ? gwGetActiveUiChainId() : null;
+  if (!chainId) {
+    try { chainId = Number(window.__gwDsUserPickedFrom?.chainId) || null; } catch (_) {}
+  }
+  if (!chainId) {
+    try { chainId = Number(currentChainId) || null; } catch (_) {}
+  }
+  // Infer chain from holdings if still unknown
+  if (!chainId && fromSym) {
+    const hit = (window.__gwTkHoldingsCache?.rows || []).find((r) => r.sym === fromSym);
+    if (hit) chainId = hit.chainId;
+  }
+  if (!chainId) chainId = 56;
+  return { fromSym, chainId: Number(chainId) };
+}
+
+function gwIsTronContext(fromSym, chainId) {
+  const from = String(fromSym || '').toUpperCase();
+  if (Number(chainId) === 728126428) return true;
+  if (from === 'TRX') return true;
+  try {
+    if (typeof GW_TRON_TOKENS !== 'undefined' && GW_TRON_TOKENS[from]) return true;
+  } catch (_) {}
+  return false;
+}
+
+function gwTkTargetsFor(fromSym, chainId) {
+  const from = String(fromSym || '').toUpperCase();
+  const cid = Number(chainId) || null;
+  const findMeta = (sym) => GW_DS_ASSETS.find((a) => a.sym === sym) || { sym, name: sym, logo: '' };
+  const TRON_ONLY = new Set(['TRX', 'SUN', 'BTT', 'JST', 'WIN']);
+  if (typeof gwIsTronContext === 'function' && gwIsTronContext(from, chainId)) {
+    const tronSame = Object.keys(GW_TRON_TOKENS).filter((s) => s !== from);
+    return {
+      same: tronSame.map((sym) => ({ ...findMeta(sym), sym, group: 'same', chainId: 728126428 })),
+      cross: ['BNB', 'ETH', 'BTC', 'SOL'].filter((s) => s !== from)
+        .map((sym) => ({ ...findMeta(sym), sym, group: 'cross' })),
+      totalSame: tronSame.length,
+    };
+  }
+  // Popular shortcuts first
+  const popular = (GW_SIM_SAME_CHAIN[cid] || []).filter((s) => s !== from && !TRON_ONLY.has(s));
+  const cfg = GW_OC_SWAP[cid];
+  const popularOk = popular.filter((s) => {
+    if (!cfg) return true;
+    return s === cfg.native || !!cfg.tokens[s] || (s === 'ETH' && cfg.tokens.WETH) || (s === 'BTC' && (cfg.tokens.WBTC || cfg.tokens.BTC));
+  });
+  const popSet = new Set(popularOk);
+  // Full LiFi catalog for this chain (may be empty until loaded)
+  const catalog = (window.__gwLifiCatalog && window.__gwLifiCatalog[cid] && window.__gwLifiCatalog[cid].list) || [];
+  const sameFull = [];
+  const seenAddr = new Set();
+  for (const s of popularOk) {
+    const hit = (typeof gwLifiPickToken === 'function') ? gwLifiPickToken(cid, s) : null;
+    const meta = findMeta(s);
+    const row = {
+      ...meta,
+      sym: s,
+      group: 'popular',
+      chainId: cid,
+      address: hit ? hit.address : (cfg && cfg.tokens[s]) || '',
+      decimals: hit ? hit.decimals : (cfg && cfg.decimals[s]),
+    };
+    sameFull.push(row);
+    if (row.address) seenAddr.add(String(row.address).toLowerCase());
+  }
+  for (const t of catalog) {
+    if (!t || !t.sym || t.sym === from) continue;
+    if (TRON_ONLY.has(t.sym)) continue;
+    const a = String(t.address || '').toLowerCase();
+    if (a && seenAddr.has(a)) continue;
+    if (a) seenAddr.add(a);
+    // Skip exact symbol already in popular (different scam contract still shown via search)
+    if (popSet.has(t.sym) && a && cfg && cfg.tokens[t.sym]
+      && a === String(cfg.tokens[t.sym]).toLowerCase()) continue;
+    if (popSet.has(t.sym)) continue;
+    sameFull.push({
+      sym: t.sym,
+      name: t.name || t.sym,
+      logo: t.logo || '',
+      group: 'same',
+      chainId: cid,
+      address: t.address,
+      decimals: t.decimals,
+      verified: t.verified,
+    });
+  }
+  const CROSS_BLOCK = new Set(['BASE', 'LINEA', ...TRON_ONLY]);
+  const cross = (typeof GW_SIM_CROSS_CHAIN !== 'undefined' ? GW_SIM_CROSS_CHAIN : [])
+    .filter((s) => s !== from && !popSet.has(s) && !CROSS_BLOCK.has(s));
+  return {
+    same: sameFull,
+    cross: cross.map((sym) => ({ ...findMeta(sym), sym, group: 'cross' })),
+    totalSame: sameFull.length,
+    catalogSize: catalog.length,
+  };
+}
+
 function gwTkOpen(which /* 'from' | 'to' */) {
   let ov = document.getElementById('gw-tk-overlay');
   if (!ov) {
@@ -6694,12 +7757,10 @@ function gwTkOpen(which /* 'from' | 'to' */) {
     ov.innerHTML = `
       <div id="gw-tk-panel">
         <div class="head">
-          <h4>Choose asset</h4>
+          <h4 id="gwTkTitle">Choose asset</h4>
           <button class="close" id="gwTkClose" aria-label="Close">×</button>
         </div>
-        <div class="search"><input id="gwTkSearch" type="text" placeholder="Search ${GW_DS_ASSETS.length}+ tokens…" autocomplete="off" />
-          <button id="gwTkAddCustom" style="margin-top:8px;width:100%;padding:8px 12px;border-radius:10px;border:1px dashed rgba(0,194,255,.35);background:transparent;color:#5dd5ff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">★ Add custom token by contract address</button>
-        </div>
+        <div class="search"><input id="gwTkSearch" type="text" placeholder="Search…" autocomplete="off" /></div>
         <div id="gw-tk-list"></div>
       </div>`;
     document.body.appendChild(ov);
@@ -6708,69 +7769,225 @@ function gwTkOpen(which /* 'from' | 'to' */) {
   }
   ov.dataset.which = which;
   ov.classList.add('open');
+  const title = document.getElementById('gwTkTitle');
   const search = ov.querySelector('#gwTkSearch');
-  search.value = '';
-  search.placeholder = `Search ${GW_DS_ASSETS.length}+ tokens…`;
-  gwTkRender('');
-  setTimeout(() => search.focus(), 40);
+  let prefill = '';
+  try {
+    if (which === 'to') {
+      const sim = document.getElementById('gwDsSimSearchInput');
+      if (sim && sim.value.trim()) prefill = sim.value.trim();
+    }
+  } catch (_) {}
+  search.value = prefill;
+  if (which === 'from') {
+    if (title) title.textContent = gwTx('tk_title_from', null, 'My wallet');
+    search.placeholder = gwTx('tk_search_wallet', null, 'Search tokens in your wallet…');
+  } else {
+    if (title) title.textContent = gwTx('tk_title_to', null, 'You receive');
+    search.placeholder = gwTx('tk_search_targets', null, 'Search tokens you can swap to…');
+  }
+  gwTkRender(prefill);
+  setTimeout(() => { try { search.focus(); search.setSelectionRange(search.value.length, search.value.length); } catch (_) { search.focus(); } }, 40);
   search.oninput = () => gwTkRender(search.value.trim());
-  // Kick LiFi token fetch immediately if we haven't yet
-  try { gwDsFetchLifiTokens(); } catch (_) {}
-  // Item #3 — Add custom token by contract address
-  const addBtn = document.getElementById('gwTkAddCustom');
-  if (addBtn) addBtn.onclick = () => gwCustomTokenOpenModal();
 }
-function gwTkRender(q) {
+
+async function gwTkRender(q) {
   const list = document.getElementById('gw-tk-list');
-  if (!list) return;
+  const overlay = document.getElementById('gw-tk-overlay');
+  if (!list || !overlay) return;
+  const which = overlay.dataset.which || 'from';
   const query = (q || '').toUpperCase();
-  const items = GW_DS_ASSETS.filter((a) => !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query));
-  if (items.length === 0) { list.innerHTML = `<div class="gw-tk-empty">Nothing matches «${q}»</div>`; return; }
-  // Progressive rendering: paint first 200 immediately, then append batches
-  // of 200 on scroll — supports all 9555+ tokens without DOM freeze.
-  const BATCH = 200;
-  const rowHtml = (a) => {
+  const tx = (k, fb) => (typeof gwTx === 'function' ? gwTx(k, null, fb) : fb);
+
+  const rowHtml = (a, extra) => {
     const ico = a.logo
-      ? `<img class="ico" src="${a.logo}" alt="${a.sym}" loading="lazy" onerror="this.outerHTML='<span class=&quot;ico&quot;>${a.sym.slice(0,3)}</span>' " />`
+      ? `<img class="ico" src="${a.logo}" alt="${a.sym}" loading="lazy" onerror="this.outerHTML='<span class=&quot;ico&quot;>${a.sym.slice(0,3)}</span>'" />`
       : `<span class="ico">${a.sym.slice(0, 3)}</span>`;
-    return `<div class="gw-tk-row" data-sym="${a.sym}">
+    const meta = extra || '';
+    const addr = a.address || '';
+    const dec = a.decimals != null ? a.decimals : '';
+    const short = addr && addr !== GW_LIFI_ZERO
+      ? ` · ${addr.slice(0, 6)}…${addr.slice(-4)}`
+      : '';
+    return `<div class="gw-tk-row" data-sym="${a.sym}" data-cid="${a.chainId || ''}" data-addr="${addr}" data-dec="${dec}" data-amt="${a.amt != null ? a.amt : ''}">
       ${ico}
-      <div class="body"><div class="sym">${a.sym}</div><div class="name">${a.name || a.sym}</div></div>
+      <div class="body"><div class="sym">${a.sym}</div><div class="name">${a.name || a.sym}${a.chain ? ' · ' + a.chain : ''}${short}</div></div>
+      ${meta}
     </div>`;
   };
-  let rendered = Math.min(BATCH, items.length);
-  list.innerHTML = items.slice(0, rendered).map(rowHtml).join('') +
-    (rendered < items.length ? `<div class="gw-tk-more" id="gw-tk-more" style="text-align:center;padding:10px;color:#6b7a92;font-size:11.5px">Showing ${rendered} of ${items.length}. Scroll for more…</div>` : `<div style="text-align:center;padding:8px;color:#6b7a92;font-size:11.5px">All ${items.length} tokens shown</div>`);
-  const overlay = document.getElementById('gw-tk-overlay');
-  const which = overlay?.dataset.which;
+
   const wire = () => {
     list.querySelectorAll('.gw-tk-row').forEach((r) => {
       if (r._wired) return; r._wired = true;
       r.onclick = () => {
-        const sel = document.getElementById(which === 'from' ? 'gwDsFrom' : 'gwDsTo');
-        if (sel) { sel.value = r.dataset.sym; gwTkSyncButton(which); try { gwDsRefreshRate(); } catch (_) {} }
+        const sym = r.dataset.sym;
+        const cid = Number(r.dataset.cid) || null;
+        const amt = Number(r.dataset.amt);
+        if (which === 'from') {
+          try { gwDsEnsureTokenOption(sym, { sym }); } catch (_) {}
+          const sel = document.getElementById('gwDsFrom');
+          if (sel) sel.value = sym;
+          gwTkSyncButton('from');
+          if (cid) {
+            currentChainId = cid;
+            document.querySelectorAll('.gw-ds-chain.on').forEach((x) => x.classList.remove('on'));
+            document.querySelector(`.gw-ds-chain[data-cid="${cid}"]`)?.classList.add('on');
+          }
+          try {
+            window.__gwDsUserPickedFrom = {
+              sym, chainId: cid, at: Date.now(),
+              address: r.dataset.addr || null,
+              decimals: r.dataset.dec !== '' ? Number(r.dataset.dec) : null,
+            };
+          } catch (_) {}
+          try {
+            if (window.__gwSwState) {
+              window.__gwSwState.from = (typeof gwDsNormSym === 'function') ? gwDsNormSym(sym) : String(sym).toUpperCase();
+              if (cid) window.__gwSwState.chainId = cid;
+              if (amt > 0) window.__gwSwState.amt = String(amt);
+              try { currentChainId = cid || window.__gwSwState.chainId; } catch (_) {}
+              window.dispatchEvent(new CustomEvent('grom:sw-token-picked', { detail: { which: 'from', sym } }));
+            }
+          } catch (_) {}
+          if (sym === 'TRX' || Number(cid) === 728126428) {
+            try { gwTronConnect().catch(() => {}); } catch (_) {}
+          }
+          try {
+            const dsAmt = document.getElementById('gwDsAmt');
+            if (dsAmt && amt > 0) dsAmt.placeholder = String(amt);
+          } catch (_) {}
+        } else {
+          const addr = r.dataset.addr || '';
+          const dec = r.dataset.dec !== '' ? Number(r.dataset.dec) : null;
+          try { gwDsEnsureTokenOption(sym, { sym, address: addr, decimals: dec, chainId: cid }); } catch (_) {}
+          const sel = document.getElementById('gwDsTo');
+          if (sel) sel.value = sym;
+          try {
+            window.__gwDsUserPickedTo = {
+              sym, chainId: cid, address: addr || null,
+              decimals: dec, at: Date.now(),
+            };
+          } catch (_) {}
+          try {
+            if (window.__gwSwState) {
+              window.__gwSwState.to = (typeof gwDsNormSym === 'function') ? gwDsNormSym(sym) : String(sym).toUpperCase();
+              window.dispatchEvent(new CustomEvent('grom:sw-token-picked', { detail: { which: 'to', sym } }));
+            }
+          } catch (_) {}
+          gwTkSyncButton('to');
+        }
+        try { gwDsRefreshRate(); } catch (_) {}
         overlay.classList.remove('open');
       };
     });
   };
-  wire();
-  // Scroll handler: append next batch when user nears the bottom.
-  list.onscroll = () => {
-    if (rendered >= items.length) return;
-    if (list.scrollTop + list.clientHeight > list.scrollHeight - 400) {
-      const next = Math.min(rendered + BATCH, items.length);
-      const chunk = items.slice(rendered, next).map(rowHtml).join('');
-      const more = document.getElementById('gw-tk-more');
-      if (more) more.insertAdjacentHTML('beforebegin', chunk);
-      rendered = next;
-      if (more) {
-        if (rendered >= items.length) { more.textContent = `All ${items.length} tokens shown`; }
-        else { more.textContent = `Showing ${rendered} of ${items.length}. Scroll for more…`; }
-      }
-      wire();
+
+  if (which === 'from') {
+    list.innerHTML = `<div class="gw-tk-empty">${tx('tk_loading', 'Loading balances…')}</div>`;
+    let addr = null;
+    try { addr = (typeof gwDisplayAddress === 'function') ? gwDisplayAddress() : null; } catch (_) {}
+    if (!addr) {
+      list.innerHTML = `<div class="gw-tk-empty">${tx('tk_need_connect', 'Connect a wallet to see your tokens.')}</div>`;
+      return;
     }
+    const rows = await gwTkLoadHoldings(false);
+    // Race: user may have switched to TO while loading
+    if (overlay.dataset.which !== 'from') return;
+    const filtered = rows.filter((a) =>
+      !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query) || (a.chain || '').toUpperCase().includes(query)
+    );
+    if (!filtered.length) {
+      list.innerHTML = `<div class="gw-tk-empty">${query
+        ? `Nothing matches «${q}»`
+        : tx('tk_empty_wallet', 'No tokens in your wallet yet — deposit first, then choose what to pay with.')}</div>`;
+      return;
+    }
+    list.innerHTML = filtered.map((a) => rowHtml(a,
+      `<div class="gw-tk-bal"><div class="amt">${Number(a.amt).toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>`
+      + `<div class="usd">≈ $${Number(a.usd || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div></div>`
+    )).join('');
+    wire();
+    return;
+  }
+
+  // TO — only tokens you can swap the selected FROM into
+  const { fromSym, chainId } = gwTkGetFromContext();
+  if (!fromSym) {
+    list.innerHTML = `<div class="gw-tk-empty">${tx('tk_need_from', 'Pick a token in “You pay” first.')}</div>`;
+    return;
+  }
+  // Warm holdings cache (for chain inference) without blocking UI hard
+  gwTkLoadHoldings(false).catch(() => {});
+  const chainMeta = (GW_OC_CHAIN_META && GW_OC_CHAIN_META[chainId]) || {};
+  const renderTo = (catalogHint) => {
+    const targets = gwTkTargetsFor(fromSym, chainId);
+    const match = (a) => {
+      if (!query) return true;
+      if (a.sym.includes(query) || (a.name || '').toUpperCase().includes(query)) return true;
+      if (query.startsWith('0X') && (a.address || '').toUpperCase().includes(query)) return true;
+      return false;
+    };
+    let same = targets.same.filter(match);
+    const cross = (!query || query.length < 2) ? targets.cross.filter(match) : targets.cross.filter(match);
+    const totalCat = targets.catalogSize || same.length;
+    // Empty search: popular + first slice of catalog. With search: up to 120 matches.
+    const LIMIT = query ? 120 : 80;
+    const popular = same.filter((a) => a.group === 'popular');
+    const rest = same.filter((a) => a.group !== 'popular');
+    const shownRest = rest.slice(0, Math.max(0, LIMIT - popular.length));
+    same = popular.concat(shownRest);
+    const truncated = rest.length > shownRest.length;
+    if (!same.length && !cross.length) {
+      list.innerHTML = `<div class="gw-tk-empty">${catalogHint || ('Nothing matches «' + (q || fromSym) + '»')}</div>`;
+      return;
+    }
+    let html = '';
+    const label = chainMeta.label ? ' · ' + chainMeta.label : '';
+    html += `<div class="gw-tk-group">${tx('tk_group_same', 'Same chain')}${label} · ${totalCat.toLocaleString()}+ tokens</div>`;
+    if (popular.length && !query) {
+      html += popular.map((a) => rowHtml(a)).join('');
+      if (shownRest.length) {
+        html += `<div class="gw-tk-group">${tx('tk_group_all', 'All tokens — type to search')}</div>`;
+      }
+      html += shownRest.map((a) => rowHtml(a)).join('');
+    } else {
+      html += same.map((a) => rowHtml(a)).join('');
+    }
+    if (truncated) {
+      html += `<div class="gw-tk-empty" style="padding:10px 14px;opacity:.7">${tx('tk_search_more', 'Type name or 0x address to find more…')} (${rest.length.toLocaleString()})</div>`;
+    }
+    if (cross.length) {
+      html += `<div class="gw-tk-group">${tx('tk_group_cross', 'Cross-chain (bridge · 1–5 min)')}</div>`;
+      html += cross.map((a) => rowHtml(a)).join('');
+    }
+    list.innerHTML = html;
+    wire();
+    try {
+      const inp = document.getElementById('gwTkSearch');
+      if (inp) inp.placeholder = `Search ${totalCat.toLocaleString()}+ tokens…`;
+    } catch (_) {}
   };
+
+  // Show curated list immediately, then hydrate full LiFi catalog
+  renderTo();
+  if (chainId && Number(chainId) !== 728126428 && typeof gwLifiEnsureChainTokens === 'function') {
+    const had = (window.__gwLifiCatalog && window.__gwLifiCatalog[chainId] && window.__gwLifiCatalog[chainId].list) || [];
+    if (!had.length) {
+      list.insertAdjacentHTML('afterbegin', `<div class="gw-tk-empty" id="gwTkCatLoad">${tx('tk_loading_catalog', 'Loading full token catalog…')}</div>`);
+    }
+    gwLifiEnsureChainTokens(chainId).then((list) => {
+      try { document.getElementById('gwTkCatLoad')?.remove(); } catch (_) {}
+      if (!list || !list.length) return;
+      // Only re-render if this overlay still open on same side
+      if (!document.getElementById('gw-tk-overlay')?.classList.contains('open')) return;
+      if ((document.getElementById('gw-tk-overlay')?.dataset.which || '') !== 'to') return;
+      renderTo();
+    }).catch(() => {
+      try { document.getElementById('gwTkCatLoad')?.remove(); } catch (_) {}
+    });
+  }
 }
+
 function gwTkSyncButton(which) {
   const sel = document.getElementById(which === 'from' ? 'gwDsFrom' : 'gwDsTo');
   const btn = document.getElementById(which === 'from' ? 'gwDsFromBtn' : 'gwDsToBtn');
@@ -6931,7 +8148,7 @@ function gwDsBuildPanel() {
 /* Small in-memory price cache for USD values of the 32 assets (Binance ticker) */
 const gwDsPriceCache = new Map();  // sym -> { price, at }
 async function gwDsPriceUsd(sym) {
-  if (sym === 'USDT' || sym === 'USDC') return 1;
+  if (sym === 'USDT' || sym === 'USDC' || sym === 'BUSD' || sym === 'DAI') return 1;
   const cached = gwDsPriceCache.get(sym);
   if (cached && Date.now() - cached.at < 20000) return cached.price;
   try {
@@ -6979,30 +8196,174 @@ async function gwDsAvailableAmount(sym) {
 async function gwDsAutoPickFromToken() {
   if (gwDsGetMode() !== 'onchain') return;
   if (!gwOcConnectedAddress()) return;
+  // Never override a FROM the user already chose in Simple mode.
+  // Old behaviour silently flipped BNB → ETH (by raw-balance compare) while
+  // leaving amount 0.0062 → quote showed "1 ETH ≈ 1857" on a BNB-sized input.
+  try {
+    if (window.__gwDsUserPickedFrom) return;
+    if (document.querySelector('.gw-ds-wrap.gw-ds-mode-simple .gw-ds-sim-row.on')) return;
+  } catch (_) {}
   const candidates = ['ETH', 'BNB', 'USDT', 'USDC', 'MATIC', 'ARB'];
   let bestSym = null;
+  let bestUsd = 0;
   let bestBal = 0;
   for (const sym of candidates) {
     const bal = await gwDsAvailableAmount(sym);
-    if (bal > bestBal) { bestBal = bal; bestSym = sym; }
+    if (!(bal > 0)) continue;
+    const px = (typeof gwDsPriceUsd === 'function') ? (await gwDsPriceUsd(sym).catch(() => 0)) : 0;
+    const usd = bal * (px > 0 ? px : (sym === 'USDT' || sym === 'USDC' ? 1 : 0));
+    // Prefer USD value; fall back to raw balance only if price missing.
+    const score = usd > 0 ? usd : bal;
+    if (score > bestUsd) { bestUsd = score; bestBal = bal; bestSym = sym; }
   }
   if (!bestSym || bestBal <= 0) return;
   const fromEl = document.getElementById('gwDsFrom');
   if (!fromEl) return;
   if (fromEl.value === bestSym) return;
   fromEl.value = bestSym;
+  try { gwDsEnsureTokenOption(bestSym, { sym: bestSym }); gwTkSyncButton('from'); } catch (_) {}
+  // Clear amount — it belonged to the previous default token.
+  try {
+    const sim = document.getElementById('gwDsSimAmt');
+    const ds = document.getElementById('gwDsAmt');
+    if (sim) { sim.value = ''; sim.dataset.max = String(bestBal); }
+    if (ds) ds.value = '';
+    if (typeof gwDsInvalidateQuoteUi === 'function') gwDsInvalidateQuoteUi('autopick');
+  } catch (_) {}
   gwDsRefreshBalances().catch(() => {});
   gwDsRefreshRate();
 }
 
 let gwDsQuoteAbort = null;
 let gwDsQuoteTimer = null;
+
+/** Instant-swap quote helpers (race-safe + amount sync + mid sanity). */
+window.__gwDsQuoteSeq = window.__gwDsQuoteSeq || 0;
+window.__gwLastSimpleQuote = window.__gwLastSimpleQuote || null;
+
+function gwDsParseAmt(raw) {
+  // RU/EU locales type "0,0062"; Number("0,0062") === NaN — that left Simple
+  // on "Fetching rate…" while the hidden advanced route still showed a quote.
+  if (raw == null) return 0;
+  let s = String(raw).trim();
+  if (!s) return 0;
+  s = s.replace(/\s+/g, '').replace(/^\u2212/, '-');
+  if (s.includes(',') && s.includes('.')) {
+    // 1.234,56 → 1234.56 ; 1,234.56 → 1234.56
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.');
+    else s = s.replace(/,/g, '');
+  } else if (s.includes(',')) {
+    s = s.replace(',', '.');
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function gwDsReadSwapAmt() {
+  try {
+    const wrap = document.querySelector('.gw-ds-wrap.gw-ds-mode-simple');
+    const sim = document.getElementById('gwDsSimAmt');
+    const ds = document.getElementById('gwDsAmt');
+    if (wrap && sim) {
+      const n = gwDsParseAmt(sim.value);
+      if (ds) {
+        // Keep canonical dot form in the hidden advanced field.
+        const canon = n > 0 ? String(n) : '';
+        if (ds.value !== canon) ds.value = canon;
+      }
+      return n;
+    }
+    return gwDsParseAmt(ds?.value);
+  } catch (_) {
+    return gwDsParseAmt(document.getElementById('gwDsAmt')?.value);
+  }
+}
+
+function gwDsInvalidateQuoteUi(reason) {
+  try {
+    const outEl = document.getElementById('gwDsOut');
+    if (outEl) { outEl.value = ''; delete outEl.dataset.pair; }
+    window.__gwLastAggQuotes = null;
+    window.__gwLastSimpleQuote = null;
+    const routeEl = document.getElementById('gwDsRoute');
+    const rateLine = document.getElementById('gwDsRateLine');
+    const t = (typeof gwDsLang === 'function') ? gwDsLang() : { getting: 'Fetching rate…', est: 'Enter an amount to see the live rate.' };
+    if (routeEl) {
+      routeEl.className = 'gw-ds-route';
+      routeEl.innerHTML = `<span class="k full" id="gwDsRateLine">${t.getting || 'Fetching rate…'}</span>`;
+    } else if (rateLine) {
+      rateLine.textContent = t.getting || 'Fetching rate…';
+    }
+    if (typeof gwDsSimUpdatePreview === 'function') gwDsSimUpdatePreview();
+  } catch (_) {}
+}
+
+async function gwDsMidEstimate(from, to, amt) {
+  try {
+    const [pf, pt] = await Promise.all([gwDsPriceUsd(from), gwDsPriceUsd(to)]);
+    if (!(pf > 0) || !(pt > 0) || !(amt > 0)) return null;
+    return { est: (amt * pf) / pt, pf, pt, rate: pf / pt };
+  } catch (_) { return null; }
+}
+
+function gwDsQuoteSane(outAmt, midEst) {
+  if (!(outAmt > 0)) return false;
+  if (!midEst || !(midEst.est > 0)) return true;
+  const ratio = outAmt / midEst.est;
+  return ratio > 0.88 && ratio < 1.12;
+}
+
+function gwDsPublishSimpleQuote({ from, to, outAmt, rate }) {
+  const fromN = (typeof gwDsNormSym === 'function') ? gwDsNormSym(from) : String(from || '').toUpperCase();
+  const toN = (typeof gwDsNormSym === 'function') ? gwDsNormSym(to) : String(to || '').toUpperCase();
+  const out = Number(outAmt);
+  if (!(out > 0) || !fromN || !toN) return;
+  window.__gwLastSimpleQuote = { from: fromN, to: toN, out, rate: rate != null ? Number(rate) : null, at: Date.now() };
+  try {
+    const outEl = document.getElementById('gwDsOut');
+    if (outEl) {
+      outEl.value = Number(out.toFixed(8));
+      outEl.dataset.pair = fromN + '|' + toN;
+    }
+    // Keep hidden selects aligned with the quote we just published.
+    const fromEl = document.getElementById('gwDsFrom');
+    const toEl = document.getElementById('gwDsTo');
+    if (fromEl && fromEl.value !== fromN) {
+      try { gwDsEnsureTokenOption(fromN, { sym: fromN }); } catch (_) {}
+      fromEl.value = fromN;
+    }
+    if (toEl && toEl.value !== toN) {
+      try { gwDsEnsureTokenOption(toN, { sym: toN }); } catch (_) {}
+      toEl.value = toN;
+    }
+  } catch (_) {}
+  try { gwDsSimUpdatePreview(); } catch (_) {}
+}
+
+function gwDsEnsureSimpleUi() {
+  try {
+    if (!document.getElementById('gwDsCard')) return;
+    if (typeof gwDsSimBuildToggle === 'function') gwDsSimBuildToggle();
+    if (typeof gwDsSimBuild === 'function') gwDsSimBuild();
+    const mode = (typeof gwSwapModeGet === 'function') ? gwSwapModeGet() : 'simple';
+    document.querySelectorAll('.gw-ds-wrap').forEach((el) => {
+      el.classList.toggle('gw-ds-mode-simple', mode === 'simple');
+    });
+    if (mode === 'simple' && typeof gwDsSimRenderBalances === 'function') {
+      try { gwDsSimRenderBalances(); } catch (_) {}
+    }
+    try { gwDsSimUpdatePreview(); } catch (_) {}
+  } catch (_) {}
+}
+
 async function gwDsRefreshRate() {
-  // Any refresh invalidates the last quote — clear it here so that if the
-  // on-chain path is skipped (WC hiccup) or returns 0 quotes, the Simple
-  // mode 'You get' preview can safely display whatever the fallback
-  // (cross-rate) puts into outEl instead of staying on "Fetching rate…"
-  // because it thinks the previous pair's cached quote is still fresh.
+  // Race-safe: only the latest refresh may write UI.
+  const seq = ++window.__gwDsQuoteSeq;
+  const stillMine = () => seq === window.__gwDsQuoteSeq;
+  const finishPreview = () => {
+    try { if (typeof gwDsSimUpdatePreview === 'function') gwDsSimUpdatePreview(); } catch (_) {}
+  };
+
   try { window.__gwLastAggQuotes = null; } catch (_) {}
   const t = gwDsLang();
   const routeEl = document.getElementById('gwDsRoute');
@@ -7010,15 +8371,62 @@ async function gwDsRefreshRate() {
   const rateLine = document.getElementById('gwDsRateLine');
   const amtUsd = document.getElementById('gwDsAmtUsd');
   const outUsd = document.getElementById('gwDsOutUsd');
-  if (!routeEl || !outEl || !rateLine) return;
+  if (!routeEl || !outEl || !rateLine) { finishPreview(); return; }
   routeEl.className = 'gw-ds-route';
 
-  const from = document.getElementById('gwDsFrom')?.value || 'USDT';
-  const to   = document.getElementById('gwDsTo')?.value   || 'BTC';
-  const amt  = Number(document.getElementById('gwDsAmt')?.value || 0);
+  // Simple-mode source of truth: highlighted wallet row beats hidden <select>
+  // (AutoPick / remount used to flip select to ETH while the row still said BNB).
+  let from = gwDsNormSym(document.getElementById('gwDsFrom')?.value || 'USDT');
+  let to   = gwDsNormSym(document.getElementById('gwDsTo')?.value   || 'BTC');
+  try {
+    const row = document.querySelector('.gw-ds-wrap.gw-ds-mode-simple .gw-ds-sim-row.on');
+    if (row?.dataset?.sym) {
+      const rowSym = gwDsNormSym(row.dataset.sym);
+      if (rowSym && rowSym !== from) {
+        console.warn('[GROM swap] FROM desync: select=', from, 'row=', rowSym, '— using row');
+        from = rowSym;
+        const fromEl = document.getElementById('gwDsFrom');
+        if (fromEl) {
+          try { gwDsEnsureTokenOption(from, { sym: from }); } catch (_) {}
+          fromEl.value = from;
+        }
+        if (row.dataset.cid) {
+          const cid = Number(row.dataset.cid);
+          if (cid) {
+            currentChainId = cid;
+            document.querySelectorAll('.gw-ds-chain.on').forEach((x) => x.classList.remove('on'));
+            document.querySelector(`.gw-ds-chain[data-cid="${cid}"]`)?.classList.add('on');
+          }
+        }
+      }
+    } else if (window.__gwDsUserPickedFrom?.sym) {
+      const u = gwDsNormSym(window.__gwDsUserPickedFrom.sym);
+      if (u && u !== from) {
+        from = u;
+        const fromEl = document.getElementById('gwDsFrom');
+        if (fromEl) {
+          try { gwDsEnsureTokenOption(from, { sym: from }); } catch (_) {}
+          fromEl.value = from;
+        }
+      }
+    }
+  } catch (_) {}
+  // Prefer simple-mode amount (fixes: UI shows 0.0062 but quote used stale gwDsAmt).
+  let amt  = (typeof gwDsReadSwapAmt === 'function') ? gwDsReadSwapAmt() : Number(document.getElementById('gwDsAmt')?.value || 0);
+  // Cap to Simple max so a leftover BNB amount never prices as ETH.
+  try {
+    const sim = document.getElementById('gwDsSimAmt');
+    const maxBal = gwDsParseAmt(sim?.dataset?.max);
+    if (maxBal > 0 && amt > maxBal * 1.0000001) {
+      console.warn('[GROM swap] amount', amt, '> max', maxBal, '— clamping');
+      amt = maxBal;
+      if (sim) sim.value = String(maxBal);
+      const ds = document.getElementById('gwDsAmt');
+      if (ds) ds.value = String(maxBal);
+    }
+  } catch (_) {}
   const mode = gwDsGetMode();
 
-  // Refresh available balances shown above each field
   gwDsRefreshBalances().catch(() => {});
 
   if (amt <= 0) {
@@ -7027,22 +8435,76 @@ async function gwDsRefreshRate() {
     if (amtUsd) amtUsd.textContent = '';
     if (outUsd) outUsd.textContent = '';
     rateLine.textContent = t.est;
+    finishPreview();
     return;
   }
   if (from === to) {
     routeEl.className = 'gw-ds-route warn';
-    rateLine.textContent = '⚠ ' + (from === to ? 'Choose different assets' : '');
+    rateLine.textContent = '⚠ Choose different assets';
     outEl.value = '';
     delete outEl.dataset.pair;
+    finishPreview();
     return;
   }
 
-  // Live USD label under "You pay"
-  gwDsPriceUsd(from).then((p) => { if (amtUsd) amtUsd.textContent = p ? '≈ $' + (amt * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : ''; });
+  gwDsPriceUsd(from).then((p) => {
+    if (!stillMine()) return;
+    if (amtUsd) amtUsd.textContent = p ? '≈ $' + (amt * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
+  });
 
   rateLine.textContent = t.getting;
+  outEl.value = '';
+  delete outEl.dataset.pair;
+  finishPreview();
 
-  // === ON-CHAIN mode: meta-aggregator (LiFi + Paraswap + KyberSwap + Odos) ===
+  // === TRON (TRX / TRC-20) via SunSwap — Trust DApp browser or TronLink ===
+  if (typeof gwIsTronPair === 'function' && gwIsTronPair(from, to)) {
+    try {
+      const outAmt = await gwTronQuoteHuman(from, to, amt);
+      if (!stillMine()) return;
+      if (outAmt > 0) {
+        const rate = amt > 0 ? outAmt / amt : null;
+        applyOut(outAmt, { rate });
+        if (typeof gwDsPublishSimpleQuote === 'function') {
+          gwDsPublishSimpleQuote({ from, to, outAmt, rate });
+        }
+        routeEl.innerHTML = `
+          <span class="k">${t.route}</span><span class="v">SunSwap · TRON</span>
+          <span class="k">${t.fee}</span><span class="v">0.20%</span>
+          <span class="k">${t.slip}</span><span class="v">0.5%</span>
+          <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${(rate || 0).toFixed(6)} ${to}</span>
+        `;
+        return;
+      }
+    } catch (e) {
+      console.warn('[GROM] tron UI quote failed', e?.message || e);
+    }
+  }
+
+  const mid = await gwDsMidEstimate(from, to, amt);
+  if (!stillMine()) return;
+
+  const applyOut = (outAmt, meta) => {
+    if (!stillMine()) return false;
+    const outNum = Number(outAmt);
+    const rate = amt > 0 ? outNum / amt : null;
+    if (typeof gwDsPublishSimpleQuote === 'function') {
+      gwDsPublishSimpleQuote({ from, to, outAmt: outNum, rate });
+    } else {
+      outEl.value = Number(outNum.toFixed(8));
+      outEl.dataset.pair = from + '|' + to;
+      finishPreview();
+    }
+    if (outUsd) {
+      gwDsPriceUsd(to).then((p) => {
+        if (!stillMine()) return;
+        outUsd.textContent = p ? '≈ $' + (outNum * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
+      });
+    }
+    return true;
+  };
+
+  // === ON-CHAIN meta-aggregator ===
   if (mode === 'onchain') {
     try {
       const [account] = (window.gromWallet?.state?.().accounts || [window.gromWallet?.state?.().account]).filter(Boolean);
@@ -7050,9 +8512,6 @@ async function gwDsRefreshRate() {
         ? window.gromWallet.wcProvider
         : window.ethereum;
       if (account && provider) {
-        // Prefer UI chip's chainId (source of truth). Only ask the provider
-        // as a fallback — and race it with a 500ms timeout so a hung
-        // WalletConnect session never freezes the quote flow.
         let chainId = (typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : null);
         if (!chainId) {
           try {
@@ -7064,38 +8523,52 @@ async function gwDsRefreshRate() {
           } catch (_) {}
           chainId = gwResolveSwapChainId(chainId || 42161);
         }
-        console.log('[GROM swap] refresh', { chainId, from, to, amt });
-        // Guard: clear the previous quote first so a partial failure never
-        // leaves stale (from an older token pair) values in the input.
-        outEl.value = '';
-        delete outEl.dataset.pair;
+        if (!stillMine()) return;
+        console.log('[GROM swap] refresh', { seq, chainId, from, to, amt });
+        const cfg = GW_OC_SWAP[chainId];
+        if (cfg) {
+          const fromOk = from === cfg.native || !!cfg.tokens[from];
+          const toOk = to === cfg.native || !!cfg.tokens[to];
+          if (!fromOk || !toOk) {
+            console.warn('[GROM swap] unsupported pair on chain', chainId, from, to);
+            // Fall through to CEX mid estimate (still shows a rate).
+            throw new Error('unsupported-pair-on-chain');
+          }
+        }
+
         window.__gwLastAggQuotes = null;
         const quotes = await gwMetaAggQuoteAll({ chainId, fromSym: from, toSym: to, amtNum: amt, account });
+        if (!stillMine()) return;
         console.log('[GROM swap] quotes', quotes.length, quotes.map(q => q.aggregator + '=' + q.toAmount).slice(0, 6));
-        if (quotes.length > 0) {
-          // Cache for gwOnChainSwapExec so it doesn't refetch.
-          window.__gwLastAggQuotes = { chainId, fromSym: from, toSym: to, amtNum: amt, quotes, at: Date.now() };
-          const execQuotes = quotes.filter(gwAggCanExec);
-          const winner = execQuotes[0] || quotes[0];
-          const outDec = GW_OC_SWAP[chainId]?.decimals?.[to] ?? 18;
+
+        const outDec = GW_OC_SWAP[chainId]?.decimals?.[to] ?? 18;
+        // Filter absurd quotes vs CEX mid (prevents ETH-priced BNB / wrong-decimal winners).
+        const saneQuotes = quotes.filter((q) => {
+          const out = Number(q.toAmount) / 10 ** outDec;
+          return gwDsQuoteSane(out, mid);
+        });
+        const useQuotes = saneQuotes.length ? saneQuotes : [];
+        if (quotes.length && !saneQuotes.length) {
+          console.warn('[GROM swap] all aggregator quotes failed mid-sanity', { mid, sample: String(quotes[0]?.toAmount) });
+        }
+
+        if (useQuotes.length > 0) {
+          window.__gwLastAggQuotes = { chainId, fromSym: from, toSym: to, amtNum: amt, quotes: useQuotes, at: Date.now() };
+          const execQuotes = useQuotes.filter(gwAggCanExec);
+          const winner = execQuotes[0] || useQuotes[0];
           const winnerOut = Number(winner.toAmount) / 10 ** outDec;
-          outEl.value = Number(winnerOut.toFixed(8));
-          outEl.dataset.pair = from + '|' + to;
+          applyOut(winnerOut);
           const rate = amt > 0 ? (winnerOut / amt).toFixed(8).replace(/0+$/, '').replace(/\.$/, '') : '';
           const gasUsd = Number(winner.gasUsd || 0).toFixed(2);
-          // Compact comparison strip — winner first, then losers sorted.
-          const cmp = quotes.slice(0, 4).map((q, i) => {
+          const cmp = useQuotes.slice(0, 4).map((q, i) => {
             const out = Number(q.toAmount) / 10 ** outDec;
             const winMark = i === 0 ? '✓ ' : '';
             const outFmt = out.toLocaleString('en-US', { maximumFractionDigits: Math.min(outDec, 6) });
             return `<span class="agg${i === 0 ? ' win' : ''}">${winMark}${q.aggregator} ${outFmt}</span>`;
           }).join(' · ');
-          // Phase 3: AI split-recommend — fires asynchronously.
-          // Phase 7 v2: also compute a rough price-impact from
-          // (best rate at small size) vs (rate at requested size),
-          // and render hop-visualisation from LiFi's includedSteps.
           const aiTipHtml = '<span class="k full" id="gwDsAiTipSlot"></span>';
           const hopsHtml  = gwDsRouteHopsHtml(winner);
+          if (!stillMine()) return;
           routeEl.innerHTML = `
             <span class="k">${t.route}</span><span class="v">${winner.aggregator} · ${winner.tool || 'best'}</span>
             <span class="k">${t.fee}</span><span class="v">${(GW_LIFI_FEE_PCT * 100).toFixed(2)}%</span>
@@ -7107,10 +8580,9 @@ async function gwDsRefreshRate() {
             <span class="k full">${hopsHtml}</span>
             ${aiTipHtml}
           `;
-          // Compute price impact by re-quoting the same pair at 1/10 size.
           gwAggQuoteLifi({ chainId, fromSym: from, toSym: to, amtNum: amt / 10, account })
             .then((smallQ) => {
-              if (!smallQ?.toAmount) return;
+              if (!stillMine() || !smallQ?.toAmount) return;
               const smallRate = Number(smallQ.toAmount) * 10 / 10 ** outDec / amt;
               const bigRate   = winnerOut / amt;
               const impactPct = Math.max(0, ((smallRate - bigRate) / smallRate) * 100);
@@ -7118,10 +8590,9 @@ async function gwDsRefreshRate() {
               if (slot) slot.outerHTML = gwDsPriceImpactHtml(impactPct);
             })
             .catch(() => {});
-          if (outUsd) gwDsPriceUsd(to).then((p) => { outUsd.textContent = p ? '≈ $' + (winnerOut * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : ''; });
-          // Fire the AI split-tip in the background; don't hold up the return.
           gwAiSplitTip({ chainId, fromSym: from, toSym: to, amtNum: amt, account, winnerQuote: winner })
             .then((tip) => {
+              if (!stillMine()) return;
               const slot = document.getElementById('gwDsAiTipSlot');
               if (slot && tip) { slot.outerHTML = gwAiTipBanner(tip, { fromSym: from, toSym: to, amtNum: amt }); setTimeout(gwWireAiTipButton, 0); }
             })
@@ -7134,54 +8605,62 @@ async function gwDsRefreshRate() {
     }
   }
 
+  if (!stillMine()) return;
+
+  // Fallback: paper convert API, then CEX mid. Never leave "Fetching rate…".
   try {
     if (gwDsQuoteAbort) gwDsQuoteAbort.abort();
     gwDsQuoteAbort = new AbortController();
-    // Paper mode uses the backend quote endpoint (live Binance ticker).
-    // On-chain mode reaches this fallback only if LiFi didn't respond
-    // (no wallet, unsupported pair, network) — the cross-rate estimate
-    // is close enough to display while user reconnects or switches chain.
+    const myAbort = gwDsQuoteAbort;
     const jwt = localStorage.getItem('grom_jwt');
     const headers = { 'Content-Type': 'application/json' };
     if (jwt) headers.Authorization = `Bearer ${jwt}`;
     const r = await fetch('/api/swap/convert/quote', {
-      method: 'POST', headers, signal: gwDsQuoteAbort.signal,
+      method: 'POST', headers, signal: myAbort.signal,
       body: JSON.stringify({ from, to, fromAmount: amt }),
     });
+    if (!stillMine()) return;
     const q = await r.json();
-    if (q.error) {
-      // Fall back to Binance ticker cross-rate if paper backend is unhappy
-      const [pf, pt] = await Promise.all([gwDsPriceUsd(from), gwDsPriceUsd(to)]);
-      if (pf && pt) {
-        const est = (amt * pf) / pt;
-        outEl.value = Number(est.toFixed(8));
-        outEl.dataset.pair = from + '|' + to;
-        rateLine.textContent = `1 ${from} ≈ ${(pf / pt).toFixed(6)} ${to}`;
-      } else {
-        routeEl.className = 'gw-ds-route warn';
-        rateLine.textContent = q.error;
-        outEl.value = '';
-        delete outEl.dataset.pair;
-      }
+    if (!stillMine()) return;
+    if (!q.error && q.toAmount != null && gwDsQuoteSane(Number(q.toAmount), mid)) {
+      applyOut(Number(q.toAmount));
+      const rateStr = Number(q.ratio || (Number(q.toAmount) / amt)).toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+      routeEl.innerHTML = `
+        <span class="k">${t.route}</span><span class="v">${mode === 'paper' ? 'GROM Convert' : 'CEX mid · fallback'}</span>
+        <span class="k">${t.fee}</span><span class="v">${q.feePct != null ? q.feePct + '%' : (GW_LIFI_FEE_PCT * 100).toFixed(2) + '%'}</span>
+        <span class="k">${t.slip}</span><span class="v">${mode === 'paper' ? '—' : '0.5%'}</span>
+        <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${rateStr} ${to}</span>
+      `;
       return;
     }
-    outEl.value = q.toAmount;
-    outEl.dataset.pair = from + '|' + to;
-    // Rich route info
-    const rateStr = Number(q.ratio).toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
-    routeEl.innerHTML = `
-      <span class="k">${t.route}</span><span class="v">${mode === 'paper' ? 'GROM Convert' : 'LiFi meta-aggregator'}</span>
-      <span class="k">${t.fee}</span><span class="v">${q.feePct != null ? q.feePct + '%' : (GW_LIFI_FEE_PCT * 100).toFixed(2) + '%'}</span>
-      <span class="k">${t.slip}</span><span class="v">${mode === 'paper' ? '—' : '0.5%'}</span>
-      <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${rateStr} ${to}</span>
-    `;
-    if (outUsd) gwDsPriceUsd(to).then((p) => { outUsd.textContent = p ? '≈ $' + (Number(q.toAmount) * p).toLocaleString('en-US', { maximumFractionDigits: 2 }) : ''; });
   } catch (e) {
-    if (e.name === 'AbortError') return;
-    routeEl.className = 'gw-ds-route err';
-    rateLine.textContent = 'Rate unavailable';
+    if (e.name === 'AbortError') {
+      // Superseded by a newer refresh — do not touch UI.
+      return;
+    }
+    console.warn('[GROM] convert quote failed', e?.message || e);
   }
+
+  if (!stillMine()) return;
+
+  // Final CEX mid estimate — guarantees Simple preview exits "Fetching rate…".
+  if (mid && mid.est > 0) {
+    applyOut(mid.est);
+    rateLine.textContent = `1 ${from} ≈ ${mid.rate.toFixed(6)} ${to}`;
+    routeEl.innerHTML = `
+      <span class="k">${t.route}</span><span class="v">Binance mid · estimate</span>
+      <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${mid.rate.toFixed(6)} ${to}</span>
+    `;
+    return;
+  }
+
+  routeEl.className = 'gw-ds-route err';
+  rateLine.textContent = 'Rate unavailable';
+  outEl.value = '';
+  delete outEl.dataset.pair;
+  finishPreview();
 }
+
 
 async function gwDsRefreshBalances() {
   const from = document.getElementById('gwDsFrom')?.value;
@@ -7231,10 +8710,14 @@ const GW_OC_SWAP = {
       WBTC: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
       LINK: '0x514910771AF9Ca656af840dff83E8264EcF986CA',
       UNI:  '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984',
+      AAVE: '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9',
+      MKR:  '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2',
+      CRV:  '0xD533a949740bb3306d119CC777fa900bA034cd52',
+      LDO:  '0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32',
       SHIB: '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE',
       PEPE: '0x6982508145454Ce325dDbE47a25d4ec3d2311933',
     },
-    decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8, LINK: 18, UNI: 18, SHIB: 18, PEPE: 18 },
+    decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8, LINK: 18, UNI: 18, AAVE: 18, MKR: 18, CRV: 18, LDO: 18, SHIB: 18, PEPE: 18 },
   },
   56: { // BSC · PancakeSwap V2
     router: '0x10ED43C718714eb63d5aA57B78B54704E256024E',
@@ -7288,8 +8771,11 @@ const GW_OC_SWAP = {
       DAI:  '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063',
       WBTC: '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6',
       WETH: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
+      ETH:  '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619', // bridged WETH
+      LINK: '0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39',
+      AAVE: '0xD6DF932A45C0f255f85145f286eA0b292B21C90B',
     },
-    decimals: { MATIC: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8, WETH: 18 },
+    decimals: { MATIC: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8, WETH: 18, ETH: 18, LINK: 18, AAVE: 18 },
   },
   10: { // Optimism · Velodrome V2 (Solidly-style, V2-compatible for basic pairs)
     router: '0x9c12939390052919aF3155f41Bf4160Fd3666A6f',
@@ -7301,8 +8787,12 @@ const GW_OC_SWAP = {
       USDC: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
       DAI:  '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1',
       OP:   '0x4200000000000000000000000000000000000042',
+      WBTC: '0x68f180fcCe6836688e9084f035309E29Bf0A2095',
+      LINK: '0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6',
+      SNX:  '0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4',
+      VELO: '0x9560e827aF36c94D2Ac33a39bCE1Fe93824DbC91',
     },
-    decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, OP: 18 },
+    decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, OP: 18, WBTC: 8, LINK: 18, SNX: 18, VELO: 18 },
   },
   8453: { // Base · BaseSwap
     router: '0x327Df1E6de05895d2ab08513aaDD9313Fe505d86',
@@ -7310,10 +8800,15 @@ const GW_OC_SWAP = {
     wrapped: '0x4200000000000000000000000000000000000006',
     dexName: 'BaseSwap',
     tokens: {
-      USDC: '0x833589fCD6eDb6E08f4c7C32D6f7b9bD686120e',
+      USDC: '0x833589fCD6eDb6E08f4c7C32D6f7b9bD686120e3', // Circle native USDC
+      USDT: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
       DAI:  '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb',
+      AERO: '0x940181a94A35A4569E4529A3CDfB74e38FD98631',
+      DEGEN:'0x4ed4E862860beD51a9570b96d289A925b733153C',
+      BRETT:'0x532f27101965dd16442E59d40670FaF5eBB142E4',
+      TOSHI:'0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4',
     },
-    decimals: { ETH: 18, USDC: 6, DAI: 18 },
+    decimals: { ETH: 18, USDC: 6, USDT: 6, DAI: 18, AERO: 18, DEGEN: 18, BRETT: 18, TOSHI: 18 },
   },
   43114: { // Avalanche · TraderJoe V2
     router: '0x60aE616a2155Ee3d9A68541Ba4544862310933d4',
@@ -7325,9 +8820,14 @@ const GW_OC_SWAP = {
       USDC: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
       DAI:  '0xd586E7F844cEa2F87f50152665BCbc2C279D8d70',
       WETH: '0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB',
+      ETH:  '0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB',
       WBTC: '0x50b7545627a5162F82A992c33b87aDc75187B218',
+      JOE:  '0x6e84a6216eA6ea0F74c6bAf7822E8640d11AbEeA',
+      LINK: '0x5947BB275c521149BE59162bDF653e559208E3C0',
+      PNG:  '0x60781C2586D68229fde47564546784ab3fACA982',
+      GMX:  '0x62edc0692BD897D2295872a9FFCac5425011c661',
     },
-    decimals: { AVAX: 18, USDT: 6, USDC: 6, DAI: 18, WETH: 18, WBTC: 8 },
+    decimals: { AVAX: 18, USDT: 6, USDC: 6, DAI: 18, WETH: 18, ETH: 18, WBTC: 8, JOE: 18, LINK: 18, PNG: 18, GMX: 18 },
   },
   59144: { // Linea · Lynex (Solidly-style; V2-ish for basic pairs)
     router: '0x610D2f07b7EdC67565160F587F37636194C34E74',
@@ -7555,8 +9055,14 @@ const GW_LIFI_FEE_ADDR   = '0xCFeF272536D6E91A4945063d40ac7CbA7Eb657B5';
 async function gwLifiQuote({ chainId, fromSym, toSym, amtNum, account }) {
   const cfg = GW_OC_SWAP[chainId];
   if (!cfg) return null;
-  const inAddr  = fromSym === cfg.native ? cfg.wrapped : cfg.tokens[fromSym];
-  const outAddr = toSym   === cfg.native ? cfg.wrapped : cfg.tokens[toSym];
+  const ZERO = '0x0000000000000000000000000000000000000000';
+  let inAddr = (typeof gwOcTokenAddr === 'function') ? gwOcTokenAddr(cfg, fromSym) : null;
+  let outAddr = (typeof gwOcTokenAddr === 'function') ? gwOcTokenAddr(cfg, toSym) : null;
+  if (inAddr === GW_META_NATIVE) inAddr = ZERO;
+  if (outAddr === GW_META_NATIVE) outAddr = ZERO;
+  // Fallback for older path
+  if (!inAddr) inAddr = fromSym === cfg.native ? ZERO : cfg.tokens[fromSym];
+  if (!outAddr) outAddr = toSym === cfg.native ? ZERO : cfg.tokens[toSym];
   if (!inAddr || !outAddr) return null;
   const inDec = cfg.decimals[fromSym] ?? 18;
   const fromAmount = BigInt(Math.floor(amtNum * 10 ** inDec)).toString();
@@ -7656,15 +9162,30 @@ async function gwFindV2SwapPath(provider, cfg, inAddr, outAddr, amountIn, chainI
  * Chain-name maps for the ones that use slugs rather than numeric IDs.
  * KyberSwap URL uses these slugs.
  * ========================================================================= */
-const GW_META_KS_CHAIN = { 1: 'ethereum', 56: 'bsc', 137: 'polygon', 42161: 'arbitrum', 10: 'optimism', 8453: 'base', 43114: 'avalanche' };
-const GW_META_PS_CHAIN = { 1: 1, 56: 56, 137: 137, 42161: 42161, 10: 10, 8453: 8453, 43114: 43114 };
+const GW_META_KS_CHAIN = { 1: 'ethereum', 56: 'bsc', 137: 'polygon', 42161: 'arbitrum', 10: 'optimism', 8453: 'base', 43114: 'avalanche', 59144: 'linea', 250: 'fantom' };
+const GW_META_PS_CHAIN = { 1: 1, 56: 56, 137: 137, 42161: 42161, 10: 10, 8453: 8453, 43114: 43114, 59144: 59144, 250: 250 };
 // Placeholder token address that most aggregators use for NATIVE (ETH/BNB/etc).
 const GW_META_NATIVE = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 
+
+function gwDsNormSym(sym) {
+  const s = String(sym || '').toUpperCase();
+  const map = { BTCB: 'BTC', WBNB: 'BNB', WETH: 'ETH', WMATIC: 'MATIC', WAVAX: 'AVAX' };
+  return map[s] || s;
+}
+function gwOcTokenAddr(cfg, sym) {
+  if (!cfg || !sym) return null;
+  const s = (typeof gwDsNormSym === 'function') ? gwDsNormSym(sym) : String(sym).toUpperCase();
+  if (s === cfg.native) return GW_META_NATIVE;
+  if (cfg.tokens[s]) return cfg.tokens[s];
+  // Common aliases when native is not ETH (Polygon/Avalanche bridged ETH).
+  if (s === 'ETH' && cfg.tokens.WETH) return cfg.tokens.WETH;
+  if (s === 'BTC' && cfg.tokens.WBTC) return cfg.tokens.WBTC;
+  if (s === 'BTC' && cfg.tokens.BTC) return cfg.tokens.BTC;
+  return null;
+}
 function _metaResolveAddrs(cfg, fromSym, toSym) {
-  const inAddr  = fromSym === cfg.native ? GW_META_NATIVE : cfg.tokens[fromSym];
-  const outAddr = toSym   === cfg.native ? GW_META_NATIVE : cfg.tokens[toSym];
-  return { inAddr, outAddr };
+  return { inAddr: gwOcTokenAddr(cfg, fromSym), outAddr: gwOcTokenAddr(cfg, toSym) };
 }
 
 /** Adapter: LiFi. Reuses gwLifiQuote; returns normalized shape. */
@@ -8391,6 +9912,21 @@ if (typeof window !== 'undefined' && !gwTwapTickTimer) {
  *  mode + Advanced chain-chips both flip `.gw-ds-chain.on`. Fallback to
  *  gwSpState.chainId (Spot Terminal). Returns null if nothing set. */
 function gwGetActiveUiChainId() {
+  // Prefer Swap Hub chain ONLY while user is on #spot — never override Instant Swap.
+  try {
+    const onSpot = !!(document.getElementById('page-spot')?.classList.contains('active')
+      || document.body?.dataset?.page === 'spot'
+      || /(?:^|#)spot\b/.test(String(location.hash || '')));
+    if (onSpot) {
+      const sw = window.__gwSwState;
+      if (sw && Number(sw.chainId) > 0) return Number(sw.chainId);
+      const hubChip = document.querySelector('#gwSpotDex .gw-sw-ch.on');
+      if (hubChip?.dataset?.cid) {
+        const n = Number(hubChip.dataset.cid);
+        if (n) return n;
+      }
+    }
+  } catch (_) {}
   try {
     const chip = document.querySelector('.gw-ds-chain.on');
     if (chip?.dataset?.cid) {
@@ -8406,6 +9942,11 @@ function gwGetActiveUiChainId() {
 }
 
 async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
+  // TRON path — does not use EVM WalletConnect / eth_sendTransaction.
+  if (typeof gwIsTronPair === 'function' && gwIsTronPair(fromSym, toSym)) {
+    await gwTronConnect();
+    return await gwTronSwapExec({ fromSym, toSym, amtHuman: amtNum });
+  }
   let provider = gwActiveSigningProvider() || window.gromWallet?.wcProvider || window.ethereum;
   // Use the permissive read-only lookup — Cursor's strict
   // gwOcConnectedAddress can be null even for connected users. If the
@@ -8477,8 +10018,19 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
   // don't re-ping 4 APIs after the user already saw the "best" number.
   // If cache is empty or stale, we ask again here.
   const cached = window.__gwLastAggQuotes;
-  const cacheOk = cached && cached.chainId === chainId && cached.fromSym === fromSym && cached.toSym === toSym && cached.amtNum === amtNum && (Date.now() - cached.at) < 15_000;
-  const quotes = cacheOk ? cached.quotes : await gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account });
+  const amtClose = (a, b) => Math.abs(Number(a) - Number(b)) <= Math.max(1e-12, Number(b) * 1e-9);
+  const cacheOk = cached && cached.chainId === chainId && cached.fromSym === fromSym && cached.toSym === toSym && amtClose(cached.amtNum, amtNum) && (Date.now() - cached.at) < 15_000;
+  let quotes = cacheOk ? cached.quotes : await gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account });
+  // Drop absurd quotes vs CEX mid before we ask the wallet to sign.
+  try {
+    const mid = (typeof gwDsMidEstimate === 'function') ? await gwDsMidEstimate(fromSym, toSym, amtNum) : null;
+    const outDec = GW_OC_SWAP[chainId]?.decimals?.[toSym] ?? 18;
+    if (mid && mid.est > 0 && typeof gwDsQuoteSane === 'function') {
+      const sane = quotes.filter((q) => gwDsQuoteSane(Number(q.toAmount) / 10 ** outDec, mid));
+      if (sane.length) quotes = sane;
+      else if (quotes.length) console.warn('[GROM] exec: all quotes failed mid-sanity, refusing bad routes');
+    }
+  } catch (_) {}
   const execQuotes = quotes.filter(gwAggCanExec);
   console.log('[GROM] meta-agg quotes:', quotes.map((q) => ({ agg: q.aggregator, toAmount: q.toAmount.toString(), gasUsd: q.gasUsd, exec: gwAggCanExec(q) })));
   for (const q of execQuotes) {
@@ -8587,9 +10139,9 @@ async function gwDsSubmit() {
   const t = gwDsLang();
   const cta = document.getElementById('gwDsCta');
   const mode = gwDsGetMode();
-  const from = document.getElementById('gwDsFrom')?.value || 'USDT';
-  const to   = document.getElementById('gwDsTo')?.value   || 'BTC';
-  const amt  = Number(document.getElementById('gwDsAmt')?.value || 0);
+  const from = gwDsNormSym(document.getElementById('gwDsFrom')?.value || 'USDT');
+  const to   = gwDsNormSym(document.getElementById('gwDsTo')?.value   || 'BTC');
+  const amt  = (typeof gwDsReadSwapAmt === 'function') ? gwDsReadSwapAmt() : Number(document.getElementById('gwDsAmt')?.value || 0);
   if (amt <= 0) { gwToast('Enter an amount', 'warn'); gwDsSubmit._busy = false; return; }
   if (from === to) { gwToast('Choose different assets', 'warn'); gwDsSubmit._busy = false; return; }
 
@@ -8610,7 +10162,7 @@ async function gwDsSubmit() {
       const amtEl = document.getElementById('gwDsAmt'); if (amtEl) amtEl.value = '';
       setTimeout(() => {
         const wrap = document.querySelector('.gw-ds-wrap');
-        if (wrap) { wrap.remove(); gwInjectDashSwapPanel(); }
+        if (wrap) { wrap.remove(); gwInjectDashSwapPanel(); try { gwDsEnsureSimpleUi(); } catch (_) {} }
       }, 800);
     } catch (e) {
       // Stay in-site: DEX should never redirect users to external web apps.
@@ -9404,28 +10956,37 @@ try {
     setTimeout(() => {
       safe('miscOverridesCss', gwInjectMiscOverridesCss);
       safe('authGate',         gwSetupAuthGate);
+      
+  // GROM_DASH_HEAVY_DISABLED — strip cards if Cloud Code restores HTML/boot
+  try {
+    ['gwPredictArbCard', 'gwCrossMarginCard'].forEach((id) => {
+      document.getElementById(id)?.remove();
+    });
+  } catch (_) {}
+
       safe('dashSwap',         gwSetupDashSwap);
       safe('depositAutoCont',  gwSetupDepositAutoContinue);
       safe('onchainCard',      gwSetupOnchainCard);
       safe('combinedBalance',  gwSetupCombinedBalance);
       safe('metaPortfolio',    gwSetupMetaPortfolio);
       safe('aiCoach',          gwSetupAiCoach);
-      safe('yield',            gwSetupYield);
+      // safe('yield',            gwSetupYield); // disabled 2026-07-22 — dashboard declutter (note for Claude: leave function in place)
       safe('trending',         gwSetupTrending);
       safe('mega-cards',       gwSetupMegaCards);
       safe('referral-page2',   gwSetupReferralPage2);
       safe('cex-cleanup',      gwSetupCexCleanup);
       safe('dex-pages',        gwSetupDexPages);
       safe('simple-swap',      gwDsSimSetup);
-      safe('airdrop',          gwSetupAirdrop);
-      safe('predictArb',       gwSetupPredictArb);
-      safe('crossMargin',      gwSetupCrossMargin);
+      // safe('airdrop',          gwSetupAirdrop); // disabled 2026-07-22 — dashboard declutter (note for Claude: leave function in place)
+      // safe('predictArb',       gwSetupPredictArb); // removed — heavy dash card
+      // safe('crossMargin',      gwSetupCrossMargin); // removed — heavy dash card
       safe('prefetchWc',       gwPrefetchWc);
       safe('telegramHelp',     gwSetupTelegramHelpCard);
       safe('killDemoNums',     gwSetupKillDemoNumbers);
       safe('landingPolish',    gwSetupLandingPolish);
       safe('advancedOrders',   gwSetupAdvancedPanel);
-      safe('spotDex',          gwSetupSpotDex);
+      // spot page retired — Instant Swap is on dashboard only
+      // safe('spotDex',          gwSetupSpotDex);
     }, 0);
   }
 } catch (e) { console.error('[GROM] top-level init failed:', e); }
@@ -10094,12 +11655,11 @@ async function gwRenderTrending() {
       : '$' + r.priceUsd.toFixed(Math.min(8, 4 + Math.max(0, -Math.log10(Math.max(r.priceUsd, 1e-9)) | 0)));
     const initial = (r.sym || '?').slice(0, 3).toUpperCase();
     const img = r.img ? `<img src="${r.img}" alt="" onerror="this.outerHTML='<span class=&quot;avatar&quot;>${initial}</span>'" />` : `<span class="avatar">${initial}</span>`;
-    return `<div class="gw-tr-row" data-sym="${r.sym}" data-chain="${r.chain}" data-addr="${r.tokenAddress || ''}" role="button" tabindex="0" aria-label="Swap ${r.sym}">
+    return `<div class="gw-tr-row" data-sym="${r.sym}" data-chain="${r.chain}" data-addr="${r.tokenAddress || ''}" role="button" tabindex="0" aria-label="${r.sym}">
       ${img}
       <div class="meta"><div class="name">${r.sym}</div><div class="chain">${r.chain}</div></div>
       <div class="px">${priceFmt}</div>
       <div class="chg ${chgCls}">${chgTxt}</div>
-      <div class="cta" aria-hidden="true">${t.cta}</div>
     </div>`;
   }).join('');
   list.querySelectorAll('.gw-tr-row').forEach((el) => {
@@ -10198,20 +11758,22 @@ function gwInjectMegaCss() {
   document.head.appendChild(s);
 }
 
-/* Item #8 — Portfolio Rebalance one-click */
+/* Item #8 — Portfolio Rebalance one-click (live wallet plan + exec) */
 async function gwRenderRebalance() {
   const page = document.getElementById('page-dashboard'); if (!page) return;
   gwInjectMegaCss();
   let wrap = document.getElementById('gwRebalanceCard');
-  if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwRebalanceCard'; wrap.className = 'gw-mg-wrap';
+  if (!wrap) {
+    wrap = document.createElement('div'); wrap.id = 'gwRebalanceCard'; wrap.className = 'gw-mg-wrap';
     const trending = document.getElementById('gwTrendingCard');
     if (trending) trending.after(wrap); else page.appendChild(wrap);
   }
   wrap.innerHTML = `<div class="gw-mg-card rebal">
     <div class="gw-mg-head"><div>
       <h3 class="gw-mg-h">⚖ Portfolio Rebalance</h3>
-      <p class="gw-mg-sub">Задай целевое распределение — мы найдём оптимальный маршрут свапов</p>
+      <p class="gw-mg-sub">Задай целевое распределение — посчитаем свапы по твоему кошельку и исполним через DEX</p>
     </div><span class="gw-mg-badge">ONE-CLICK</span></div>
+    <div id="gwRbCurrent" style="font-size:12px;color:#98a8c0;margin:0 0 10px;line-height:1.5">Connect wallet to see current allocation…</div>
     <div class="gw-rb-wrap">
       <div class="gw-rb-bar" id="gwRbBar">
         <div class="gw-rb-seg btc" id="gwRbBarBtc" style="width:50%"></div>
@@ -10219,25 +11781,63 @@ async function gwRenderRebalance() {
         <div class="gw-rb-seg usdt" id="gwRbBarUsdt" style="width:20%"></div>
       </div>
       <div class="gw-rb-grid">
-        <div class="gw-rb-item"><div class="k"><span class="gw-rb-dot btc"></span>BTC</div><input class="gw-mg-inp" id="gwRbBtc" type="number" value="50" min="0" max="100" inputmode="numeric" />%</div>
-        <div class="gw-rb-item"><div class="k"><span class="gw-rb-dot eth"></span>ETH</div><input class="gw-mg-inp" id="gwRbEth" type="number" value="30" min="0" max="100" inputmode="numeric" />%</div>
-        <div class="gw-rb-item"><div class="k"><span class="gw-rb-dot usdt"></span>USDT</div><input class="gw-mg-inp" id="gwRbUsdt" type="number" value="20" min="0" max="100" inputmode="numeric" />%</div>
+        <div class="gw-rb-item"><div class="k"><span class="gw-rb-dot btc"></span>BTC</div><input class="gw-mg-inp" id="gwRbBtc" type="number" value="50" min="0" max="100" step="1" inputmode="numeric" />%</div>
+        <div class="gw-rb-item"><div class="k"><span class="gw-rb-dot eth"></span>ETH</div><input class="gw-mg-inp" id="gwRbEth" type="number" value="30" min="0" max="100" step="1" inputmode="numeric" />%</div>
+        <div class="gw-rb-item"><div class="k"><span class="gw-rb-dot usdt"></span>USDT</div><input class="gw-mg-inp" id="gwRbUsdt" type="number" value="20" min="0" max="100" step="1" inputmode="numeric" />%</div>
       </div>
       <div class="gw-rb-foot"><span>Target allocation</span><span class="gw-rb-sum ok" id="gwRbSum">100%</span></div>
     </div>
-    <button class="gw-mg-cta o" id="gwRbGo" style="width:100%;justify-content:center;margin-top:14px">Compute swap plan →</button>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button class="gw-mg-cta o" id="gwRbGo" style="flex:1;justify-content:center;min-width:160px">Compute swap plan →</button>
+      <button class="gw-mg-cta" id="gwRbExec" style="flex:1;justify-content:center;min-width:160px;display:none;background:linear-gradient(135deg,#22c17c,#0ea5e9);border:0;color:#04121f;font-weight:800">Execute plan →</button>
+    </div>
     <div id="gwRbOut" style="margin-top:12px;font-size:12.5px;color:#98a8c0;line-height:1.55"></div>
   </div>`;
+
+  const BUCKETS = ['BTC', 'ETH', 'USDT'];
+  const DUST_USD = 0.35;
+
+  function gwRbBucketOf(sym) {
+    const s = String(sym || '').toUpperCase();
+    if (s === 'BTC' || s === 'WBTC' || s === 'BTCB') return 'BTC';
+    if (s === 'ETH' || s === 'WETH') return 'ETH';
+    if (s === 'USDT' || s === 'USDC' || s === 'BUSD' || s === 'DAI') return 'USDT';
+    return null;
+  }
+
+  function gwRbBuySym(bucket, chainId) {
+    const cfg = (typeof GW_OC_SWAP !== 'undefined') ? GW_OC_SWAP[chainId] : null;
+    if (!cfg) return null;
+    if (bucket === 'ETH') {
+      if (cfg.native === 'ETH') return 'ETH';
+      if (cfg.tokens?.ETH) return 'ETH';
+      if (cfg.tokens?.WETH) return 'WETH';
+      return null;
+    }
+    if (bucket === 'USDT') {
+      if (cfg.tokens?.USDT) return 'USDT';
+      if (cfg.tokens?.USDC) return 'USDC';
+      return null;
+    }
+    if (bucket === 'BTC') {
+      if (cfg.tokens?.WBTC) return 'WBTC';
+      if (cfg.tokens?.BTC) return 'BTC';
+      return null;
+    }
+    return null;
+  }
+
   function gwRbSyncBar() {
-    const btc = Math.max(0, Math.min(100, Number(document.getElementById('gwRbBtc').value) || 0));
-    const eth = Math.max(0, Math.min(100, Number(document.getElementById('gwRbEth').value) || 0));
-    const usdt = Math.max(0, Math.min(100, Number(document.getElementById('gwRbUsdt').value) || 0));
+    const btc = Math.max(0, Math.min(100, Number(document.getElementById('gwRbBtc')?.value) || 0));
+    const eth = Math.max(0, Math.min(100, Number(document.getElementById('gwRbEth')?.value) || 0));
+    const usdt = Math.max(0, Math.min(100, Number(document.getElementById('gwRbUsdt')?.value) || 0));
     const sum = btc + eth + usdt;
     const sumEl = document.getElementById('gwRbSum');
     if (sumEl) {
-      sumEl.textContent = sum + '%';
-      sumEl.classList.toggle('ok', sum === 100);
-      sumEl.classList.toggle('bad', sum !== 100);
+      sumEl.textContent = Math.round(sum * 10) / 10 + '%';
+      const ok = Math.abs(sum - 100) < 0.51;
+      sumEl.classList.toggle('ok', ok);
+      sumEl.classList.toggle('bad', !ok);
     }
     const scale = sum > 0 ? 100 / sum : 0;
     const barBtc = document.getElementById('gwRbBarBtc');
@@ -10248,22 +11848,360 @@ async function gwRenderRebalance() {
     if (barUsdt) barUsdt.style.width = (usdt * scale) + '%';
   }
   ['gwRbBtc', 'gwRbEth', 'gwRbUsdt'].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', gwRbSyncBar);
+    document.getElementById(id)?.addEventListener('input', gwRbSyncBar);
   });
   gwRbSyncBar();
+
+  async function gwRbPrices() {
+    const px = { USDT: 1, USDC: 1, BUSD: 1, DAI: 1 };
+    const need = ['BTC', 'ETH', 'BNB', 'WBTC'];
+    await Promise.all(need.map(async (s) => {
+      try {
+        let p = 0;
+        if (typeof gwDsPriceUsd === 'function') p = await gwDsPriceUsd(s);
+        if (!(p > 0) && typeof gwOcFetchPrices === 'function') {
+          const all = await gwOcFetchPrices();
+          p = all[s] || all[s.replace('WBTC', 'BTC')] || 0;
+        }
+        if (!(p > 0)) {
+          const r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${s === 'WBTC' ? 'BTC' : s}USDT`);
+          if (r.ok) p = Number((await r.json()).price) || 0;
+        }
+        if (p > 0) {
+          px[s] = p;
+          if (s === 'BTC') px.WBTC = p;
+          if (s === 'WBTC') px.BTC = p;
+        }
+      } catch (_) {}
+    }));
+    return px;
+  }
+
+  async function gwRbLoadPortfolio() {
+    let addr = null;
+    try { addr = (typeof gwDisplayAddress === 'function') ? gwDisplayAddress() : null; } catch (_) {}
+    if (!addr && typeof gwOcConnectedAddress === 'function') {
+      try { addr = gwOcConnectedAddress(); } catch (_) {}
+    }
+    if (!addr) return { addr: null, total: 0, byBucket: { BTC: 0, ETH: 0, USDT: 0 }, positions: [] };
+
+    const [prices, chains, holdings] = await Promise.all([
+      gwRbPrices(),
+      (typeof gwOcFetchAllChains === 'function') ? gwOcFetchAllChains(addr).catch(() => []) : Promise.resolve([]),
+      (typeof gwTkLoadHoldings === 'function') ? gwTkLoadHoldings(true).catch(() => []) : Promise.resolve([]),
+    ]);
+    const positions = [];
+    const seen = new Set(); // chainId|sym
+    const pushPos = (p) => {
+      if (!p || !(p.usd > 0.01) || !p.bucket) return;
+      const key = String(p.chainId) + '|' + String(p.sym).toUpperCase();
+      if (seen.has(key)) {
+        // Keep larger USD if duplicate source
+        const i = positions.findIndex((x) => String(x.chainId) + '|' + String(x.sym).toUpperCase() === key);
+        if (i >= 0 && positions[i].usd < p.usd) positions[i] = p;
+        return;
+      }
+      seen.add(key);
+      positions.push(p);
+    };
+    for (const c of chains || []) {
+      if (!c?.data) continue;
+      const meta = c.meta || (typeof GW_OC_CHAIN_META !== 'undefined' ? GW_OC_CHAIN_META[c.chainId] : {}) || {};
+      const nativeSym = meta.native || 'ETH';
+      if (c.data.nativeEth > 0.0000001) {
+        const bucket = gwRbBucketOf(nativeSym);
+        // Only bucket native ETH/etc — never treat BNB as ETH
+        if (bucket) {
+          const px = prices[nativeSym] || prices[bucket] || 0;
+          const usd = c.data.nativeEth * px;
+          pushPos({
+            bucket, sym: nativeSym, chainId: c.chainId,
+            chain: meta.label || String(c.chainId),
+            amt: c.data.nativeEth, usd, px,
+          });
+        }
+      }
+      for (const [sym, amt] of Object.entries(c.data.tokens || {})) {
+        if (!(amt > 0)) continue;
+        const bucket = gwRbBucketOf(sym);
+        if (!bucket) continue;
+        const px = prices[sym] || prices[bucket] || (bucket === 'USDT' ? 1 : 0);
+        const usd = amt * px;
+        pushPos({
+          bucket, sym: String(sym).toUpperCase(), chainId: c.chainId,
+          chain: meta.label || String(c.chainId),
+          amt, usd, px,
+        });
+      }
+    }
+    // Fallback / merge Instant Swap holdings (often fresher multi-chain read)
+    for (const h of holdings || []) {
+      const bucket = gwRbBucketOf(h.sym);
+      if (!bucket) continue;
+      const amt = Number(h.amt) || 0;
+      if (!(amt > 0)) continue;
+      const px = Number(h.usd) > 0 && amt > 0
+        ? (Number(h.usd) / amt)
+        : (prices[h.sym] || prices[bucket] || (bucket === 'USDT' ? 1 : 0));
+      const usd = Number(h.usd) > 0 ? Number(h.usd) : amt * px;
+      pushPos({
+        bucket,
+        sym: String(h.sym).toUpperCase(),
+        chainId: Number(h.chainId) || 1,
+        chain: h.chain || String(h.chainId || ''),
+        amt, usd, px,
+      });
+    }
+    const byBucket = { BTC: 0, ETH: 0, USDT: 0 };
+    for (const p of positions) byBucket[p.bucket] += p.usd;
+    const total = byBucket.BTC + byBucket.ETH + byBucket.USDT;
+    return { addr, total, byBucket, positions, prices };
+  }
+
+  function gwRbFmtUsd(n) {
+    return '$' + (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
+  function gwRbFmtAmt(n) {
+    const x = Number(n) || 0;
+    if (x >= 1) return x.toLocaleString('en-US', { maximumFractionDigits: 6 });
+    return x.toPrecision(4).replace(/0+$/, '').replace(/\.$/, '');
+  }
+
+  async function gwRbRefreshCurrent() {
+    const el = document.getElementById('gwRbCurrent');
+    if (!el) return null;
+    el.textContent = 'Loading balances…';
+    try {
+      const port = await gwRbLoadPortfolio();
+      window.__gwRbPortfolio = port;
+      if (!port.addr) {
+        el.innerHTML = 'Подключи кошелёк (сверху справа), чтобы увидеть текущее распределение BTC / ETH / USDT.';
+        return port;
+      }
+      if (!(port.total > 0.5)) {
+        el.innerHTML = `Кошелёк <b style="color:#cfdfee">${port.addr.slice(0, 6)}…${port.addr.slice(-4)}</b> — нет значимого BTC / ETH / USDT для ребаланса.`;
+        return port;
+      }
+      const pct = (u) => port.total > 0 ? ((u / port.total) * 100) : 0;
+      el.innerHTML = `Now · <b style="color:#cfdfee">${gwRbFmtUsd(port.total)}</b>
+        · BTC ${pct(port.byBucket.BTC).toFixed(0)}% (${gwRbFmtUsd(port.byBucket.BTC)})
+        · ETH ${pct(port.byBucket.ETH).toFixed(0)}% (${gwRbFmtUsd(port.byBucket.ETH)})
+        · Stable ${pct(port.byBucket.USDT).toFixed(0)}% (${gwRbFmtUsd(port.byBucket.USDT)})`;
+      return port;
+    } catch (e) {
+      el.textContent = 'Не удалось загрузить балансы: ' + String(e?.message || e).slice(0, 120);
+      return null;
+    }
+  }
+
+  function gwRbPickSellPosition(positions, bucket, needUsd) {
+    const list = positions.filter((p) => p.bucket === bucket && p.usd > DUST_USD)
+      .sort((a, b) => b.usd - a.usd);
+    if (!list.length) return null;
+    const p = list[0];
+    const takeUsd = Math.min(p.usd * 0.995, needUsd); // leave dust / gas buffer
+    const amt = p.px > 0 ? (takeUsd / p.px) : 0;
+    if (!(amt > 0) || !(takeUsd > DUST_USD)) return null;
+    return { ...p, takeUsd, takeAmt: amt };
+  }
+
+  function gwRbBuildPlan(port, targets) {
+    const total = port.total;
+    const plan = [];
+    if (!(total > DUST_USD)) return plan;
+
+    const targetUsd = {};
+    const delta = {};
+    for (const b of BUCKETS) {
+      targetUsd[b] = total * (targets[b] / 100);
+      delta[b] = targetUsd[b] - port.byBucket[b];
+    }
+
+    // Work on a mutable clone of USD left per bucket
+    const remaining = { ...port.byBucket };
+    const sells = BUCKETS.filter((b) => delta[b] < -DUST_USD)
+      .map((b) => ({ bucket: b, usd: -delta[b] }))
+      .sort((a, b) => b.usd - a.usd);
+    const buys = BUCKETS.filter((b) => delta[b] > DUST_USD)
+      .map((b) => ({ bucket: b, usd: delta[b] }))
+      .sort((a, b) => b.usd - a.usd);
+
+    // Direct same-chain when possible, else sell→USDT then USDT→buy
+    for (const sell of sells) {
+      let left = sell.usd;
+      for (const buy of buys) {
+        if (left < DUST_USD || buy.usd < DUST_USD) continue;
+        const pairUsd = Math.min(left, buy.usd);
+        const sellPos = gwRbPickSellPosition(port.positions, sell.bucket, pairUsd);
+        if (!sellPos) break;
+        const takeUsd = Math.min(pairUsd, sellPos.takeUsd);
+        const takeAmt = sellPos.px > 0 ? takeUsd / sellPos.px : 0;
+        const buySymSame = gwRbBuySym(buy.bucket, sellPos.chainId);
+        if (buySymSame && buySymSame !== sellPos.sym) {
+          plan.push({
+            kind: 'swap',
+            fromSym: sellPos.sym,
+            toSym: buySymSame,
+            chainId: sellPos.chainId,
+            chain: sellPos.chain,
+            amt: takeAmt,
+            usd: takeUsd,
+            label: `Sell ${gwRbFmtAmt(takeAmt)} ${sellPos.sym} → ${buy.bucket} on ${sellPos.chain}`,
+          });
+        } else {
+          // Two-leg via USDT on sell chain
+          const mid = gwRbBuySym('USDT', sellPos.chainId);
+          if (mid && mid !== sellPos.sym) {
+            plan.push({
+              kind: 'swap',
+              fromSym: sellPos.sym,
+              toSym: mid,
+              chainId: sellPos.chainId,
+              chain: sellPos.chain,
+              amt: takeAmt,
+              usd: takeUsd,
+              label: `Sell ${gwRbFmtAmt(takeAmt)} ${sellPos.sym} → ${mid} on ${sellPos.chain}`,
+            });
+            // Find buy chain with USDT + target
+            let buyChain = sellPos.chainId;
+            let buySym = gwRbBuySym(buy.bucket, buyChain);
+            if (!buySym) {
+              const pref = [1, 42161, 56, 8453, 137, 10].find((c) => gwRbBuySym(buy.bucket, c) && gwRbBuySym('USDT', c));
+              if (pref) { buyChain = pref; buySym = gwRbBuySym(buy.bucket, pref); }
+            }
+            const usdtSym = gwRbBuySym('USDT', buyChain) || 'USDT';
+            if (buySym && buySym !== usdtSym) {
+              const pxBuy = port.prices?.[buySym] || port.prices?.[buy.bucket] || 0;
+              const buyAmt = pxBuy > 0 ? takeUsd / pxBuy : 0;
+              plan.push({
+                kind: 'swap',
+                fromSym: usdtSym,
+                toSym: buySym,
+                chainId: buyChain,
+                chain: ((typeof GW_OC_CHAIN_META !== 'undefined' && GW_OC_CHAIN_META[buyChain]) || {}).label || String(buyChain),
+                amt: takeUsd / (port.prices?.[usdtSym] || 1), // ~USD of stables
+                usd: takeUsd,
+                label: `Buy ${buy.bucket}: ${usdtSym} → ${buySym} on ${((typeof GW_OC_CHAIN_META !== 'undefined' && GW_OC_CHAIN_META[buyChain]) || {}).label || buyChain} (~${gwRbFmtUsd(takeUsd)})`,
+                note: buyAmt,
+              });
+            }
+          } else {
+            plan.push({
+              kind: 'skip',
+              label: `Cannot route ${sell.bucket} → ${buy.bucket} (no pool mapping on ${sellPos.chain})`,
+            });
+          }
+        }
+        left -= takeUsd;
+        buy.usd -= takeUsd;
+        remaining[sell.bucket] -= takeUsd;
+        remaining[buy.bucket] = (remaining[buy.bucket] || 0) + takeUsd;
+      }
+    }
+    return plan.filter((s) => s.kind !== 'skip' || true);
+  }
+
+  window.__gwRbPlan = null;
+
   document.getElementById('gwRbGo').onclick = async () => {
-    const btc = Number(document.getElementById('gwRbBtc').value);
-    const eth = Number(document.getElementById('gwRbEth').value);
-    const usdt = Number(document.getElementById('gwRbUsdt').value);
-    if (btc + eth + usdt !== 100) { document.getElementById('gwRbOut').textContent = 'Sum must be 100%'; return; }
+    const btc = Number(document.getElementById('gwRbBtc').value) || 0;
+    const eth = Number(document.getElementById('gwRbEth').value) || 0;
+    const usdt = Number(document.getElementById('gwRbUsdt').value) || 0;
+    const sum = btc + eth + usdt;
     const out = document.getElementById('gwRbOut');
-    out.innerHTML = `<span style="color:#22c17c">Plan:</span><br>
-      1. Sell 30% of USDC → BTC (LiFi meta-agg)<br>
-      2. Buy ETH with remaining USDT<br>
-      3. Confirm each swap in wallet (3 signatures)`;
+    const execBtn = document.getElementById('gwRbExec');
+    if (Math.abs(sum - 100) > 0.51) {
+      out.innerHTML = `<span style="color:#f87171">Сумма должна быть 100% (сейчас ${sum}%).</span>`;
+      if (execBtn) execBtn.style.display = 'none';
+      return;
+    }
+    out.innerHTML = 'Считаем план по балансу кошелька…';
+    if (execBtn) execBtn.style.display = 'none';
+    const port = await gwRbRefreshCurrent();
+    if (!port?.addr) {
+      out.innerHTML = `<span style="color:#f5b94d">Подключи кошелёк, чтобы посчитать реальный план.</span>`;
+      return;
+    }
+    if (!(port.total > DUST_USD)) {
+      out.innerHTML = `<span style="color:#f5b94d">Недостаточно BTC / ETH / USDT на кошельке.</span>`;
+      return;
+    }
+    // Normalize tiny float drift
+    const targets = { BTC: btc, ETH: eth, USDT: usdt };
+    const plan = gwRbBuildPlan(port, targets);
+    window.__gwRbPlan = { plan, port, targets, at: Date.now() };
+
+    if (!plan.length) {
+      out.innerHTML = `<span style="color:#22c17c">✓ Уже близко к цели</span> — существенных свапов не нужно (порог ~${gwRbFmtUsd(DUST_USD)}).`;
+      return;
+    }
+
+    const swaps = plan.filter((p) => p.kind === 'swap');
+    const skips = plan.filter((p) => p.kind === 'skip');
+    out.innerHTML = `
+      <div style="color:#cfdfee;font-weight:700;margin-bottom:6px">План · ${swaps.length} swap${swaps.length === 1 ? '' : 's'} · портфель ${gwRbFmtUsd(port.total)}</div>
+      <ol style="margin:0;padding-left:18px">
+        ${plan.map((p, i) => `<li style="margin:4px 0;color:${p.kind === 'skip' ? '#f5b94d' : '#98a8c0'}">${p.label}${p.usd && p.kind === 'swap' ? ` · ~${gwRbFmtUsd(p.usd)}` : ''}</li>`).join('')}
+      </ol>
+      <div style="margin-top:8px;font-size:11.5px;color:#6b7a92">Каждый шаг — подпись в кошельке (approve + swap). Можно остановить, отклонив транзакцию.</div>`;
+    if (execBtn) execBtn.style.display = swaps.length ? 'inline-flex' : 'none';
   };
+
+  document.getElementById('gwRbExec').onclick = async () => {
+    const pack = window.__gwRbPlan;
+    const out = document.getElementById('gwRbOut');
+    const execBtn = document.getElementById('gwRbExec');
+    const goBtn = document.getElementById('gwRbGo');
+    if (!pack?.plan?.length) return;
+    const swaps = pack.plan.filter((p) => p.kind === 'swap');
+    if (!swaps.length) return;
+    if (typeof gwOnChainSwapExec !== 'function') {
+      out.innerHTML += `<div style="color:#f87171;margin-top:8px">Swap engine недоступен.</div>`;
+      return;
+    }
+    if (execBtn) { execBtn.disabled = true; execBtn.textContent = 'Executing…'; }
+    if (goBtn) goBtn.disabled = true;
+
+    const logs = [];
+    for (let i = 0; i < swaps.length; i++) {
+      const s = swaps[i];
+      logs.push(`<div style="color:#5dd5ff">[${i + 1}/${swaps.length}] ${s.label}…</div>`);
+      out.innerHTML = logs.join('');
+      try {
+        // Align UI chain chip so quote/exec resolve the right network
+        try {
+          currentChainId = s.chainId;
+          if (window.__gwSwState) window.__gwSwState.chainId = s.chainId;
+          document.querySelectorAll('.gw-ds-chain.on').forEach((x) => x.classList.remove('on'));
+          document.querySelector(`.gw-ds-chain[data-cid="${s.chainId}"]`)?.classList.add('on');
+        } catch (_) {}
+        const hash = await gwOnChainSwapExec(s.fromSym, s.toSym, s.amt);
+        logs.push(`<div style="color:#22c17c">✓ ${s.fromSym}→${s.toSym} ${hash ? String(hash).slice(0, 12) + '…' : 'done'}</div>`);
+        out.innerHTML = logs.join('');
+      } catch (e) {
+        const msg = String(e?.message || e || '').slice(0, 180);
+        logs.push(`<div style="color:#f87171">✗ ${s.fromSym}→${s.toSym}: ${msg}</div>`);
+        out.innerHTML = logs.join('') + `<div style="margin-top:8px;color:#f5b94d">Остановлено. Исправь и нажми Compute снова.</div>`;
+        if (execBtn) { execBtn.disabled = false; execBtn.textContent = 'Execute plan →'; }
+        if (goBtn) goBtn.disabled = false;
+        return;
+      }
+    }
+    logs.push(`<div style="color:#22c17c;font-weight:800;margin-top:8px">Готово. Обновляю балансы…</div>`);
+    out.innerHTML = logs.join('');
+    await gwRbRefreshCurrent();
+    if (execBtn) { execBtn.disabled = false; execBtn.style.display = 'none'; execBtn.textContent = 'Execute plan →'; }
+    if (goBtn) goBtn.disabled = false;
+    try { if (typeof gwToast === 'function') gwToast('Rebalance complete', 'success'); } catch (_) {}
+  };
+
+  // Initial load + refresh when wallet connects
+  gwRbRefreshCurrent();
+  try {
+    window.addEventListener('grom:wallet-changed', () => { gwRbRefreshCurrent(); });
+  } catch (_) {}
 }
+
 
 /* Item #10 — NFT Trending — REMOVED 2026-07-11.
  * Reason: CoinGecko /nfts/markets moved behind Pro paywall ($129/mo),
@@ -10574,7 +12512,81 @@ function gwDpLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'
 function gwDpPrefLoad() { try { return JSON.parse(localStorage.getItem('gw_dex_prefs') || '{}'); } catch (_) { return {}; } }
 function gwDpPrefSave(v) { try { localStorage.setItem('gw_dex_prefs', JSON.stringify(v)); } catch (_) {} }
 
+
+/** Fill #page-wallet Assets + total from live gwTkLoadHoldings (non-custodial). */
+async function gwHydrateWalletPageAssets() {
+  const list = document.getElementById('walletAssetsList');
+  const totalEl = document.getElementById('walletTotalBalance');
+  const deltaEl = document.getElementById('walletTotalDelta');
+  const countEl = document.getElementById('walletAssetCount');
+  if (!list) return;
+  let addr = '';
+  try { addr = (typeof gwDisplayAddress === 'function' && gwDisplayAddress()) || ''; } catch (_) {}
+  if (!addr) {
+    try { addr = localStorage.getItem('grom_wallet_label') || ''; } catch (_) {}
+    if (!/^0x[a-fA-F0-9]{40}$/i.test(addr) && !(addr && addr.length > 10)) addr = '';
+  }
+  if (!addr) {
+    list.innerHTML = '<div style="padding:20px;color:var(--silver5)">Connect a wallet to load on-chain balances.</div>';
+    if (totalEl) totalEl.textContent = '—';
+    if (deltaEl) { deltaEl.textContent = 'Connect wallet to view balance'; deltaEl.style.color = 'var(--silver5)'; }
+    if (countEl) countEl.textContent = '—';
+    return;
+  }
+  list.innerHTML = '<div style="padding:20px;color:var(--silver5)">Loading on-chain balances…</div>';
+  try {
+    const rows = (typeof gwTkLoadHoldings === 'function') ? await gwTkLoadHoldings(true) : [];
+    const pos = (rows || []).filter((r) => Number(r.amt) > 0).sort((a, b) => (b.usd || 0) - (a.usd || 0));
+    const total = pos.reduce((s, r) => s + (Number(r.usd) || 0), 0);
+    if (totalEl) {
+      totalEl.textContent = total > 0
+        ? '$' + total.toLocaleString('en-US', { maximumFractionDigits: 2 })
+        : '$0.00';
+    }
+    if (deltaEl) {
+      deltaEl.textContent = (addr.slice(0, 6) + '…' + addr.slice(-4)) + ' · live on-chain';
+      deltaEl.style.color = 'var(--success)';
+    }
+    if (countEl) countEl.textContent = pos.length ? (pos.length + ' tokens') : '0 tokens';
+    if (!pos.length) {
+      list.innerHTML = '<div style="padding:20px;color:var(--silver5)">No visible tokens yet. Fund your wallet, then refresh.</div>';
+      return;
+    }
+    list.innerHTML = pos.slice(0, 40).map((r) => {
+      const sym = String(r.sym || '').toUpperCase();
+      const amt = Number(r.amt) || 0;
+      const amtStr = amt >= 1 ? amt.toLocaleString('en-US', { maximumFractionDigits: 6 }) : Number(amt.toPrecision(4));
+      const usd = Number(r.usd) || 0;
+      const usdStr = usd > 0 ? ('$' + usd.toLocaleString('en-US', { maximumFractionDigits: 2 })) : '—';
+      const chain = r.chain || r.chainId || '';
+      const ico = (sym || '?').slice(0, 1);
+      return `<div class="asset-row">
+        <span class="coin-ico">${ico}</span>
+        <div class="nm">${sym}<small>${r.name || sym}</small></div>
+        <div class="col">${amtStr} ${sym}</div>
+        <div class="col">${chain}</div>
+        <div class="col" style="color:var(--silver1);font-weight:700">${usdStr}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = '<div style="padding:20px;color:var(--silver5)">Could not load balances: '
+      + String(e?.message || e).slice(0, 100) + '</div>';
+  }
+}
+
+
+(function () {
+  if (document.getElementById('gw-wallet-rm-css')) return;
+  const s = document.createElement('style');
+  s.id = 'gw-wallet-rm-css';
+  s.textContent = '#gwDpWalletCard{display:none!important}';
+  document.head.appendChild(s);
+  try { document.getElementById('gwDpWalletCard')?.remove(); } catch (_) {}
+})();
+
 function gwRenderDexWalletActions() {
+  try { document.getElementById('gwDpWalletCard')?.remove(); } catch (_) {}
+  return;
   const page = document.getElementById('page-wallet'); if (!page) return;
   gwInjectDexPagesCss();
   let wrap = document.getElementById('gwDpWalletCard');
@@ -10601,10 +12613,23 @@ function gwRenderDexWalletActions() {
     </div>
   </div>`;
   wrap.querySelectorAll('[data-scroll]').forEach((a) => {
-    a.addEventListener('click', () => {
-      setTimeout(() => { const el = document.querySelector('.' + a.dataset.scroll); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 250);
+    a.addEventListener('click', (ev) => {
+      try { ev.preventDefault(); } catch (_) {}
+      try { if (typeof show === 'function') show('dashboard'); } catch (_) {}
+      setTimeout(() => { const el = document.querySelector('.gw-ds-wrap'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 250);
     });
   });
+  try {
+    const cash = document.createElement('button');
+    cash.type = 'button';
+    cash.className = 'gw-dp-action';
+    cash.style.cssText = 'border:0;cursor:pointer;text-align:left;font:inherit;color:inherit;background:inherit';
+    cash.innerHTML = '<span class="ic">💳</span><span class="lbl">Cash / card<div class="hint">MoonPay · Buy USDT</div></span>';
+    cash.onclick = () => { try { openWalletModal('buy'); } catch (_) {} };
+    wrap.querySelector('.gw-dp-grid')?.appendChild(cash);
+  } catch (_) {}
+  try { gwHydrateWalletPageAssets(); } catch (_) {}
+  try { if (typeof renderConnectedWalletsList === 'function') renderConnectedWalletsList(); } catch (_) {}
 }
 
 function gwRenderDexSettings() {
@@ -10714,29 +12739,72 @@ function gwFixReferralQR() {
     // Blank out the hero's placeholder code + link before user signs in —
     // shows '—' instead of a nonexistent GROM-G7K3Q9 code.
     const refCode = document.getElementById('refCode');
-    if (refCode && /^GROM-[A-Z0-9]+$/.test((refCode.textContent || '').trim())) {
-      refCode.textContent = 'Sign in to generate';
-    }
     const refLinkEl = document.getElementById('refLink');
-    if (refLinkEl && (refLinkEl.textContent || '').includes('grom.exchange/r/G7K3Q9')) {
-      refLinkEl.textContent = 'Sign in to reveal your link';
+    if (gwReferralWalletSeed()) {
+      gwApplyLocalInviteIdentity(refCode, refLinkEl);
+    } else {
+      if (refCode && /^GROM-[A-Z0-9]+$/.test((refCode.textContent || '').trim())) {
+        refCode.textContent = 'Connect wallet to generate';
+      }
+      if (refLinkEl && (refLinkEl.textContent || '').includes('grom.exchange/r/G7K3Q9')) {
+        refLinkEl.textContent = 'Connect wallet to reveal your link';
+      }
     }
+  } else if (typeof gwApplyLocalInviteIdentity === 'function') {
+    gwApplyLocalInviteIdentity(document.getElementById('refCode'), document.getElementById('refLink'));
   }
 }
 
 function gwRenderDexReferralExplainer() {
   const page = document.getElementById('page-referral'); if (!page) return;
   gwInjectDexPagesCss();
+
+  // Top row: How-it-works (left) + Commission status (right)
+  let row = document.getElementById('gwRefTopRow');
+  if (!row) {
+    row = document.createElement('div');
+    row.id = 'gwRefTopRow';
+    const ref2 = document.getElementById('gwRef2CardPage');
+    const workbench = page.querySelector('.ref-workbench');
+    const firstCard = page.querySelector('.card');
+    if (ref2) ref2.after(row);
+    else if (workbench) workbench.before(row);
+    else if (firstCard) firstCard.before(row);
+    else page.appendChild(row);
+  }
+
   let wrap = document.getElementById('gwDpReferralExplainer');
   if (!wrap) {
-    wrap = document.createElement('div'); wrap.id = 'gwDpReferralExplainer'; wrap.className = 'gw-dp-wrap';
-    // Insert AFTER Referral 2.0 card if it exists, else before first card.
-    const ref2 = document.getElementById('gwRef2CardPage');
-    const firstCard = page.querySelector('.card');
-    if (ref2) ref2.after(wrap);
-    else if (firstCard) firstCard.before(wrap);
-    else page.appendChild(wrap);
+    wrap = document.createElement('div');
+    wrap.id = 'gwDpReferralExplainer';
+    wrap.className = 'gw-dp-wrap';
+    row.appendChild(wrap);
+  } else if (wrap.parentElement !== row) {
+    row.insertBefore(wrap, row.firstChild);
   }
+
+  let slot = document.getElementById('gwRefCommissionSlot');
+  if (!slot) {
+    slot = document.createElement('div');
+    slot.id = 'gwRefCommissionSlot';
+    row.appendChild(slot);
+  } else if (slot.parentElement !== row) {
+    row.appendChild(slot);
+  }
+
+  const commissionCard =
+    page.querySelector('.card:has([data-i18n="ref_commission_status"])') ||
+    Array.from(page.querySelectorAll('.card')).find((c) => {
+      const h = c.querySelector('h3,[data-i18n="ref_commission_status"]');
+      return h && /commission\s*status/i.test((h.textContent || h.getAttribute('data-i18n') || ''));
+    });
+  if (commissionCard && commissionCard.parentElement !== slot) {
+    slot.appendChild(commissionCard);
+  }
+
+  const wb = page.querySelector('.ref-workbench');
+  if (wb) wb.classList.add('gw-ref-wb-emptied');
+
   const t = gwDpLang();
   wrap.innerHTML = `<div class="gw-dp-card g">
     <div class="gw-dp-head"><div>
@@ -10745,7 +12813,7 @@ function gwRenderDexReferralExplainer() {
     </div><span class="gw-dp-badge" style="background:rgba(34,193,124,.12);border-color:rgba(34,193,124,.30);color:#22c17c">50/50</span></div>
     <div style="display:flex;gap:14px;flex-wrap:wrap">
       ${[t.refStep1, t.refStep2, t.refStep3].map((s, i) => `
-        <div style="flex:1 1 220px;padding:16px 18px;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)">
+        <div style="flex:1 1 160px;padding:16px 18px;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)">
           <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#22c17c,#10a06a);color:#04160a;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;margin-bottom:10px">${i + 1}</div>
           <div style="color:#e7eef8;font-size:13.5px;line-height:1.5">${s}</div>
         </div>
@@ -10756,7 +12824,9 @@ function gwRenderDexReferralExplainer() {
 
 function gwSetupDexPages() {
   const run = gwDebounce(() => {
-    try { if (document.getElementById('page-wallet'))   gwRenderDexWalletActions();   } catch (_) {}
+    // DEX Quick Actions removed
+    // try { if (document.getElementById('page-wallet'))   gwRenderDexWalletActions();   } catch (_) {}
+    try { if (document.getElementById('page-wallet'))   gwHydrateWalletPageAssets();  } catch (_) {}
     try { if (document.getElementById('page-settings')) gwRenderDexSettings();        } catch (_) {}
     try { if (document.getElementById('page-referral')) {
       gwRenderDexReferralExplainer();
@@ -10766,9 +12836,19 @@ function gwSetupDexPages() {
   run();
   let n = 0; const id = setInterval(() => { n++; const anyMounted = document.getElementById('gwDpWalletCard') || document.getElementById('gwDpSettingsCard') || document.getElementById('gwDpReferralExplainer'); if (anyMounted || n >= 20) clearInterval(id); else run(); }, 500);
   window.addEventListener('hashchange', run);
+  window.addEventListener('grom:wallet-connected', () => { try { gwHydrateWalletPageAssets(); } catch (_) {} });
+  document.addEventListener('grom:wallet-address-known', () => { try { gwHydrateWalletPageAssets(); } catch (_) {} });
+  document.addEventListener('grom:wallet-disconnected', () => { try { gwHydrateWalletPageAssets(); } catch (_) {} });
   const obs = new MutationObserver(() => run()); obs.observe(document.body, { attributes: true, subtree: false, attributeFilter: ['data-page'] });
   window.addEventListener('grom:lang-change', () => {
-    ['gwDpWalletCard', 'gwDpSettingsCard', 'gwDpReferralExplainer'].forEach(id => document.getElementById(id)?.remove());
+    try {
+      const page = document.getElementById('page-referral');
+      const slotCard = document.querySelector('#gwRefCommissionSlot > .card');
+      const wb = page && page.querySelector('.ref-workbench .ref-stack');
+      if (slotCard && wb) wb.appendChild(slotCard);
+      page && page.querySelector('.ref-workbench')?.classList.remove('gw-ref-wb-emptied');
+    } catch (_) {}
+    ['gwDpWalletCard', 'gwDpSettingsCard', 'gwDpReferralExplainer', 'gwRefTopRow'].forEach(id => document.getElementById(id)?.remove());
     run();
   });
 }
@@ -10959,6 +13039,10 @@ function gwInjectPredictArbCss() {
   const s = document.createElement('style'); s.id = 'gw-pa-css'; s.textContent = css; document.head.appendChild(s);
 }
 async function gwRenderPredictArb() {
+  // GROM_DASH_HEAVY_DISABLED
+  try { document.getElementById('gwPredictArbCard')?.remove(); } catch (_) {}
+  return;
+
   const page = document.getElementById('page-dashboard');
   if (!page) return;
   gwInjectPredictArbCss();
@@ -10994,6 +13078,10 @@ async function gwRenderPredictArb() {
   `;
 }
 function gwSetupPredictArb() {
+  // GROM_DASH_HEAVY_DISABLED — do not re-enable without product ask
+  try { document.getElementById('gwPredictArbCard')?.remove(); } catch (_) {}
+  return;
+
   const tryRender = gwDebounce(() => { if (document.getElementById('page-dashboard')) { try { gwRenderPredictArb(); console.log('[GROM] predict-arb rendered'); } catch (e) { console.warn('[GROM] predict-arb', e); } } }, 200);
   tryRender();
   let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwPredictArbCard') || n >= 20) clearInterval(id); else tryRender(); }, 500);
@@ -11042,6 +13130,10 @@ const GW_CM_TR = {
 function gwCmLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'); if (s&&GW_CM_TR[s]) l=s; } catch (_) {} return GW_CM_TR[l]||GW_CM_TR.en; }
 
 function gwRenderCrossMargin() {
+  // GROM_DASH_HEAVY_DISABLED
+  try { document.getElementById('gwCrossMarginCard')?.remove(); } catch (_) {}
+  return;
+
   const page = document.getElementById('page-dashboard');
   if (!page) return;
   gwInjectCrossMarginCss();
@@ -11071,6 +13163,10 @@ function gwRenderCrossMargin() {
   });
 }
 function gwSetupCrossMargin() {
+  // GROM_DASH_HEAVY_DISABLED — do not re-enable without product ask
+  try { document.getElementById('gwCrossMarginCard')?.remove(); } catch (_) {}
+  return;
+
   const tryRender = gwDebounce(() => { if (document.getElementById('page-dashboard')) { try { gwRenderCrossMargin(); console.log('[GROM] cross-margin rendered'); } catch (e) { console.warn('[GROM] cross-margin', e); } } }, 200);
   tryRender();
   let n = 0; const id = setInterval(() => { n++; if (document.getElementById('gwCrossMarginCard') || n >= 20) clearInterval(id); else tryRender(); }, 500);
@@ -11337,49 +13433,127 @@ function gwInjectLpPolishCss() {
       display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 10px;
     }
     @media (max-width: 1100px) { .gw-lp-chains-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; } }
-    @media (max-width: 640px)  { .gw-lp-chains-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; } }
-    @media (max-width: 380px)  { .gw-lp-chains-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } }
+    @media (max-width: 640px)  {
+      .gw-lp-chains-grid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 14px 10px;
+      }
+      .gw-lp-chains-grid .gw-lp-chain-cell {
+        flex: 0 0 calc(25% - 10px);
+        max-width: calc(25% - 10px);
+        box-sizing: border-box;
+      }
+      .gw-lp-chains-h {
+        font-size: 17px !important;
+        font-weight: 750;
+        letter-spacing: -0.01em;
+        line-height: 1.25;
+        max-width: 18em;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .gw-lp-chains-sub {
+        font-size: 11.5px !important;
+        line-height: 1.4;
+        max-width: 28em;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .gw-lp-chains-eyebrow { font-size: 10px; margin-bottom: 8px; }
+    }
+    @media (max-width: 380px)  {
+      .gw-lp-chains-grid .gw-lp-chain-cell {
+        flex: 0 0 calc(33.333% - 10px);
+        max-width: calc(33.333% - 10px);
+      }
+      .gw-lp-chains-h { font-size: 16px !important; }
+    }
 
     .gw-lp-chain-cell {
       position: relative;
       display: flex; flex-direction: column; align-items: center; gap: 8px;
-      padding: 14px 6px 12px; border-radius: 14px;
-      background:
-        linear-gradient(160deg, rgba(255,255,255,.045), rgba(255,255,255,.015)),
-        linear-gradient(180deg, rgba(11,18,32,.55), rgba(8,12,20,.35));
-      border: 1px solid rgba(122,162,199,.16);
-      transition: transform .2s cubic-bezier(.22,.61,.36,1), border-color .2s, box-shadow .2s, background .2s;
+      padding: 8px 4px;
+      border-radius: 0;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      transition: transform .2s cubic-bezier(.22,.61,.36,1);
       min-width: 0;
       isolation: isolate;
     }
-    .gw-lp-chain-cell::after {
-      content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-      background: radial-gradient(90% 60% at 50% 0%, rgba(0,194,255,.14), transparent 60%);
-      opacity: 0; transition: opacity .22s;
-      z-index: -1;
-    }
+    .gw-lp-chain-cell::after { display: none !important; content: none !important; }
     .gw-lp-chain-cell:hover {
       transform: translateY(-2px);
-      border-color: rgba(0,194,255,.42);
-      box-shadow: 0 12px 28px rgba(0,194,255,.14), 0 2px 0 rgba(255,255,255,.04) inset;
+      border: 0 !important;
+      box-shadow: none !important;
+      background: transparent !important;
     }
-    .gw-lp-chain-cell:hover::after { opacity: 1; }
     .gw-lp-chain-cell .logo {
       width: 42px; height: 42px; border-radius: 50%; overflow: hidden;
       display: inline-flex; align-items: center; justify-content: center;
-      background: rgba(255,255,255,.06);
-      box-shadow: 0 4px 12px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.06) inset;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      outline: none !important;
       font-weight: 800; font-size: 11px; color: #e7eef8; flex-shrink: 0;
       transition: transform .22s cubic-bezier(.22,.61,.36,1);
     }
-    .gw-lp-chain-cell:hover .logo { transform: scale(1.06); }
+    .gw-lp-chain-cell:hover .logo { transform: scale(1.08); }
     @media (max-width: 480px) { .gw-lp-chain-cell .logo { width: 36px; height: 36px; } }
-    .gw-lp-chain-cell img { width: 100%; height: 100%; object-fit: cover; }
+    .gw-lp-chain-cell img {
+      width: 100%; height: 100%; object-fit: cover;
+      border: 0 !important; box-shadow: none !important; background: transparent !important;
+      border-radius: 50%;
+    }
     .gw-lp-chain-cell .lbl {
       font-size: 11.5px; color: #e2ecf7; font-weight: 700; letter-spacing: .01em;
       text-align: center; line-height: 1.2; word-break: break-word;
     }
     @media (max-width: 480px) { .gw-lp-chain-cell .lbl { font-size: 10.5px; } }
+
+
+    /* Landing chains — FORCE frameless (2026-07-19 #2) */
+    #page-landing .gw-lp-chain-cell,
+    .gw-lp-chains .gw-lp-chain-cell {
+      background: transparent !important;
+      background-image: none !important;
+      border: none !important;
+      border-width: 0 !important;
+      box-shadow: none !important;
+      outline: none !important;
+      border-radius: 0 !important;
+      padding: 6px 2px !important;
+    }
+    #page-landing .gw-lp-chain-cell::before,
+    #page-landing .gw-lp-chain-cell::after,
+    .gw-lp-chains .gw-lp-chain-cell::before,
+    .gw-lp-chains .gw-lp-chain-cell::after {
+      display: none !important;
+      content: none !important;
+      opacity: 0 !important;
+    }
+    #page-landing .gw-lp-chain-cell:hover,
+    .gw-lp-chains .gw-lp-chain-cell:hover {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      transform: translateY(-2px);
+    }
+    #page-landing .gw-lp-chain-cell .logo,
+    .gw-lp-chains .gw-lp-chain-cell .logo {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      outline: none !important;
+    }
+    #page-landing .gw-lp-chain-cell img,
+    .gw-lp-chains .gw-lp-chain-cell img {
+      border: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
 
     /* Aggregator ribbon — standalone card below chains */
     .gw-lp-agg {
@@ -11438,10 +13612,10 @@ function gwInjectLpPolishCss() {
     .gw-lp-faq-a { max-height: 0; overflow: hidden; transition: max-height .3s; font-size: 13px; color: #cfdfee; line-height: 1.55; }
     .gw-lp-faq-item.open .gw-lp-faq-a { max-height: 420px; margin-top: 10px; }
   `;
-  let s = document.getElementById('gw-lp-polish-css');
+  let s = document.getElementById('gw-lp-polish-css-v3');
   if (!s) {
     s = document.createElement('style');
-    s.id = 'gw-lp-polish-css';
+    s.id = 'gw-lp-polish-css-v3';
     document.head.appendChild(s);
   }
   s.textContent = css;
@@ -11486,12 +13660,12 @@ const GW_LP_CHAINS = [
   { sym: 'BNB',  name: 'BSC',      logo: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png' },
   { sym: 'ARB',  name: 'Arbitrum', logo: 'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg' },
   { sym: 'MATIC',name: 'Polygon',  logo: 'https://assets.coingecko.com/coins/images/4713/small/polygon.png' },
-  { sym: 'BASE', name: 'Base',     logo: 'https://raw.githubusercontent.com/base-org/brand-kit/main/logo/symbol/Base_Symbol_Blue.png' },
+  { sym: 'BASE', name: 'Base',     logo: '/assets/chains/base.svg' },
   { sym: 'OP',   name: 'Optimism', logo: 'https://assets.coingecko.com/coins/images/25244/small/Optimism.png' },
   { sym: 'AVAX', name: 'Avalanche',logo: 'https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png' },
   { sym: 'BTC',  name: 'Bitcoin',  logo: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png' },
   { sym: 'TON',  name: 'TON',      logo: 'https://assets.coingecko.com/coins/images/17980/small/ton_symbol.png' },
-  { sym: 'TRX',  name: 'Tron',     logo: 'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png' },
+  { sym: 'TRX',  name: 'Tron',     logo: '/assets/chains/tron.png' },
 ];
 
 function gwRenderLandingPolish() {
@@ -11673,3 +13847,5 @@ if (document.readyState === 'loading') {
 } else {
   hook();
 }
+
+

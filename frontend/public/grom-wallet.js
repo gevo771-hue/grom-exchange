@@ -9410,17 +9410,14 @@ try {
       safe('combinedBalance',  gwSetupCombinedBalance);
       safe('metaPortfolio',    gwSetupMetaPortfolio);
       safe('aiCoach',          gwSetupAiCoach);
-      // Yield + Airdrop dashboard cards disabled 2026-07-20 — dashboard was too cluttered.
-      // To re-enable: uncomment the two lines below. Card renderers still exist (gwRenderYield/gwRenderAirdrop),
-      // this only turns off the auto-mount into #page-dashboard.
-      // safe('yield',            gwSetupYield);
+      safe('yield',            gwSetupYield);
       safe('trending',         gwSetupTrending);
       safe('mega-cards',       gwSetupMegaCards);
       safe('referral-page2',   gwSetupReferralPage2);
       safe('cex-cleanup',      gwSetupCexCleanup);
       safe('dex-pages',        gwSetupDexPages);
       safe('simple-swap',      gwDsSimSetup);
-      // safe('airdrop',          gwSetupAirdrop);
+      safe('airdrop',          gwSetupAirdrop);
       safe('predictArb',       gwSetupPredictArb);
       safe('crossMargin',      gwSetupCrossMargin);
       safe('prefetchWc',       gwPrefetchWc);

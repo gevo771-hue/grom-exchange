@@ -14233,8 +14233,19 @@ var GROM_XSTOCKS = [
   var _gwxCatalogPromise = null;
 
   function gwxMapCat(underlying, name) {
-    var u = String(underlying || '').toUpperCase();
-    if (GWX_SEED_CAT[u]) return GWX_SEED_CAT[u];
+    var u = String(underlying || '').toUpperCase().replace(/\./g, '');
+    if (GWX_SEED_CAT[u] || GWX_SEED_CAT[String(underlying || '').toUpperCase()]) {
+      return GWX_SEED_CAT[u] || GWX_SEED_CAT[String(underlying || '').toUpperCase()];
+    }
+    // Common ETF / index tickers
+    if (/^(SPY|QQQ|DIA|IWM|ARKK|VOO|VTI|IVV|SPX|NDX|CSPX|TQQQ|SQQQ)$/.test(u)) return 'etf';
+    if (/^(TSLA|F|GM|RIVN|NIO|XPEV|LI)$/.test(u)) return 'auto';
+    if (/^(COIN|MSTR|MARA|HOOD|RIOT|CLSK)$/.test(u)) return 'crypto';
+    if (/^(XOM|CVX|BP|SHEL|OXY)$/.test(u)) return 'energy';
+    if (/^(JPM|BAC|V|MA|GS|MS|BRKB|WFC|C|AXP)$/.test(u)) return 'finance';
+    if (/^(LLY|UNH|JNJ|PFE|MRK|ABBV|AMGN|BMY)$/.test(u)) return 'health';
+    if (/^(AAPL|MSFT|NVDA|GOOGL|GOOG|META|AMZN|AMD|NFLX|ADBE|CRM|ORCL|AVGO|QCOM|CSCO|INTC|IBM|PLTR|MU|TSM)$/.test(u)) return 'tech';
+    if (/^(KO|PEP|MCD|NKE|DIS|WMT|COST|SBUX|TGT)$/.test(u)) return 'consumer';
     var blob = String(name || '') + ' ' + u;
     for (var i = 0; i < GWX_CAT_KW.length; i++) if (GWX_CAT_KW[i][1].test(blob)) return GWX_CAT_KW[i][0];
     return null;
@@ -14265,10 +14276,59 @@ var GROM_XSTOCKS = [
     if (!cid) return null;
     return { chainId: cid, address: s.addrs[cid], decimals: s.decimals || 18, tokenSym: s.tokenSym };
   }
+  var GWX_CACHE_KEY = 'gwx_xstocks_catalog_v2';
+  function gwxIsRealXStock(item) {
+    if (!item) return false;
+    var name = String(item.name || '');
+    var tok = String(item.tokenSym || '');
+    if (!/xStock$/i.test(name)) return false;
+    if (tok && !/x$/i.test(tok)) return false;
+    // Reject obvious non-equity leftovers if a bad cache slips through
+    if (/network|wrapped|stable|frax|liquid staking|memecoin|protocol/i.test(name)) return false;
+    return !!(item.addrs && Object.keys(item.addrs).length);
+  }
+  function gwxEnrichItem(item) {
+    if (!item) return null;
+    var addrs = item.addrs || {};
+    var chains = item.chains && item.chains.length
+      ? item.chains.slice()
+      : Object.keys(addrs).map(Number).filter(Boolean);
+    if (!chains.length) return null;
+    var pref = Number(item.chain)
+      || (typeof window.gwXstocksPickChain === 'function' ? window.gwXstocksPickChain(addrs, 1) : null)
+      || chains[0];
+    var label = item.chainLabel
+      || (window.GWX_ID_TO_LABEL && window.GWX_ID_TO_LABEL[pref])
+      || Object.keys(GWX_NET).find(function (k) { return GWX_NET[k] === pref; })
+      || String(pref);
+    item.chains = chains;
+    item.chain = pref;
+    item.chainLabel = label;
+    item.cat = item.cat || gwxMapCat(item.sym, item.name);
+    item.decimals = item.decimals || 18;
+    item.tradeable = item.halted ? false : true;
+    item.vol24 = item.vol24 || '—';
+    item.mc = item.mc || '—';
+    item.chg = item.chg || 0;
+    item.price = item.price || 0;
+    return item;
+  }
+  function gwxSanitizeCatalog(items) {
+    var out = [], seen = {};
+    (items || []).forEach(function (raw) {
+      var it = gwxEnrichItem(Object.assign({}, raw));
+      if (!gwxIsRealXStock(it) || seen[it.sym]) return;
+      seen[it.sym] = 1;
+      out.push(it);
+    });
+    out.sort(function (a, b) { return a.sym.localeCompare(b.sym); });
+    return out;
+  }
   function gwxApplyCatalog(items) {
-    if (!items || !items.length) return;
+    var clean = gwxSanitizeCatalog(items);
+    if (!clean.length) return;
     GROM_XSTOCKS.length = 0;
-    items.forEach(function (it) { GROM_XSTOCKS.push(it); });
+    clean.forEach(function (it) { GROM_XSTOCKS.push(it); });
     STOCK_MAP = {};
     GROM_XSTOCKS.forEach(function (s) { STOCK_MAP[s.sym] = s; });
     gwxPxInit = false;
@@ -14279,52 +14339,15 @@ var GROM_XSTOCKS = [
     updateXstocksStats();
     renderXstocksRows();
   }
-  function gwxNormalizeNode(n) {
-    if (!n || !n.symbol) return null;
-    var tokenSym = String(n.symbol);
-    var underlying = String(n.underlyingSymbol || tokenSym.replace(/x$/i, '') || tokenSym).toUpperCase();
-    var addrs = {};
-    (n.deployments || []).forEach(function (dep) {
-      var cid = GWX_NET[dep.network];
-      var addr = dep.address || dep.wrapperAddressV2 || dep.wrapperAddress;
-      if (cid && addr && /^0x[a-fA-F0-9]{40}$/i.test(addr)) addrs[cid] = addr;
+  async function gwxFetchBackedViaProxy() {
+    var r = await fetch('/api/market/xstocks?_=' + Date.now(), {
+      headers: { Accept: 'application/json' }, cache: 'no-store',
     });
-    if (!Object.keys(addrs).length) return null; // EVM-only Phase 1
-    var cat = gwxMapCat(underlying, n.name || n.description || '');
-    return {
-      sym: underlying,
-      tokenSym: tokenSym,
-      name: n.name || (underlying + ' xStock'),
-      price: 0, chg: 0, vol24: '—', mc: '—',
-      cat: cat,
-      logo: n.logo || '',
-      addrs: addrs,
-      decimals: 18,
-      tradeable: true,
-      halted: !!n.isTradingHalted,
-    };
-  }
-  async function gwxFetchBackedCatalog() {
-    var all = [], page = 0;
-    for (; page < 24; page++) {
-      var r = await fetch('https://api.backed.fi/api/v2/public/assets?page=' + page, {
-        headers: { Accept: 'application/json' }, cache: 'no-store',
-      });
-      if (!r.ok) throw new Error('backed ' + r.status);
-      var d = await r.json();
-      var nodes = d.nodes || [];
-      nodes.forEach(function (n) { all.push(n); });
-      if (!(d.page && d.page.hasNextPage)) break;
-    }
-    var out = [], seen = {};
-    all.forEach(function (n) {
-      var item = gwxNormalizeNode(n);
-      if (!item || seen[item.sym]) return;
-      seen[item.sym] = 1;
-      out.push(item);
-    });
-    out.sort(function (a, b) { return a.sym.localeCompare(b.sym); });
-    return out;
+    if (!r.ok) throw new Error('xstocks proxy ' + r.status);
+    var d = await r.json();
+    var items = gwxSanitizeCatalog(d.items || []);
+    if (!items.length) throw new Error('xstocks proxy empty');
+    return items;
   }
   async function gwxFetchLifiFallback() {
     var r = await fetch('https://li.quest/v1/tokens?chains=1,42161,10,56', { headers: { Accept: 'application/json' } });
@@ -14335,46 +14358,59 @@ var GROM_XSTOCKS = [
     Object.keys(tokens).forEach(function (chain) {
       var cid = Number(chain);
       (tokens[chain] || []).forEach(function (t) {
-        var s = String(t.symbol || '');
-        if (!/x$/i.test(s) && !/^b[A-Z]/.test(s)) return;
         var name = String(t.name || '');
-        if (!/xstock|backed/i.test(name) && !/x$/i.test(s)) return;
-        var underlying = s.replace(/x$/i, '').replace(/^b/, '').toUpperCase();
+        var s = String(t.symbol || '');
+        // STRICT: name must end with xStock — never accept bare *x tickers (LOGX, FRAX, TRX…)
+        if (!/xStock$/i.test(name)) return;
+        if (!/x$/i.test(s)) return;
+        if (!t.address || !/^0x[a-fA-F0-9]{40}$/i.test(t.address)) return;
+        var underlying = s.replace(/x$/i, '').toUpperCase();
         if (!bySym[underlying]) {
           bySym[underlying] = {
-            sym: underlying, tokenSym: s, name: name || underlying, price: Number(t.priceUSD) || 0,
+            sym: underlying, tokenSym: s, name: name, price: Number(t.priceUSD) || 0,
             chg: 0, vol24: '—', mc: '—', cat: gwxMapCat(underlying, name), logo: t.logoURI || '',
             addrs: {}, decimals: Number(t.decimals) || 18, tradeable: true, halted: false,
           };
         }
-        if (t.address && /^0x[a-fA-F0-9]{40}$/i.test(t.address)) bySym[underlying].addrs[cid] = t.address;
+        bySym[underlying].addrs[cid] = t.address;
         if (t.priceUSD) bySym[underlying].price = Number(t.priceUSD);
       });
     });
-    return Object.keys(bySym).map(function (k) { return bySym[k]; }).filter(function (x) { return Object.keys(x.addrs).length; });
+    return gwxSanitizeCatalog(Object.keys(bySym).map(function (k) { return bySym[k]; }));
   }
   async function gwxLoadCatalog(force) {
     if (_gwxCatalogPromise && !force) return _gwxCatalogPromise;
-    if (!force && gwxCatalogAt && (Date.now() - gwxCatalogAt) < 5 * 60 * 1000 && GROM_XSTOCKS.length && GROM_XSTOCKS[0].addrs) {
+    if (!force && gwxCatalogAt && (Date.now() - gwxCatalogAt) < 5 * 60 * 1000
+      && GROM_XSTOCKS.length && gwxIsRealXStock(GROM_XSTOCKS[0]) && GROM_XSTOCKS.length < 900) {
       return GROM_XSTOCKS;
     }
     _gwxCatalogPromise = (async function () {
       try {
+        // Drop poisoned v1 cache (LiFi junk: LOGX, FRAX, TRX…)
+        try { localStorage.removeItem('gwx_btokens_catalog'); } catch (_) {}
         var cached = null;
-        try { cached = JSON.parse(localStorage.getItem('gwx_btokens_catalog') || 'null'); } catch (_) {}
+        try { cached = JSON.parse(localStorage.getItem(GWX_CACHE_KEY) || 'null'); } catch (_) {}
         if (!force && cached && cached.at && (Date.now() - cached.at) < 5 * 60 * 1000 && cached.items && cached.items.length) {
-          gwxApplyCatalog(cached.items);
-          gwxCatalogAt = cached.at;
-          gwxRefreshPrices();
-          return cached.items;
+          var cachedClean = gwxSanitizeCatalog(cached.items);
+          if (cachedClean.length >= 20 && cachedClean.length === gwxSanitizeCatalog(cached.items).length) {
+            // reject caches dominated by non-xStock (defensive)
+            var okRatio = cachedClean.length / Math.max(1, cached.items.length);
+            if (okRatio > 0.85) {
+              gwxApplyCatalog(cachedClean);
+              gwxCatalogAt = cached.at;
+              gwxRefreshPrices();
+              return cachedClean;
+            }
+          }
         }
         var items = null;
-        try { items = await gwxFetchBackedCatalog(); } catch (e) { console.warn('[gwx] backed catalog', e); }
+        try { items = await gwxFetchBackedViaProxy(); } catch (e) { console.warn('[gwx] backed proxy', e); }
         if (!items || !items.length) items = await gwxFetchLifiFallback();
+        items = gwxSanitizeCatalog(items);
         if (items && items.length) {
           gwxApplyCatalog(items);
           gwxCatalogAt = Date.now();
-          try { localStorage.setItem('gwx_btokens_catalog', JSON.stringify({ at: gwxCatalogAt, items: items })); } catch (_) {}
+          try { localStorage.setItem(GWX_CACHE_KEY, JSON.stringify({ at: gwxCatalogAt, items: items, v: 2 })); } catch (_) {}
           gwxRefreshPrices();
           return items;
         }
@@ -15188,21 +15224,12 @@ var GROM_XSTOCKS = [
       delete sec.dataset.gwxForce;
     });
     applyPredictView(); renderXstocksRows();
-    // Safari energy: do NOT fetch Backed catalog / chain balances on every
-    // ensurePages() (boot retries 30×). Only when user is on #xstocks.
     try {
-      var onXs = false;
-      try {
-        var hx = (location.hash || '').replace(/^#/, '').split('?')[0];
-        onXs = hx === 'xstocks' || !!document.getElementById('page-xstocks')?.classList.contains('active');
-      } catch (_) {}
-      if (onXs) {
-        gwxLoadCatalog(false).then(function () {
-          refreshUsdtBalChip();
-          gwxLoadPositions();
-          gwxFocusFromHash();
-        });
-      }
+      gwxLoadCatalog(false).then(function () {
+        refreshUsdtBalChip();
+        gwxLoadPositions();
+        gwxFocusFromHash();
+      });
     } catch (_) {}
   }
 
@@ -15576,25 +15603,12 @@ var GROM_XSTOCKS = [
   // show() router handles activation; we just freshen dynamic bits).
   document.addEventListener('click', function (e) {
     var n = e.target.closest('[data-page="predict"], [data-page="xstocks"]');
-    if (n) {
-      setTimeout(refreshActive, 60);
-      if (n.dataset.page === 'predict' && typeof window.gromLoadPredictLive === 'function') window.gromLoadPredictLive(true);
-      if (n.dataset.page === 'xstocks') {
-        try {
-          gwxLoadCatalog(false).then(function () { refreshUsdtBalChip(); gwxLoadPositions(); gwxFocusFromHash(); });
-        } catch (_) {}
-      }
-    }
+    if (n) { setTimeout(refreshActive, 60); if (n.dataset.page === 'predict' && typeof window.gromLoadPredictLive === 'function') window.gromLoadPredictLive(true); }
   }, true);
   window.addEventListener('hashchange', function () {
     var h = (location.hash || '').replace(/^#/, '').split('?')[0];
     if (h === 'predict' || h === 'xstocks') setTimeout(refreshActive, 80);
     if (h === 'predict') loadPredictLive(true);
-    if (h === 'xstocks') {
-      try {
-        gwxLoadCatalog(false).then(function () { refreshUsdtBalChip(); gwxLoadPositions(); gwxFocusFromHash(); });
-      } catch (_) {}
-    }
   });
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && document.getElementById('page-predict')?.classList.contains('active')) {
@@ -15603,17 +15617,11 @@ var GROM_XSTOCKS = [
   });
 
   function boot() {
-    injectCss(); ensurePages(); ensureNav();
-    // Predict widgets are light; live poll stays. Catalog/RPC stays off until #xstocks.
-    try { renderPredictWidgets(); } catch (_) {}
-    try { loadPredictLive(true); } catch (_) {}
-    try { ensurePredictPoll(); } catch (_) {}
+    injectCss(); ensurePages(); ensureNav(); loadPredictLive(true); ensurePredictPoll(); renderPredictWidgets();
     if (typeof window.applyI18n === 'function') window.applyI18n();
     var tries = 0;
-    // Fewer retries + skip catalog work via ensurePages gate above (Safari energy)
-    var iv = setInterval(function () { tries++; ensureNav(); if (tries % 5 === 0) ensurePages(); if (tries >= 12) clearInterval(iv); }, 1000);
-    // refreshActive self-schedules; first tick after idle so Instant Swap can mount first
-    setTimeout(function () { try { refreshActive(); } catch (_) {} }, 1500);
+    var iv = setInterval(function () { tries++; ensurePages(); ensureNav(); if (tries >= 30) clearInterval(iv); }, 700);
+    refreshActive();
   }
   window.gromRefreshI18nPages = function () {
     ['page-predict', 'page-xstocks'].forEach(function (id) {

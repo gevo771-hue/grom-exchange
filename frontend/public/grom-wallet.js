@@ -11172,9 +11172,7 @@ try {
     });
   } catch (_) {}
 
-      // Instant Swap first — Safari may kill the tab if heavy work runs before this mounts
       safe('dashSwap',         gwSetupDashSwap);
-      safe('simple-swap',      gwDsSimSetup);
       safe('depositAutoCont',  gwSetupDepositAutoContinue);
       safe('onchainCard',      gwSetupOnchainCard);
       safe('xstocksWallet',    gwSetupXstocksWalletBridge);
@@ -11187,6 +11185,7 @@ try {
       safe('referral-page2',   gwSetupReferralPage2);
       safe('cex-cleanup',      gwSetupCexCleanup);
       safe('dex-pages',        gwSetupDexPages);
+      safe('simple-swap',      gwDsSimSetup);
       // safe('airdrop',          gwSetupAirdrop); // disabled 2026-07-22 — dashboard declutter (note for Claude: leave function in place)
       // safe('predictArb',       gwSetupPredictArb); // removed — heavy dash card
       // safe('crossMargin',      gwSetupCrossMargin); // removed — heavy dash card
@@ -12656,24 +12655,9 @@ function gwSetupCexCleanup() {
   };
   hideDeposit();
   gwPatchDashBannerText();
-  const debounced = gwDebounce(() => { hideDeposit(); gwPatchDashBannerText(); }, 250);
-  // Safari energy: never observe document.body subtree (re-entrancy with banners/predict).
-  // Header-only observer + slow visible poll is enough to keep Deposit pills hidden.
-  try {
-    const hdr = document.querySelector('header.topbar, header, .hub-header');
-    if (hdr) {
-      const obs = new MutationObserver(() => debounced());
-      obs.observe(hdr, { childList: true, subtree: true });
-    }
-  } catch (_) {}
-  try {
-    if (!window.__gwCexHideIv) {
-      window.__gwCexHideIv = setInterval(() => {
-        if (document.hidden) return;
-        try { hideDeposit(); } catch (_) {}
-      }, 4000);
-    }
-  } catch (_) {}
+  const debounced = gwDebounce(() => { hideDeposit(); gwPatchDashBannerText(); }, 150);
+  const obs = new MutationObserver(() => debounced());
+  obs.observe(document.body, { childList: true, subtree: true });
   window.addEventListener('hashchange', debounced);
   window.addEventListener('grom:lang-change', debounced);
 

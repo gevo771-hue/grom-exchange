@@ -22,7 +22,15 @@ function fallbackQuotes() {
 
 // ---- Polymarket prediction-markets proxy (public, cached) ----
 let _predictCache = { ts: 0, data: null };
-const PREDICT_TTL = 30_000;
+const PREDICT_TTL = 60_000;
+
+// ---- Backed xStocks catalog proxy (public, cached) — browser can't call api.backed.fi (no CORS) ----
+let _xstocksCache = { ts: 0, data: null };
+const XSTOCKS_TTL = 5 * 60_000;
+const GWX_NET = {
+  Ethereum: 1, Arbitrum: 42161, Optimism: 10, BinanceSmartChain: 56,
+  Base: 8453, Polygon: 137, Avalanche: 43114, Mantle: 5000,
+};
 
 function safeJson(str, def) { try { return JSON.parse(str); } catch { return def; } }
 function pmCategory(ev) {
@@ -56,38 +64,6 @@ function pmEndsAt(iso) {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
-function pmEventTimes(ev) {
-  let start = ev.startDate || ev.startTime || null;
-  let end = ev.endDate || ev.endTime || null;
-  for (const m of Array.isArray(ev.markets) ? ev.markets : []) {
-    if (!start && m.gameStartTime) start = m.gameStartTime;
-    if (!end && m.endDate) end = m.endDate;
-  }
-  return { start, end };
-}
-// LIVE = sport/esports starting soon or politics/crypto resolving within 24h.
-function pmIsLive(ev, cat) {
-  const { start, end } = pmEventTimes(ev);
-  const now = Date.now();
-  const endMs = end ? new Date(end).getTime() : NaN;
-  const startMs = start ? new Date(start).getTime() : NaN;
-  if (!Number.isFinite(endMs)) return false;
-
-  const title = String(ev.title || ev.question || '').toLowerCase();
-  const vsMatch = /\bvs\.?\b|\svs?\s|\sv\s|\s@\s/.test(title);
-  const sportish = cat === 'sport' || cat === 'esports';
-  const anchorMs = Number.isFinite(startMs) ? startMs : endMs;
-  const hoursToStart = (anchorMs - now) / 3600000;
-  const hoursToEnd = (endMs - now) / 3600000;
-
-  if (sportish && (vsMatch || cat === 'esports')) {
-    if (hoursToEnd < -8) return false;
-    if (hoursToStart <= 8 && hoursToEnd >= -6) return true;
-  }
-  if ((cat === 'politics' || cat === 'crypto') && hoursToEnd >= 0 && hoursToEnd <= 24) return true;
-
-  return false;
-}
 function normalizePolymarket(events) {
   const out = [];
   for (const ev of Array.isArray(events) ? events : []) {
@@ -109,9 +85,6 @@ function normalizePolymarket(events) {
     if (rows.length > 1) rows.sort((a, b) => b.p - a.p);
     rows = rows.slice(0, 6);
     const cat = pmCategory(ev);
-    const times = pmEventTimes(ev);
-    const startIso = times.start || null;
-    const endIso = times.end || null;
     out.push({
       id: 'pm_' + (ev.id || ev.slug || out.length),
       cat,
@@ -119,12 +92,10 @@ function normalizePolymarket(events) {
       q: String(ev.title || ev.question || '').slice(0, 150),
       vol: Number(ev.volume || ev.volume24hr || 0) || 0,
       vol24: Number(ev.volume24hr || 0) || 0,
-      starts: startIso ? pmEnds(startIso) : '',
-      startsAt: startIso ? pmEndsAt(startIso) : null,
-      ends: endIso ? pmEnds(endIso) : '',
-      endsAt: endIso ? pmEndsAt(endIso) : null,
-      time: pmTime(startIso || endIso),
-      live: pmIsLive(ev, cat),
+      ends: pmEnds(ev.endDate),
+      endsAt: pmEndsAt(ev.endDate),
+      time: pmTime(ev.endDate),
+      live: true,
       rows,
     });
     if (out.length >= 48) break;
@@ -135,9 +106,77 @@ function normalizePolymarket(events) {
 export function createMarketRouter() {
   const r = express.Router();
 
+  // Backed xStocks catalog (server-side to bypass CORS on api.backed.fi).
+  // Only products whose name ends with "xStock" — never the full LiFi token soup.
+  r.get('/xstocks', async (_req, res) => {
+    const now = Date.now();
+    if (_xstocksCache.data && now - _xstocksCache.ts < XSTOCKS_TTL) {
+      return res.json({ items: _xstocksCache.data, cached: true, source: 'backed' });
+    }
+    try {
+      const all = [];
+      for (let page = 0; page < 24; page++) {
+        const { data } = await axios.get('https://api.backed.fi/api/v2/public/assets', {
+          params: { page },
+          timeout: 12000,
+          headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' },
+        });
+        const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
+        all.push(...nodes);
+        if (!data?.page?.hasNextPage) break;
+      }
+      const seen = new Set();
+      const items = [];
+      for (const n of all) {
+        const name = String(n?.name || '');
+        const tokenSym = String(n?.symbol || '');
+        if (!/xStock$/i.test(name)) continue;
+        if (!/x$/i.test(tokenSym)) continue;
+        const underlying = String(n.underlyingSymbol || tokenSym.replace(/x$/i, '') || tokenSym).toUpperCase();
+        if (!underlying || seen.has(underlying)) continue;
+        const addrs = {};
+        const chains = [];
+        for (const dep of (n.deployments || [])) {
+          const cid = GWX_NET[dep.network];
+          const addr = dep.address || dep.wrapperAddressV2 || dep.wrapperAddress;
+          if (!cid || !addr || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) continue;
+          addrs[cid] = addr;
+          chains.push(cid);
+        }
+        if (!chains.length) continue;
+        seen.add(underlying);
+        const pref = [1, 42161, 10, 56, 8453].find((c) => addrs[c]) || chains[0];
+        items.push({
+          sym: underlying,
+          tokenSym,
+          name,
+          logo: n.logo || '',
+          addrs,
+          chains,
+          chain: pref,
+          chainLabel: Object.keys(GWX_NET).find((k) => GWX_NET[k] === pref) || String(pref),
+          decimals: 18,
+          tradeable: true,
+          halted: !!n.isTradingHalted,
+          price: 0,
+          chg: 0,
+          vol24: '—',
+          mc: '—',
+        });
+      }
+      items.sort((a, b) => a.sym.localeCompare(b.sym));
+      if (items.length) _xstocksCache = { ts: now, data: items };
+      return res.json({ items, source: 'backed', count: items.length });
+    } catch (e) {
+      if (_xstocksCache.data?.length) {
+        return res.json({ items: _xstocksCache.data, cached: true, source: 'backed', error: 'upstream' });
+      }
+      return res.status(502).json({ items: [], error: String(e?.message || e) });
+    }
+  });
+
   // Live prediction markets from Polymarket (server-side to bypass CORS).
   r.get('/predict', async (_req, res) => {
-    res.set('Cache-Control', 'no-store, max-age=0');
     const now = Date.now();
     if (_predictCache.data && now - _predictCache.ts < PREDICT_TTL) {
       return res.json({ markets: _predictCache.data, cached: true });

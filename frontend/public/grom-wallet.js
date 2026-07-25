@@ -9008,6 +9008,214 @@ async function gwEnsureChain(provider, targetChainId) {
 }
 
 /* =========================================================================
+ * xStocks / Backed Phase 1 — thin helpers for #page-xstocks (Cursor boot).
+ * Register token addrs into GW_OC_SWAP so meta-agg can quote, then buy/sell.
+ * ========================================================================= */
+window.GWX_NET_TO_ID = {
+  Ethereum: 1, Arbitrum: 42161, Optimism: 10, BinanceSmartChain: 56,
+  Base: 8453, Polygon: 137, Avalanche: 43114, Mantle: 5000,
+};
+window.GWX_ID_TO_LABEL = {
+  1: 'Ethereum', 42161: 'Arbitrum', 10: 'Optimism', 56: 'BNB Chain',
+  8453: 'Base', 137: 'Polygon', 43114: 'Avalanche', 5000: 'Mantle',
+};
+
+window.gwXstocksRegisterToken = function ({ chainId, sym, address, decimals, name, logo }) {
+  const cid = Number(chainId);
+  const s = String(sym || '').toUpperCase();
+  const addr = String(address || '');
+  if (!cid || !s || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) return false;
+  try {
+    if (typeof GW_OC_SWAP !== 'undefined' && GW_OC_SWAP[cid]) {
+      GW_OC_SWAP[cid].tokens[s] = addr;
+      GW_OC_SWAP[cid].decimals[s] = Number(decimals) || 18;
+    }
+  } catch (_) {}
+  try {
+    if (typeof GW_DS_ASSETS !== 'undefined' && !GW_DS_ASSETS.find((a) => a.sym === s)) {
+      GW_DS_ASSETS.push({
+        sym: s,
+        name: name || s,
+        logo: logo || '',
+        custom: true,
+        address: addr,
+        chainId: cid,
+        decimals: Number(decimals) || 18,
+      });
+    }
+  } catch (_) {}
+  return true;
+};
+
+window.gwXstocksPickChain = function (addrsByChain, preferredChainId) {
+  const map = addrsByChain || {};
+  const pref = Number(preferredChainId) || 0;
+  if (pref && map[pref]) return pref;
+  const order = [1, 42161, 10, 56, 8453, 137];
+  for (const id of order) if (map[id]) return id;
+  const keys = Object.keys(map).map(Number).filter(Boolean);
+  return keys[0] || null;
+};
+
+async function gwXstocksPrepChain(chainId) {
+  const cid = Number(chainId);
+  if (!cid) throw new Error('No supported chain for this stock token');
+  try { currentChainId = cid; } catch (_) {}
+  try {
+    window.__gwDsUserPickedFrom = Object.assign({}, window.__gwDsUserPickedFrom || {}, {
+      chainId: cid, sym: 'USDT',
+    });
+  } catch (_) {}
+  try {
+    document.querySelectorAll('.gw-ds-chain').forEach((el) => {
+      el.classList.toggle('on', Number(el.dataset.cid) === cid);
+    });
+  } catch (_) {}
+  const provider = gwActiveSigningProvider() || window.gromWallet?.wcProvider || window.ethereum;
+  if (provider?.request) {
+    try { await gwEnsureChain(provider, cid); } catch (e) {
+      const label = (window.GWX_ID_TO_LABEL && window.GWX_ID_TO_LABEL[cid]) || ('chain ' + cid);
+      throw new Error('Switch to ' + label + ' to trade this stock token');
+    }
+  }
+  return cid;
+}
+
+window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, decimals, name, logo }) {
+  const sym = String(tokenSym || '').toUpperCase();
+  const amt = Number(usdtAmount);
+  if (!sym || !(amt > 0)) throw new Error('Invalid buy amount');
+  const addr = gwReadOnlyAddress();
+  if (!addr) {
+    try { if (typeof openConnectModal === 'function') openConnectModal(); } catch (_) {}
+    throw new Error('Connect wallet first');
+  }
+  window.gwXstocksRegisterToken({ chainId, sym, address, decimals, name, logo });
+  await gwXstocksPrepChain(chainId);
+  return await gwOnChainSwapExec('USDT', sym, amt);
+};
+
+window.gwXstocksSell = async function ({ tokenSym, tokenAmount, chainId, address, decimals, name, logo }) {
+  const sym = String(tokenSym || '').toUpperCase();
+  const amt = Number(tokenAmount);
+  if (!sym || !(amt > 0)) throw new Error('Invalid sell amount');
+  const addr = gwReadOnlyAddress();
+  if (!addr) {
+    try { if (typeof openConnectModal === 'function') openConnectModal(); } catch (_) {}
+    throw new Error('Connect wallet first');
+  }
+  window.gwXstocksRegisterToken({ chainId, sym, address, decimals, name, logo });
+  await gwXstocksPrepChain(chainId);
+  return await gwOnChainSwapExec(sym, 'USDT', amt);
+};
+
+window.gwXstocksQuote = async function ({ fromSym, toSym, amtNum, chainId, address, decimals, name, logo }) {
+  const from = String(fromSym || '').toUpperCase();
+  const to = String(toSym || '').toUpperCase();
+  const amt = Number(amtNum);
+  if (!from || !to || !(amt > 0)) return null;
+  const tokenSym = from === 'USDT' || from === 'USDC' ? to : from;
+  if (address) window.gwXstocksRegisterToken({ chainId, sym: tokenSym, address, decimals, name, logo });
+  const account = gwReadOnlyAddress() || '0x0000000000000000000000000000000000000001';
+  const quotes = await gwMetaAggQuoteAll({ chainId: Number(chainId), fromSym: from, toSym: to, amtNum: amt, account });
+  return (quotes && quotes[0]) || null;
+};
+
+window.gwXstocksBalanceOf = async function ({ chainId, tokenAddress, account, decimals }) {
+  const cid = Number(chainId);
+  const tok = String(tokenAddress || '');
+  const acc = String(account || gwReadOnlyAddress() || '');
+  if (!cid || !/^0x[a-fA-F0-9]{40}$/i.test(tok) || !/^0x[a-fA-F0-9]{40}$/i.test(acc)) return 0;
+  try {
+    const raw = await gwRpcTry(cid, 'eth_call', [{ to: tok, data: padAddressData(acc) }, 'latest']);
+    const dec = Number(decimals) || 18;
+    return Number(BigInt(raw || '0x0')) / (10 ** dec);
+  } catch (_) { return 0; }
+};
+
+window.gwXstocksUsdtBalance = async function (chainId) {
+  const cid = Number(chainId) || (typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : 1) || 1;
+  const addr = (typeof gwReadOnlyAddress === 'function') ? gwReadOnlyAddress() : null;
+  if (!addr) return 0;
+  try {
+    const rows = (typeof gwTkLoadHoldings === 'function') ? await gwTkLoadHoldings(false) : [];
+    const hit = (rows || []).find((r) => r.sym === 'USDT' && Number(r.chainId) === cid)
+      || (rows || []).find((r) => r.sym === 'USDT');
+    if (hit) return Number(hit.amt) || 0;
+  } catch (_) {}
+  try {
+    const bal = await window.gromFetchOnchainBalances(addr, cid);
+    return Number(bal?.tokens?.USDT) || 0;
+  } catch (_) { return 0; }
+};
+
+function gwInjectXstocksWalletCss() {
+  if (document.getElementById('gw-xstocks-wallet-css')) return;
+  const s = document.createElement('style');
+  s.id = 'gw-xstocks-wallet-css';
+  s.textContent = [
+    '.gw-xst-block{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)}',
+    '.gw-xst-h{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#98a8c0;margin:0 0 8px}',
+    '.gw-xst-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 12px;margin:0 0 6px;border-radius:12px;border:1px solid rgba(245,185,77,.18);background:rgba(245,185,77,.06);color:inherit;font:inherit;cursor:pointer;transition:.15s}',
+    '.gw-xst-row:hover{background:rgba(245,185,77,.12);border-color:rgba(245,185,77,.35)}',
+    '.gw-xst-ico{width:28px;height:28px;border-radius:8px;object-fit:contain;background:#fff;flex:none}',
+    '.gw-xst-ico-fb{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:10px;font-weight:800;background:rgba(245,185,77,.25);color:#f5b94d;flex:none}',
+    '.gw-xst-meta{flex:1;min-width:0}.gw-xst-meta b{display:block;font-size:13px;font-weight:800;color:#e7eef8}',
+    '.gw-xst-meta small{display:block;font-size:11px;color:#98a8c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.gw-xst-usd{font-size:13px;font-weight:800;color:#f5b94d;font-variant-numeric:tabular-nums}',
+  ].join('');
+  document.head.appendChild(s);
+}
+
+function gwRenderXstocksWalletRows(positions) {
+  gwInjectXstocksWalletCss();
+  const card = document.getElementById('gwOnchainCard');
+  if (!card) return;
+  let host = document.getElementById('gwXstocksWalletBlock');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'gwXstocksWalletBlock';
+    host.className = 'gw-xst-block';
+    card.appendChild(host);
+  }
+  const arr = Array.isArray(positions) ? positions.filter((p) => p && p.qty > 0) : [];
+  if (!arr.length) { host.innerHTML = ''; return; }
+  host.innerHTML = '<p class="gw-xst-h">Tokenized stocks</p>' + arr.map((p) => {
+    const ico = p.logo
+      ? `<img class="gw-xst-ico" src="${p.logo}" alt="" loading="lazy"/>`
+      : `<span class="gw-xst-ico-fb">${String(p.sym || '').slice(0, 2)}</span>`;
+    const usd = (Number(p.usd) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const qty = Number(p.qty) || 0;
+    return `<button type="button" class="gw-xst-row" data-xst-sym="${p.sym}">${ico}<span class="gw-xst-meta"><b>${p.tokenSym || ('b' + p.sym)} · ${p.name || p.sym}</b><small>${qty.toFixed(4)} · Backed</small></span><span class="gw-xst-usd">$${usd}</span></button>`;
+  }).join('');
+  host.querySelectorAll('.gw-xst-row').forEach((btn) => {
+    btn.onclick = () => {
+      const sym = btn.getAttribute('data-xst-sym');
+      try { sessionStorage.setItem('gwx_focus_sym', sym || ''); } catch (_) {}
+      try { if (typeof show === 'function') show('xstocks'); } catch (_) {}
+      setTimeout(() => {
+        try {
+          document.dispatchEvent(new CustomEvent('grom:xstocks-focus', { detail: { sym } }));
+        } catch (_) {}
+      }, 200);
+    };
+  });
+}
+
+function gwSetupXstocksWalletBridge() {
+  document.addEventListener('grom:xstocks-positions-updated', (ev) => {
+    try { gwRenderXstocksWalletRows(ev?.detail?.positions || []); } catch (_) {}
+  });
+  window.addEventListener('hashchange', () => {
+    if (!document.getElementById('page-wallet')?.classList.contains('active')) return;
+    try {
+      const cached = window.__gwxLastPositions;
+      if (cached) gwRenderXstocksWalletRows(cached);
+    } catch (_) {}
+  });
+}
+
+/* =========================================================================
  * LiFi meta-aggregator swap execution (2026-07-07).
  *
  * WHY LIFI vs. our inline Uniswap/Pancake V2 routers:
@@ -10967,6 +11175,7 @@ try {
       safe('dashSwap',         gwSetupDashSwap);
       safe('depositAutoCont',  gwSetupDepositAutoContinue);
       safe('onchainCard',      gwSetupOnchainCard);
+      safe('xstocksWallet',    gwSetupXstocksWalletBridge);
       safe('combinedBalance',  gwSetupCombinedBalance);
       safe('metaPortfolio',    gwSetupMetaPortfolio);
       safe('aiCoach',          gwSetupAiCoach);

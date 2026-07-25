@@ -14213,6 +14213,327 @@ var GROM_XSTOCKS = [
   function savePos(key, arr) { try { localStorage.setItem(key, JSON.stringify(arr.slice(0, 60))); } catch (_) {} }
   function livePx(sym) { var p = (typeof window.gromLivePrice === 'function') ? window.gromLivePrice(sym) : null; return (p != null && isFinite(p) && p > 0) ? p : null; }
 
+  /* ---- Backed xStocks catalog (Phase 1) — dynamic, cached 5 min ---- */
+  var GWX_SEED_CAT = {};
+  GROM_XSTOCKS.forEach(function (s) { GWX_SEED_CAT[s.sym] = s.cat; });
+  var GWX_CAT_KW = [
+    ['tech', /tech|software|semiconductor|chip|cloud|nvidia|apple|microsoft|google|alphabet|meta|amazon|oracle|cisco|intel|ibm|palantir|broadcom|qualcomm|netflix|salesforce|adobe|amd|micron|sk hynix/i],
+    ['finance', /bank|financial|capital|visa|mastercard|goldman|morgan|berkshire|insurance|pay/i],
+    ['etf', /\betf\b|treasury|bond|s&p|sp500|nasdaq|russell|dow|ark /i],
+    ['auto', /auto|tesla|ford|general motors|rivian|motor/i],
+    ['consumer', /consumer|retail|coca|pepsi|mcdonald|nike|disney|walmart|costco|starbucks/i],
+    ['crypto', /coinbase|microstrategy|mara|robinhood|crypto|bitcoin|strategy/i],
+    ['energy', /energy|oil|exxon|chevron|shell|gas/i],
+    ['health', /health|pharma|lilly|unitedhealth|johnson|pfizer|moderna|biotech/i],
+  ];
+  var GWX_NET = { Ethereum: 1, Arbitrum: 42161, Optimism: 10, BinanceSmartChain: 56, Base: 8453, Polygon: 137, Avalanche: 43114, Mantle: 5000 };
+  var gwxUsdtBal = 0;
+  var gwxPositions = [];
+  var gwxCatalogAt = 0;
+  var _gwxCatalogPromise = null;
+
+  function gwxMapCat(underlying, name) {
+    var u = String(underlying || '').toUpperCase();
+    if (GWX_SEED_CAT[u]) return GWX_SEED_CAT[u];
+    var blob = String(name || '') + ' ' + u;
+    for (var i = 0; i < GWX_CAT_KW.length; i++) if (GWX_CAT_KW[i][1].test(blob)) return GWX_CAT_KW[i][0];
+    return null;
+  }
+  function gwxConnected() {
+    try {
+      if (typeof gwReadOnlyAddress === 'function' && gwReadOnlyAddress()) return true;
+      if (typeof gwIsWalletUiConnected === 'function' && gwIsWalletUiConnected()) return true;
+    } catch (_) {}
+    return false;
+  }
+  function gwxOpenConnect() {
+    try {
+      if (typeof openConnectModal === 'function') { openConnectModal(); return; }
+      var chip = document.getElementById('walletChip');
+      if (chip) chip.click();
+    } catch (_) {}
+  }
+  function gwxUiChainId() {
+    try { if (typeof gwGetActiveUiChainId === 'function') { var c = gwGetActiveUiChainId(); if (c) return Number(c); } } catch (_) {}
+    return 1;
+  }
+  function gwxPickTrade(s) {
+    if (!s || !s.addrs) return null;
+    var cid = (typeof window.gwXstocksPickChain === 'function')
+      ? window.gwXstocksPickChain(s.addrs, gwxUiChainId())
+      : null;
+    if (!cid) return null;
+    return { chainId: cid, address: s.addrs[cid], decimals: s.decimals || 18, tokenSym: s.tokenSym };
+  }
+  function gwxApplyCatalog(items) {
+    if (!items || !items.length) return;
+    GROM_XSTOCKS.length = 0;
+    items.forEach(function (it) { GROM_XSTOCKS.push(it); });
+    STOCK_MAP = {};
+    GROM_XSTOCKS.forEach(function (s) { STOCK_MAP[s.sym] = s; });
+    gwxPxInit = false;
+    initPx();
+    GROM_XSTOCKS.forEach(function (s) {
+      if (s.price > 0) { gwxPx[s.sym] = s.price; gwxB0[s.sym] = s.price / (1 + (s.chg || 0) / 100); }
+    });
+    updateXstocksStats();
+    renderXstocksRows();
+  }
+  function gwxNormalizeNode(n) {
+    if (!n || !n.symbol) return null;
+    var tokenSym = String(n.symbol);
+    var underlying = String(n.underlyingSymbol || tokenSym.replace(/x$/i, '') || tokenSym).toUpperCase();
+    var addrs = {};
+    (n.deployments || []).forEach(function (dep) {
+      var cid = GWX_NET[dep.network];
+      var addr = dep.address || dep.wrapperAddressV2 || dep.wrapperAddress;
+      if (cid && addr && /^0x[a-fA-F0-9]{40}$/i.test(addr)) addrs[cid] = addr;
+    });
+    if (!Object.keys(addrs).length) return null; // EVM-only Phase 1
+    var cat = gwxMapCat(underlying, n.name || n.description || '');
+    return {
+      sym: underlying,
+      tokenSym: tokenSym,
+      name: n.name || (underlying + ' xStock'),
+      price: 0, chg: 0, vol24: '—', mc: '—',
+      cat: cat,
+      logo: n.logo || '',
+      addrs: addrs,
+      decimals: 18,
+      tradeable: true,
+      halted: !!n.isTradingHalted,
+    };
+  }
+  async function gwxFetchBackedCatalog() {
+    var all = [], page = 0;
+    for (; page < 24; page++) {
+      var r = await fetch('https://api.backed.fi/api/v2/public/assets?page=' + page, {
+        headers: { Accept: 'application/json' }, cache: 'no-store',
+      });
+      if (!r.ok) throw new Error('backed ' + r.status);
+      var d = await r.json();
+      var nodes = d.nodes || [];
+      nodes.forEach(function (n) { all.push(n); });
+      if (!(d.page && d.page.hasNextPage)) break;
+    }
+    var out = [], seen = {};
+    all.forEach(function (n) {
+      var item = gwxNormalizeNode(n);
+      if (!item || seen[item.sym]) return;
+      seen[item.sym] = 1;
+      out.push(item);
+    });
+    out.sort(function (a, b) { return a.sym.localeCompare(b.sym); });
+    return out;
+  }
+  async function gwxFetchLifiFallback() {
+    var r = await fetch('https://li.quest/v1/tokens?chains=1,42161,10,56', { headers: { Accept: 'application/json' } });
+    if (!r.ok) throw new Error('lifi tokens ' + r.status);
+    var d = await r.json();
+    var tokens = d.tokens || {};
+    var bySym = {};
+    Object.keys(tokens).forEach(function (chain) {
+      var cid = Number(chain);
+      (tokens[chain] || []).forEach(function (t) {
+        var s = String(t.symbol || '');
+        if (!/x$/i.test(s) && !/^b[A-Z]/.test(s)) return;
+        var name = String(t.name || '');
+        if (!/xstock|backed/i.test(name) && !/x$/i.test(s)) return;
+        var underlying = s.replace(/x$/i, '').replace(/^b/, '').toUpperCase();
+        if (!bySym[underlying]) {
+          bySym[underlying] = {
+            sym: underlying, tokenSym: s, name: name || underlying, price: Number(t.priceUSD) || 0,
+            chg: 0, vol24: '—', mc: '—', cat: gwxMapCat(underlying, name), logo: t.logoURI || '',
+            addrs: {}, decimals: Number(t.decimals) || 18, tradeable: true, halted: false,
+          };
+        }
+        if (t.address && /^0x[a-fA-F0-9]{40}$/i.test(t.address)) bySym[underlying].addrs[cid] = t.address;
+        if (t.priceUSD) bySym[underlying].price = Number(t.priceUSD);
+      });
+    });
+    return Object.keys(bySym).map(function (k) { return bySym[k]; }).filter(function (x) { return Object.keys(x.addrs).length; });
+  }
+  async function gwxLoadCatalog(force) {
+    if (_gwxCatalogPromise && !force) return _gwxCatalogPromise;
+    if (!force && gwxCatalogAt && (Date.now() - gwxCatalogAt) < 5 * 60 * 1000 && GROM_XSTOCKS.length && GROM_XSTOCKS[0].addrs) {
+      return GROM_XSTOCKS;
+    }
+    _gwxCatalogPromise = (async function () {
+      try {
+        var cached = null;
+        try { cached = JSON.parse(localStorage.getItem('gwx_btokens_catalog') || 'null'); } catch (_) {}
+        if (!force && cached && cached.at && (Date.now() - cached.at) < 5 * 60 * 1000 && cached.items && cached.items.length) {
+          gwxApplyCatalog(cached.items);
+          gwxCatalogAt = cached.at;
+          gwxRefreshPrices();
+          return cached.items;
+        }
+        var items = null;
+        try { items = await gwxFetchBackedCatalog(); } catch (e) { console.warn('[gwx] backed catalog', e); }
+        if (!items || !items.length) items = await gwxFetchLifiFallback();
+        if (items && items.length) {
+          gwxApplyCatalog(items);
+          gwxCatalogAt = Date.now();
+          try { localStorage.setItem('gwx_btokens_catalog', JSON.stringify({ at: gwxCatalogAt, items: items })); } catch (_) {}
+          gwxRefreshPrices();
+          return items;
+        }
+      } catch (e) {
+        console.warn('[gwx] catalog load failed', e);
+      } finally {
+        _gwxCatalogPromise = null;
+      }
+      return GROM_XSTOCKS;
+    })();
+    return _gwxCatalogPromise;
+  }
+  async function gwxRefreshPrices() {
+    var sample = GROM_XSTOCKS.filter(function (s) { return s.addrs && s.addrs[1]; }).slice(0, 40);
+    await Promise.all(sample.map(async function (s) {
+      try {
+        var addr = s.addrs[1] || s.addrs[42161] || Object.values(s.addrs)[0];
+        var chain = s.addrs[1] ? 1 : (s.addrs[42161] ? 42161 : Number(Object.keys(s.addrs)[0]));
+        var r = await fetch('https://li.quest/v1/token?chain=' + chain + '&token=' + addr);
+        if (!r.ok) return;
+        var t = await r.json();
+        var px = Number(t.priceUSD);
+        if (px > 0) {
+          var prev = gwxPx[s.sym] || s.price || px;
+          gwxPx[s.sym] = px; s.price = px;
+          if (!gwxB0[s.sym]) gwxB0[s.sym] = px;
+          s.chg = gwxB0[s.sym] ? ((px / gwxB0[s.sym] - 1) * 100) : 0;
+          if (t.logoURI && !s.logo) s.logo = t.logoURI;
+        }
+      } catch (_) {}
+    }));
+    renderXstocksRows();
+  }
+  async function refreshUsdtBalChip() {
+    try {
+      if (!gwxConnected()) { gwxUsdtBal = 0; updateXstocksStats(); return; }
+      var tradeChain = gwxUiChainId();
+      if (typeof window.gwXstocksUsdtBalance === 'function') {
+        gwxUsdtBal = await window.gwXstocksUsdtBalance(tradeChain);
+      }
+    } catch (_) { gwxUsdtBal = 0; }
+    updateXstocksStats();
+  }
+  function updateXstocksStats() {
+    var page = document.getElementById('page-xstocks'); if (!page) return;
+    var stats = page.querySelectorAll('.gwx-stats > div');
+    if (stats[0]) {
+      var b = stats[0].querySelector('b');
+      var sm = stats[0].querySelector('small');
+      if (b) b.textContent = gwxConnected() ? money(gwxUsdtBal) : '—';
+      if (sm) {
+        sm.textContent = gwxConnected() ? tx('px_my_usdt', 'My USDT balance') : tx('px_connect_for_bal', 'Connect wallet');
+        sm.classList.add('live');
+      }
+    }
+    if (stats[1]) {
+      var tb = stats[1].querySelector('b');
+      if (tb) tb.textContent = String(GROM_XSTOCKS.length);
+    }
+  }
+  async function gwxLoadPositions() {
+    var addr = null;
+    try { addr = typeof gwReadOnlyAddress === 'function' ? gwReadOnlyAddress() : null; } catch (_) {}
+    if (!addr || typeof window.gwXstocksBalanceOf !== 'function') {
+      gwxPositions = [];
+      window.__gwxLastPositions = [];
+      renderStockPos();
+      try { document.dispatchEvent(new CustomEvent('grom:xstocks-positions-updated', { detail: { positions: [] } })); } catch (_) {}
+      return;
+    }
+    var chainId = gwxUiChainId();
+    var list = GROM_XSTOCKS.filter(function (s) { return s.addrs && (s.addrs[chainId] || s.addrs[1] || s.addrs[42161]); });
+    var out = [];
+    // Cap concurrent reads — scan tokens that have addr on preferred chains
+    var batch = list.slice(0, 80);
+    await Promise.all(batch.map(async function (s) {
+      var cid = s.addrs[chainId] ? chainId : (s.addrs[1] ? 1 : 42161);
+      var tokenAddr = s.addrs[cid];
+      if (!tokenAddr) return;
+      var qty = await window.gwXstocksBalanceOf({ chainId: cid, tokenAddress: tokenAddr, account: addr, decimals: s.decimals || 18 });
+      if (!(qty > 0.0000001)) return;
+      var px = curPx(s.sym) || s.price || 0;
+      out.push({
+        sym: s.sym, tokenSym: s.tokenSym, name: s.name, logo: s.logo,
+        qty: qty, px: px, usd: qty * px, chainId: cid, address: tokenAddr, decimals: s.decimals || 18,
+      });
+    }));
+    out.sort(function (a, b) { return b.usd - a.usd; });
+    gwxPositions = out;
+    window.__gwxLastPositions = out;
+    renderStockPos();
+    try { document.dispatchEvent(new CustomEvent('grom:xstocks-positions-updated', { detail: { positions: out } })); } catch (_) {}
+  }
+  function openStockModal(opts) {
+    injectCss(); closeModal();
+    var ov = document.createElement('div'); ov.id = 'gromTradeModal'; ov.className = 'gtm-ov';
+    var balLabel = gwxConnected()
+      ? (tx('px_my_usdt', 'My USDT balance') + ': <b>' + money(gwxUsdtBal) + '</b>')
+      : tx('px_connect_wallet', 'Connect wallet to trade');
+    ov.innerHTML = '<div class="gtm">'
+      + '<div class="gtm-h"><span>' + opts.title + '</span><button class="gtm-x" type="button">✕</button></div>'
+      + (opts.sub ? '<div class="gtm-sub">' + opts.sub + '</div>' : '')
+      + '<div class="gtm-bal">' + balLabel + '</div>'
+      + '<div class="gtm-field"><input type="number" id="gtmAmt" min="0" step="any" placeholder="0.00"/><span>' + (opts.unit || 'USDT') + '</span></div>'
+      + '<div class="gtm-presets"><button type="button" data-a="25">$25</button><button type="button" data-a="100">$100</button><button type="button" data-a="500">$500</button><button type="button" data-a="max">Max</button></div>'
+      + '<div class="gtm-info" id="gtmInfo"></div>'
+      + '<div class="gtm-actions"><button type="button" class="gtm-cancel">' + tx('gtm_cancel', 'Cancel') + '</button><button type="button" class="gtm-confirm">' + opts.confirmLabel + '</button></div>'
+      + '</div>';
+    document.body.appendChild(ov);
+    var amt = ov.querySelector('#gtmAmt'), info = ov.querySelector('#gtmInfo'), confirmBtn = ov.querySelector('.gtm-confirm');
+    var quoteTimer = null, lastQuote = null;
+    async function upd() {
+      var v = parseFloat(amt.value || '0');
+      if (!v || v <= 0) { info.textContent = tx('px_enter_amount', 'Enter amount') + (opts.unit === 'TOKEN' ? '.' : ' USDT.'); return; }
+      info.textContent = tx('px_quoting', 'Fetching route…');
+      if (typeof opts.infoAsync === 'function') {
+        try {
+          lastQuote = await opts.infoAsync(v);
+          info.innerHTML = lastQuote && lastQuote.html ? lastQuote.html : (lastQuote || '');
+        } catch (e) {
+          info.textContent = (e && e.message) || tx('px_quote_fail', 'Quote unavailable');
+        }
+      } else if (typeof opts.info === 'function') {
+        info.innerHTML = opts.info(v);
+      }
+    }
+    amt.addEventListener('input', function () {
+      clearTimeout(quoteTimer);
+      quoteTimer = setTimeout(upd, 400);
+    });
+    ov.querySelectorAll('.gtm-presets button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (b.dataset.a === 'max') amt.value = opts.unit === 'TOKEN' ? String(opts.maxToken || 0) : String(Math.floor(gwxUsdtBal * 100) / 100);
+        else amt.value = b.dataset.a;
+        upd();
+      });
+    });
+    ov.querySelector('.gtm-x').onclick = closeModal;
+    ov.querySelector('.gtm-cancel').onclick = closeModal;
+    ov.addEventListener('click', function (e) { if (e.target === ov) closeModal(); });
+    confirmBtn.onclick = async function () {
+      var v = parseFloat(amt.value || '0');
+      if (!v || v <= 0) { notify(tx('px_enter_amount', 'Enter amount'), 'error'); return; }
+      if (!gwxConnected()) { gwxOpenConnect(); return; }
+      if (opts.unit !== 'TOKEN' && v > gwxUsdtBal + 1e-9) { notify(tx('px_insufficient_usdt', 'Insufficient USDT'), 'error'); return; }
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = tx('px_signing', 'Confirm in wallet…');
+      try {
+        await opts.onConfirm(v, lastQuote);
+        closeModal();
+      } catch (e) {
+        notify((e && e.message) || tx('px_swap_fail', 'Swap failed'), 'error');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = opts.confirmLabel;
+      }
+    };
+    upd(); setTimeout(function () { try { amt.focus(); } catch (_) {} }, 30);
+  }
+
   function injectCss() {
     if (document.getElementById('grom-extra-enhance-css')) return;
     var css = ''
@@ -14315,6 +14636,8 @@ var GROM_XSTOCKS = [
       + '.gwx-trade{padding:7px 13px;border-radius:9px;border:0;font-weight:700;font-size:12px;cursor:pointer;transition:.13s}'
       + '.gwx-buy{background:rgba(34,197,94,.18);color:#34d27f}.gwx-buy:hover{background:rgba(34,197,94,.3);transform:translateY(-1px)}'
       + '.gwx-sell{background:rgba(239,68,68,.18);color:#f87171}.gwx-sell:hover{background:rgba(239,68,68,.3);transform:translateY(-1px)}'
+      + '.gwx-soon{display:inline-flex;align-items:center;padding:7px 12px;border-radius:9px;font-size:11px;font-weight:800;letter-spacing:.04em;color:#98a8c0;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}'
+      + '.gwx-bal small.live{color:#7cd4ff}'
       + '.gwx-price.flash-up{animation:gwxFlashUp .6s ease}.gwx-price.flash-dn{animation:gwxFlashDn .6s ease}'
       + '@keyframes gwxFlashUp{0%{color:#34d27f;text-shadow:0 0 12px rgba(52,210,127,.6)}100%{color:var(--silver1,#e7eef8);text-shadow:none}}'
       + '@keyframes gwxFlashDn{0%{color:#f87171;text-shadow:0 0 12px rgba(248,113,113,.6)}100%{color:var(--silver1,#e7eef8);text-shadow:none}}'
@@ -14489,17 +14812,28 @@ var GROM_XSTOCKS = [
       + (predictWhen(m) ? '<span>⏱ ' + esc(predictWhen(m)) + '</span>' : '') + '</div></div>';
   }
   function stockRowHtml(s) {
-    var px = curPx(s.sym), b0 = gwxB0[s.sym] || s.price, chg = (px / b0 - 1) * 100;
+    var px = curPx(s.sym) || s.price || 0;
+    var b0 = gwxB0[s.sym] || s.price || px || 1;
+    var chg = s.chg != null ? s.chg : ((px / b0 - 1) * 100);
     var cls = chg >= 0 ? 'gwx-up' : 'gwx-dn';
     var ini = s.sym.replace(/[^A-Z]/g, '').slice(0, 2) || s.sym.slice(0, 2);
+    var trade = gwxPickTrade(s);
+    var actions;
+    if (s.halted || !trade) {
+      actions = '<span class="gwx-soon">' + tx('px_soon', 'Soon') + '</span>';
+    } else {
+      actions = '<button type="button" class="gwx-trade gwx-buy" data-sym="' + s.sym + '" data-side="buy">' + tx('px_buy', 'Buy') + '</button>'
+        + '<button type="button" class="gwx-trade gwx-sell" data-sym="' + s.sym + '" data-side="sell">' + tx('px_sell', 'Sell') + '</button>';
+    }
+    var tickLbl = s.tokenSym ? (s.sym + ' <small style="opacity:.55;font-weight:600">' + esc(s.tokenSym) + '</small>') : s.sym;
     return '<div class="gwx-row" data-sym="' + s.sym + '" data-b0="' + b0 + '">'
       + '<div class="gwx-row-sym">' + logoHtml(s.sym, ini)
-      + '<div class="nm"><div class="gwx-tick">' + s.sym + '</div><div class="gwx-name">' + esc(s.name) + '</div></div></div>'
-      + '<div class="gwx-price">$' + px.toFixed(2) + '</div>'
-      + '<div class="gwx-chg ' + cls + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</div>'
-      + '<div class="gwx-col-vol">' + s.vol24 + '</div>'
-      + '<div class="gwx-col-mc">' + s.mc + '</div>'
-      + '<div class="gwx-row-actions"><button type="button" class="gwx-trade gwx-buy" data-sym="' + s.sym + '" data-side="buy">' + tx('px_buy', 'Buy') + '</button><button type="button" class="gwx-trade gwx-sell" data-sym="' + s.sym + '" data-side="sell">' + tx('px_sell', 'Sell') + '</button></div>'
+      + '<div class="nm"><div class="gwx-tick">' + tickLbl + '</div><div class="gwx-name">' + esc(s.name) + '</div></div></div>'
+      + '<div class="gwx-price">' + (px ? ('$' + px.toFixed(2)) : '—') + '</div>'
+      + '<div class="gwx-chg ' + cls + '">' + (px ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—') + '</div>'
+      + '<div class="gwx-col-vol">' + (s.vol24 || '—') + '</div>'
+      + '<div class="gwx-col-mc">' + (s.mc || '—') + '</div>'
+      + '<div class="gwx-row-actions">' + actions + '</div>'
       + '</div>';
   }
   function catTabsHtml(list, active, withEmoji) {
@@ -14545,15 +14879,17 @@ var GROM_XSTOCKS = [
   }
   function buildXstocks() {
     initPx();
+    var balTxt = gwxConnected() ? money(gwxUsdtBal) : '—';
+    var balSm = gwxConnected() ? tx('px_my_usdt', 'My USDT balance') : tx('px_connect_for_bal', 'Connect wallet');
     return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
       + '<h1 class="gwx-h1">📈 ' + tx('pg_xstocks_title', 'Tokenized stocks') + ' <span class="gwx-badge new">NEW</span></h1>'
-      + '<div class="gwx-hero-aside"><div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + money(bal()) + '</b><small>' + tx('px_demo_bal', 'Demo balance') + '</small></div><div><b>' + GROM_XSTOCKS.length + '</b><small>' + tx('px_tickers', 'Tickers') + '</small></div><div><b>24/7</b><small>' + tx('px_trading', 'Trading') + '</small></div></div>'
+      + '<div class="gwx-hero-aside"><div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + balTxt + '</b><small class="live">' + balSm + '</small></div><div><b id="gwxTickerCount">' + GROM_XSTOCKS.length + '</b><small>' + tx('px_tickers', 'Tickers') + '</small></div><div><b>24/7</b><small>' + tx('px_trading', 'Trading') + '</small></div></div>'
       + heroJumpBtn('gromStockPos', 'px_my_positions', 'My positions') + '</div></div></div>'
       + '<div class="gwx-toolbar"><div class="gwx-cats">' + catTabsHtml(GROM_SCATS, gwxState.sCat, false) + '</div>'
       + '<div class="gwx-search"><input type="text" placeholder="' + esc(tx('px_search_stocks', 'Search ticker…')) + '" /></div></div>'
       + '<div class="gwx-table"><div class="gwx-thead"><div>' + tx('px_col_ticker', 'Ticker') + '</div><div>' + tx('px_col_price', 'Price') + '</div><div>' + tx('px_col_chg', '24h %') + '</div><div class="gwx-col-vol">' + tx('px_col_vol', '24h vol') + '</div><div class="gwx-col-mc">' + tx('px_col_mc', 'Market cap') + '</div><div></div></div><div class="gwx-rows"></div></div>'
       + '<div class="gxp" id="gromStockPos"><div class="gxp-h">' + tx('px_my_positions', 'My positions') + '</div><div class="gxp-list"></div></div>'
-      + '<div class="gwx-foot">' + tx('px_foot_xstocks', '') + '</div></div>';
+      + '<div class="gwx-foot">' + tx('px_foot_xstocks', 'Powered by Backed xStocks · fee 0.20% · non-custodial via LiFi') + '</div></div>';
   }
   var GWX_LIVE = null;
   var _predictFetch = null;
@@ -14824,10 +15160,15 @@ var GROM_XSTOCKS = [
     var host = document.querySelector('#page-xstocks .gwx-rows'); if (!host) return;
     var q = gwxState.sQ.trim().toLowerCase();
     var list = GROM_XSTOCKS.filter(function (s) {
-      return (gwxState.sCat === 'all' || s.cat === gwxState.sCat) && (!q || s.sym.toLowerCase().indexOf(q) >= 0 || s.name.toLowerCase().indexOf(q) >= 0);
+      var catOk = gwxState.sCat === 'all' || s.cat === gwxState.sCat;
+      // Uncategorized tokens only appear under "Все"
+      if (gwxState.sCat !== 'all' && !s.cat) return false;
+      return catOk && (!q || s.sym.toLowerCase().indexOf(q) >= 0 || s.name.toLowerCase().indexOf(q) >= 0 || String(s.tokenSym || '').toLowerCase().indexOf(q) >= 0);
     });
     host.innerHTML = list.length ? list.map(stockRowHtml).join('') : '<div class="gwx-none" style="border:0">' + tx('px_none_stocks', 'Nothing found') + '</div>';
     if (typeof gromHydrateLogos === 'function') gromHydrateLogos(host);
+    var countEl = document.getElementById('gwxTickerCount');
+    if (countEl) countEl.textContent = String(GROM_XSTOCKS.length);
   }
 
   // Create real <section class="page"> shells so the app's own show() router
@@ -14847,21 +15188,61 @@ var GROM_XSTOCKS = [
       delete sec.dataset.gwxForce;
     });
     applyPredictView(); renderXstocksRows();
+    try {
+      gwxLoadCatalog(false).then(function () {
+        refreshUsdtBalChip();
+        gwxLoadPositions();
+        gwxFocusFromHash();
+      });
+    } catch (_) {}
   }
 
-  /* ---- positions ---- */
+  function gwxFocusFromHash() {
+    var sym = '';
+    try { sym = sessionStorage.getItem('gwx_focus_sym') || ''; } catch (_) {}
+    if (!sym) {
+      try {
+        var h = String(location.hash || '');
+        var m = h.match(/[?&]sym=([A-Za-z0-9.]+)/);
+        if (m) sym = m[1].toUpperCase();
+      } catch (_) {}
+    }
+    if (!sym) return;
+    try { sessionStorage.removeItem('gwx_focus_sym'); } catch (_) {}
+    gwxState.sQ = sym;
+    var page = document.getElementById('page-xstocks');
+    var inp = page && page.querySelector('.gwx-search input');
+    if (inp) inp.value = sym;
+    renderXstocksRows();
+    setTimeout(function () {
+      var row = document.querySelector('#page-xstocks .gwx-row[data-sym="' + sym + '"]');
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.add('gxp-flash');
+        setTimeout(function () { row.classList.remove('gxp-flash'); }, 1200);
+      }
+      scrollToGwxSection('gromStockPos');
+    }, 120);
+  }
+
+  /* ---- positions (on-chain bToken / xStock balances) ---- */
   function renderStockPos() {
     var page = document.getElementById('page-xstocks'); if (!page) return;
     var list = page.querySelector('#gromStockPos .gxp-list'); if (!list) return;
-    var arr = loadPos('grom_xstock_pos');
-    if (!arr.length) { list.innerHTML = '<div class="gxp-empty">' + tx('px_empty_stocks', '') + '</div>'; return; }
+    if (!gwxConnected()) {
+      list.innerHTML = '<div class="gxp-empty">' + tx('px_connect_for_pos', 'Connect wallet to see positions') + '</div>';
+      return;
+    }
+    var arr = gwxPositions || [];
+    if (!arr.length) { list.innerHTML = '<div class="gxp-empty">' + tx('px_empty_stocks', 'No stock positions yet') + '</div>'; return; }
     list.innerHTML = arr.map(function (p, i) {
-      var cur = curPx(p.sym) || p.px; var val = p.qty * cur;
-      var pnl = (p.side === 'buy') ? (val - p.usd) : (p.usd - val);
-      return '<div class="gxp-row"><div><b>' + p.sym + '<span class="gxp-side ' + (p.side === 'buy' ? 'b' : 's') + '">' + (p.side === 'buy' ? 'LONG' : 'SHORT') + '</span></b>'
-        + '<small>' + p.qty.toFixed(4) + ' @ $' + p.px.toFixed(2) + ' · ' + tx('px_now', 'now') + ' $' + cur.toFixed(2) + '</small></div>'
-        + '<div class="gxp-pnl ' + (pnl >= 0 ? 'up' : 'dn') + '">' + (pnl >= 0 ? '+' : '−') + money(Math.abs(pnl)).slice(1) + '</div>'
-        + '<button type="button" class="gxp-close" data-k="stock" data-i="' + i + '">' + tx('px_close', 'Close') + '</button></div>';
+      var cur = curPx(p.sym) || p.px || 0;
+      var val = p.qty * cur;
+      var chainLbl = (window.GWX_ID_TO_LABEL && window.GWX_ID_TO_LABEL[p.chainId]) || ('chain ' + p.chainId);
+      return '<div class="gxp-row" data-sym="' + p.sym + '"><div><b>' + esc(p.tokenSym || p.sym) + '<span class="gxp-side b">LONG</span></b>'
+        + '<small>' + p.qty.toFixed(4) + ' · ' + esc(chainLbl) + ' · ' + tx('px_now', 'now') + ' $' + cur.toFixed(2) + '</small></div>'
+        + '<div class="gxp-pnl up">' + money(val) + '</div>'
+        + '<button type="button" class="gxp-close" data-k="stock" data-i="' + i + '" data-sym="' + p.sym + '">' + tx('px_sell', 'Sell') + '</button></div>';
     }).join('');
   }
   function renderPredictPos() {
@@ -14878,10 +15259,9 @@ var GROM_XSTOCKS = [
   }
   function closePos(kind, i) {
     if (kind === 'stock') {
-      var arr = loadPos('grom_xstock_pos'); var p = arr[i]; if (!p) return;
-      var cur = curPx(p.sym) || p.px; var val = p.qty * cur;
-      setBal(bal() + (p.side === 'buy' ? val : (2 * p.usd - val)));
-      arr.splice(i, 1); savePos('grom_xstock_pos', arr); notify(tx('px_pos_closed', 'Position closed') + ' ' + p.sym, 'success'); renderStockPos();
+      var p = (gwxPositions || [])[i];
+      if (!p) return;
+      onStockBySym(p.sym, 'sell');
     } else if (kind === 'predict') {
       var a = loadPos('grom_predict_pos'); var pp = a[i]; if (!pp) return;
       setBal(bal() + pp.stake * 0.95);
@@ -14892,19 +15272,69 @@ var GROM_XSTOCKS = [
   /* ---- trade / bet handlers ---- */
   function onStock(row, side) {
     if (!row) return;
-    var sym = row.dataset.sym; if (!sym) return;
-    var px = curPx(sym) || 0;
-    if (!px) { notify(tx('px_price_unavail', 'Price unavailable'), 'error'); return; }
-    openModal({
+    onStockBySym(row.dataset.sym, side);
+  }
+  function onStockBySym(sym, side) {
+    if (!sym) return;
+    if (!gwxConnected()) { gwxOpenConnect(); return; }
+    var s = STOCK_MAP[sym] || GROM_XSTOCKS.find(function (x) { return x.sym === sym; });
+    if (!s) { notify(tx('px_price_unavail', 'Price unavailable'), 'error'); return; }
+    var trade = gwxPickTrade(s);
+    if (!trade) { notify(tx('px_soon', 'Soon') + ' — ' + tx('px_no_evm_route', 'No EVM market for this ticker yet'), 'info'); return; }
+    var uiChain = gwxUiChainId();
+    if (uiChain && trade.chainId !== uiChain && !s.addrs[uiChain]) {
+      var label = (window.GWX_ID_TO_LABEL && window.GWX_ID_TO_LABEL[trade.chainId]) || ('chain ' + trade.chainId);
+      notify(tx('px_switch_chain', 'Switch to') + ' ' + label + ' ' + tx('px_to_buy', 'to buy') + ' ' + (s.tokenSym || sym), 'info');
+    }
+    var px = curPx(sym) || s.price || 0;
+    refreshUsdtBalChip();
+    var pos = (gwxPositions || []).find(function (p) { return p.sym === sym; });
+    var maxTok = pos ? pos.qty : 0;
+    openStockModal({
       title: (side === 'buy' ? tx('px_buy', 'Buy') + ' ' : tx('px_sell', 'Sell') + ' ') + sym,
-      sub: tx('pg_xstocks_title', 'Tokenized stocks') + ' · ~$' + px.toFixed(2),
+      sub: (s.tokenSym || sym) + ' · ' + ((window.GWX_ID_TO_LABEL && window.GWX_ID_TO_LABEL[trade.chainId]) || '') + (px ? (' · ~$' + px.toFixed(2)) : ''),
       confirmLabel: (side === 'buy' ? tx('px_buy', 'Buy') + ' ' : tx('px_sell', 'Sell') + ' ') + sym,
-      info: function (v) { if (!v) return tx('px_enter_amount', 'Enter amount') + ' USDT.'; return '≈ ' + (v / px).toFixed(4) + ' ' + sym + ' @ $' + px.toFixed(2); },
-      onConfirm: function (v) {
-        var qty = v / px; setBal(bal() - (side === 'buy' ? v : -v));
-        var arr = loadPos('grom_xstock_pos'); arr.unshift({ sym: sym, side: side, usd: v, qty: qty, px: px, t: Date.now() }); savePos('grom_xstock_pos', arr);
-        notify((side === 'buy' ? tx('px_buy', 'Buy') : tx('px_sell', 'Sell')) + ' ' + qty.toFixed(4) + ' ' + sym, 'success'); renderStockPos();
-      }
+      unit: side === 'sell' ? 'TOKEN' : 'USDT',
+      maxToken: maxTok,
+      infoAsync: async function (v) {
+        if (typeof window.gwXstocksQuote !== 'function') {
+          return { html: px ? ('≈ ' + (side === 'buy' ? (v / px) : (v * px)).toFixed(4) + (side === 'buy' ? (' ' + (s.tokenSym || sym)) : ' USDT') + ' · fee 0.20%') : tx('px_quoting', 'Fetching route…') };
+        }
+        var fromSym = side === 'buy' ? 'USDT' : trade.tokenSym;
+        var toSym = side === 'buy' ? trade.tokenSym : 'USDT';
+        var q = await window.gwXstocksQuote({
+          fromSym: fromSym, toSym: toSym, amtNum: v, chainId: trade.chainId,
+          address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
+        });
+        if (!q) return { html: tx('px_quote_fail', 'Quote unavailable — try Ethereum / Arbitrum') };
+        var outDec = side === 'buy' ? (trade.decimals || 18) : 6;
+        var outAmt = Number(q.toAmount) / Math.pow(10, outDec);
+        var gas = (q.gasUsd != null) ? (' · gas ≈ $' + Number(q.gasUsd).toFixed(2)) : '';
+        var route = (q.aggregator || q.tool || 'DEX') + '';
+        return {
+          html: '≈ <b>' + outAmt.toFixed(4) + '</b> ' + toSym
+            + ' · route: ' + esc(route)
+            + ' · fee 0.20%' + gas,
+          quote: q, outAmt: outAmt,
+        };
+      },
+      onConfirm: async function (v) {
+        if (side === 'buy') {
+          await window.gwXstocksBuy({
+            tokenSym: trade.tokenSym, usdtAmount: v, chainId: trade.chainId,
+            address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
+          });
+          notify(tx('px_bought', 'Bought') + ' ' + sym + ' · ' + money(v), 'success');
+        } else {
+          await window.gwXstocksSell({
+            tokenSym: trade.tokenSym, tokenAmount: v, chainId: trade.chainId,
+            address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
+          });
+          notify(tx('px_sold', 'Sold') + ' ' + v.toFixed(4) + ' ' + (s.tokenSym || sym), 'success');
+        }
+        await refreshUsdtBalChip();
+        await gwxLoadPositions();
+      },
     });
   }
   function onBet(btn) {
@@ -14931,6 +15361,15 @@ var GROM_XSTOCKS = [
       }
     });
   }
+
+  document.addEventListener('grom:xstocks-focus', function (ev) {
+    try {
+      var sym = ev && ev.detail && ev.detail.sym;
+      if (sym) { try { sessionStorage.setItem('gwx_focus_sym', sym); } catch (_) {} gwxFocusFromHash(); }
+    } catch (_) {}
+  });
+  document.addEventListener('grom:wallet-connected', function () { refreshUsdtBalChip(); gwxLoadPositions(); });
+  document.addEventListener('grom:wallet-disconnected', function () { gwxUsdtBal = 0; gwxPositions = []; updateXstocksStats(); renderStockPos(); });
 
   document.addEventListener('click', function (e) {
     var jump = e.target.closest('.gwx-jump');
@@ -14988,13 +15427,21 @@ var GROM_XSTOCKS = [
   function refreshStockPrices() {
     var page = document.getElementById('page-xstocks'); if (!page || !page.classList.contains('active')) return;
     initPx();
+    // Paint cached LiFi / catalog prices — no fake random drift on live markets
     page.querySelectorAll('.gwx-row[data-sym]').forEach(function (row) {
-      var sym = row.dataset.sym; var b0 = parseFloat(row.dataset.b0) || gwxB0[sym] || curPx(sym);
-      var prev = gwxPx[sym] != null ? gwxPx[sym] : curPx(sym);
-      var p = prev * (1 + (Math.random() * 0.004 - 0.002)); gwxPx[sym] = p;
-      var chg = (p / b0 - 1) * 100;
-      var pe = row.querySelector('.gwx-price'); if (pe) { pe.textContent = '$' + p.toFixed(2); flash(pe, p >= prev); }
-      var ce = row.querySelector('.gwx-chg'); if (ce) { ce.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%'; ce.classList.toggle('gwx-up', chg >= 0); ce.classList.toggle('gwx-dn', chg < 0); }
+      var sym = row.dataset.sym;
+      var s = STOCK_MAP[sym];
+      var b0 = parseFloat(row.dataset.b0) || gwxB0[sym] || (s && s.price) || curPx(sym) || 1;
+      var p = curPx(sym) || (s && s.price) || 0;
+      if (!p) return;
+      var chg = s && s.chg != null ? s.chg : ((p / b0 - 1) * 100);
+      var pe = row.querySelector('.gwx-price'); if (pe) pe.textContent = '$' + p.toFixed(2);
+      var ce = row.querySelector('.gwx-chg');
+      if (ce) {
+        ce.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+        ce.classList.toggle('gwx-up', chg >= 0);
+        ce.classList.toggle('gwx-dn', chg < 0);
+      }
     });
   }
   function driftPredict() {
@@ -15036,7 +15483,12 @@ var GROM_XSTOCKS = [
     _gwxTick++;
     var px = document.getElementById('page-xstocks');
     var pp = document.getElementById('page-predict');
-    if (px && px.classList.contains('active')) { refreshStockPrices(); if (_gwxTick % 4 === 0) { renderStockPos(); updateBalChips(); } }
+    if (px && px.classList.contains('active')) {
+      refreshStockPrices();
+      if (_gwxTick % 4 === 0) { renderStockPos(); updateXstocksStats(); }
+      if (_gwxTick % 20 === 0) { refreshUsdtBalChip(); gwxLoadPositions(); }
+      if (_gwxTick % 50 === 0) gwxRefreshPrices();
+    }
     if (pp && pp.classList.contains('active')) {
       if (_gwxTick % 3 === 0) patchPredictQuotes();
       if (!gwxMobile() || _gwxTick % 2 === 0) driftPredict();

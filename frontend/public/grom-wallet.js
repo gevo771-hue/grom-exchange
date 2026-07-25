@@ -10487,9 +10487,11 @@ function gwInjectDashBannersCss() {
         0 1px 0 rgba(255,255,255,0.06) inset,
         0 14px 38px -18px rgba(0,0,0,0.55),
         0 0 0 1px rgba(255,255,255,0.02) inset !important;
-      /* No backdrop-filter here — Safari recomposites 4 blurred banners under live UI */
+      backdrop-filter: blur(14px) saturate(150%);
+      -webkit-backdrop-filter: blur(14px) saturate(150%);
       overflow: hidden;
       cursor: pointer;
+      transform-style: preserve-3d;
       transition:
         transform .55s cubic-bezier(.2,.7,.2,1),
         box-shadow .55s cubic-bezier(.2,.7,.2,1),
@@ -10497,16 +10499,28 @@ function gwInjectDashBannersCss() {
       scroll-snap-align: start;
     }
 
-    /* ---------- static accent rim (::before) — was infinite conic spin (Safari energy hog) ---------- */
+    /* ---------- rotating aurora halo (::before) ---------- */
     .dash-banners .dash-banner::before {
       content: "";
-      position: absolute; inset: 0;
+      position: absolute; inset: -2px;
       border-radius: inherit;
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gw-bn-a, #00c2ff) 45%, transparent);
-      opacity: 0.85;
+      padding: 1.5px;
+      background: conic-gradient(from 0deg,
+        var(--gw-bn-a, #00c2ff) 0%,
+        transparent 25%,
+        var(--gw-bn-b, #6e8dff) 50%,
+        transparent 75%,
+        var(--gw-bn-a, #00c2ff) 100%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+              mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+              mask-composite: exclude;
+      opacity: 0.7;
+      animation: gwBnSpin 14s linear infinite;
       pointer-events: none;
       z-index: 0;
     }
+    @keyframes gwBnSpin { to { transform: rotate(360deg); } }
 
     /* ---------- shimmering holographic sweep (::after) ---------- */
     .dash-banners .dash-banner::after {
@@ -10532,7 +10546,7 @@ function gwInjectDashBannersCss() {
     .dash-banners .dash-banner .banner-shine,
     .dash-banners .dash-banner .banner-content,
     .dash-banners .dash-banner .banner-tag { position: relative; z-index: 2; }
-    .dash-banners .dash-banner .banner-mesh { opacity: 0.75; }
+    .dash-banners .dash-banner .banner-mesh { opacity: 0.75; mix-blend-mode: screen; }
     /* Disable Cursor's older shine layer — our ::after replaces it */
     .dash-banners .dash-banner .banner-shine { display: none !important; }
 

@@ -63,21 +63,21 @@ const WC_PROJECT_ID = '28302d1699a8833692b54f0454164625';
 import { EthereumProvider } from 'https://esm.sh/@walletconnect/ethereum-provider@2.18.0';
 
 /* ----- metadata для WalletConnect / Trust Wallet Verify API -----
- * url ДОЛЖЕН совпадать с реальным доменом (иначе «Недійсний домен»).
- * Нормализуем www → apex и фиксируем production origin. */
+ * Trust shows «Invalid domain» when metadata.url ≠ real page origin.
+ * Do NOT strip www — www.grom.exchange and grom.exchange are both live
+ * (no redirect), and both are on the Reown allowlist. Always send the
+ * exact location.origin so Verify API returns VALID. */
 function walletAppOrigin() {
-  const host = (location.hostname || '').replace(/^www\./i, '').toLowerCase();
-  if (host === 'grom.exchange') return 'https://grom.exchange';
-  if (location.protocol === 'http:' || location.protocol === 'https:') {
-    return location.protocol + '//' + host + (location.port ? ':' + location.port : '');
-  }
+  try {
+    if (location.protocol === 'http:' || location.protocol === 'https:') {
+      // Exact origin — required for WalletConnect Verify / Trust Wallet
+      return location.origin;
+    }
+  } catch (_) {}
   return 'https://grom.exchange';
 }
 function walletMetadata() {
   const origin = walletAppOrigin();
-  // Metadata sent to WalletConnect Verify API + shown by wallets on connect.
-  // MUST match the description registered in Reown Cloud dashboard for the
-  // "Verify" status to become green in Trust / Rainbow / MetaMask mobile.
   return {
     name: 'GROM',
     description: 'Non-custodial cross-chain DEX. 10 000+ tokens, 20+ networks, best-route swaps from your wallet.',

@@ -32,6 +32,118 @@ const GWX_NET = {
   Base: 8453, Polygon: 137, Avalanche: 43114, Mantle: 5000,
 };
 
+// Yahoo Finance session (crumb + cookie) for equity volume / market cap.
+let _yfSession = { crumb: '', cookie: '', ts: 0 };
+const YF_UA = 'Mozilla/5.0 (compatible; GROMExchange/1.0; +https://grom.exchange)';
+
+function fmtCompactUsd(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v <= 0) return '—';
+  if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+  return `$${v.toFixed(0)}`;
+}
+
+function toYahooSymbol(sym) {
+  // BRK.B → BRK-B, etc.
+  return String(sym || '').toUpperCase().replace(/\./g, '-');
+}
+
+async function ensureYahooSession() {
+  if (_yfSession.crumb && Date.now() - _yfSession.ts < 45 * 60_000) return _yfSession;
+  const warm = await axios.get('https://fc.yahoo.com', {
+    timeout: 8000,
+    maxRedirects: 5,
+    validateStatus: () => true,
+    headers: { 'User-Agent': YF_UA, Accept: 'text/html' },
+  });
+  const cookie = []
+    .concat(warm.headers['set-cookie'] || [])
+    .map((c) => String(c).split(';')[0])
+    .filter(Boolean)
+    .join('; ');
+  const crumbRes = await axios.get('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+    timeout: 8000,
+    responseType: 'text',
+    headers: { 'User-Agent': YF_UA, Cookie: cookie, Accept: 'text/plain' },
+  });
+  const crumb = String(crumbRes.data || '').trim();
+  if (!crumb || /error|html|<!/i.test(crumb)) throw new Error('yahoo crumb unavailable');
+  _yfSession = { crumb, cookie, ts: Date.now() };
+  return _yfSession;
+}
+
+/** Batch Yahoo quotes → Map(underlyingSym → { vol24, mc, equityPx, chg }) */
+async function fetchYahooEquityMetrics(symbols) {
+  const uniq = [...new Set((symbols || []).map((s) => String(s || '').toUpperCase()).filter(Boolean))];
+  const out = new Map();
+  if (!uniq.length) return out;
+  let session;
+  try { session = await ensureYahooSession(); } catch (_) { return out; }
+
+  const chunkSize = 80;
+  for (let i = 0; i < uniq.length; i += chunkSize) {
+    const chunk = uniq.slice(i, i + chunkSize);
+    const ysyms = chunk.map(toYahooSymbol);
+    try {
+      const { data } = await axios.get('https://query1.finance.yahoo.com/v7/finance/quote', {
+        timeout: 12000,
+        params: { symbols: ysyms.join(','), crumb: session.crumb },
+        headers: { 'User-Agent': YF_UA, Cookie: session.cookie, Accept: 'application/json' },
+      });
+      const rows = data?.quoteResponse?.result || [];
+      const byY = new Map(rows.map((r) => [String(r.symbol || '').toUpperCase(), r]));
+      for (let j = 0; j < chunk.length; j++) {
+        const sym = chunk[j];
+        const r = byY.get(ysyms[j]) || byY.get(sym);
+        if (!r) continue;
+        const px = Number(r.regularMarketPrice);
+        const shares = Number(r.regularMarketVolume);
+        const mc = Number(r.marketCap);
+        const chg = Number(r.regularMarketChangePercent);
+        const dollarVol = (Number.isFinite(px) && Number.isFinite(shares) && px > 0 && shares > 0)
+          ? px * shares
+          : 0;
+        out.set(sym, {
+          vol24: fmtCompactUsd(dollarVol),
+          mc: fmtCompactUsd(mc),
+          equityPx: Number.isFinite(px) && px > 0 ? px : 0,
+          chg: Number.isFinite(chg) ? chg : 0,
+        });
+      }
+    } catch (e) {
+      // Crumb expiry → reset once and retry this chunk
+      if (String(e?.response?.status || '') === '401' || String(e?.response?.status || '') === '403') {
+        _yfSession = { crumb: '', cookie: '', ts: 0 };
+        try {
+          session = await ensureYahooSession();
+          i -= chunkSize; // retry chunk
+          continue;
+        } catch (_) { break; }
+      }
+    }
+  }
+  return out;
+}
+
+async function enrichXstocksMetrics(items) {
+  if (!Array.isArray(items) || !items.length) return items;
+  const metrics = await fetchYahooEquityMetrics(items.map((it) => it.sym));
+  if (!metrics.size) return items;
+  for (const it of items) {
+    const m = metrics.get(String(it.sym || '').toUpperCase());
+    if (!m) continue;
+    if (m.vol24 && m.vol24 !== '—') it.vol24 = m.vol24;
+    if (m.mc && m.mc !== '—') it.mc = m.mc;
+    // Keep LiFi/token mid as live trade price when FE fills it; seed equity px if empty.
+    if (!(Number(it.price) > 0) && m.equityPx > 0) it.price = m.equityPx;
+    if (m.chg) it.chg = m.chg;
+  }
+  return items;
+}
+
 function safeJson(str, def) { try { return JSON.parse(str); } catch { return def; } }
 function pmCategory(ev) {
   const tags = Array.isArray(ev.tags) ? ev.tags.map((t) => t.label || t.slug || '') : [];
@@ -165,6 +277,8 @@ export function createMarketRouter() {
         });
       }
       items.sort((a, b) => a.sym.localeCompare(b.sym));
+      // Underlying equity 24h $ volume + market cap (Yahoo). Token mid stays FE/LiFi.
+      try { await enrichXstocksMetrics(items); } catch (_) {}
       if (items.length) _xstocksCache = { ts: now, data: items };
       return res.json({ items, source: 'backed', count: items.length });
     } catch (e) {

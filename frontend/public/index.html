@@ -220,7 +220,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Oxanium:wght@600;700;800&family=Rajdhani:wght@600;700&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/grom-banners.72759417.css" />
+<link rel="stylesheet" href="/grom-banners.css" />
 <link rel="manifest" href="/manifest.webmanifest" />
 <link rel="icon" type="image/png" href="/icon-192.png?v=20260608a" sizes="192x192" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260608a" sizes="180x180" />
@@ -7484,9 +7484,9 @@
   </div>
 </div>
 
-<script src="/grom-instruments.953b43a8.js"></script>
-<script src="/grom-i18n.8dc7654c.js"></script>
-<script src="/grom-i18n-extra.3e03b84b.js"></script>
+<script src="/grom-instruments.js"></script>
+<script src="/grom-i18n.js"></script>
+<script src="/grom-i18n-extra.js"></script>
 <script>
 if (location.protocol !== 'file:') {
   var walletModule = document.createElement('script');
@@ -7496,7 +7496,7 @@ if (location.protocol !== 'file:') {
 
   var privyModule = document.createElement('script');
   privyModule.type = 'module';
-  privyModule.src = '/grom-privy.990a8eb6.js';
+  privyModule.src = '/grom-privy.js';
   document.head.appendChild(privyModule);
 }
 </script>
@@ -14215,37 +14215,24 @@ var GROM_XSTOCKS = [
 
   /* ---- Backed xStocks catalog (Phase 1) — dynamic, cached 5 min ---- */
   var GWX_SEED_CAT = {};
-  GROM_XSTOCKS.forEach(function (s) { GWX_SEED_CAT[s.sym] = s.cat; });
+  GROM_XSTOCKS.forEach(function (s) { if (s.cat) GWX_SEED_CAT[s.sym] = s.cat; });
+  /* Full Backed catalog → chip categories (627 tickers). Keywords cover future listings. */
+  var GWX_CAT_BY_SYM = {A:'tech',AA:'tech',AAPL:'tech',ABBV:'health',ABNB:'tech',ABT:'health',ACN:'tech',ADBE:'tech',ADI:'tech',ADM:'consumer',ADP:'tech',ADSK:'tech',AEE:'energy',AEP:'energy',AFL:'finance',AIG:'finance',AIT:'tech',AIZ:'finance',AJG:'finance',AKAM:'tech',ALAB:'tech',ALB:'health',ALGN:'tech',ALL:'finance',ALLY:'finance',ALNY:'health',AMAT:'tech',AMBR:'tech',AMD:'tech',AME:'tech',AMGN:'health',AMP:'finance',AMT:'finance',AMZN:'tech',ANET:'tech',APA:'energy',APD:'health',APG:'tech',APH:'tech',APLD:'tech',APO:'finance',APP:'tech',ARES:'finance',ARMK:'etf',ARW:'tech',ASML:'tech',ASTS:'tech',ATI:'tech',ATO:'energy',AVB:'finance',AVGO:'tech',AVY:'consumer',AWK:'energy',AXON:'tech',AZN:'health',AZO:'auto',BA:'tech',BAC:'finance',BALL:'consumer',BAM:'finance',BBY:'consumer',BDX:'health',BIIB:'health',BITX:'crypto',BJ:'consumer',BMNR:'crypto',BMY:'health',BNY:'finance',BOT:'crypto',BR:'finance',BRK.B:'finance',BRO:'finance',BSP:'tech',BSX:'health',BTBT:'crypto',BTGO:'crypto',BURL:'consumer',BWA:'auto',BWXT:'tech',BX:'finance',C:'finance',CAH:'health',CARR:'tech',CASY:'consumer',CAT:'tech',CBRE:'finance',CCI:'finance',CDNS:'tech',CDW:'tech',CEG:'energy',CF:'health',CFG:'finance',CG:'finance',CHD:'consumer',CHRW:'tech',CHTR:'tech',CI:'health',CIEN:'tech',CINF:'finance',CL:'consumer',CLH:'energy',CLSK:'crypto',CLX:'consumer',CMCSA:'tech',CME:'finance',CMG:'consumer',CMI:'tech',CMS:'energy',CNC:'health',CNP:'energy',COF:'finance',COHR:'tech',COIN:'crypto',COO:'health',COP:'energy',COPX:'etf',COR:'health',CORZ:'crypto',CPAY:'finance',CPNG:'consumer',CPRT:'auto',CPT:'finance',CRCL:'crypto',CRM:'tech',CRS:'tech',CRWD:'tech',CSCO:'tech',CSGP:'finance',CSL:'consumer',CSX:'tech',CTAS:'consumer',CTSH:'tech',CTVA:'consumer',CVNA:'auto',CVS:'health',CVX:'energy',CW:'tech',D:'energy',DAL:'consumer',DASH:'tech',DAX:'etf',DDOG:'tech',DE:'tech',DECK:'consumer',DELL:'tech',DFDV:'finance',DG:'consumer',DGX:'health',DHI:'consumer',DHR:'health',DIS:'consumer',DKNG:'consumer',DKS:'consumer',DLR:'finance',DLTR:'consumer',DOC:'health',DOV:'tech',DOW:'health',DRI:'consumer',DT:'tech',DTE:'energy',DUK:'energy',DVN:'energy',DXCM:'health',EA:'tech',ECL:'consumer',ED:'energy',EFX:'finance',EG:'finance',EIX:'energy',EL:'consumer',ELAN:'health',ELS:'finance',ELV:'health',EME:'tech',EMR:'tech',ENHA:'finance',ENTG:'tech',EOG:'energy',EQH:'finance',EQIX:'tech',EQR:'finance',EQT:'energy',ES:'energy',ESS:'finance',ETN:'tech',ETR:'energy',EVR:'finance',EVRG:'energy',EW:'health',EWBC:'finance',EWG:'etf',EWQ:'etf',EWU:'etf',EWY:'etf',EXC:'energy',EXE:'energy',EXEL:'health',EXPD:'tech',EXR:'tech',F:'auto',FAAA:'etf',FANG:'energy',FAST:'consumer',FCNCA:'finance',FCX:'consumer',FDX:'tech',FE:'energy',FERG:'consumer',FEZ:'etf',FFIV:'tech',FGDL:'etf',FHN:'finance',FICO:'tech',FIS:'finance',FISV:'finance',FITB:'finance',FIX:'tech',FLBL:'etf',FLQM:'etf',FNF:'finance',FSLR:'energy',FSML:'etf',FTAI:'tech',FTNT:'tech',FTV:'tech',FWONK:'consumer',GD:'tech',GDX:'etf',GE:'tech',GEHC:'health',GEN:'tech',GEV:'energy',GGG:'tech',GILD:'health',GIS:'consumer',GL:'finance',GLD:'etf',GLPI:'finance',GLW:'tech',GLXY:'crypto',GM:'auto',GME:'consumer',GNRC:'energy',GOOGL:'tech',GPC:'consumer',GPN:'finance',GS:'finance',GWW:'tech',HAL:'energy',HAS:'consumer',HBAN:'finance',HCA:'health',HD:'consumer',HEI:'tech',HIG:'auto',HIMS:'health',HLT:'consumer',HON:'tech',HOOD:'finance',HPE:'tech',HPQ:'tech',HST:'consumer',HSY:'consumer',HUBB:'tech',HUM:'health',HUT:'crypto',HWM:'tech',IBKR:'finance',IBM:'tech',ICE:'finance',IDXX:'health',IEMG:'finance',IEX:'tech',IFF:'consumer',IJR:'etf',ILMN:'health',INCY:'health',INSM:'health',INTC:'tech',INTU:'tech',INVH:'finance',IP:'consumer',IQM:'tech',IQV:'health',IR:'tech',IREN:'crypto',IRM:'tech',ISRG:'health',ITA:'etf',ITT:'tech',ITW:'tech',IWM:'etf',J:'tech',JAAA:'etf',JBHT:'consumer',JBL:'tech',JLL:'finance',JNJ:'health',JPM:'finance',JPST:'finance',KDP:'consumer',KEY:'finance',KEYS:'tech',KHC:'consumer',KIM:'finance',KKR:'finance',KLAC:'tech',KMB:'consumer',KMI:'energy',KNX:'consumer',KO:'consumer',KR:'consumer',KRAQ:'etf',KVUE:'consumer',L:'finance',LAMR:'consumer',LDOS:'tech',LECO:'energy',LEN:'consumer',LHX:'tech',LII:'tech',LIN:'health',LITE:'finance',LLY:'health',LMT:'tech',LNG:'energy',LNT:'energy',LOW:'consumer',LPLA:'finance',LRCX:'tech',LSCC:'tech',LUV:'consumer',LVS:'energy',LYV:'consumer',MA:'finance',MAA:'finance',MAR:'consumer',MARA:'crypto',MAS:'consumer',MCD:'consumer',MCHP:'tech',MCK:'health',MCO:'finance',MDB:'tech',MDLN:'health',MDLZ:'consumer',MDT:'health',MET:'finance',META:'tech',MKC:'consumer',MKL:'finance',MKSI:'tech',MLI:'tech',MLM:'consumer',MMM:'consumer',MO:'consumer',MOO:'etf',MPC:'energy',MPWR:'tech',MRK:'health',MRNA:'health',MRSH:'finance',MRVL:'tech',MS:'finance',MSCI:'finance',MSFT:'tech',MSI:'tech',MSTR:'crypto',MTB:'finance',MTD:'health',MTSI:'tech',MTZ:'energy',MU:'tech',NBIX:'health',NDAQ:'finance',NDSN:'tech',NEE:'energy',NEM:'consumer',NET:'tech',NFLX:'tech',NI:'energy',NKE:'consumer',NLR:'etf',NLY:'finance',NOC:'tech',NOW:'tech',NRG:'energy',NSC:'tech',NTAP:'tech',NTNX:'tech',NTRA:'health',NTRS:'finance',NUE:'consumer',NVDA:'tech',NVO:'health',NYT:'consumer',O:'finance',ODFL:'tech',OHI:'health',OKE:'energy',OKLO:'energy',OKTA:'tech',OMC:'consumer',ON:'tech',ONDS:'tech',ONTO:'tech',OPEN:'finance',ORCL:'tech',ORLY:'auto',OTIS:'tech',OVV:'energy',OXY:'energy',P:'consumer',PALL:'finance',PANW:'tech',PAYX:'tech',PCAR:'auto',PCG:'energy',PEG:'energy',PEN:'health',PEP:'consumer',PFE:'health',PFG:'finance',PFGC:'consumer',PG:'consumer',PGR:'finance',PH:'tech',PINS:'tech',PKG:'consumer',PL:'tech',PLD:'finance',PLTR:'tech',PM:'consumer',PNC:'finance',PNFP:'finance',PNW:'finance',PPG:'consumer',PPL:'energy',PPLT:'finance',PR:'energy',PRU:'finance',PSA:'finance',PSX:'energy',PTC:'tech',PWR:'tech',PYPL:'finance',Q:'tech',QCOM:'tech',QQQ:'etf',QSR:'consumer',RBA:'etf',RBLX:'tech',RCAT:'tech',RDDT:'tech',REG:'finance',REGN:'health',RF:'finance',RGA:'finance',RGLD:'etf',RIOT:'crypto',RIVN:'auto',RJF:'finance',RKLB:'tech',RL:'consumer',RMD:'health',RNR:'finance',ROIV:'health',ROK:'tech',ROKU:'tech',ROL:'consumer',ROP:'tech',ROST:'consumer',RRX:'tech',RS:'tech',RSG:'energy',RTX:'tech',RVMD:'health',SAIA:'consumer',SATA:'etf',SBAC:'tech',SBET:'consumer',SBUX:'consumer',SCCO:'etf',SCHF:'finance',SCHW:'finance',SGI:'consumer',SGOV:'etf',SHW:'consumer',SJM:'consumer',SKHY:'tech',SLMT:'consumer',SLV:'etf',SMCI:'tech',SMH:'etf',SMR:'energy',SNA:'tech',SNDK:'tech',SNOW:'tech',SNPS:'tech',SNX:'tech',SO:'energy',SOFI:'finance',SOLS:'tech',SOXL:'tech',SOXX:'etf',SPCE:'tech',SPCX:'tech',SPG:'finance',SPY:'etf',SRE:'energy',SSNC:'tech',STLD:'consumer',STRC:'crypto',STRK:'crypto',STT:'finance',STZ:'consumer',SUI:'finance',SWK:'consumer',SYF:'finance',SYK:'health',SYY:'consumer',TBLL:'etf',TDG:'tech',TDY:'tech',TEAM:'tech',TER:'tech',TFC:'finance',THC:'health',TJX:'consumer',TLN:'energy',TMO:'health',TMUS:'tech',TOL:'consumer',TONX:'crypto',TPL:'energy',TPR:'consumer',TQQQ:'etf',TRGP:'energy',TRMB:'tech',TROW:'finance',TRU:'finance',TRV:'finance',TSCO:'consumer',TSLA:'auto',TSM:'tech',TSN:'consumer',TTWO:'tech',TW:'finance',TWLO:'tech',TXN:'tech',TXT:'tech',TYL:'tech',UAL:'consumer',UBER:'tech',UDR:'finance',ULTA:'consumer',UNH:'health',UNM:'finance',UNP:'tech',UPS:'tech',URA:'etf',URI:'tech',USAR:'etf',USB:'finance',USFD:'consumer',USPX:'etf',UTHR:'health',UUUU:'energy',V:'finance',VCX:'etf',VEEV:'tech',VGK:'etf',VICI:'finance',VIDA:'etf',VIK:'consumer',VLO:'energy',VLTO:'tech',VMC:'consumer',VOO:'etf',VRSK:'finance',VRSN:'tech',VRT:'finance',VRTX:'health',VT:'etf',VTI:'etf',VTR:'finance',VTRS:'health',VUG:'etf',VXUS:'etf',VZ:'tech',WAB:'tech',WAT:'health',WBD:'finance',WBS:'finance',WCC:'tech',WDAY:'tech',WDC:'tech',WEC:'energy',WELL:'finance',WEN:'consumer',WFC:'finance',WM:'energy',WMB:'energy',WMT:'tech',WPC:'finance',WRB:'finance',WSM:'consumer',WSO:'tech',WST:'health',WULF:'crypto',WWD:'tech',WY:'consumer',XEL:'energy',XLE:'etf',XOM:'energy',XOP:'etf',XPO:'tech',XYL:'tech',XYZ:'finance',YLDE:'etf',YUM:'consumer',ZBH:'health',ZBRA:'tech',ZM:'tech',ZS:'tech',ZTS:'health'};
   var GWX_CAT_KW = [
-    ['tech', /tech|software|semiconductor|chip|cloud|nvidia|apple|microsoft|google|alphabet|meta|amazon|oracle|cisco|intel|ibm|palantir|broadcom|qualcomm|netflix|salesforce|adobe|amd|micron|sk hynix/i],
-    ['finance', /bank|financial|capital|visa|mastercard|goldman|morgan|berkshire|insurance|pay/i],
-    ['etf', /\betf\b|treasury|bond|s&p|sp500|nasdaq|russell|dow|ark /i],
-    ['auto', /auto|tesla|ford|general motors|rivian|motor/i],
-    ['consumer', /consumer|retail|coca|pepsi|mcdonald|nike|disney|walmart|costco|starbucks/i],
-    ['crypto', /coinbase|microstrategy|mara|robinhood|crypto|bitcoin|strategy/i],
-    ['energy', /energy|oil|exxon|chevron|shell|gas/i],
-    ['health', /health|pharma|lilly|unitedhealth|johnson|pfizer|moderna|biotech/i],
+    ['etf', /etf|trust|fund|spdr|ishares|vanguard|invesco|proshares|ark |index/i],
+    ['crypto', /coinbase|microstrategy|bitcoin|crypto|blockchain|bitgo|circle|robinhood|marathon digital|riot platforms/i],
+    ['auto', /auto|automotive|tesla|ford |general motors|rivian|lucid|motor|vehicles?/i],
+    ['energy', /energy|oil|petroleum|exxon|chevron|utility|utilities|electric power|solar|gas|pipeline|refin/i],
+    ['health', /health|pharma|biotech|therapeut|medtronic|abbott|lilly|unitedhealth|pfizer|moderna|medical/i],
+    ['finance', /bank|financial|capital|visa|mastercard|insurance|reit|realty|asset management|blackrock|schwab/i],
+    ['tech', /technolog|software|semiconductor|chip|cloud|cyber|internet|nvidia|apple|microsoft|google|meta platforms|amazon|oracle|cisco|intel|palantir|broadcom|qualcomm|netflix|salesforce|adobe|aerospace|defense|electronics/i],
+    ['consumer', /consumer|retail|coca|pepsi|mcdonald|nike|disney|walmart|costco|starbucks|restaurant|apparel|hotel|airline|beverage|food/i],
   ];
-  var GWX_NET = { Ethereum: 1, Arbitrum: 42161, Optimism: 10, BinanceSmartChain: 56, Base: 8453, Polygon: 137, Avalanche: 43114, Mantle: 5000 };
-  var gwxUsdtBal = 0;
-  var gwxPositions = [];
-  var gwxCatalogAt = 0;
-  var _gwxCatalogPromise = null;
-
   function gwxMapCat(underlying, name) {
-    var u = String(underlying || '').toUpperCase().replace(/\./g, '');
-    if (GWX_SEED_CAT[u] || GWX_SEED_CAT[String(underlying || '').toUpperCase()]) {
-      return GWX_SEED_CAT[u] || GWX_SEED_CAT[String(underlying || '').toUpperCase()];
-    }
-    // Common ETF / index tickers
-    if (/^(SPY|QQQ|DIA|IWM|ARKK|VOO|VTI|IVV|SPX|NDX|CSPX|TQQQ|SQQQ)$/.test(u)) return 'etf';
-    if (/^(TSLA|F|GM|RIVN|NIO|XPEV|LI)$/.test(u)) return 'auto';
-    if (/^(COIN|MSTR|MARA|HOOD|RIOT|CLSK)$/.test(u)) return 'crypto';
-    if (/^(XOM|CVX|BP|SHEL|OXY)$/.test(u)) return 'energy';
-    if (/^(JPM|BAC|V|MA|GS|MS|BRKB|WFC|C|AXP)$/.test(u)) return 'finance';
-    if (/^(LLY|UNH|JNJ|PFE|MRK|ABBV|AMGN|BMY)$/.test(u)) return 'health';
-    if (/^(AAPL|MSFT|NVDA|GOOGL|GOOG|META|AMZN|AMD|NFLX|ADBE|CRM|ORCL|AVGO|QCOM|CSCO|INTC|IBM|PLTR|MU|TSM)$/.test(u)) return 'tech';
-    if (/^(KO|PEP|MCD|NKE|DIS|WMT|COST|SBUX|TGT)$/.test(u)) return 'consumer';
+    var raw = String(underlying || '').toUpperCase();
+    var u = raw.replace(/\./g, '');
+    if (GWX_SEED_CAT[raw] || GWX_SEED_CAT[u]) return GWX_SEED_CAT[raw] || GWX_SEED_CAT[u];
+    if (GWX_CAT_BY_SYM[raw] || GWX_CAT_BY_SYM[u]) return GWX_CAT_BY_SYM[raw] || GWX_CAT_BY_SYM[u];
     var blob = String(name || '') + ' ' + u;
     for (var i = 0; i < GWX_CAT_KW.length; i++) if (GWX_CAT_KW[i][1].test(blob)) return GWX_CAT_KW[i][0];
     return null;
@@ -14276,7 +14263,7 @@ var GROM_XSTOCKS = [
     if (!cid) return null;
     return { chainId: cid, address: s.addrs[cid], decimals: s.decimals || 18, tokenSym: s.tokenSym };
   }
-  var GWX_CACHE_KEY = 'gwx_xstocks_catalog_v2';
+  var GWX_CACHE_KEY = 'gwx_xstocks_catalog_v4';
   function gwxIsRealXStock(item) {
     if (!item) return false;
     var name = String(item.name || '');
@@ -14307,11 +14294,20 @@ var GROM_XSTOCKS = [
     item.cat = item.cat || gwxMapCat(item.sym, item.name);
     item.decimals = item.decimals || 18;
     item.tradeable = item.halted ? false : true;
-    item.vol24 = item.vol24 || '—';
-    item.mc = item.mc || '—';
+    if (!item.vol24 || item.vol24 === '—') item.vol24 = '—';
+    if (!item.mc || item.mc === '—') item.mc = '—';
     item.chg = item.chg || 0;
     item.price = item.price || 0;
     return item;
+  }
+  function gwxFmtCompactUsd(n) {
+    var v = Number(n);
+    if (!(v > 0)) return '—';
+    if (v >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
+    if (v >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B';
+    if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+    if (v >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'K';
+    return '$' + v.toFixed(0);
   }
   function gwxSanitizeCatalog(items) {
     var out = [], seen = {};
@@ -14424,7 +14420,7 @@ var GROM_XSTOCKS = [
     return _gwxCatalogPromise;
   }
   async function gwxRefreshPrices() {
-    var sample = GROM_XSTOCKS.filter(function (s) { return s.addrs && s.addrs[1]; }).slice(0, 40);
+    var sample = GROM_XSTOCKS.filter(function (s) { return s.addrs && (s.addrs[1] || s.addrs[42161]); }).slice(0, 60);
     await Promise.all(sample.map(async function (s) {
       try {
         var addr = s.addrs[1] || s.addrs[42161] || Object.values(s.addrs)[0];
@@ -14434,11 +14430,17 @@ var GROM_XSTOCKS = [
         var t = await r.json();
         var px = Number(t.priceUSD);
         if (px > 0) {
-          var prev = gwxPx[s.sym] || s.price || px;
           gwxPx[s.sym] = px; s.price = px;
           if (!gwxB0[s.sym]) gwxB0[s.sym] = px;
-          s.chg = gwxB0[s.sym] ? ((px / gwxB0[s.sym] - 1) * 100) : 0;
+          // Keep Yahoo equity 24h% when catalog already enriched (mc present); else session delta.
+          if (!(s.mc && s.mc !== '—') && gwxB0[s.sym]) {
+            s.chg = ((px / gwxB0[s.sym] - 1) * 100);
+          }
           if (t.logoURI && !s.logo) s.logo = t.logoURI;
+        }
+        // Fallback on-chain 24h vol if underlying equity metrics missing.
+        if ((!s.vol24 || s.vol24 === '—') && Number(t.volumeUSD24H) > 0) {
+          s.vol24 = gwxFmtCompactUsd(t.volumeUSD24H);
         }
       } catch (_) {}
     }));
@@ -14750,7 +14752,7 @@ var GROM_XSTOCKS = [
     ov.innerHTML = '<div class="gtm">'
       + '<div class="gtm-h"><span>' + opts.title + '</span><button class="gtm-x" type="button">✕</button></div>'
       + (opts.sub ? '<div class="gtm-sub">' + opts.sub + '</div>' : '')
-      + '<div class="gtm-bal">' + tx('gtm_demo_bal', 'Demo balance:') + ' <b>' + money(bal()) + '</b></div>'
+      + '<div class="gtm-bal">' + tx('gtm_demo_bal', 'Balance:') + ' <b>' + money(bal()) + '</b></div>'
       + '<div class="gtm-field"><input type="number" id="gtmAmt" min="1" step="1" placeholder="0.00"/><span>USDT</span></div>'
       + '<div class="gtm-presets"><button type="button" data-a="25">$25</button><button type="button" data-a="100">$100</button><button type="button" data-a="500">$500</button><button type="button" data-a="max">Max</button></div>'
       + '<div class="gtm-info" id="gtmInfo"></div>'
@@ -14900,7 +14902,7 @@ var GROM_XSTOCKS = [
     var totalVol = GROM_PREDICT_MARKETS.reduce(function (a, m) { return a + m.vol; }, 0);
     return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
       + '<h1 class="gwx-h1">🎯 ' + tx('pg_predict_title', 'Prediction markets') + ' <span class="gwx-badge beta">BETA</span></h1>'
-      + '<div class="gwx-hero-aside"><div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + money(bal()) + '</b><small>' + tx('px_demo_bal', 'Demo balance') + '</small></div><div><b>' + fmtVol(totalVol) + '</b><small>' + tx('px_vol_24h', '24h volume') + '</small></div><div><b>' + GROM_PREDICT_MARKETS.length + '</b><small>' + tx('px_markets_n', 'Markets') + '</small></div></div>'
+      + '<div class="gwx-hero-aside"><div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + money(bal()) + '</b><small>' + tx('px_demo_bal', 'Balance') + '</small></div><div><b>' + fmtVol(totalVol) + '</b><small>' + tx('px_vol_24h', '24h volume') + '</small></div><div><b>' + GROM_PREDICT_MARKETS.length + '</b><small>' + tx('px_markets_n', 'Markets') + '</small></div></div>'
       + heroJumpBtn('gromPredictPos', 'px_my_bets', 'My bets') + '</div></div></div>'
       + '<div class="gwx-view-tabs" role="tablist">'
       + '<button type="button" class="gwx-view-tab' + (gwxState.pView === 'all' ? ' on' : '') + '" data-pview="all" role="tab">' + tx('px_view_all', 'All markets') + '</button>'

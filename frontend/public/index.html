@@ -5339,7 +5339,7 @@
           <div class="lp-product-card lp-p-glow" onclick="show('predict')">
             <div class="lp-p-icon">🎯</div>
             <h3 data-i18n="lp_prod_bo_h">Prediction Markets</h3>
-            <p data-i18n="lp_prod_bo_p">Live probabilities on crypto, politics & sports. Non-custodial wallet sign-in. Demo balance to explore — no deposit required.</p>
+            <p data-i18n="lp_prod_bo_p">Live probabilities on crypto, politics & sports. Non-custodial wallet sign-in — explore without a deposit.</p>
             <div class="lp-p-cta" data-i18n="lp_prod_bo_cta">Open predictions →</div>
           </div>
         </div>
@@ -5644,7 +5644,7 @@
             <div class="banner-copy">
             <div class="banner-eyebrow" data-i18n="dash_banner_px_eyebrow">PREDICTION MARKETS</div>
             <h3 data-i18n="dash_banner_px_h">Sports · Crypto · Politics</h3>
-            <p data-i18n="dash_banner_px_p">Live probabilities from Polymarket. Bet on outcomes — demo balance, zero risk.</p>
+            <p data-i18n="dash_banner_px_p">Live probabilities from Polymarket. Bet on real-world outcomes.</p>
             <div class="banner-cta" data-i18n="dash_banner_px_cta">Open predictions →</div>
             </div>
           </div>
@@ -8130,7 +8130,7 @@ const boState = {
   elapsed: 13,
   strike: 63892.65,
   account: 'demo',
-  balance: { demo: 50000, live: 12847.32 },
+  balance: { demo: 0, live: 0 },
   positions: [],
   wlTab: 'all',
   sound: true
@@ -14077,7 +14077,7 @@ window.refreshSwapEstimate = refreshSwapEstimate;
  * grom-wallet.84845dfe.js handed these pages to index.html, so we render real
  * first-class `.page` sections (#page-predict / #page-xstocks) wired into
  * the app's own show() router — fixes both click + direct-URL rendering.
- * Functional on demo balance (shared window.boState): live stock prices,
+ * Predict uses shared window.boState balance (not marketed as Demo/$50k): live prices,
  * working Buy/Sell + YES/NO bets, positions w/ PnL, trade modal.
  * ============================================================ */
 // Prediction categories (key, emoji, i18n key).
@@ -14198,7 +14198,8 @@ var GROM_XSTOCKS = [
     var b = window.boState && window.boState.balance;
     if (b && typeof b.demo === 'number') return b.demo;
     var v = parseFloat(localStorage.getItem('grom_demo_bal') || '');
-    return isFinite(v) ? v : 50000;
+    // No default $50,000 seed — brief: remove Demo/Paper/$50,000 copy & marketing numbers.
+    return isFinite(v) ? v : 0;
   }
   function setBal(v) {
     v = Math.max(0, v);
@@ -14771,7 +14772,7 @@ var GROM_XSTOCKS = [
     ov.querySelector('.gtm-confirm').onclick = function () {
       var v = parseFloat(amt.value || '0');
       if (!v || v <= 0) { notify(tx('px_enter_amount', 'Enter amount'), 'error'); return; }
-      if (v > bal()) { notify(tx('px_insufficient', 'Insufficient demo balance'), 'error'); return; }
+      if (v > bal()) { notify(tx('px_insufficient', 'Insufficient balance'), 'error'); return; }
       opts.onConfirm(v); closeModal();
     };
     upd(); setTimeout(function () { try { amt.focus(); } catch (_) {} }, 30);

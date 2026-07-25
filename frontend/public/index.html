@@ -158,7 +158,10 @@
   .header-actions .deposit-btn,
   .header .deposit-cta,
   .hub-header button[data-action="deposit"],
-  button.deposit-cta { display: none !important; }
+  button.deposit-cta,
+  #page-wallet .wallet-hero .actions button[onclick*="deposit"],
+  #page-wallet button[onclick*="openWalletModal('deposit')"],
+  button[onclick*="openWalletModal('deposit')"] { display: none !important; }
 </style>
 <style id="grom-route-boot-css">
   /* Prevent landing flash on refresh — overridden once JS router is ready */
@@ -5032,7 +5035,6 @@
   </div>
   <nav class="hub-nav" aria-label="Main">
     <button type="button" class="hub-link" data-page="dashboard" data-i18n="nav_dashboard">Dashboard</button>
-    <button type="button" class="hub-link" data-page="spot" data-i18n="nav_spot">Spot</button>
     <button type="button" class="hub-link" data-page="binary" data-i18n="nav_binary">Binary</button>
     <button type="button" class="hub-link" data-page="futures" data-i18n="nav_futures">Futures</button>
     <button type="button" class="hub-link" data-page="markets" data-i18n="nav_markets">Markets</button>
@@ -5086,7 +5088,6 @@
 <div class="shell">
   <aside class="sidebar">
     <div class="nav-item" data-page="dashboard"><span class="ico"><svg width="18" height="18"><use href="#i-dashboard"/></svg></span><span class="nav-label" data-i18n="nav_dashboard">Dashboard</span></div>
-    <div class="nav-item" data-page="spot"><span class="ico"><svg width="18" height="18"><use href="#i-spot"/></svg></span><span class="nav-label" data-i18n="nav_spot">Spot</span></div>
     <div class="nav-item" data-page="binary"><span class="ico"><svg width="18" height="18"><use href="#i-binary"/></svg></span><span class="nav-label" data-i18n="nav_binary">Binary</span><span class="badge new" data-i18n="badge_hot">HOT</span></div>
     <div class="nav-item" data-page="futures"><span class="ico" style="font-weight:800;font-size:13px;color:var(--steel1)">Ƒ</span><span class="nav-label" data-i18n="nav_futures">Futures</span><span class="badge new" data-i18n="badge_new">NEW</span></div>
     <div class="nav-item" data-page="markets"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="nav-label" data-i18n="nav_markets">Markets</span></div>
@@ -6133,170 +6134,42 @@
 
     <!-- WALLET -->
     <section class="page" id="page-wallet">
-      <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Wallet</span></div>
+      <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now" data-i18n="nav_wallet">Wallet</span></div>
       <h1 class="page-title"><span data-i18n="pg_wallet_title">Your wallet</span> <span class="tag">Non-custodial · DEX</span></h1>
-      <p class="page-subtitle">On-chain portfolio across 20+ networks. Swap, send and bridge directly from your connected wallet — your keys, your signatures.</p>
+      <p class="page-subtitle" data-i18n="pg_wallet_sub">On-chain assets across connected networks. Swap and buy with card — your keys, your signatures.</p>
 
       <div class="wallet-hero">
         <div>
-          <div class="total">Total balance</div>
+          <div class="total">Total on-chain</div>
           <div class="val mono" id="walletTotalBalance">—</div>
-          <div class="delta" id="walletTotalDelta" style="color:var(--silver5)">Sign in to view balance</div>
+          <div class="delta" id="walletTotalDelta" style="color:var(--silver5)">Connect wallet to view balance</div>
         </div>
         <div class="actions">
-          <button type="button" class="btn-ghost" onclick="openWalletModal('deposit')"><svg width="14" height="14"><use href="#i-deposit"/></svg> Deposit</button>
-          <button type="button" class="btn-ghost" onclick="openWalletModal('send')"><svg width="14" height="14"><use href="#i-send"/></svg> Send</button>
-          <button type="button" class="btn-primary" onclick="openWalletModal('swap')">Swap</button>
+          <button type="button" class="btn-ghost" id="walletCashBtn" onclick="openWalletModal('buy')">Cash</button>
+          <button type="button" class="btn-primary" id="walletSwapBtn" onclick="show('dashboard'); setTimeout(function(){ try{ document.querySelector('.gw-ds-wrap')?.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){} }, 200);">Swap</button>
         </div>
       </div>
 
-      <div class="ops-grid">
-        <div class="ops-mini">
-          <div class="k">On-chain balance</div>
-          <div class="v mono" id="walletAvailableValue">—</div>
-          <div class="s" id="walletAvailableMeta">Connect wallet to view</div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-head">
+          <h3>Connected wallet</h3>
+          <span class="sub">Self-custody · your keys</span>
         </div>
-        <div class="ops-mini">
-          <div class="k">Pending transfers</div>
-          <div class="v mono" id="walletPendingCount">0</div>
-          <div class="s" id="walletPendingMeta">No pending transfers</div>
-        </div>
-        <div class="ops-mini">
-          <div class="k">Bridge routes</div>
-          <div class="v mono" id="walletRouteCount">6 active</div>
-          <div class="s" id="walletRouteMeta">ERC-20, TRC-20, Solana, Base, Arbitrum, BNB Chain</div>
-        </div>
-      </div>
-
-      <!-- Custody split: Trading (custodial) vs Self-custody (BYOW) -->
-      <div class="grid-2" style="gap:14px;margin-top:14px">
-        <div class="card">
-          <div class="card-head">
-            <h3>Trading account</h3>
-            <span class="sub" style="color:var(--accent)">Custodial · instant fills</span>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
+          <div id="walletConnectedList" style="display:flex;flex-direction:column;gap:6px;min-height:48px">
+            <div style="color:var(--silver5);font-size:12px">No external wallet connected yet.</div>
           </div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
-            <div class="set-row" style="border:none;padding:4px 0"><div class="set-lbl">Active balance</div><div class="mono" id="walletTradingBal">—</div></div>
-            <div class="set-row" style="border:none;padding:4px 0"><div class="set-lbl">Locked in orders</div><div class="mono" id="walletLockedBal">—</div></div>
-            <p style="color:var(--silver5);font-size:12px;margin:6px 0 8px">Funds here power Spot, Futures and Binary execution. Recommend keeping only what you actively trade.</p>
-            <div class="boff-actions" style="margin:0">
-              <button class="btn-ghost" onclick="openWalletModal('deposit')">Top up</button>
-              <button class="btn-ghost" id="walletMoveToOwnBtn" onclick="moveBalanceToConnectedWallet()" style="display:none">Move excess → my wallet</button>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-head">
-            <h3>Connected wallets</h3>
-            <span class="sub">Self-custody · your keys</span>
-          </div>
-          <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
-            <div id="walletConnectedList" style="display:flex;flex-direction:column;gap:6px;min-height:60px">
-              <div style="color:var(--silver5);font-size:12px">No external wallet connected yet.</div>
-            </div>
-            <p style="color:var(--silver5);font-size:12px;margin:6px 0 8px">Bring your own wallet — Trust, MetaMask, Binance Web3 Wallet — and swap directly on-chain via 1inch when you want full self-custody.</p>
-            <div class="boff-actions" style="margin:0">
-              <button class="btn-primary" onclick="openConnectModal && openConnectModal()">Connect wallet</button>
-              <button class="btn-ghost" onclick="openWalletModal('swap')">Swap on-chain</button>
-            </div>
+          <div class="boff-actions" style="margin:0">
+            <button type="button" class="btn-primary" onclick="typeof openConnectModal==='function'&&openConnectModal()">Connect wallet</button>
+            <button type="button" class="btn-ghost" onclick="openWalletModal('buy')">Buy with card</button>
           </div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-head"><h3>Assets</h3><span class="sub" id="walletAssetCount">4 tokens</span></div>
-        <div class="asset-row" style="background:rgba(11,18,32,0.4);font-size:11px;color:var(--silver5);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">
-          <div></div><div>Asset</div><div style="text-align:right">Balance</div><div style="text-align:right">Price</div><div style="text-align:right">Value</div>
-        </div>
-        <div id="walletAssetsList">
-          <div class="asset-row"><span class="coin-ico btc">₿</span><div class="nm">Bitcoin<small>BTC</small></div><div class="col">0.09842 BTC</div><div class="col">$63,903</div><div class="col" style="color:var(--silver1);font-weight:700">$6,289.37</div></div>
-          <div class="asset-row"><span class="coin-ico eth">Ξ</span><div class="nm">Ethereum<small>ETH</small></div><div class="col">0.4820 ETH</div><div class="col">$3,684</div><div class="col" style="color:var(--silver1);font-weight:700">$1,775.76</div></div>
-          <div class="asset-row"><span class="coin-ico usdt">$</span><div class="nm">Tether<small>USDT</small></div><div class="col">564.33 USDT</div><div class="col">$1.0002</div><div class="col" style="color:var(--silver1);font-weight:700">$564.44</div></div>
-          <div class="asset-row"><span class="coin-ico sol">S</span><div class="nm">Solana<small>SOL</small></div><div class="col">1.3600 SOL</div><div class="col">$182.27</div><div class="col" style="color:var(--silver1);font-weight:700">$247.89</div></div>
-        </div>
-      </div>
-
-      <div class="wallet-grid">
-        <div class="wallet-stack">
-          <div class="card">
-            <div class="card-head"><h3>Recent transfers</h3><span class="sub">Last 24h</span></div>
-            <div class="card-body" id="walletTransfersList">
-              <div class="transfer-row">
-                <span class="st ok">confirmed</span>
-                <div><div class="nm">USDT deposit · Tron (TRC-20)</div><div class="meta">14m ago · hash 0xa28f…71ce · 20/20 confirmations</div></div>
-                <div class="mono">250.00 USDT</div>
-                <button class="mini-btn" type="button" onclick="toast('Demo transfer — connect wallet for live explorer links','info')">Details</button>
-              </div>
-              <div class="transfer-row">
-                <span class="st warn">pending</span>
-                <div><div class="nm">BTC withdrawal · Bitcoin</div><div class="meta">8m ago · batching with fee optimizer · ETA 3 min</div></div>
-                <div class="mono">0.012 BTC</div>
-                <button class="mini-btn" onclick="openWithdrawalDetails(this)" data-w="w_dev_001">Details</button>
-              </div>
-              <div class="transfer-row">
-                <span class="st ok">settled</span>
-                <div><div class="nm">USDC bridge-in · Arbitrum One</div><div class="meta">2h ago · internal credit mirrored to trading balance</div></div>
-                <div class="mono">800.00 USDC</div>
-                <button class="mini-btn" onclick="copyBridgeReceipt(this)" data-tx="0xab12cd34...f0ee">Receipt</button>
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-head"><h3>Operational routing</h3><span class="sub pill-dot">Healthy</span></div>
-            <div class="card-body">
-              <div class="policy-row">
-                <div><div class="title">Embedded wallet</div><div class="meta">Privy-backed account with passkey recovery</div></div>
-                <div class="mono">Active</div>
-                <div class="pill-dot">Ready</div>
-                <button class="mini-btn" onclick="show('settings')">Manage</button>
-              </div>
-              <div class="policy-row">
-                <div><div class="title">Fiat on-ramp</div><div class="meta">MoonPay / Transak / Ramp routing available</div></div>
-                <div class="mono">3 providers</div>
-                <div class="pill-dot">Online</div>
-                <button class="mini-btn" onclick="openWalletModal('buy')">Open</button>
-              </div>
-              <div class="policy-row">
-                <div><div class="title">Withdrawal policy</div><div class="meta">Velocity checks, destination screening, daily limits</div></div>
-                <div class="mono">$25k/day</div>
-                <div class="pill-dot warn">Reviewable</div>
-                <button class="mini-btn" onclick="openHelpTopic('kyc')">Limits</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="wallet-stack">
-          <div class="card">
-            <div class="card-head"><h3>Portfolio allocation</h3><span class="sub">By NAV</span></div>
-            <div class="card-body">
-              <div class="portfolio-slice"><div class="mono">BTC</div><div class="bar"><span style="--w:79.8%"></span></div><div class="mono">79.8%</div></div>
-              <div class="portfolio-slice"><div class="mono">ETH</div><div class="bar"><span style="--w:13.8%"></span></div><div class="mono">13.8%</div></div>
-              <div class="portfolio-slice"><div class="mono">USDT</div><div class="bar"><span style="--w:4.4%"></span></div><div class="mono">4.4%</div></div>
-              <div class="portfolio-slice"><div class="mono">SOL</div><div class="bar"><span style="--w:1.9%"></span></div><div class="mono">1.9%</div></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-head"><h3>Wallet security</h3><span class="sub">Session controls</span></div>
-            <div class="card-body">
-              <div class="policy-row">
-                <div><div class="title">Primary signer</div><div class="meta">Email login + embedded wallet + device binding</div></div>
-                <div class="mono">MacBook Pro</div>
-                <div class="pill-dot">Verified</div>
-                <button class="mini-btn" onclick="show('settings')">Open</button>
-              </div>
-              <div class="policy-row">
-                <div><div class="title">Parallel wallet connections</div><div class="meta">Binance Web3 · Trust · MetaMask · OKX · Coinbase · WalletConnect</div></div>
-                <div class="mono">6 enabled</div>
-                <div class="pill-dot">Ready</div>
-                <button class="mini-btn" onclick="connectWallet()">Connect</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </section>
 
-    <!-- HISTORY -->
+    
+<!-- HISTORY -->
     <section class="page" id="page-history">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">History</span></div>
       <h1 class="page-title" data-i18n="pg_history_title">Trade history</h1>
@@ -7415,19 +7288,16 @@
 <div class="wm-overlay" id="walletModal" role="dialog" aria-modal="true" aria-labelledby="wmTitle" aria-hidden="true" hidden onclick="if(event.target===this) closeWalletModal()">
   <div class="wm">
     <div class="wm-head">
-      <h3 id="wmTitle" data-i18n="wallet_deposit">Deposit</h3>
+      <h3 id="wmTitle" data-i18n="wallet_cash">Cash</h3>
       <button type="button" class="wm-close" aria-label="Close" onclick="closeWalletModal()">✕</button>
     </div>
     <div class="wm-body">
-      <div class="wm-tabs" id="wmTabs">
-        <button type="button" data-mode="deposit" class="active" data-i18n="wallet_deposit">Deposit</button>
-        <button type="button" data-mode="buy" data-i18n="wallet_cash">Cash</button>
-        <button type="button" data-mode="send" data-i18n="wallet_send">Send</button>
-        <button type="button" data-mode="swap" data-i18n="wallet_swap">Swap</button>
+      <div class="wm-tabs" id="wmTabs" style="display:none" aria-hidden="true">
+        <button type="button" data-mode="buy" class="active" data-i18n="wallet_cash">Cash</button>
       </div>
 
       <!-- DEPOSIT (multi-step flow) -->
-      <div class="wm-pane dep-flow" data-pane="deposit">
+      <div class="wm-pane dep-flow" data-pane="deposit" style="display:none">
         <div class="dep-steps" id="depSteps">
           <span class="dep-step active" data-step="coin">Coin</span>
           <span class="dep-step" data-step="network">Network</span>
@@ -7514,7 +7384,7 @@
       </div>
 
       <!-- BUY (fiat on-ramp) -->
-      <div class="wm-pane" data-pane="buy" style="display:none">
+      <div class="wm-pane" data-pane="buy">
         <div class="fiat-card">
           <h4>Buy crypto with card</h4>
           <p>Fiat goes directly from the provider to your GROM wallet. KYC is handled by the on-ramp — we never touch your bank data.</p>
@@ -7639,7 +7509,7 @@ window.addEventListener('resize', function () {
   if (wasMobile !== window.GROM_MOBILE && typeof updateAuthUi === 'function') updateAuthUi();
 }, { passive: true });
 /* ========== Animated plexus background ========== */
-/* Safari energy: only paint on landing while tab is visible; pause otherwise. */
+/* Safari energy: paint only on landing while tab visible; pause otherwise. */
 (function initPlexus() {
   const cv = document.getElementById('plexusBg');
   if (!cv) return;
@@ -7652,7 +7522,7 @@ window.addEventListener('resize', function () {
   const PRM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let rafId = 0;
   let lastFrame = 0;
-  const FRAME_MS = 1000 / 24; // ~24fps — enough motion, far less GPU than 60fps
+  const FRAME_MS = 1000 / 24;
 
   function plexusShouldRun() {
     return !document.hidden && document.body && document.body.classList.contains('landing-layout') && !PRM;
@@ -7696,7 +7566,6 @@ window.addEventListener('resize', function () {
     cv.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const area = W * H;
-    // Fewer nodes than before — O(n²) line checks dominate Safari energy
     const targetCount = Math.min(90, Math.max(40, Math.round(area / 28000)));
     points = [];
     for (let i = 0; i < targetCount; i++) points.push(spawnPoint());
@@ -7815,7 +7684,6 @@ window.addEventListener('resize', function () {
     if (document.hidden) stopPlexus();
     else startPlexus();
   });
-  // Route changes toggle body.landing-layout — watch and pause off-landing
   try {
     new MutationObserver(function () {
       if (plexusShouldRun()) startPlexus();
@@ -7830,6 +7698,12 @@ window.addEventListener('resize', function () {
 /* Navigation — robust event delegation */
 function show(page) {
   if (!page) return;
+  // Spot/Swap page retired — Instant Swap lives on dashboard only (2026-07-19, re-pinned 2026-07-22)
+  if (page === 'spot') {
+    try { history.replaceState(null, '', '#dashboard'); } catch (_) {}
+    try { localStorage.setItem('grom_page', 'dashboard'); } catch (_) {}
+    return show('dashboard');
+  }
   // Admin route guard — backoffice is admin-only.
   // Non-admins (including anonymous) get redirected to dashboard. The page HTML
   // exists in the DOM but is never shown without role=admin in JWT.
@@ -7942,6 +7816,7 @@ var _logoHome = document.getElementById('logoHome');
 if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefault(); show('landing'); });
 (function () {
   var fromHash = (location.hash || '').replace(/^#/, '').split('?')[0];
+  if (fromHash === 'spot') fromHash = 'dashboard';
   var fromStore = '';
   try { fromStore = localStorage.getItem('grom_page') || ''; } catch (_) {}
   var fromBoot = document.documentElement.getAttribute('data-grom-route') || '';
@@ -13457,7 +13332,8 @@ function openWalletModal(mode) {
   ov.classList.add('gw-user-opened', 'open');
   ov.hidden = false;
   ov.setAttribute('aria-hidden', 'false');
-  switchWalletPane(mode || 'deposit');
+  // Wallet modal is Cash-only (Deposit/Send/Swap tabs removed 2026-07-22)
+  switchWalletPane('buy');
 }
 function closeWalletModal() {
   var ov = document.getElementById('walletModal');
@@ -13468,29 +13344,26 @@ function closeWalletModal() {
   }
 }
 function switchWalletPane(mode) {
-  var i18n = typeof t === 'function' ? t : function (k, fb) { return fb || k; };
-  var titles = {
-    deposit: i18n('wallet_deposit', 'Deposit'),
-    buy: i18n('wallet_cash', 'Cash'),
-    send: i18n('wallet_send', 'Send'),
-    swap: i18n('wallet_swap', 'Swap')
-  };
-  var titleEl = document.getElementById('wmTitle'); if (titleEl) titleEl.textContent = titles[mode] || 'Wallet';
+  // Cash-only modal — ignore other modes
+  mode = 'buy';
+  var titleEl = document.getElementById('wmTitle');
+  if (titleEl) {
+    var cashLabel = 'Cash';
+    try {
+      if (typeof t === 'function') {
+        var tr = t('wallet_cash');
+        if (tr && tr !== 'wallet_cash') cashLabel = tr;
+      }
+    } catch (_) {}
+    titleEl.textContent = cashLabel;
+  }
   document.querySelectorAll('#wmTabs button').forEach(function (b) {
-    b.classList.toggle('active', b.dataset.mode === mode);
+    b.classList.toggle('active', b.dataset.mode === 'buy');
   });
   document.querySelectorAll('.wm-pane').forEach(function (p) {
-    p.style.display = (p.dataset.pane === mode) ? '' : 'none';
+    p.style.display = (p.dataset.pane === 'buy') ? '' : 'none';
   });
-  if (mode === 'deposit') {
-    if (typeof loadConfigNetworks === 'function') {
-      loadConfigNetworks().then(function () { gromDepFlowOpen(); }, function () { gromDepFlowOpen(); });
-    } else {
-      gromDepFlowOpen();
-    }
-  }
-  if (mode === 'buy') updateFiatQuote();
-  if (mode === 'swap') { try { gromSwapDedupe('wmSwapFrom'); refreshSwapEstimate(); } catch (_) {} }
+  if (typeof updateFiatQuote === 'function') updateFiatQuote();
 }
 (function wireWalletModal() {
   var tabs = document.getElementById('wmTabs');

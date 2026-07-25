@@ -15188,12 +15188,21 @@ var GROM_XSTOCKS = [
       delete sec.dataset.gwxForce;
     });
     applyPredictView(); renderXstocksRows();
+    // Safari energy: do NOT fetch Backed catalog / chain balances on every
+    // ensurePages() (boot retries 30×). Only when user is on #xstocks.
     try {
-      gwxLoadCatalog(false).then(function () {
-        refreshUsdtBalChip();
-        gwxLoadPositions();
-        gwxFocusFromHash();
-      });
+      var onXs = false;
+      try {
+        var hx = (location.hash || '').replace(/^#/, '').split('?')[0];
+        onXs = hx === 'xstocks' || !!document.getElementById('page-xstocks')?.classList.contains('active');
+      } catch (_) {}
+      if (onXs) {
+        gwxLoadCatalog(false).then(function () {
+          refreshUsdtBalChip();
+          gwxLoadPositions();
+          gwxFocusFromHash();
+        });
+      }
     } catch (_) {}
   }
 
@@ -15567,12 +15576,25 @@ var GROM_XSTOCKS = [
   // show() router handles activation; we just freshen dynamic bits).
   document.addEventListener('click', function (e) {
     var n = e.target.closest('[data-page="predict"], [data-page="xstocks"]');
-    if (n) { setTimeout(refreshActive, 60); if (n.dataset.page === 'predict' && typeof window.gromLoadPredictLive === 'function') window.gromLoadPredictLive(true); }
+    if (n) {
+      setTimeout(refreshActive, 60);
+      if (n.dataset.page === 'predict' && typeof window.gromLoadPredictLive === 'function') window.gromLoadPredictLive(true);
+      if (n.dataset.page === 'xstocks') {
+        try {
+          gwxLoadCatalog(false).then(function () { refreshUsdtBalChip(); gwxLoadPositions(); gwxFocusFromHash(); });
+        } catch (_) {}
+      }
+    }
   }, true);
   window.addEventListener('hashchange', function () {
     var h = (location.hash || '').replace(/^#/, '').split('?')[0];
     if (h === 'predict' || h === 'xstocks') setTimeout(refreshActive, 80);
     if (h === 'predict') loadPredictLive(true);
+    if (h === 'xstocks') {
+      try {
+        gwxLoadCatalog(false).then(function () { refreshUsdtBalChip(); gwxLoadPositions(); gwxFocusFromHash(); });
+      } catch (_) {}
+    }
   });
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && document.getElementById('page-predict')?.classList.contains('active')) {
@@ -15581,11 +15603,17 @@ var GROM_XSTOCKS = [
   });
 
   function boot() {
-    injectCss(); ensurePages(); ensureNav(); loadPredictLive(true); ensurePredictPoll(); renderPredictWidgets();
+    injectCss(); ensurePages(); ensureNav();
+    // Predict widgets are light; live poll stays. Catalog/RPC stays off until #xstocks.
+    try { renderPredictWidgets(); } catch (_) {}
+    try { loadPredictLive(true); } catch (_) {}
+    try { ensurePredictPoll(); } catch (_) {}
     if (typeof window.applyI18n === 'function') window.applyI18n();
     var tries = 0;
-    var iv = setInterval(function () { tries++; ensurePages(); ensureNav(); if (tries >= 30) clearInterval(iv); }, 700);
-    refreshActive();
+    // Fewer retries + skip catalog work via ensurePages gate above (Safari energy)
+    var iv = setInterval(function () { tries++; ensureNav(); if (tries % 5 === 0) ensurePages(); if (tries >= 12) clearInterval(iv); }, 1000);
+    // refreshActive self-schedules; first tick after idle so Instant Swap can mount first
+    setTimeout(function () { try { refreshActive(); } catch (_) {} }, 1500);
   }
   window.gromRefreshI18nPages = function () {
     ['page-predict', 'page-xstocks'].forEach(function (id) {

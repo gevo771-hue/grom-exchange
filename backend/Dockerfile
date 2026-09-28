@@ -28,6 +28,7 @@ WORKDIR /app
 
 COPY --from=build --chown=grom:grom /app/node_modules ./node_modules
 COPY --from=build --chown=grom:grom /app/src          ./src
+COPY --from=build --chown=grom:grom /app/ecosystem.config.cjs ./ecosystem.config.cjs
 COPY --from=build --chown=grom:grom /app/package.json ./package.json
 
 USER grom:grom
@@ -38,4 +39,6 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD curl -fsS http://localhost:4000/health || exit 1
 
 ENTRYPOINT ["/sbin/tini", "--"]
+# Single-process on 1 vCPU — pm2 cluster regressed night2 (+13–24%).
+# Re-enable via ecosystem.config.cjs after upgrade to 2–4 vCPU.
 CMD ["node", "src/server.js"]

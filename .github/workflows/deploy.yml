@@ -55,30 +55,24 @@ jobs:
               exec 9>/tmp/grom-deploy.lock
               flock -w 300 9
 
-              # Keep currently-served frontend in case git tree is behind live.
-              rm -rf /tmp/grom-fe-live-backup
-              docker cp grom_frontend:/usr/share/nginx/html /tmp/grom-fe-live-backup || true
-
               git fetch origin main
               git reset --hard origin/main
+
+              # Build dist BEFORE compose so a FE image rebuild never ships raw public/.
+              # assert-frontend-clean also node --check's first-party public/*.js
+              node scripts/assert-frontend-clean.mjs
+              node scripts/build-frontend.mjs
+              node scripts/assert-frontend-clean.mjs
+
               docker compose up -d --build --wait --wait-timeout 300
               docker compose exec -T backend npm run migrate
 
-              # Content-hashed frontend build (cache-bust automation)
-              node scripts/build-frontend.mjs
+              # Wipe then copy — docker cp merges and would leave OLD hashed twins forever.
+              docker exec grom_frontend sh -c 'find /usr/share/nginx/html -mindepth 1 -maxdepth 1 ! -name .well-known -exec rm -rf {} +'
               docker cp frontend/dist/. grom_frontend:/usr/share/nginx/html/
+              docker cp frontend/nginx.conf grom_frontend:/etc/nginx/conf.d/default.conf || true
+              docker exec grom_frontend nginx -t
               docker exec grom_frontend nginx -s reload
-
-              # If git frontend lacks Instant Swap hang guards that live had, restore live bundle.
-              if [ -d /tmp/grom-fe-live-backup ]; then
-                LIVE_HAS=$(grep -c stillMine /tmp/grom-fe-live-backup/grom-wallet.js 2>/dev/null || echo 0)
-                NEW_HAS=$(docker exec grom_frontend sh -c 'grep -c stillMine /usr/share/nginx/html/grom-wallet.js 2>/dev/null || echo 0')
-                if [ "\$LIVE_HAS" -gt 0 ] && [ "\$NEW_HAS" -lt "\$LIVE_HAS" ]; then
-                  echo '⚠ git frontend behind live hang-fixes — restoring live bundle'
-                  docker cp /tmp/grom-fe-live-backup/. grom_frontend:/usr/share/nginx/html/
-                  docker exec grom_frontend nginx -s reload
-                fi
-              fi
 
               for attempt in 1 2 3 4 5 6 7 8 9 10; do
                 if curl -fsS http://127.0.0.1:4000/health >/dev/null; then
@@ -112,16 +106,10 @@ jobs:
       - name: Checkout scripts for smoke
         uses: actions/checkout@v4
 
-      - name: Post-deploy load smoke (Scenario A)
-        continue-on-error: false
+      - name: Post-deploy read-only smoke
         env:
           BASE_URL: https://grom.exchange
         run: |
           set -euo pipefail
-          sudo gpg -k >/dev/null 2>&1 || true
-          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
-          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq k6
-          chmod +x scripts/load/smoke.sh scripts/load/F_ws_flood.sh
-          BASE_URL="$BASE_URL" ./scripts/load/smoke.sh
+          chmod +x scripts/health-check.sh
+          ./scripts/health-check.sh "$BASE_URL"

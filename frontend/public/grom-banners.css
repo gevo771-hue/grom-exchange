@@ -1,254 +1,327 @@
-/* ============================================================================
- * grom-banners.css — premium dashboard banner design (Spot · Binary · Futures
- * · Predict). Loaded via <link rel="stylesheet"> in <head> so it blocks first
- * paint and no Cursor-baseline → premium "flash" is ever visible.
- *
- * Owned by Claude (grom-wallet.js territory) but lives in its own file so the
- * inline <head> stays clean and the cascade lands before HTML body renders.
- * ========================================================================= */
+/* GROM dashboard banners — cinematic full-bleed billboards */
 
-/* ---------- container ---------- */
-.dash-banners {
-  gap: 14px !important;
-  padding: 4px 2px 18px !important;
-  scroll-padding: 8px;
-  scroll-snap-type: x mandatory;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
-          mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+#page-dashboard .dash-banners-wrap,
+.dash-banners-wrap {
+  position: relative;
+  margin-bottom: 22px;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  isolation: isolate;
 }
 
-/* ---------- card frame ---------- */
+#page-dashboard .dash-banners,
+.dash-banners {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  border-radius: 20px;
+  grid-template-columns: none !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 0 !important;
+  scrollbar-width: none;
+}
+#page-dashboard .dash-banners::-webkit-scrollbar,
+.dash-banners::-webkit-scrollbar { display: none; }
+
+#page-dashboard .dash-banners .dash-banner,
 .dash-banners .dash-banner {
+  --gw-bn-a: #5ee7ff;
+  --gw-bn-shadow: rgba(40, 180, 220, 0.35);
   position: relative !important;
   isolation: isolate;
-  min-height: 188px !important;
-  padding: 22px 22px 20px !important;
-  border-radius: 22px !important;
-  background:
-    radial-gradient(120% 140% at 0% 0%, rgba(255,255,255,0.06), transparent 55%),
-    linear-gradient(155deg, rgba(13,22,38,0.72) 0%, rgba(8,14,26,0.85) 100%) !important;
-  border: 1px solid rgba(255,255,255,0.07) !important;
-  box-shadow:
-    0 1px 0 rgba(255,255,255,0.06) inset,
-    0 14px 38px -18px rgba(0,0,0,0.55),
-    0 0 0 1px rgba(255,255,255,0.02) inset !important;
-  backdrop-filter: blur(14px) saturate(150%);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  overflow: hidden;
+  flex: 0 0 100% !important;
+  min-width: 100% !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 240px !important;
+  padding: 0 !important;
+  border-radius: 20px !important;
+  box-sizing: border-box !important;
+  scroll-snap-align: start !important;
+  scroll-snap-stop: always !important;
+  overflow: hidden !important;
   cursor: pointer;
-  transform-style: preserve-3d;
-  transition:
-    transform .55s cubic-bezier(.2,.7,.2,1),
-    box-shadow .55s cubic-bezier(.2,.7,.2,1),
-    border-color .35s ease;
-  scroll-snap-align: start;
+  text-decoration: none;
+  color: inherit;
+  border: none !important;
+  background: #0a0e14 !important;
+  box-shadow: 0 20px 48px -28px rgba(0, 0, 0, 0.72) !important;
+  transform: none !important;
+  transition: none !important;
 }
 
-/* ---------- rotating aurora halo (::before) ---------- */
-.dash-banners .dash-banner::before {
-  content: "";
-  position: absolute; inset: -2px;
-  border-radius: inherit;
-  padding: 1.5px;
-  background: conic-gradient(from 0deg,
-    var(--gw-bn-a, #00c2ff) 0%,
-    transparent 25%,
-    var(--gw-bn-b, #6e8dff) 50%,
-    transparent 75%,
-    var(--gw-bn-a, #00c2ff) 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  opacity: 0.7;
-  animation: gwBnSpin 14s linear infinite;
-  pointer-events: none;
+.dash-banners .banner-spot { --gw-bn-a: #5ee7ff; --gw-bn-shadow: rgba(50, 200, 230, 0.4); }
+.dash-banners .banner-futures { --gw-bn-a: #ffc45c; --gw-bn-shadow: rgba(255, 160, 50, 0.4); }
+.dash-banners .banner-predict { --gw-bn-a: #a78bfa; --gw-bn-shadow: rgba(140, 120, 240, 0.38); }
+
+/* Full-bleed photo art */
+.dash-banners .banner-photo {
+  position: absolute;
+  inset: 0;
   z-index: 0;
-}
-@keyframes gwBnSpin { to { transform: rotate(360deg); } }
-
-/* ---------- holographic shimmer sweep (::after) ---------- */
-.dash-banners .dash-banner::after {
-  content: "";
-  position: absolute; inset: 0;
   border-radius: inherit;
-  background: linear-gradient(105deg,
-    transparent 30%,
-    rgba(255,255,255,0.07) 47%,
-    rgba(255,255,255,0.18) 50%,
-    rgba(255,255,255,0.07) 53%,
-    transparent 70%);
-  background-size: 220% 100%;
-  background-position: -120% 0;
-  pointer-events: none;
+  background-size: cover;
+  background-position: center right;
+  background-repeat: no-repeat;
+}
+.dash-banners .dash-banner:hover .banner-photo {
+  transform: none;
+}
+.dash-banners .banner-spot .banner-photo {
+  background-image: url("/assets/banners/banner-swap-bg.jpg");
+  /* Keep USDT (bottom-right in art) inside the crop on wide desktop */
+  background-position: 88% 72%;
+}
+.dash-banners .banner-futures .banner-photo {
+  background-image: url("/assets/banners/banner-trade-bg.jpg");
+  background-position: 90% 55%;
+}
+.dash-banners .banner-predict .banner-photo {
+  background-image: url("/assets/banners/banner-predict-bg.jpg");
+  background-position: 92% 50%;
+}
+
+/* Readability scrim — horizontal only (no bottom dark band / frame) */
+.dash-banners .banner-scrim {
+  position: absolute;
+  inset: 0;
   z-index: 1;
-  transition: background-position 1.2s cubic-bezier(.4,.0,.2,1);
-}
-.dash-banners .dash-banner:hover::after { background-position: 220% 0; }
-
-/* ---------- content stacking ---------- */
-.dash-banners .dash-banner .banner-mesh,
-.dash-banners .dash-banner .banner-shine,
-.dash-banners .dash-banner .banner-content,
-.dash-banners .dash-banner .banner-tag { position: relative; z-index: 2; }
-.dash-banners .dash-banner .banner-mesh { opacity: 0.75; mix-blend-mode: screen; }
-.dash-banners .dash-banner .banner-shine { display: none !important; }
-
-/* ---------- hover lift ---------- */
-.dash-banners .dash-banner:hover {
-  transform: translateY(-8px) scale(1.012) rotateX(2deg) rotateY(-2deg) !important;
-  border-color: rgba(255,255,255,0.14) !important;
-  box-shadow:
-    0 1px 0 rgba(255,255,255,0.10) inset,
-    0 26px 60px -22px var(--gw-bn-shadow, rgba(0,194,255,0.35)),
-    0 0 0 1px rgba(255,255,255,0.04) inset !important;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    rgba(6, 9, 14, 0.92) 0%,
+    rgba(6, 9, 14, 0.72) 34%,
+    rgba(6, 9, 14, 0.28) 58%,
+    rgba(6, 9, 14, 0.08) 78%,
+    transparent 100%);
 }
 
-/* ---------- icon: glass tile + pulsing ring ---------- */
-.dash-banners .banner-ico {
-  position: relative;
-  width: 64px; height: 64px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 34px !important;
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02));
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow:
-    0 6px 18px -6px var(--gw-bn-shadow, rgba(0,194,255,0.45)),
-    0 1px 0 rgba(255,255,255,0.08) inset;
-  filter: drop-shadow(0 4px 18px var(--gw-bn-shadow, rgba(0,194,255,0.5))) !important;
-}
-.dash-banners .banner-ico::after {
-  content: "";
-  position: absolute; inset: -6px;
-  border-radius: 22px;
-  border: 1.5px solid var(--gw-bn-a, #00c2ff);
-  opacity: 0;
-  animation: gwBnPulse 2.4s ease-out infinite;
-}
-@keyframes gwBnPulse {
-  0%   { opacity: 0.55; transform: scale(0.92); }
-  70%  { opacity: 0;    transform: scale(1.18); }
-  100% { opacity: 0;    transform: scale(1.18); }
+.dash-banners .dash-banner::before,
+.dash-banners .dash-banner::after {
+  display: none !important;
+  content: none !important;
 }
 
-/* ---------- typography ---------- */
+/* Kill old chrome */
+.dash-banners .banner-art,
+.dash-banners .banner-mesh,
+.dash-banners .banner-shine,
+.dash-banners .banner-ico,
+.dash-banners .banner-cta,
+.dash-banners .banner-stage,
+.dash-banners .banner-logos,
+.dash-banners .banner-stats {
+  display: none !important;
+}
+
 .dash-banners .banner-content {
-  display: flex; align-items: flex-start; gap: 16px;
+  position: relative;
+  z-index: 4;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-end !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  min-height: 240px;
   height: 100%;
+  padding: 28px 32px 30px !important;
+  max-width: 52%;
 }
-.dash-banners .banner-copy { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+
+.dash-banners .banner-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
 .dash-banners .banner-eyebrow {
-  font-size: 10.5px !important;
-  letter-spacing: .24em !important;
-  font-weight: 800 !important;
-  opacity: .9;
-}
-.dash-banners .dash-banner h3 {
-  font-size: 17.5px !important;
-  font-weight: 800 !important;
-  letter-spacing: -0.01em;
-  line-height: 1.25 !important;
-  margin: 2px 0 4px !important;
-  color: #f3f8ff;
-  background: linear-gradient(180deg, #ffffff 0%, #c7d8ec 100%);
-  -webkit-background-clip: text;
-          background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-.dash-banners .dash-banner p {
-  font-size: 12.5px !important;
-  color: #98a8c0 !important;
-  line-height: 1.5 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
   margin: 0 !important;
-}
-
-/* ---------- CTA pill ---------- */
-.dash-banners .banner-cta {
-  margin-top: auto !important;
-  display: inline-flex !important;
-  align-items: center; gap: 6px;
-  padding: 8px 14px !important;
-  border-radius: 999px !important;
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--gw-bn-a, #00c2ff) 22%, transparent),
-    color-mix(in srgb, var(--gw-bn-b, #6e8dff) 12%, transparent));
-  border: 1px solid color-mix(in srgb, var(--gw-bn-a, #00c2ff) 40%, transparent);
-  color: var(--gw-bn-a, #00c2ff) !important;
-  font-size: 12px !important;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 10px !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase;
   font-weight: 800 !important;
-  letter-spacing: .04em;
-  align-self: flex-start;
-  transition: transform .25s, box-shadow .25s, background .25s;
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
-.dash-banners .dash-banner:hover .banner-cta {
-  transform: translateX(6px) !important;
-  box-shadow: 0 8px 22px -8px var(--gw-bn-shadow, rgba(0,194,255,0.55));
-}
-
-/* ---------- tag pill (HOT / NEW / BETA) ---------- */
-.dash-banners .banner-tag {
-  position: absolute !important; top: 14px !important; right: 14px !important;
-  padding: 4px 10px !important;
-  border-radius: 999px !important;
-  font-size: 9.5px !important;
-  letter-spacing: .14em !important;
-  font-weight: 900 !important;
-  backdrop-filter: blur(6px);
-  box-shadow: 0 6px 14px -6px rgba(0,0,0,0.55);
-  z-index: 3;
-}
-.dash-banners .banner-tag::before {
+.dash-banners .banner-eyebrow::before {
   content: "";
-  display: inline-block;
-  width: 6px; height: 6px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: currentColor;
-  margin-right: 6px;
-  vertical-align: middle;
-  animation: gwBnDot 1.6s ease-in-out infinite;
-  box-shadow: 0 0 8px currentColor;
+  background: var(--gw-bn-a);
+  box-shadow: 0 0 10px var(--gw-bn-a);
+  animation: gwBnDot 1.5s ease-in-out infinite;
 }
 @keyframes gwBnDot { 50% { opacity: 0.35; } }
 
-/* ---------- per-banner accent palette ---------- */
-.dash-banners .banner-spot    { --gw-bn-a: #00c2ff; --gw-bn-b: #6e8dff; --gw-bn-shadow: rgba(0,194,255,0.45); }
-.dash-banners .banner-binary  { --gw-bn-a: #22c17c; --gw-bn-b: #0ecb81; --gw-bn-shadow: rgba(34,193,124,0.40); }
-.dash-banners .banner-futures { --gw-bn-a: #f5b94d; --gw-bn-b: #ff8a3d; --gw-bn-shadow: rgba(245,185,77,0.42); }
-.dash-banners .banner-predict { --gw-bn-a: #c084fc; --gw-bn-b: #6e8dff; --gw-bn-shadow: rgba(168,85,247,0.46); }
+.dash-banners .dash-banner h3,
+.dash-banners .banner-content h3 {
+  margin: 0 !important;
+  font-size: 34px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.04em !important;
+  line-height: 1.05 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff;
+  background: none;
+  text-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+}
 
-/* ---------- desktop sizing ---------- */
+.dash-banners .dash-banner p,
+.dash-banners .banner-content p {
+  margin: 0 !important;
+  font-size: 14.5px !important;
+  line-height: 1.45 !important;
+  color: rgba(210, 224, 240, 0.88) !important;
+  max-width: 34ch;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+.dash-banners .banner-tag {
+  display: none !important;
+}
+
+.dash-banners .dash-banner:hover {
+  transform: none !important;
+  margin: 0 !important;
+  box-shadow: 0 20px 48px -28px rgba(0, 0, 0, 0.72) !important;
+}
+.dash-banners .dash-banner:active {
+  transform: none !important;
+}
+
+/* Dots — below banner, no strip background */
+#page-dashboard .dash-banner-dots,
+.dash-banner-dots {
+  position: static;
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 0;
+  margin: 0;
+  background: transparent !important;
+}
+.dash-banner-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: width 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+}
+.dash-banner-dots span.active {
+  width: 22px;
+  background: linear-gradient(90deg, #5ee7ff, #88c0d0);
+  border-color: transparent;
+  box-shadow: 0 0 14px rgba(0, 194, 255, 0.4);
+}
+
 @media (min-width: 900px) {
-  .dash-banners { grid-template-columns: repeat(4, 1fr) !important; display: grid !important; gap: 16px !important; }
-  .dash-banners .dash-banner { min-width: 0 !important; min-height: 210px !important; }
-}
-
-/* ---------- mobile polish ---------- */
-@media (max-width: 899px) {
-  .dash-banners {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    overflow-x: auto !important;
-    padding: 6px 14px 22px !important;
-    gap: 12px !important;
-  }
+  #page-dashboard .dash-banners .dash-banner,
   .dash-banners .dash-banner {
-    flex: 0 0 84% !important;
-    min-height: 168px !important;
-    padding: 18px !important;
-    border-radius: 20px !important;
+    min-height: 268px !important;
   }
-  .dash-banners .banner-ico { width: 54px; height: 54px; font-size: 28px !important; border-radius: 15px; }
-  .dash-banners .dash-banner h3 { font-size: 15.5px !important; }
-  .dash-banners .dash-banner p { font-size: 12px !important; }
-  .dash-banners .banner-cta { padding: 7px 12px !important; font-size: 11.5px !important; }
-  .dash-banners .dash-banner:hover { transform: translateY(-3px) !important; }
+  .dash-banners .banner-content {
+    min-height: 268px;
+    padding: 34px 40px 36px !important;
+    max-width: 48%;
+  }
+  .dash-banners .dash-banner h3,
+  .dash-banners .banner-content h3 {
+    font-size: 40px !important;
+  }
+  .dash-banners .dash-banner p,
+  .dash-banners .banner-content p {
+    font-size: 15.5px !important;
+  }
+  /* Desktop is much wider — pin crop so BTC/ETH stay in frame; USDT pinned via .banner-coins */
+  .dash-banners .banner-spot .banner-photo {
+    background-position: 84% 70%;
+    background-size: cover;
+  }
 }
 
-/* ---------- prefers-reduced-motion: stop spinning/pulsing ---------- */
+@media (max-width: 899px) {
+  #page-dashboard .dash-banners-wrap,
+  .dash-banners-wrap {
+    margin-bottom: 10px !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+  #page-dashboard .dash-banners,
+  .dash-banners {
+    padding: 0 !important;
+    gap: 0 !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+  }
+  #page-dashboard .dash-banners .dash-banner,
+  .dash-banners .dash-banner {
+    min-height: 168px !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .dash-banners .banner-content {
+    min-height: 168px;
+    max-width: 72%;
+    padding: 18px 16px 18px !important;
+    gap: 8px !important;
+  }
+  .dash-banners .banner-photo {
+    background-position: 72% center;
+  }
+  .dash-banners .banner-scrim {
+    background: linear-gradient(90deg,
+      rgba(6, 9, 14, 0.94) 0%,
+      rgba(6, 9, 14, 0.78) 45%,
+      rgba(6, 9, 14, 0.35) 72%,
+      transparent 100%);
+  }
+  .dash-banners .banner-eyebrow {
+    font-size: 8.5px !important;
+    padding: 4px 8px;
+    letter-spacing: 0.14em !important;
+  }
+  .dash-banners .dash-banner h3,
+  .dash-banners .banner-content h3 {
+    font-size: 20px !important;
+  }
+  .dash-banners .dash-banner p,
+  .dash-banners .banner-content p {
+    font-size: 12px !important;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  .dash-banners .dash-banner:hover { transform: none !important; }
+  .dash-banners .dash-banner:hover .banner-photo { transform: none; }
+  .dash-banners .banner-eyebrow::before { animation: none !important; box-shadow: none !important; opacity: 1 !important; }
+  .dash-banners .banner-eyebrow { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .dash-banners .dash-banner::before,
-  .dash-banners .banner-ico::after,
-  .dash-banners .banner-tag::before { animation: none !important; }
-  .dash-banners .dash-banner:hover { transform: translateY(-3px) !important; }
+  .dash-banners .dash-banner::after,
+  .dash-banners .banner-photo,
+  .dash-banners .banner-eyebrow::before {
+    animation: none !important;
+    transition: none !important;
+  }
 }

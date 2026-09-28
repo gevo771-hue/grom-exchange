@@ -1,0 +1,10 @@
+{
+  "priceRoute": {
+    "destAmount": "2654318",
+    "destAmountAfterFee": "2653787",
+    "partner": "grom-exchange",
+    "partnerFee": 0.2,
+    "srcAmount": "1000000",
+    "hmac": "sanitized"
+  }
+}

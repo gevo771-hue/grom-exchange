@@ -1,97 +1,24 @@
-import crypto from 'node:crypto';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
-import { z } from 'zod';
 import config from '../config/index.js';
-import { query, withTx } from '../db/pool.js';
-import idempotencyMiddleware from '../middleware/idempotency.js';
-import { verifyTotp } from '../utils/totp.js';
-import { ensureDepositAddress as ensureBinanceDepositAddress } from './binance-onboarding.js';
-import { ensureWelcomeWalletSeed } from './welcome-seed.js';
-
-const STABLE_ASSETS = new Set(['USD', 'USDT', 'USDC']);
-const DEMO_BALANCES = [
-  { asset: 'BTC', amount: 0.09842, locked: 0 },
-  { asset: 'ETH', amount: 0.482, locked: 0 },
-  { asset: 'USDT', amount: 564.33, locked: 0 },
-  { asset: 'SOL', amount: 1.36, locked: 0 },
-];
-const DEMO_TRANSFERS = [
-  {
-    direction: 'deposit',
-    asset: 'USDT',
-    network: 'Tron (TRC-20)',
-    address: 'TKz8H4p2WqD3F9Y1R5k6N8mP4j7L2sV3bX',
-    amount: 250,
-    fee: 0,
-    status: 'completed',
-    confirmations: 20,
-    required_confirmations: 20,
-    note: 'Seeded demo deposit',
-    tx_hash: '0xa28f71ce',
-    created_at: 'NOW() - INTERVAL \'14 minutes\'',
-  },
-  {
-    direction: 'withdrawal',
-    asset: 'BTC',
-    network: 'Bitcoin',
-    address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-    amount: 0.012,
-    fee: 0.00008,
-    status: 'pending',
-    confirmations: 0,
-    required_confirmations: 3,
-    note: 'Batching with fee optimizer · ETA 3 min',
-    tx_hash: null,
-    created_at: 'NOW() - INTERVAL \'8 minutes\'',
-  },
-  {
-    direction: 'deposit',
-    asset: 'USDC',
-    network: 'Arbitrum One',
-    address: '0x9e2f4a8c1b5d7e3f6a9c2b4d8e1f5a7c9b2d4e6f',
-    amount: 800,
-    fee: 0,
-    status: 'completed',
-    confirmations: 10,
-    required_confirmations: 10,
-    note: 'Internal credit mirrored to trading balance',
-    tx_hash: '0xbridgein',
-    created_at: 'NOW() - INTERVAL \'2 hours\'',
-  },
-];
+import { query } from '../db/pool.js';
+import { logUserActivity } from '../activity/log.js';
+import {
+  JUP_MINT_RE,
+  jupFeeBpsFromConfig,
+  jupFeeModeFromConfig,
+  jupiterEnabled,
+  resolveJupFeeAccount,
+  assertJupPlatformFee,
+  attachJupQuoteMeta,
+} from './jup-fee.js';
 
 function toNum(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function verifyWebhookSignature(secret, rawBody, provided) {
-  if (!secret) return false;
-  const expected = crypto.createHmac('sha256', secret).update(rawBody || '').digest('hex');
-  return expected === String(provided || '');
-}
 
-function webhookReplayKey(provider, input) {
-  const externalId = input.externalRef || input.transferId || input.txHash || null;
-  return externalId ? { provider: String(provider || 'generic'), externalId: String(externalId) } : null;
-}
-
-function roundMoney(value) {
-  return Math.round(toNum(value) * 100) / 100;
-}
-
-function formatMoney(value) {
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-function formatAssetAmount(asset, value) {
-  const digits = STABLE_ASSETS.has(asset) ? 2 : value >= 1 ? 4 : 6;
-  return `${value.toFixed(digits)} ${asset}`;
-}
 
 function formatHistoryTime(value) {
   return new Intl.DateTimeFormat('en-US', {
@@ -103,1037 +30,675 @@ function formatHistoryTime(value) {
   }).format(new Date(value));
 }
 
-async function getAssetUsdPrice(priceAggregator, asset) {
-  if (STABLE_ASSETS.has(asset)) return 1;
-  const price = await priceAggregator.getPrice(`${asset}/USDT`);
-  return toNum(price);
+function explorerForTx(chainHint, txHash) {
+  if (!txHash) return '';
+  const h = String(txHash);
+  const c = String(chainHint || '').toLowerCase();
+  if (c === '42161' || c === 'arb' || c.includes('arbitrum')) return `https://arbiscan.io/tx/${h}`;
+  if (c === '8453' || c === 'base') return `https://basescan.org/tx/${h}`;
+  if (c === '137' || c === 'matic' || c.includes('polygon')) return `https://polygonscan.com/tx/${h}`;
+  if (c === '56' || c === 'bsc' || c.includes('bnb')) return `https://bscscan.com/tx/${h}`;
+  if (c === '10' || c === 'op' || c.includes('optimism')) return `https://optimistic.etherscan.io/tx/${h}`;
+  if (c === '43114' || c === 'avax' || c.includes('avalanche')) return `https://snowtrace.io/tx/${h}`;
+  if (c === '1' || c === 'eth' || c.includes('ethereum')) return `https://etherscan.io/tx/${h}`;
+  return `https://etherscan.io/tx/${h}`;
 }
 
-async function creditTransferIfNeeded(tx, transferRow) {
-  if (!transferRow || transferRow.direction !== 'deposit') return;
-  if (transferRow.status === 'completed' || transferRow.settled_at) return;
-  await tx.query(
-    `INSERT INTO balances (user_id, asset, mode, amount, locked, updated_at)
-     VALUES ($1, $2, 'live', $3, 0, NOW())
-     ON CONFLICT (user_id, asset, mode)
-     DO UPDATE SET amount = balances.amount + EXCLUDED.amount, updated_at = NOW()`,
-    [transferRow.user_id, transferRow.asset, transferRow.amount]
-  );
-}
-
-async function applySettlementUpdate(tx, input, payload) {
-  const lookupValue = input.transferId || input.externalRef;
-  const lookupField = input.transferId ? 'id' : 'external_ref';
-  if (!lookupValue) {
-    const err = new Error('transfer identifier required');
-    err.status = 400;
-    throw err;
-  }
-  const { rows } = await tx.query(
-    `SELECT *
-       FROM wallet_transfers
-      WHERE ${lookupField}=$1
-      FOR UPDATE`,
-    [lookupValue]
-  );
-  const current = rows[0];
-  if (!current) {
-    const err = new Error('transfer not found');
-    err.status = 404;
-    throw err;
-  }
-  if (input.status === 'completed') {
-    await creditTransferIfNeeded(tx, current);
-  }
-  const updated = await tx.query(
-    `UPDATE wallet_transfers
-       SET status=$2,
-           tx_hash=COALESCE($3, tx_hash),
-           confirmations=COALESCE($4, confirmations),
-           required_confirmations=COALESCE($5, required_confirmations),
-           note=COALESCE($6, note),
-           provider=COALESCE($7, provider),
-           webhook_payload=$8,
-           updated_at=NOW(),
-           settled_at=CASE WHEN $2='completed' THEN NOW() ELSE settled_at END
-     WHERE id=$1
-     RETURNING id, user_id, direction, asset, network, address, amount, fee, status, confirmations, required_confirmations, note, provider, external_ref, tx_hash, settled_at, created_at`,
-    [
-      current.id,
-      input.status,
-      input.txHash || null,
-      input.confirmations ?? null,
-      input.requiredConfirmations ?? null,
-      input.note || null,
-      input.provider || null,
-      JSON.stringify(payload || {}),
-    ]
-  );
-  return updated.rows[0];
-}
-
-async function ensureWebhookNotReplayed(tx, provider, input, payload) {
-  const key = webhookReplayKey(provider, input);
-  if (!key) return false;
-  const payloadHash = sha256(JSON.stringify(payload || {}));
-  const { rows } = await tx.query(
-    `INSERT INTO webhook_events (provider, external_id, payload_hash)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (provider, external_id) DO NOTHING
-     RETURNING provider`,
-    [key.provider, key.externalId, payloadHash]
-  );
-  return rows.length === 0;
-}
-
-export function summariseBalances(balances, priceMap) {
-  let totalUsd = 0;
-  let availableUsd = 0;
-  const assets = balances.map((row) => {
-    const amount = toNum(row.amount);
-    const locked = toNum(row.locked);
-    const priceUsd = toNum(priceMap[row.asset]);
-    const valueUsd = amount * priceUsd;
-    const available = Math.max(amount - locked, 0);
-    totalUsd += valueUsd;
-    availableUsd += available * priceUsd;
-    return {
-      asset: row.asset,
-      amount,
-      locked,
-      priceUsd,
-      valueUsd,
-      displayBalance: formatAssetAmount(row.asset, amount),
-      displayPrice: `$${formatMoney(priceUsd)}`,
-      displayValue: `$${formatMoney(valueUsd)}`,
-    };
-  });
-
-  assets.sort((a, b) => b.valueUsd - a.valueUsd);
-
-  const totalBasis = totalUsd || 1;
-  const allocation = assets.map((row) => ({
-    asset: row.asset,
-    sharePct: Number(((row.valueUsd / totalBasis) * 100).toFixed(1)),
-  }));
-
-  return {
-    totalUsd: roundMoney(totalUsd),
-    availableUsd: roundMoney(availableUsd),
-    assets,
-    allocation,
-  };
-}
-
-export function buildHistoryItems({ transfers, binaryPositions, spotOrders }) {
+/** History from on-chain/user_activity only — no custodial ledger. */
+export function buildHistoryItems({ transfers = [], spotOrders = [], swapActivity = [] } = {}) {
   const items = [];
-
-  for (const row of transfers) {
-    const direction = row.direction === 'deposit' ? 'deposits' : 'withdrawals';
+  for (const row of (swapActivity || [])) {
+    const d = row.detail && typeof row.detail === 'object' ? row.detail : {};
+    const product = String(row.product || 'swap');
+    const from = d.from || d.fromSym || row.asset || '?';
+    const to = d.to || d.toSym || '';
+    const amt = row.amount != null ? toNum(row.amount) : null;
+    const chain = d.chain || d.fromChainId || d.chainId || '';
+    const kind = product === 'futures' ? 'futures' : (product === 'spot' ? 'spot' : 'swap');
+    const labelCore = to
+      ? `${amt != null ? amt : ''} ${from} → ${to}`.replace(/\s+/g, ' ').trim()
+      : `${row.action || product} · ${from}`;
     items.push({
-      kind: direction,
+      kind,
       occurredAt: row.created_at,
-      assetLabel: `${row.direction === 'deposit' ? 'Deposit' : 'Withdraw'} · ${row.asset}${row.direction === 'withdrawal' ? ` → ${String(row.address).slice(0, 6)}…${String(row.address).slice(-4)}` : ''}`,
-      stakeLabel: formatAssetAmount(row.asset, toNum(row.amount)),
-      resultLabel: row.status,
+      assetLabel: `${kind === 'futures' ? 'Perp' : kind === 'spot' ? 'Spot' : 'Swap'} · ${labelCore}`,
+      stakeLabel: amt != null ? `${amt} ${from}` : '—',
+      resultLabel: row.status || row.action || 'filled',
       pnl: null,
-      statusTone: row.status === 'completed' ? 'win' : row.status === 'failed' ? 'loss' : 'neutral',
-      directionTone: row.direction === 'deposit' ? 'up' : 'down',
+      statusTone: /fail|reject|cancel|error/i.test(String(row.status || row.action || '')) ? 'loss' : 'win',
+      directionTone: /sell|short|down/i.test(String(row.action || '')) ? 'down' : 'up',
       timeLabel: formatHistoryTime(row.created_at),
+      explorerUrl: explorerForTx(chain, row.tx_hash),
+      txHash: row.tx_hash || null,
+      wallet: String(row.wallet_address || '').toLowerCase() || null,
+      wallet_address: String(row.wallet_address || '').toLowerCase() || null,
+      _ts: row.created_at ? new Date(row.created_at).getTime() : 0,
+      _hash: row.tx_hash || null,
     });
   }
-
-  for (const row of binaryPositions) {
-    const payout = toNum(row.payout);
-    items.push({
-      kind: 'binary',
-      occurredAt: row.placed_at,
-      assetLabel: `${row.asset} binary · ${row.duration_sec}s`,
-      stakeLabel: `$${formatMoney(toNum(row.stake))}`,
-      resultLabel: `${payout >= 0 ? '+' : '-'}$${formatMoney(Math.abs(payout))}`,
-      pnl: payout,
-      statusTone: payout >= 0 ? 'win' : 'loss',
-      directionTone: row.direction === 'up' ? 'up' : 'down',
-      timeLabel: formatHistoryTime(row.placed_at),
-    });
-  }
-
-  for (const row of spotOrders) {
-    const amount = toNum(row.amount);
-    const filled = toNum(row.filled || row.amount);
-    const price = toNum(row.price);
-    const notional = filled * price;
-    items.push({
-      kind: 'spot',
-      occurredAt: row.created_at,
-      assetLabel: `Spot ${row.side === 'buy' ? 'Buy' : 'Sell'} · ${filled.toFixed(4)} ${String(row.pair).split('/')[0]}`,
-      stakeLabel: `$${formatMoney(notional)}`,
-      resultLabel: row.status || 'filled',
-      pnl: null,
-      statusTone: 'win',
-      directionTone: row.side === 'buy' ? 'up' : 'down',
-      timeLabel: formatHistoryTime(row.created_at),
-    });
-  }
-
+  void transfers; void spotOrders;
   return items.sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt));
 }
 
-async function ensureDevWalletSeed(userId) {
-  await ensureWelcomeWalletSeed(userId);
-  if (config.env === 'production') return;
-
-  const seededOrders = await query('SELECT 1 FROM spot_orders WHERE user_id=$1 LIMIT 1', [userId]);
-  if (seededOrders.rowCount === 0) {
-    await query(
-      `INSERT INTO spot_orders (user_id, pair, side, type, price, amount, filled, status, created_at)
-       VALUES
-         ($1, 'BTC/USDT', 'buy', 'limit', 104218.40, 0.005, 0.005, 'filled', NOW() - INTERVAL '15 hours'),
-         ($1, 'ETH/USDT', 'sell', 'market', 3684.15, 0.012, 0.012, 'filled', NOW() - INTERVAL '20 hours')`,
-      [userId]
-    );
-  }
-}
-
-const withdrawSchema = z.object({
-  asset: z.string().min(2).max(12),
-  network: z.string().min(2).max(64),
-  address: z.string().min(10).max(128),
-  amount: z.number().positive().max(1_000_000),
-});
-
-const depositConfirmationSchema = z.object({
-  asset: z.string().min(2).max(12),
-  network: z.string().min(2).max(64),
-  address: z.string().min(10).max(128),
-  amount: z.number().positive().max(1_000_000).default(10),
-});
-
-const onrampConfirmationSchema = z.object({
-  provider: z.string().min(2).max(32),
-  fiatAmount: z.number().positive().max(1_000_000),
-  fiatCurrency: z.string().min(3).max(8),
-  asset: z.string().min(2).max(12),
-  receiveAmount: z.number().positive().max(1_000_000),
-});
-
-const settlementWebhookSchema = z.object({
-  transferId: z.string().uuid().optional(),
-  externalRef: z.string().max(128).optional(),
-  status: z.enum(['confirming', 'completed', 'failed', 'cancelled', 'review']),
-  txHash: z.string().max(191).optional(),
-  confirmations: z.number().int().min(0).optional(),
-  requiredConfirmations: z.number().int().min(0).optional(),
-  note: z.string().max(500).optional(),
-  provider: z.string().max(64).optional(),
-});
-
-const whitelistSchema = z.object({
-  asset: z.string().min(2).max(12).optional(),
-  network: z.string().min(2).max(64),
-  address: z.string().min(10).max(128),
-  label: z.string().max(120).optional(),
-});
-
-const withdrawConfirmSchema = z.object({
-  otp: z.string().regex(/^\d{6}$/),
-  totpToken: z.string().regex(/^\d{6,8}$/).optional(),
-});
-
-const depositAddressSchema = z.object({
-  asset: z.string().min(2).max(12),
-  network: z.string().min(2).max(32),
-});
-
-function sha256(input) {
-  return crypto.createHash('sha256').update(String(input || '')).digest('hex');
-}
-
-function generateEmailOtp() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-function riskFlagsForWithdrawal({ usdValue, whitelistAgeHours }) {
-  const flags = [];
-  if (usdValue >= config.wallet.withdrawManualApprovalUsdt) flags.push('manual_approval');
-  if (usdValue >= config.wallet.withdrawDailyLimitUsdt) flags.push('daily_limit_threshold');
-  if (whitelistAgeHours < config.wallet.withdrawAddressCooldownHours) flags.push('cooldown_active');
-  return flags;
-}
-
-async function ensureIdempotency({ tx, userId, routeKey, requestHash, responseCode = null, responseBody = null }) {
-  const existing = await tx.query(
-    `SELECT response_code, response_body, request_hash
-       FROM idempotency_keys
-      WHERE user_id=$1 AND route_key=$2 AND expires_at > NOW()`,
-    [userId, routeKey]
-  );
-  if (existing.rows[0]) {
-    if (existing.rows[0].request_hash !== requestHash) {
-      const err = new Error('idempotency_key_reused_with_different_payload');
-      err.status = 409;
-      throw err;
-    }
-    return existing.rows[0];
-  }
-  await tx.query(
-    `INSERT INTO idempotency_keys (user_id, route_key, request_hash, response_code, response_body)
-     VALUES ($1, $2, $3, $4, $5::jsonb)`,
-    [userId, routeKey, requestHash, responseCode, responseBody ? JSON.stringify(responseBody) : null]
-  );
-  return null;
-}
-
-async function saveIdempotencyResponse({ tx, userId, routeKey, responseCode, responseBody }) {
-  await tx.query(
-    `UPDATE idempotency_keys
-        SET response_code=$3, response_body=$4::jsonb
-      WHERE user_id=$1 AND route_key=$2`,
-    [userId, routeKey, responseCode, JSON.stringify(responseBody)]
-  );
-}
-
-async function appendWalletAudit(tx, {
-  userId,
-  transferId = null,
-  type,
-  asset = null,
-  amount = null,
-  beforeBalance = null,
-  afterBalance = null,
-  actor = 'system',
-  reason = null,
-  metadata = {},
-}) {
-  await tx.query(
-    `INSERT INTO wallet_audit
-       (user_id, transfer_id, type, asset, amount, before_balance, after_balance, actor, reason, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)`,
-    [userId, transferId, type, asset, amount, beforeBalance, afterBalance, actor, reason, JSON.stringify(metadata || {})]
-  );
-}
-
-function deriveMockDepositAddress({ userId, asset, network, index }) {
-  const seed = sha256(`${userId}:${asset}:${network}:${index}`);
-  const net = String(network || '').toUpperCase();
-  if (net.includes('TRON') || net === 'TRX') return `T${seed.slice(0, 33)}`;
-  if (net.includes('BTC')) return `bc1q${seed.slice(0, 38)}`;
-  return `0x${seed.slice(0, 40)}`;
-}
-
-export function createWalletRouter({ requireAuth, priceAggregator, wsBroadcaster = null }) {
+export function createWalletRouter({ requireAuth, priceAggregator: _priceAggregator, wsBroadcaster: _wsBroadcaster = null }) {
   const r = express.Router();
-  const withdrawLimiter = rateLimit({
-    windowMs: 60_000,
-    max: 8,
-    standardHeaders: true,
-    legacyHeaders: false,
-    keyGenerator: (req) => req.user?.sub || req.ip,
-  });
 
-  /* GET /api/wallet/deposits?limit=10 — recent deposit history for the new
-   * Binance-style deposit modal. Returns inbound wallet_transfers rows for the
-   * authenticated user, newest first. Each row maps to the shape Cursor's
-   * gromDepLoadRecent() consumes: { asset, amount, status, txHash, time }. */
-  r.get('/wallet/deposits', requireAuth, async (req, res, next) => {
+  /** Wallet connect — creates user row before SIWE (visible in admin). */
+  r.post('/wallet/connect', rateLimit({ windowMs: 60_000, max: 30 }), async (req, res, next) => {
     try {
-      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 50);
+      const address = String(req.body?.address || '').toLowerCase();
+      const chainId = parseInt(req.body?.chain_id || req.body?.chainId || '1', 10);
+      if (!/^0x[a-f0-9]{40}$/.test(address)) {
+        return res.status(400).json({ error: 'bad_address' });
+      }
+      const prev = await query('SELECT id FROM users WHERE wallet_address=$1', [address]);
+      const isNew = prev.rowCount === 0;
       const { rows } = await query(
-        `SELECT id, asset, amount, status, tx_hash, network, created_at, confirmations
-           FROM wallet_transfers
-          WHERE user_id=$1 AND direction='deposit'
-          ORDER BY created_at DESC
-          LIMIT $2`,
-        [req.user.sub, limit]
+        `INSERT INTO users (wallet_address, chain_id, last_seen_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (wallet_address) DO UPDATE
+           SET last_seen_at = NOW(), chain_id = EXCLUDED.chain_id
+         RETURNING id, wallet_address, chain_id, created_at, last_seen_at`,
+        [address, chainId]
       );
-      const deposits = rows.map((row) => ({
-        id: row.id,
-        asset: row.asset,
-        amount: Number(row.amount),
-        status: row.status,
-        txHash: row.tx_hash,
-        network: row.network,
-        confirmations: row.confirmations,
-        time: row.created_at,
-      }));
-      res.json({ deposits });
+      const user = rows[0];
+      await logUserActivity({
+        userId: user.id,
+        wallet: address,
+        product: 'auth',
+        action: isNew ? 'register' : 'connect',
+        detail: { chain_id: chainId, method: 'wallet_connect' },
+        status: 'done',
+      });
+      res.json({ user, isNew });
     } catch (err) { next(err); }
   });
 
-  r.get('/wallet/deposit-address', requireAuth, async (req, res, next) => {
+  /**
+   * Public Tron account proxy — browser → TronGrid often blocked / rate-limited
+   * on mobile Safari. Uses TRON_API_KEY when set; falls back to publicnode
+   * getaccount + TRC-20 balanceOf so Instant Swap still shows USDT.
+   * GET /api/wallet/tron-account?address=T…
+   */
+  const tronAccountCache = new Map(); // address → { at, body }
+  const TRON_ACCOUNT_TTL_MS = 45_000;
+  const TRON_PUBLIC_HOSTS = [
+    'https://tron-rpc.publicnode.com',
+    'https://api.trongrid.io',
+  ];
+
+  async function tronPostJson(host, path, body, headers = {}) {
+    const res = await fetch(`${String(host).replace(/\/$/, '')}${path}`, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(12000),
+    });
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); } catch (_) { json = { raw: text }; }
+    return { ok: res.ok, status: res.status, json };
+  }
+
+  /** Base58Check → 32-byte ABI parameter for balanceOf(address).
+   * publicnode validateaddress often returns no hexAddress — local decode is required. */
+  function tronBase58ToParameter(base58) {
+    const ALPH = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     try {
-      const input = depositAddressSchema.parse(req.query);
-      if (config.binance.useAsHotWallet) {
-        const address = await ensureBinanceDepositAddress(req.user.sub, input.asset, input.network);
-        return res.json({ depositAddress: address });
+      let num = 0n;
+      for (const c of String(base58 || '')) {
+        const i = ALPH.indexOf(c);
+        if (i < 0) return '';
+        num = num * 58n + BigInt(i);
       }
-      // SECURITY: when Binance hot-wallet is OFF, the fallback code below derives
-      // a deterministic seed-based "mock" address (e.g. 0xbb67ec2a…) that GROM
-      // has NO private key for. Sending real funds to it loses them. The legacy
-      // wallet UI relied on this for screenshots, but the new web3-native UI
-      // surfaces it to live users — so refuse to serve it in production unless
-      // the operator explicitly opts in via GROM_ALLOW_MOCK_DEPOSIT_ADDRESS=true.
-      const allowMock = ['1', 'true', 'TRUE'].includes(process.env.GROM_ALLOW_MOCK_DEPOSIT_ADDRESS || '');
-      if (config.env === 'production' && !allowMock) {
-        return res.status(503).json({
-          error: 'custodial_deposit_unavailable',
-          detail: 'GROM custodial deposits require BINANCE_HOT_WALLET=true (currently disabled). Use the non-custodial deposit flow instead.',
-        });
+      let hex = num.toString(16);
+      if (hex.length % 2) hex = '0' + hex;
+      let leading = 0;
+      for (const c of String(base58 || '')) {
+        if (c === '1') leading += 1;
+        else break;
       }
-      const existing = await query(
-        `SELECT asset, network, address, derivation_index, created_at
-           FROM deposit_addresses
-          WHERE user_id=$1 AND asset=$2 AND network=$3`,
-        [req.user.sub, input.asset, input.network]
-      );
-      if (existing.rows[0]) return res.json({ depositAddress: existing.rows[0] });
-      const created = await withTx(async (tx) => {
-        const seq = await tx.query(
-          `SELECT COALESCE(MAX(derivation_index), 0) + 1 AS next_idx
-             FROM deposit_addresses
-            WHERE user_id=$1`,
-          [req.user.sub]
-        );
-        const derivationIndex = Number(seq.rows[0]?.next_idx || 1);
-        const address = deriveMockDepositAddress({
-          userId: req.user.sub,
-          asset: input.asset,
-          network: input.network,
-          index: derivationIndex,
-        });
-        const { rows } = await tx.query(
-          `INSERT INTO deposit_addresses (user_id, asset, network, address, derivation_index)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING asset, network, address, derivation_index, created_at`,
-          [req.user.sub, input.asset, input.network, address, derivationIndex]
-        );
-        await appendWalletAudit(tx, {
-          userId: req.user.sub,
-          type: 'deposit_address_created',
-          asset: input.asset,
-          actor: 'user',
-          reason: input.network,
-          metadata: { address, derivation_index: derivationIndex },
-        });
-        return rows[0];
-      });
-      res.status(201).json({ depositAddress: created });
-    } catch (err) {
-      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
-      next(err);
+      const bytes = Buffer.concat([Buffer.alloc(leading), Buffer.from(hex, 'hex')]);
+      if (bytes.length < 25) return '';
+      const payload = bytes.subarray(0, bytes.length - 4); // drop checksum
+      if (payload.length !== 21 || payload[0] !== 0x41) return '';
+      return Buffer.from(payload.subarray(1)).toString('hex').padStart(64, '0');
+    } catch (_) {
+      return '';
     }
-  });
+  }
 
-  r.get('/wallet/whitelist', requireAuth, async (req, res, next) => {
+  async function tronHexPayload(host, base58, headers = {}) {
+    const local = tronBase58ToParameter(base58);
+    if (local) return local;
     try {
-      const { rows } = await query(
-        `SELECT id, asset, network, address, label, created_at, revoked_at
-           FROM address_whitelist
-          WHERE user_id=$1
-          ORDER BY revoked_at NULLS FIRST, created_at DESC`,
-        [req.user.sub]
-      );
-      res.json({ items: rows });
-    } catch (err) { next(err); }
-  });
-
-  r.post('/wallet/whitelist', requireAuth, async (req, res, next) => {
-    try {
-      const input = whitelistSchema.parse(req.body);
-      const row = await withTx(async (tx) => {
-        const { rows } = await tx.query(
-          `INSERT INTO address_whitelist (user_id, asset, network, address, label)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (user_id, network, address)
-           DO UPDATE SET asset=COALESCE(EXCLUDED.asset, address_whitelist.asset),
-                         label=COALESCE(EXCLUDED.label, address_whitelist.label),
-                         revoked_at=NULL
-           RETURNING id, asset, network, address, label, created_at, revoked_at`,
-          [req.user.sub, input.asset || null, input.network, input.address, input.label || null]
-        );
-        await appendWalletAudit(tx, {
-          userId: req.user.sub,
-          type: 'withdraw_whitelist_add',
-          asset: input.asset || null,
-          actor: 'user',
-          reason: input.network,
-          metadata: { address: input.address, label: input.label || null },
-        });
-        return rows[0];
-      });
-      res.status(201).json({ item: row });
-    } catch (err) {
-      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
-      next(err);
-    }
-  });
-
-  r.delete('/wallet/whitelist/:id', requireAuth, async (req, res, next) => {
-    try {
-      const result = await withTx(async (tx) => {
-        const { rows } = await tx.query(
-          `UPDATE address_whitelist
-              SET revoked_at=NOW()
-            WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL
-          RETURNING id, asset, network, address, label`,
-          [req.params.id, req.user.sub]
-        );
-        if (!rows[0]) return null;
-        await appendWalletAudit(tx, {
-          userId: req.user.sub,
-          type: 'withdraw_whitelist_remove',
-          asset: rows[0].asset,
-          actor: 'user',
-          reason: rows[0].network,
-          metadata: { address: rows[0].address, label: rows[0].label || null },
-        });
-        return rows[0];
-      });
-      if (!result) return res.status(404).json({ error: 'not_found' });
-      res.json({ ok: true, removed: result.id });
-    } catch (err) { next(err); }
-  });
-
-  r.get('/wallet/overview', requireAuth, async (req, res, next) => {
-    try {
-      await ensureDevWalletSeed(req.user.sub);
-      const [{ rows: balances }, { rows: transfers }] = await Promise.all([
-        query(
-          `SELECT asset, amount, locked, updated_at
-           FROM balances
-           WHERE user_id=$1 AND mode='live'
-           ORDER BY updated_at DESC`,
-          [req.user.sub]
-        ),
-        query(
-          `SELECT id, direction, asset, network, address, tx_hash, amount, fee, status, confirmations, required_confirmations, note, created_at
-           FROM wallet_transfers
-           WHERE user_id=$1
-           ORDER BY created_at DESC
-           LIMIT 10`,
-          [req.user.sub]
-        ),
-      ]);
-
-      const priceMap = {};
-      for (const row of balances) {
-        priceMap[row.asset] = await getAssetUsdPrice(priceAggregator, row.asset);
+      const { json } = await tronPostJson(host, '/wallet/validateaddress', {
+        address: base58,
+        visible: true,
+      }, headers);
+      const hx = String(json?.hexAddress || '').replace(/^0x/i, '');
+      if (/^41[a-fA-F0-9]{40}$/.test(hx)) {
+        return hx.slice(2).toLowerCase().padStart(64, '0');
       }
+    } catch (_) {}
+    return '';
+  }
 
-      const summary = summariseBalances(balances, priceMap);
-      const pendingTransfers = transfers.filter((row) =>
-        row.status === 'pending'
-        || row.status === 'confirming'
-        || row.status === 'review'
-        || row.status === 'awaiting_otp'
-        || row.status === 'awaiting_review'
-        || row.status === 'approved'
-        || row.status === 'queued'
-        || row.status === 'signing'
-        || row.status === 'broadcast'
-      ).length;
+  async function tronTrc20Balance(host, owner, contract, headers = {}) {
+    const parameter = await tronHexPayload(host, owner, headers);
+    if (!parameter) return null;
+    const { json } = await tronPostJson(host, '/wallet/triggerconstantcontract', {
+      owner_address: owner,
+      contract_address: contract,
+      function_selector: 'balanceOf(address)',
+      parameter,
+      visible: true,
+    }, headers);
+    const raw = json?.constant_result?.[0];
+    if (!raw) return null;
+    try { return BigInt('0x' + String(raw).replace(/^0x/i, '')).toString(); }
+    catch (_) { return null; }
+  }
 
-      res.json({
-        summary: {
-          totalUsd: summary.totalUsd,
-          totalUsdLabel: `$${formatMoney(summary.totalUsd)}`,
-          availableUsd: summary.availableUsd,
-          availableUsdLabel: `$${formatMoney(summary.availableUsd)}`,
-          assetCount: summary.assets.length,
-          pendingTransfers,
-          bridgeRoutes: 6,
-          deltaPct: 0,
-          deltaUsd: 0,
-          allocation: summary.allocation,
-        },
-        assets: summary.assets,
-        transfers: transfers.map((row) => ({
-          id: row.id,
-          direction: row.direction,
-          asset: row.asset,
-          network: row.network,
-          address: row.address,
-          txHash: row.tx_hash,
-          amount: toNum(row.amount),
-          amountLabel: formatAssetAmount(row.asset, toNum(row.amount)),
-          status: row.status,
-          confirmations: row.confirmations,
-          requiredConfirmations: row.required_confirmations,
-          note: row.note,
-          createdAt: row.created_at,
-          createdAtLabel: formatHistoryTime(row.created_at),
-        })),
-      });
-    } catch (err) { next(err); }
-  });
-
-  r.post('/wallet/withdrawals', requireAuth, withdrawLimiter, idempotencyMiddleware('wallet_withdrawals'), async (req, res, next) => {
-    try {
-      const input = withdrawSchema.parse(req.body);
-      const idempotencyKey = String(req.headers['idempotency-key'] || '').trim() || null;
-      const routeKey = idempotencyKey ? `withdrawal:create:${idempotencyKey}` : null;
-      const requestHash = idempotencyKey ? sha256(JSON.stringify(input)) : null;
-      const transfer = await withTx(async (tx) => {
-        if (routeKey) {
-          const cached = await ensureIdempotency({
-            tx,
-            userId: req.user.sub,
-            routeKey,
-            requestHash,
-          });
-          if (cached?.response_body) return cached.response_body.transfer;
+  async function tronAccountViaFullNode(address, headers = {}) {
+    const tronCfg = config.signers?.tron || config.tron || {};
+    // Curated Instant Swap / Wallet TRC-20 set — must match frontend GW_TRON_TOKENS.
+    // Older path only queried USDT/USDC, so Wallet page looked empty for SUN/NFT/…
+    const contracts = {
+      USDT: tronCfg.contracts?.USDT || tronCfg.usdtContract || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+      USDC: tronCfg.contracts?.USDC || process.env.USDC_TRON_CONTRACT || 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',
+      USDD: tronCfg.contracts?.USDD || 'TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn',
+      TUSD: tronCfg.contracts?.TUSD || 'TUpMhErZL2fhh4sVNULAbNKLokS4GjC1F4',
+      USDJ: tronCfg.contracts?.USDJ || 'TMwFHYXLJaRUPeW6421aqXL4ZEzPRFGkGT',
+      SUN:  tronCfg.contracts?.SUN  || 'TSSMHYeV2uE9qYH95DqyoCuNCzEL1NvU3S',
+      BTT:  tronCfg.contracts?.BTT  || 'TAFjULxiVgT4qWk6UZwjqwZXTSaGaqnVp4',
+      JST:  tronCfg.contracts?.JST  || 'TCFLL5dx5ZJdKnWuesXxi1VPwjLVmWZZy9',
+      WIN:  tronCfg.contracts?.WIN  || 'TLa2f6VPqDgRE67v1736s7bJ8Ray5wYjU7',
+      NFT:  tronCfg.contracts?.NFT  || 'TFczxzPhnThNSqr5by8tvxsdCFRRz6cPNq',
+      HTX:  tronCfg.contracts?.HTX  || 'TUPM7K8REVzD2UdV4R5fe5M8XbnR2DdoJ6',
+    };
+    let lastErr = '';
+    for (const host of TRON_PUBLIC_HOSTS) {
+      try {
+        const accRes = await tronPostJson(host, '/wallet/getaccount', {
+          address,
+          visible: true,
+        }, headers);
+        if (accRes.json?.Error || accRes.json?.error) {
+          lastErr = String(accRes.json.Error || accRes.json.error);
+          continue;
         }
-        const [balanceRes, whitelistRes] = await Promise.all([
-          tx.query(
-            `SELECT amount, locked
-               FROM balances
-              WHERE user_id=$1 AND asset=$2 AND mode='live'
-              FOR UPDATE`,
-            [req.user.sub, input.asset]
-          ),
-          tx.query(
-            `SELECT id, created_at, revoked_at
-               FROM address_whitelist
-              WHERE user_id=$1 AND network=$2 AND address=$3 AND revoked_at IS NULL
-              LIMIT 1`,
-            [req.user.sub, input.network, input.address]
-          ),
-        ]);
-        const balance = balanceRes.rows[0];
-        if (!balance) {
-          const err = new Error('asset balance not found');
-          err.status = 404;
-          throw err;
+        const acc = accRes.json && (accRes.json.address || accRes.json.balance != null)
+          ? accRes.json
+          : null;
+        if (!acc) {
+          lastErr = 'empty_account';
+          continue;
         }
-        const wl = whitelistRes.rows[0];
-        if (!wl) {
-          const err = new Error('address_not_whitelisted');
-          err.status = 400;
-          throw err;
+        const trc20 = [];
+        // Parallel balanceOf — sequential was too slow and easy to abort mid-list.
+        const entries = Object.entries(contracts).filter(([, c]) => c && /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(c));
+        const bals = await Promise.all(entries.map(async ([, contract]) => {
+          try {
+            const bal = await tronTrc20Balance(host, address, contract, headers);
+            return bal != null && bal !== '0' ? { [contract]: bal } : null;
+          } catch (_) {
+            return null;
+          }
+        }));
+        for (const row of bals) {
+          if (row) trc20.push(row);
         }
-        const amount = toNum(balance.amount);
-        const locked = toNum(balance.locked);
-        const available = Math.max(amount - locked, 0);
-        if (input.amount > available) {
-          const err = new Error('insufficient available balance');
-          err.status = 400;
-          throw err;
-        }
-        const usdPrice = await getAssetUsdPrice(priceAggregator, input.asset);
-        const usdValue = input.amount * usdPrice;
-        const daily = await tx.query(
-          `SELECT COALESCE(SUM(amount * $2), 0) AS total
-             FROM wallet_transfers
-            WHERE user_id=$1
-              AND direction='withdrawal'
-              AND status IN ('approved','queued','signing','broadcast','completed','review','awaiting_review')
-              AND created_at >= NOW() - INTERVAL '24 hours'`,
-          [req.user.sub, usdPrice]
-        );
-        if (toNum(daily.rows[0]?.total) + usdValue > config.wallet.withdrawDailyLimitUsdt) {
-          const err = new Error('daily_withdrawal_limit_exceeded');
-          err.status = 409;
-          throw err;
-        }
-        const whitelistAgeHours = Math.max(0, (Date.now() - new Date(wl.created_at).getTime()) / 36e5);
-        if (whitelistAgeHours < config.wallet.withdrawAddressCooldownHours) {
-          const err = new Error('withdraw_address_cooldown_active');
-          err.status = 409;
-          throw err;
-        }
-        const otp = generateEmailOtp();
-        const otpHash = sha256(`${req.user.sub}:${otp}`);
-        const approvalRequired = usdValue >= config.wallet.withdrawManualApprovalUsdt;
-        const riskFlags = riskFlagsForWithdrawal({ usdValue, whitelistAgeHours });
-        const { rows } = await tx.query(
-          `INSERT INTO wallet_transfers
-             (user_id, direction, asset, network, address, amount, fee, status, confirmations, required_confirmations, note, otp_code_hash, otp_expires_at, approval_required, risk_flags, idempotency_key)
-           VALUES
-             ($1, 'withdrawal', $2, $3, $4, $5, 0, 'awaiting_otp', 0, 1, $6, $7, NOW() + $8::interval, $9, $10::jsonb, $11)
-           RETURNING id, direction, asset, network, address, amount, fee, status, confirmations, required_confirmations, note, created_at, approval_required, risk_flags`,
-          [
-            req.user.sub,
-            input.asset,
-            input.network,
-            input.address,
-            input.amount,
-            approvalRequired ? 'Awaiting OTP, then admin review' : 'Awaiting email OTP confirmation',
-            otpHash,
-            `${config.wallet.withdrawOtpTtlMin} minutes`,
-            approvalRequired,
-            JSON.stringify(riskFlags),
-            idempotencyKey,
-          ]
-        );
-        await tx.query(
-          `INSERT INTO notifications_outbox (user_id, channel, template, payload)
-           VALUES ($1, 'email', 'withdraw_otp', $2::jsonb)`,
-          [req.user.sub, JSON.stringify({
-            asset: input.asset,
-            amount: input.amount,
-            network: input.network,
-            address: input.address,
-            otp,
-            expires_min: config.wallet.withdrawOtpTtlMin,
-          })]
-        );
-        await appendWalletAudit(tx, {
-          userId: req.user.sub,
-          transferId: rows[0].id,
-          type: 'withdrawal_requested',
-          asset: input.asset,
-          amount: input.amount,
-          beforeBalance: amount,
-          afterBalance: amount,
-          actor: 'user',
-          reason: approvalRequired ? 'awaiting_otp_and_admin_review' : 'awaiting_otp',
-          metadata: { network: input.network, address: input.address, usd_value: usdValue, risk_flags: riskFlags },
-        });
-        const payload = {
-          transfer: {
-            ...rows[0],
-            amount: toNum(rows[0].amount),
-            amountLabel: formatAssetAmount(rows[0].asset, toNum(rows[0].amount)),
-            createdAtLabel: formatHistoryTime(rows[0].created_at),
-          },
+        return {
+          data: [{
+            address,
+            balance: Number(acc.balance || 0),
+            trc20,
+            create_time: acc.create_time,
+            latest_opration_time: acc.latest_opration_time,
+          }],
+          success: true,
+          meta: { source: host.replace(/^https?:\/\//, ''), mode: 'fullnode' },
         };
-        if (routeKey) {
-          await saveIdempotencyResponse({
-            tx,
-            userId: req.user.sub,
-            routeKey,
-            responseCode: 201,
-            responseBody: payload,
+      } catch (e) {
+        lastErr = String(e?.message || e);
+      }
+    }
+    throw new Error(lastErr || 'tron_fullnode_failed');
+  }
+
+  r.get('/wallet/tron-account', async (req, res) => {
+    try {
+      const address = String(req.query.address || '').trim();
+      if (!/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address)) {
+        return res.status(400).json({ error: 'invalid_tron_address' });
+      }
+
+      const cached = tronAccountCache.get(address);
+      if (cached && (Date.now() - cached.at) < TRON_ACCOUNT_TTL_MS) {
+        return res.json(cached.body);
+      }
+
+      const tronCfg = config.signers?.tron || config.tron || {};
+      const host = tronCfg.fullHost || process.env.TRON_FULL_HOST || 'https://api.trongrid.io';
+      const key = tronCfg.apiKey
+        || process.env.TRON_API_KEY
+        || process.env.TRONGRID_API_KEY
+        || '';
+      const headers = { accept: 'application/json' };
+      if (key) headers['TRON-PRO-API-KEY'] = key;
+
+      let body = null;
+      let rateLimited = false;
+
+      try {
+        const url = `${String(host).replace(/\/$/, '')}/v1/accounts/${encodeURIComponent(address)}`;
+        const upstream = await fetch(url, { headers, signal: AbortSignal.timeout(12000) });
+        const text = await upstream.text();
+        let parsed;
+        try { parsed = JSON.parse(text); } catch (_) { parsed = { raw: text }; }
+        if (parsed && typeof parsed === 'object' && (parsed.Error || parsed.error) && !parsed.data) {
+          const msg = String(parsed.Error || parsed.error || '');
+          rateLimited = /rate|exceeded|quota|suspended/i.test(msg);
+        } else if (upstream.ok && Array.isArray(parsed?.data)) {
+          body = parsed;
+        } else if (!upstream.ok) {
+          rateLimited = upstream.status === 429;
+        }
+      } catch (_) {
+        /* fall through to fullnode */
+      }
+
+      if (!body) {
+        try {
+          body = await tronAccountViaFullNode(address, key ? { 'TRON-PRO-API-KEY': key } : {});
+        } catch (e) {
+          return res.status(rateLimited ? 429 : 502).json({
+            error: 'tron_upstream',
+            message: String(e?.message || e),
+            authenticated: !!key,
           });
         }
-        return payload.transfer;
-      });
+      }
 
-      wsBroadcaster?.broadcast(`balances.user.${req.user.sub}`, {
-        event: 'withdrawal_requested',
-        transfer,
-      });
-      res.status(201).json({ transfer });
+      // Never cache empty TRC-20 fullnode payloads — they used to stick for 45s
+      // and made Wallet look broke after a TronGrid blip (SUN/USDT → $0).
+      const trc20n = Array.isArray(body?.data?.[0]?.trc20) ? body.data[0].trc20.length : 0;
+      const isSparseFullnode = body?.meta?.mode === 'fullnode' && trc20n === 0;
+      if (!isSparseFullnode) {
+        tronAccountCache.set(address, { at: Date.now(), body });
+        if (tronAccountCache.size > 500) {
+          const oldest = tronAccountCache.keys().next().value;
+          tronAccountCache.delete(oldest);
+        }
+      }
+      res.json(body);
     } catch (err) {
-      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
-      if (err.status) return res.status(err.status).json({ error: err.message });
-      next(err);
+      res.status(502).json({ error: 'tron_upstream', message: String(err?.message || err) });
     }
   });
 
-  r.post('/wallet/withdrawals/:id/confirm-otp', requireAuth, withdrawLimiter, idempotencyMiddleware('wallet_withdrawal_confirm_otp'), async (req, res, next) => {
+  /**
+   * Jupiter quote/swap proxy — browser hits lite-api.jup.ag 429 often.
+   * Same-chain Solana Instant Swap only. Tight param allow-list.
+   * RR5-03: per-mint feeAccount map; no Ultra no-fee fallback.
+   */
+  const jupQuoteCache = new Map();
+  const jupLastGood = new Map();
+  const JUP_QUOTE_TTL_MS = 20000;
+  const JUP_STALE_MS = 120000;
+  const JUP_BASES = ['https://lite-api.jup.ag/swap/v1', 'https://api.jup.ag/swap/v1'];
+
+  async function jupUpstream(pathWithQuery, init = {}) {
+    let lastErr = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      for (const base of JUP_BASES) {
+        try {
+          const upstream = await fetch(base + pathWithQuery, {
+            ...init,
+            headers: { accept: 'application/json', ...(init.headers || {}) },
+            signal: AbortSignal.timeout(14000),
+          });
+          const text = await upstream.text();
+          if (upstream.status === 429) {
+            lastErr = Object.assign(new Error('jupiter_429'), { status: 429 });
+            continue;
+          }
+          if (!upstream.ok) {
+            lastErr = Object.assign(new Error('jupiter_' + upstream.status), { status: 502 });
+            continue;
+          }
+          return JSON.parse(text);
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      if (lastErr?.status === 429 && attempt < 2) {
+        await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+      } else {
+        break;
+      }
+    }
+    throw lastErr || new Error('jupiter_upstream');
+  }
+
+  function jupFeeBps() {
+    return jupFeeBpsFromConfig(config);
+  }
+
+  function jupMode() {
+    return jupFeeModeFromConfig(config);
+  }
+
+  function assertJupiterAvailableOrThrow() {
+    if (!jupiterEnabled(config)) {
+      throw Object.assign(new Error('fee_config_unavailable'), {
+        status: 503,
+        code: 'fee_config_unavailable',
+      });
+    }
+  }
+
+  function assertQuotePlatformFeeOrThrow(quote) {
+    if (jupMode() !== 'fee') return;
+    const check = assertJupPlatformFee(quote, jupFeeBps());
+    if (!check.ok) {
+      throw Object.assign(new Error('jupiter_platform_fee_missing'), {
+        status: 502,
+        code: check.reason || 'jupiter_platform_fee_missing',
+      });
+    }
+  }
+
+  function assertSwapQuoteContext(quote, expected = {}) {
+    if (!quote || typeof quote !== 'object') {
+      throw Object.assign(new Error('invalid_jup_swap'), { status: 400, code: 'invalid_jup_swap' });
+    }
+    if (expected.inputMint && String(quote.inputMint) !== String(expected.inputMint)) {
+      throw Object.assign(new Error('jup_quote_context_mismatch'), { status: 409, code: 'jup_quote_context_mismatch' });
+    }
+    if (expected.outputMint && String(quote.outputMint) !== String(expected.outputMint)) {
+      throw Object.assign(new Error('jup_quote_context_mismatch'), { status: 409, code: 'jup_quote_context_mismatch' });
+    }
+    if (expected.inAmount != null && String(quote.inAmount) !== String(expected.inAmount)) {
+      throw Object.assign(new Error('jup_quote_context_mismatch'), { status: 409, code: 'jup_quote_context_mismatch' });
+    }
+    if (expected.slippageBps != null && Number(quote.slippageBps) !== Number(expected.slippageBps)) {
+      throw Object.assign(new Error('jup_quote_context_mismatch'), { status: 409, code: 'jup_quote_context_mismatch' });
+    }
+    if (!Array.isArray(quote.routePlan)) {
+      throw Object.assign(new Error('jup_quote_context_mismatch'), { status: 409, code: 'jup_quote_missing_route' });
+    }
+    assertQuotePlatformFeeOrThrow(quote);
+  }
+
+  async function requireJupFee(inputMint, outputMint) {
+    const selected = await resolveJupFeeAccount(config, inputMint, outputMint);
+    if (!selected) {
+      throw Object.assign(new Error('fee_config_unavailable'), {
+        status: 503,
+        code: 'fee_config_unavailable',
+      });
+    }
+    return selected;
+  }
+
+  r.get('/wallet/jup-quote', async (req, res) => {
     try {
-      const input = withdrawConfirmSchema.parse(req.body || {});
-      const transfer = await withTx(async (tx) => {
-        const { rows } = await tx.query(
-          `SELECT *
-             FROM wallet_transfers
-            WHERE id=$1 AND user_id=$2 AND direction='withdrawal'
-            FOR UPDATE`,
-          [req.params.id, req.user.sub]
-        );
-        const current = rows[0];
-        if (!current) {
-          const err = new Error('transfer_not_found');
-          err.status = 404;
-          throw err;
-        }
-        if (current.status !== 'awaiting_otp') {
-          const err = new Error('withdrawal_not_awaiting_otp');
-          err.status = 409;
-          throw err;
-        }
-        if (current.otp_expires_at && new Date(current.otp_expires_at).getTime() < Date.now()) {
-          const err = new Error('otp_expired');
-          err.status = 410;
-          throw err;
-        }
-        const otpHash = sha256(`${req.user.sub}:${input.otp}`);
-        if (otpHash !== current.otp_code_hash) {
-          const err = new Error('invalid_otp');
-          err.status = 400;
-          throw err;
-        }
-        const twoFa = await tx.query(
-          `SELECT secret_base32, enabled, last_used_step
-             FROM two_fa_secrets
-            WHERE user_id=$1`,
-          [req.user.sub]
-        );
-        const tf = twoFa.rows[0];
-        if (tf?.enabled) {
-          if (!input.totpToken) {
-            const err = new Error('totp_required');
-            err.status = 400;
-            throw err;
-          }
-          const result = verifyTotp(tf.secret_base32, input.totpToken);
-          if (!result.ok) {
-            const err = new Error('invalid_totp');
-            err.status = 400;
-            throw err;
-          }
-          if (tf.last_used_step != null && Number(tf.last_used_step) === Number(result.step)) {
-            const err = new Error('totp_replay');
-            err.status = 409;
-            throw err;
-          }
-          await tx.query(
-            `UPDATE two_fa_secrets SET last_used_step=$2, updated_at=NOW() WHERE user_id=$1`,
-            [req.user.sub, result.step]
-          );
-        }
-        const balanceRes = await tx.query(
-          `SELECT amount, locked
-             FROM balances
-            WHERE user_id=$1 AND asset=$2 AND mode='live'
-            FOR UPDATE`,
-          [req.user.sub, current.asset]
-        );
-        const balance = balanceRes.rows[0];
-        if (!balance) {
-          const err = new Error('asset balance not found');
-          err.status = 404;
-          throw err;
-        }
-        const beforeAmount = toNum(balance.amount);
-        const available = Math.max(beforeAmount - toNum(balance.locked), 0);
-        if (toNum(current.amount) > available) {
-          const err = new Error('insufficient_available_balance');
-          err.status = 409;
-          throw err;
-        }
-        await tx.query(
-          `UPDATE balances
-              SET amount = amount - $3, updated_at = NOW()
-            WHERE user_id=$1 AND asset=$2 AND mode='live'`,
-          [req.user.sub, current.asset, current.amount]
-        );
-        const nextStatus = current.approval_required ? 'awaiting_review' : 'queued';
-        const updated = await tx.query(
-          `UPDATE wallet_transfers
-              SET status=$2,
-                  otp_confirmed_at=NOW(),
-                  note=$3,
-                  updated_at=NOW()
-            WHERE id=$1
-          RETURNING id, direction, asset, network, address, amount, fee, status, confirmations, required_confirmations, note, created_at, approval_required, risk_flags`,
-          [
-            current.id,
-            nextStatus,
-            current.approval_required ? 'Flagged for admin review' : 'Queued for signer broadcast',
-          ]
-        );
-        if (!current.approval_required) {
-          await tx.query(
-            `INSERT INTO withdrawal_queue (transfer_id, user_id, asset, network, address, amount, idempotency_key, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued')
-             ON CONFLICT (transfer_id) DO NOTHING`,
-            [current.id, req.user.sub, current.asset, current.network, current.address, current.amount, current.idempotency_key || null]
-          );
-        }
-        await appendWalletAudit(tx, {
-          userId: req.user.sub,
-          transferId: current.id,
-          type: 'withdrawal_otp_confirmed',
-          asset: current.asset,
-          amount: current.amount,
-          beforeBalance: beforeAmount,
-          afterBalance: beforeAmount - toNum(current.amount),
-          actor: 'user',
-          reason: current.approval_required ? 'review_required' : 'queued_for_signer',
-          metadata: { network: current.network, address: current.address },
+      const inputMint = String(req.query.inputMint || '');
+      const outputMint = String(req.query.outputMint || '');
+      const amount = String(req.query.amount || '');
+      const slippageBps = String(req.query.slippageBps || '50');
+      if (!JUP_MINT_RE.test(inputMint) || !JUP_MINT_RE.test(outputMint) || !/^\d{1,24}$/.test(amount)) {
+        return res.status(400).json({ error: 'invalid_jup_quote' });
+      }
+      if (!/^\d{1,4}$/.test(slippageBps) || Number(slippageBps) > 5000) {
+        return res.status(400).json({ error: 'invalid_jup_slippage' });
+      }
+      try {
+        assertJupiterAvailableOrThrow();
+      } catch (_) {
+        return res.status(503).json({
+          error: 'fee_config_unavailable',
+          message: 'Jupiter Instant Swap unavailable — set GROM_JUP_FEE_MODE=free|fee (and fee infra when fee)',
         });
-        return updated.rows[0];
+      }
+      const mode = jupMode();
+      let feePick = null;
+      if (mode === 'fee') {
+        try {
+          feePick = await requireJupFee(inputMint, outputMint);
+        } catch (_) {
+          return res.status(503).json({
+            error: 'fee_config_unavailable',
+            message: 'Jupiter Instant Swap unavailable — no GROM fee token account for this mint pair',
+          });
+        }
+      }
+      const qs = new URLSearchParams({
+        inputMint, outputMint, amount, slippageBps,
+        swapMode: 'ExactIn',
+        onlyDirectRoutes: 'false',
+        asLegacyTransaction: 'false',
       });
+      if (mode === 'fee') {
+        qs.set('platformFeeBps', String(jupFeeBps()));
+      }
+      const cacheKey = qs.toString() + (feePick ? `|fee:${feePick.feeAccount}` : '|free');
+      const hit = jupQuoteCache.get(cacheKey);
+      if (hit && (Date.now() - hit.at) < JUP_QUOTE_TTL_MS) {
+        return res.json(hit.body);
+      }
+      try {
+        const upstream = await jupUpstream('/quote?' + qs.toString());
+        assertQuotePlatformFeeOrThrow(upstream);
+        /* RR6-04: keep full QuoteResponse (incl. platformFee); only attach GROM meta. */
+        const meta = {
+          _gromFeeBps: jupFeeBps(),
+          _gromFeeMode: mode,
+        };
+        if (feePick) {
+          meta._gromFeeAccount = feePick.feeAccount;
+          meta._gromFeeMint = feePick.matchedMint;
+        }
+        const body = attachJupQuoteMeta(upstream, meta);
+        jupQuoteCache.set(cacheKey, { at: Date.now(), body });
+        jupLastGood.set(cacheKey, { at: Date.now(), body });
+        if (jupQuoteCache.size > 400) {
+          const oldest = jupQuoteCache.keys().next().value;
+          jupQuoteCache.delete(oldest);
+        }
+        return res.json(body);
+      } catch (err) {
+        /* No Ultra fallback — fail closed rather than return a no-fee quote in fee mode. */
+        if (err?.code === 'missing_platformFee'
+          || err?.code === 'jupiter_platform_fee_missing'
+          || err?.code === 'platformFee_bps_mismatch'
+          || err?.code === 'platformFee_amount_invalid'
+          || (err?.code && String(err.code).startsWith('platformFee'))) {
+          return res.status(502).json({
+            error: 'jupiter_platform_fee_missing',
+            message: 'Jupiter quote missing verified platformFee',
+            reason: err.code,
+          });
+        }
+        const stale = jupLastGood.get(cacheKey);
+        if (stale && (Date.now() - stale.at) < JUP_STALE_MS) {
+          return res.json(stale.body);
+        }
+        throw err;
+      }
+    } catch (err) {
+      if (err?.code === 'fee_config_unavailable' || err?.status === 503) {
+        return res.status(503).json({
+          error: 'fee_config_unavailable',
+          message: 'Jupiter Instant Swap unavailable — no GROM fee token account for this mint pair',
+        });
+      }
+      if (err?.code === 'jupiter_platform_fee_missing' || err?.status === 502 && String(err.message || '').includes('platform')) {
+        return res.status(502).json({
+          error: 'jupiter_platform_fee_missing',
+          message: 'Jupiter quote missing verified platformFee',
+        });
+      }
+      res.status(err?.status === 429 ? 429 : 502).json({
+        error: 'jupiter_upstream',
+        message: String(err?.message || err),
+      });
+    }
+  });
+
+  r.post('/wallet/jup-swap', async (req, res) => {
+    try {
+      const quoteResponse = req.body?.quoteResponse;
+      const userPublicKey = String(req.body?.userPublicKey || '');
+      if (!quoteResponse || typeof quoteResponse !== 'object' || !JUP_MINT_RE.test(userPublicKey)) {
+        return res.status(400).json({ error: 'invalid_jup_swap' });
+      }
+      try {
+        assertJupiterAvailableOrThrow();
+      } catch (_) {
+        return res.status(503).json({
+          error: 'fee_config_unavailable',
+          message: 'Jupiter Instant Swap unavailable — set GROM_JUP_FEE_MODE=free|fee (and fee infra when fee)',
+        });
+      }
+      const mode = jupMode();
+      const inMint = String(quoteResponse.inputMint || '');
+      const outMint = String(quoteResponse.outputMint || '');
+      let feePick = null;
+      if (mode === 'fee') {
+        try {
+          feePick = await requireJupFee(inMint, outMint);
+        } catch (_) {
+          return res.status(503).json({
+            error: 'fee_config_unavailable',
+            message: 'Jupiter Instant Swap unavailable — no GROM fee token account for this mint pair',
+          });
+        }
+      }
+      try {
+        assertSwapQuoteContext(quoteResponse, {
+          inputMint: inMint,
+          outputMint: outMint,
+          inAmount: quoteResponse.inAmount,
+          slippageBps: quoteResponse.slippageBps,
+        });
+      } catch (ctxErr) {
+        return res.status(ctxErr.status || 409).json({
+          error: ctxErr.code || 'jup_quote_context_mismatch',
+          message: String(ctxErr.message || ctxErr),
+        });
+      }
+      /* Strip GROM-only meta before forwarding to Jupiter /swap */
+      const {
+        _gromFeeAccount,
+        _gromFeeMint,
+        _gromFeeBps,
+        _gromFeeMode,
+        ...cleanQuote
+      } = quoteResponse;
+      void _gromFeeAccount; void _gromFeeMint; void _gromFeeBps; void _gromFeeMode;
       const payload = {
-        transfer: {
-          ...transfer,
-          amount: toNum(transfer.amount),
-          amountLabel: formatAssetAmount(transfer.asset, toNum(transfer.amount)),
-          createdAtLabel: formatHistoryTime(transfer.created_at),
-        },
+        quoteResponse: cleanQuote,
+        userPublicKey,
+        wrapAndUnwrapSol: true,
+        dynamicComputeUnitLimit: true,
+        prioritizationFeeLamports: 'auto',
       };
-      wsBroadcaster?.broadcast(`balances.user.${req.user.sub}`, {
-        event: 'withdrawal_otp_confirmed',
-        transfer: payload.transfer,
+      if (feePick) {
+        payload.feeAccount = feePick.feeAccount;
+      }
+      const body = await jupUpstream('/swap', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-      res.json(payload);
+      if (!body?.swapTransaction) {
+        return res.status(502).json({ error: 'jupiter_no_tx' });
+      }
+      const out = {
+        swapTransaction: body.swapTransaction,
+        lastValidBlockHeight: body.lastValidBlockHeight,
+        _gromFeeBps: jupFeeBps(),
+        _gromFeeMode: mode,
+      };
+      if (feePick) {
+        out._gromFeeAccount = feePick.feeAccount;
+        out._gromFeeMint = feePick.matchedMint;
+      }
+      res.json(out);
     } catch (err) {
-      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
-      if (err.status) return res.status(err.status).json({ error: err.message });
-      next(err);
+      if (err?.code === 'fee_config_unavailable' || err?.status === 503) {
+        return res.status(503).json({
+          error: 'fee_config_unavailable',
+          message: 'Jupiter Instant Swap unavailable — no GROM fee token account for this mint pair',
+        });
+      }
+      res.status(err?.status === 429 ? 429 : 502).json({
+        error: 'jupiter_upstream',
+        message: String(err?.message || err),
+      });
     }
   });
 
-  r.post('/wallet/deposits/confirmations', requireAuth, async (req, res, next) => {
+  /**
+   * Wallet-first Instant Swap history (no SIWE). Public, rate-limited, address-scoped.
+   * GET /api/history/onchain?wallet=0x…&limit=50
+   */
+  r.get('/history/onchain', async (req, res, next) => {
     try {
-      const input = depositConfirmationSchema.parse(req.body);
-      const { rows } = await query(
-        `INSERT INTO wallet_transfers
-           (user_id, direction, asset, network, address, amount, fee, status, confirmations, required_confirmations, note)
-         VALUES
-           ($1, 'deposit', $2, $3, $4, $5, 0, 'confirming', 0, 1, 'Awaiting on-chain confirmations')
-         RETURNING id, direction, asset, network, address, amount, status, confirmations, required_confirmations, note, created_at`,
-        [req.user.sub, input.asset, input.network, input.address, input.amount]
+      const wallet = String(req.query.wallet || '').trim().toLowerCase();
+      if (!/^0x[a-f0-9]{40}$/.test(wallet)) {
+        return res.status(400).json({ error: 'invalid_wallet' });
+      }
+      const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
+      const swapActRes = await query(
+        `SELECT product, action, detail, tx_hash, amount, asset, status, created_at, wallet_address
+         FROM user_activity
+         WHERE lower(wallet_address)=$1
+           AND product IN ('swap', 'spot', 'futures')
+           AND (
+             tx_hash IS NOT NULL
+             OR status IN ('filled', 'completed', 'bridging', 'submitted', 'source_confirmed')
+             OR action IN ('swap', 'bridge', 'filled', 'completed', 'spot_buy', 'spot_sell', 'order')
+           )
+           AND NOT (coalesce(status,'') = 'error' AND coalesce(action,'') ILIKE '%fail%')
+         ORDER BY created_at DESC
+         LIMIT $2`,
+        [wallet, limit]
       );
-      wsBroadcaster?.broadcast(`balances.user.${req.user.sub}`, {
-        event: 'deposit_confirmation_created',
-        transfer: rows[0],
+      const items = buildHistoryItems({
+        transfers: [],
+        spotOrders: [],
+        swapActivity: swapActRes.rows,
       });
-      res.status(201).json({ transfer: rows[0] });
-    } catch (err) {
-      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
-      next(err);
-    }
-  });
-
-  r.post('/wallet/onramp/confirmations', requireAuth, async (req, res, next) => {
-    try {
-      const input = onrampConfirmationSchema.parse(req.body);
-      const extRef = crypto.randomUUID();
-      const { rows } = await query(
-        `INSERT INTO wallet_transfers
-           (user_id, direction, asset, network, address, amount, fee, status, confirmations, required_confirmations, note, provider, external_ref)
-         VALUES
-           ($1, 'deposit', $2, $3, 'embedded-wallet', $4, 0, 'confirming', 0, 1, $5, $6, $7)
-         RETURNING id, direction, asset, network, address, amount, status, confirmations, required_confirmations, note, provider, external_ref, created_at`,
-        [
-          req.user.sub,
-          input.asset,
-          `${input.provider} on-ramp`,
-          input.receiveAmount,
-          `${input.fiatAmount} ${input.fiatCurrency} purchase initiated`,
-          input.provider,
-          extRef,
-        ]
-      );
-      res.status(201).json({ transfer: rows[0] });
-    } catch (err) {
-      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
-      next(err);
-    }
-  });
-
-  r.post('/webhooks/wallet-settlement', async (req, res, next) => {
-    try {
-      const sig = req.headers['x-grom-signature'];
-      if (!verifyWebhookSignature(config.webhooks.secret, req.rawBody, sig)) {
-        return res.status(401).json({ error: 'bad signature' });
-      }
-      const input = settlementWebhookSchema.parse(req.body);
-      const transfer = await withTx(async (tx) => {
-        const replayed = await ensureWebhookNotReplayed(tx, input.provider || 'generic', input, req.body || {});
-        if (replayed) return { replayed: true };
-        return applySettlementUpdate(tx, input, req.body || {});
-      });
-      if (transfer?.replayed) return res.json({ ok: true, replayed: true });
-      res.json({ transfer });
-    } catch (err) {
-      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
-      if (err.status) return res.status(err.status).json({ error: err.message });
-      next(err);
-    }
-  });
-
-  r.post('/webhooks/moonpay', async (req, res, next) => {
-    try {
-      const sig = req.headers['x-moonpay-signature'] || req.headers['x-signature'];
-      if (!verifyWebhookSignature(config.webhooks.moonpaySecret, req.rawBody, sig)) {
-        return res.status(401).json({ error: 'bad signature' });
-      }
-      const input = settlementWebhookSchema.parse({
-        transferId: req.body?.transferId,
-        externalRef: req.body?.externalRef || req.body?.externalTransactionId || req.body?.id,
-        status: req.body?.status,
-        txHash: req.body?.txHash || req.body?.cryptoTransactionId,
-        confirmations: req.body?.confirmations,
-        requiredConfirmations: req.body?.requiredConfirmations,
-        note: req.body?.note,
-        provider: 'moonpay',
-      });
-      const transfer = await withTx(async (tx) => {
-        const replayed = await ensureWebhookNotReplayed(tx, 'moonpay', input, req.body || {});
-        if (replayed) return { replayed: true };
-        return applySettlementUpdate(tx, input, req.body || {});
-      });
-      if (transfer?.replayed) return res.json({ ok: true, replayed: true });
-      res.json({ ok: true, transfer });
-    } catch (err) {
-      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
-      if (err.status) return res.status(err.status).json({ error: err.message });
-      next(err);
-    }
-  });
-
-  r.post('/webhooks/transak', async (req, res, next) => {
-    try {
-      const sig = req.headers['x-transak-signature'] || req.headers['x-signature'];
-      if (!verifyWebhookSignature(config.webhooks.transakSecret, req.rawBody, sig)) {
-        return res.status(401).json({ error: 'bad signature' });
-      }
-      const input = settlementWebhookSchema.parse({
-        transferId: req.body?.transferId,
-        externalRef: req.body?.externalRef || req.body?.widgetOrderId || req.body?.id,
-        status: req.body?.status,
-        txHash: req.body?.txHash || req.body?.transactionHash,
-        confirmations: req.body?.confirmations,
-        requiredConfirmations: req.body?.requiredConfirmations,
-        note: req.body?.note,
-        provider: 'transak',
-      });
-      const transfer = await withTx(async (tx) => {
-        const replayed = await ensureWebhookNotReplayed(tx, 'transak', input, req.body || {});
-        if (replayed) return { replayed: true };
-        return applySettlementUpdate(tx, input, req.body || {});
-      });
-      if (transfer?.replayed) return res.json({ ok: true, replayed: true });
-      res.json({ ok: true, transfer });
-    } catch (err) {
-      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
-      if (err.status) return res.status(err.status).json({ error: err.message });
-      next(err);
-    }
+      res.json({ items, wallet });
+    } catch (err) { next(err); }
   });
 
   r.get('/history', requireAuth, async (req, res, next) => {
     try {
-      await ensureDevWalletSeed(req.user.sub);
       const limit = Math.min(parseInt(req.query.limit || '100', 10), 250);
-      const [transfersRes, binaryRes, spotRes] = await Promise.all([
-        query(
-          `SELECT direction, asset, address, amount, status, created_at
-           FROM wallet_transfers
-           WHERE user_id=$1
-           ORDER BY created_at DESC
-           LIMIT $2`,
-          [req.user.sub, limit]
-        ),
-        query(
-          `SELECT p.direction, p.stake, p.payout, p.placed_at, r.asset, r.duration_sec
-           FROM bo_positions p
-           JOIN bo_rounds r ON r.id = p.round_id
-           WHERE p.user_id=$1
-           ORDER BY p.placed_at DESC
-           LIMIT $2`,
-          [req.user.sub, limit]
-        ),
-        query(
-          `SELECT pair, side, price, amount, filled, status, created_at
-           FROM spot_orders
-           WHERE user_id=$1
-           ORDER BY created_at DESC
-           LIMIT $2`,
-          [req.user.sub, limit]
-        ),
-      ]);
-
+      const wallet = (req.user.addr || '').toLowerCase() || null;
+      /* Strict: only this SIWE wallet's activity — never leak another address via user_id alone. */
+      const swapActRes = await query(
+        `SELECT product, action, detail, tx_hash, amount, asset, status, created_at, wallet_address
+           FROM user_activity
+          WHERE product IN ('swap', 'spot', 'futures')
+            AND (
+              ($3::text IS NOT NULL AND lower(wallet_address)=$3)
+              OR ($3::text IS NULL AND user_id=$1)
+            )
+          ORDER BY created_at DESC
+          LIMIT $2`,
+        [req.user.sub, limit, wallet]
+      );
       const items = buildHistoryItems({
-        transfers: transfersRes.rows,
-        binaryPositions: binaryRes.rows,
-        spotOrders: spotRes.rows,
+        transfers: [],
+        spotOrders: [],
+        swapActivity: swapActRes.rows,
       }).slice(0, limit);
-
       res.json({ items });
     } catch (err) { next(err); }
   });

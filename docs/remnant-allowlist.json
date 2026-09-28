@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "date": "2026-09-21",
+  "allowedSubstrings": [
+    { "pattern": "binancecoin", "reason": "CoinGecko id for BNB" },
+    { "pattern": "bscscan", "reason": "BSC explorer" },
+    { "pattern": "connectCoinbase|Coinbase Wallet", "reason": "WC self-custody connector" },
+    { "pattern": "connectBinanceWeb3|Binance Web3", "reason": "WC self-custody connector" },
+    { "pattern": "non-custodial|non_custodial", "reason": "product copy" },
+    { "pattern": "028_decommission|029_remove_custodial", "reason": "historical migrations" }
+  ],
+  "forbiddenRuntime": [
+    "GROM_KRAKEN_API_KEY",
+    "GROM_COINBASE_API_KEY",
+    "GROM_BINANCE_API_KEY",
+    "HOT_WALLET_EVM_KEY",
+    "/api/wallet/withdrawals",
+    "/auth/email-login",
+    "/auth/2fa/",
+    "__removed_withdrawals",
+    "GROM_FIAT_PROVIDERS",
+    "start2faSetup",
+    "dexNonCustodial"
+  ]
+}

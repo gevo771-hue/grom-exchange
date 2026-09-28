@@ -5,11 +5,18 @@ on:
     branches: [main, develop]
     paths:
       - 'backend/**'
+      - 'frontend/**'
+      - 'scripts/assert-frontend-clean.mjs'
+      - 'scripts/build-frontend.mjs'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'frontend/**'
+      - 'scripts/assert-frontend-clean.mjs'
+      - 'scripts/build-frontend.mjs'
+      - '.github/workflows/ci.yml'
 
 env:
   REGISTRY: ghcr.io
@@ -67,22 +74,37 @@ jobs:
         run: |
           find src -name "*.js" -print0 | xargs -0 -n1 node --check
 
-      - name: Run database migrations
+      - name: Frontend JS syntax + clean gate
+        working-directory: .
+        run: |
+          node scripts/assert-frontend-clean.mjs
+
+      - name: Run database migrations (full chain)
         env:
           PGPASSWORD: grom_ci_password
+          GROM_DB_HOST: localhost
+          GROM_DB_PORT: '54320'
+          GROM_DB_NAME: grom_test
+          GROM_DB_USER: grom
+          GROM_DB_PASSWORD: grom_ci_password
+          DATABASE_URL: postgres://grom:grom_ci_password@localhost:54320/grom_test
         run: |
-          psql -h localhost -p 54320 -U grom -d grom_test -f src/db/migrations/001_init.sql
+          node src/db/migrate.js
 
       - name: Unit tests
         env:
           GROM_DB_URL: postgres://grom:grom_ci_password@localhost:54320/grom_test
+          DATABASE_URL: postgres://grom:grom_ci_password@localhost:54320/grom_test
           GROM_REDIS_URL: redis://localhost:63790
           GROM_JWT_SECRET: ci_test_secret_minimum_32_characters_long_xx
+          GROM_REQUIRE_PG: '1'
           NODE_ENV: test
         run: npm test --if-present
 
       - name: Dependency audit
-        run: npm audit --audit-level=high --production || true
+        run: |
+          npm audit --audit-level=high --omit=dev
+          # Moderate qs tracked separately; high must fail the job.
 
   security-scan:
     name: Security scan
@@ -90,32 +112,13 @@ jobs:
     needs: lint-and-test
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Secrets scan (first push)
-        if: github.event_name == 'push' && github.event.before == '0000000000000000000000000000000000000000'
+      - name: Secrets scan (trufflehog)
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          extra_args: --only-verified
-
-      - name: Secrets scan (push diff)
-        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.before }}
-          head: ${{ github.sha }}
-          extra_args: --only-verified
-
-      - name: Secrets scan (pull request)
-        if: github.event_name == 'pull_request'
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.pull_request.base.sha }}
-          head: ${{ github.event.pull_request.head.sha }}
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
           extra_args: --only-verified
 
       - name: Dependency review
@@ -136,9 +139,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -155,7 +155,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,prefix=sha-,format=long
+            type=sha,prefix=sha-
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}

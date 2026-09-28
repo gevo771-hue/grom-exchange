@@ -9,8 +9,9 @@
  * JWT payload: { sub: userId, addr, chain, iat, exp }
  * JWT lifetime: config.auth.jwtTtl (seconds)
  */
+import { getAddress } from 'ethers';
 import express from 'express';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { SiweMessage } from 'siwe';
@@ -19,14 +20,31 @@ import { query } from '../db/pool.js';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import { attachReferralCode } from '../referral/invite.js';
-import { buildOtpAuthUrl, randomBase32, verifyTotp } from '../utils/totp.js';
-import { ensureWelcomeWalletSeed } from './welcome-seed.js';
+import { logUserActivity } from '../activity/log.js';
 
 const NONCE_TTL_MS = 5 * 60 * 1000;
 
-function emailWalletAddress(email) {
-  const hash = createHash('sha256').update(`grom-email:${email}`).digest('hex');
-  return `email:${hash.slice(0, 40)}`;
+/** SIWE requires EIP-55 checksum in the message body. */
+function siweFmtAddress(raw) {
+  return getAddress(String(raw).toLowerCase());
+}
+
+function buildSiweMessage({ address, domain, statement, uri, chainId, nonce, issuedAt }) {
+  const dom = String(domain || 'grom.exchange').replace(/^https?:\/\//, '').replace(/^www\./i, '');
+  const addr = siweFmtAddress(address);
+  const stmt = statement || 'Sign in to GROM Exchange';
+  const u = uri || `https://${dom}`;
+  const iat = issuedAt || new Date().toISOString();
+  return `${dom} wants you to sign in with your Ethereum account:
+${addr}
+
+${stmt}
+
+URI: ${u}
+Version: 1
+Chain ID: ${chainId}
+Nonce: ${nonce}
+Issued At: ${iat}`;
 }
 
 async function ensureUserSettingsRow(userId) {
@@ -37,33 +55,112 @@ async function ensureUserSettingsRow(userId) {
   );
 }
 
+/** Shared SIWE verify → JWT. Returns { token, user } or { error, status, extra }. */
+async function completeSiweLogin({ message, signature, referralCode, req, method }) {
+  let result;
+  try {
+    const siwe = new SiweMessage(message);
+    const domain = config.wallet.siweDomain;
+    result = await siwe.verify({
+      signature,
+      domain,
+      nonce: siwe.nonce,
+    });
+    if (domain && siwe.domain && String(siwe.domain).toLowerCase() !== String(domain).toLowerCase()) {
+      return { error: 'siwe_domain_mismatch', status: 401 };
+    }
+    const allowedOrigins = [
+      `https://${domain}`,
+      `http://${domain}`,
+      ...(config.cors?.origin ? [String(config.cors.origin)] : []),
+    ].map((u) => u.replace(/\/$/, '').toLowerCase());
+    if (siwe.uri) {
+      try {
+        const uriHost = new URL(siwe.uri).host.toLowerCase();
+        const okUri = allowedOrigins.some((o) => {
+          try { return new URL(o).host.toLowerCase() === uriHost; } catch { return false; }
+        }) || uriHost === String(domain).toLowerCase();
+        if (!okUri) return { error: 'siwe_uri_mismatch', status: 401 };
+      } catch {
+        return { error: 'siwe_uri_mismatch', status: 401 };
+      }
+    }
+  } catch (err) {
+    logger.warn({ err: err.message }, 'siwe verify failed');
+    return { error: err.message || 'bad signature', status: 401 };
+  }
+  if (!result.success) return { error: 'bad signature', status: 401 };
+
+  const { address, chainId, nonce } = result.data;
+  if (config.geoblock.includes(req?.headers?.['cf-ipcountry']?.toUpperCase() || '')) {
+    return { error: 'geoblocked', status: 403 };
+  }
+
+  const upd = await query(
+    `UPDATE siwe_nonces SET consumed_at=NOW()
+     WHERE nonce=$1 AND consumed_at IS NULL
+       AND issued_at > NOW() - INTERVAL '${Math.floor(NONCE_TTL_MS / 1000)} seconds'
+     RETURNING nonce`, [nonce]
+  );
+  if (upd.rowCount === 0) return { error: 'stale nonce', status: 401 };
+
+  const addr = address.toLowerCase();
+  const supported = config.wallet.supportedChains;
+  if (supported.length && !supported.includes(Number(chainId))) {
+    return { error: 'chain not supported', status: 400, extra: { supported } };
+  }
+
+  const prev = await query(`SELECT id FROM users WHERE wallet_address=$1`, [addr]);
+  const isNew = prev.rowCount === 0;
+
+  const { rows } = await query(
+    `INSERT INTO users (wallet_address, chain_id)
+     VALUES ($1,$2)
+     ON CONFLICT (wallet_address) DO UPDATE
+       SET last_seen_at = NOW(), chain_id = EXCLUDED.chain_id
+     RETURNING id, wallet_address, chain_id, risk_level, role`,
+    [addr, chainId]
+  );
+  const user = rows[0];
+  if (user.risk_level === 'blocked') return { error: 'account blocked', status: 403 };
+
+  await ensureUserSettingsRow(user.id);
+  await attachReferralCode(user.id, referralCode).catch(() => {});
+
+  await logUserActivity({
+    userId: user.id,
+    wallet: addr,
+    product: 'auth',
+    action: isNew ? 'register' : 'login',
+    detail: { chain_id: Number(chainId), method: method || 'siwe' },
+    status: 'done',
+  });
+
+  const token = jwt.sign(
+    { sub: user.id, addr: user.wallet_address, chain: user.chain_id, role: user.role || 'user' },
+    config.auth.jwtSecret,
+    { expiresIn: config.auth.jwtTtl }
+  );
+  return { token, user };
+}
+
 export function createAuthRouter() {
   const r = express.Router();
 
-  /* Rate limiters for /auth/* — protect against credential stuffing, OTP
-   * harvesting, nonce-spam DoS. Tight on login (10/min/IP), generous on
+  /* Rate limiters for /auth/* — protect against credential stuffing and
+   * nonce-spam DoS. Tight on login (10/min/IP), generous on
    * nonce since SIWE wallets re-issue on every connect attempt. */
-  const loginLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 10,
+  // Behind nginx/Cloudflare trust proxy is true — disable express-rate-limit's
+  // permissive-trust-proxy ValidationError (ERR_ERL_PERMISSIVE_TRUST_PROXY),
+  // which otherwise throws on /auth/* and breaks wallet SIWE login.
+  const rlOpts = {
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { trustProxy: false },
     message: { error: 'too_many_requests', retryAfterSec: 60 },
-  });
-  const nonceLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 30,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: 'too_many_requests', retryAfterSec: 60 },
-  });
-  const verifyLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: 'too_many_requests', retryAfterSec: 60 },
-  });
+  };
+  const nonceLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, ...rlOpts });
+  const verifyLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, ...rlOpts });
 
   if (config.allowDevLogin) {
     r.post('/dev-login', async (req, res, next) => {
@@ -74,7 +171,7 @@ export function createAuthRouter() {
            VALUES ($1, $2)
            ON CONFLICT (wallet_address) DO UPDATE
              SET last_seen_at = NOW(), chain_id = EXCLUDED.chain_id
-           RETURNING id, wallet_address, chain_id, kyc_status, risk_level, role`,
+           RETURNING id, wallet_address, chain_id, risk_level, role`,
           [demoAddr, 1]
         );
         const user = rows[0];
@@ -87,55 +184,6 @@ export function createAuthRouter() {
       } catch (err) { next(err); }
     });
   }
-
-  const emailLoginSchema = z.object({
-    email: z.string().trim().toLowerCase().email().max(160),
-    referralCode: z.string().trim().max(16).optional(),
-  }).strict();
-
-  r.post('/email-login', loginLimiter, async (req, res, next) => {
-    try {
-      const { email, referralCode } = emailLoginSchema.parse(req.body || {});
-      const pseudoWallet = emailWalletAddress(email);
-      const { rows } = await query(
-        `INSERT INTO users (wallet_address, chain_id)
-         VALUES ($1, $2)
-         ON CONFLICT (wallet_address) DO UPDATE
-           SET last_seen_at = NOW()
-         RETURNING id, wallet_address, chain_id, kyc_status, risk_level, role`,
-        [pseudoWallet, 0]
-      );
-      const user = rows[0];
-      if (user.risk_level === 'blocked') return res.status(403).json({ error: 'account_blocked' });
-
-      await ensureUserSettingsRow(user.id);
-      await ensureWelcomeWalletSeed(user.id);
-      await attachReferralCode(user.id, referralCode).catch(() => {});
-      await query(
-        `UPDATE user_settings
-            SET email=$2,
-                security=jsonb_set(COALESCE(security,'{}'::jsonb), '{login_email}', 'true'::jsonb, true),
-                updated_at=NOW()
-          WHERE user_id=$1`,
-        [user.id, email]
-      );
-      await query(
-        `INSERT INTO notifications_outbox (user_id, channel, template, payload)
-         VALUES ($1, 'email', 'login_alert', $2::jsonb)`,
-        [user.id, JSON.stringify({ email, method: 'email', at: new Date().toISOString() })]
-      ).catch(() => {});
-
-      const token = jwt.sign(
-        { sub: user.id, addr: user.wallet_address, chain: user.chain_id, role: user.role || 'user', email },
-        config.auth.jwtSecret,
-        { expiresIn: config.auth.jwtTtl }
-      );
-      res.status(201).json({ token, user: { ...user, email }, method: 'email' });
-    } catch (err) {
-      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
-      next(err);
-    }
-  });
 
   r.post('/nonce', nonceLimiter, async (req, res, next) => {
     try {
@@ -159,52 +207,9 @@ export function createAuthRouter() {
   r.post('/verify', verifyLimiter, async (req, res, next) => {
     try {
       const { message, signature, referralCode } = verifySchema.parse(req.body);
-      const siwe = new SiweMessage(message);
-      const result = await siwe.verify({ signature });
-      if (!result.success) return res.status(401).json({ error: 'bad signature' });
-
-      const { address, chainId, nonce, issuedAt } = result.data;
-      if (config.geoblock.includes(req.headers['cf-ipcountry']?.toUpperCase() || '')) {
-        return res.status(403).json({ error: 'geoblocked' });
-      }
-
-      // Consume nonce atomically
-      const upd = await query(
-        `UPDATE siwe_nonces SET consumed_at=NOW()
-         WHERE nonce=$1 AND consumed_at IS NULL
-           AND issued_at > NOW() - INTERVAL '${Math.floor(NONCE_TTL_MS / 1000)} seconds'
-         RETURNING nonce`, [nonce]
-      );
-      if (upd.rowCount === 0) return res.status(401).json({ error: 'stale nonce' });
-
-      const addr = address.toLowerCase();
-      const supported = config.wallet.supportedChains;
-      if (supported.length && !supported.includes(Number(chainId))) {
-        return res.status(400).json({ error: 'chain not supported', supported });
-      }
-
-      // Upsert user
-      const { rows } = await query(
-        `INSERT INTO users (wallet_address, chain_id)
-         VALUES ($1,$2)
-         ON CONFLICT (wallet_address) DO UPDATE
-           SET last_seen_at = NOW(), chain_id = EXCLUDED.chain_id
-         RETURNING id, wallet_address, chain_id, kyc_status, risk_level, role`,
-        [addr, chainId]
-      );
-      const user = rows[0];
-      if (user.risk_level === 'blocked') return res.status(403).json({ error: 'account blocked' });
-
-      await ensureWelcomeWalletSeed(user.id);
-      await ensureUserSettingsRow(user.id);
-      await attachReferralCode(user.id, referralCode).catch(() => {});
-
-      const token = jwt.sign(
-        { sub: user.id, addr: user.wallet_address, chain: user.chain_id, role: user.role || 'user' },
-        config.auth.jwtSecret,
-        { expiresIn: config.auth.jwtTtl }
-      );
-      res.json({ token, user });
+      const out = await completeSiweLogin({ message, signature, referralCode, req });
+      if (out.error) return res.status(out.status).json({ error: out.error, ...(out.extra || {}) });
+      res.json({ token: out.token, user: out.user });
     } catch (err) {
       if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
       logger.warn({ err: err.message }, 'siwe verify failed');
@@ -212,109 +217,151 @@ export function createAuthRouter() {
     }
   });
 
+  /* ----- Device login (desktop QR → Trust DApp Browser signs → desktop polls) ----- */
+  const deviceStartSchema = z.object({
+    address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+    chainId: z.number().int().positive().optional(),
+  }).strict();
+
+  r.post('/device/start', nonceLimiter, async (req, res, next) => {
+    try {
+      const { address, chainId: bodyChain } = deviceStartSchema.parse(req.body || {});
+      const addr = address.toLowerCase();
+      const chainId = Number(bodyChain) || 1;
+      const supported = config.wallet.supportedChains;
+      if (supported.length && !supported.includes(chainId)) {
+        return res.status(400).json({ error: 'chain not supported', supported });
+      }
+
+      await query(`DELETE FROM device_logins WHERE expires_at < NOW() OR (wallet_address=$1 AND status='pending')`, [addr]);
+
+      const nonce = randomBytes(16).toString('hex');
+      await query(`INSERT INTO siwe_nonces (nonce) VALUES ($1)`, [nonce]);
+
+      const domain = config.wallet.siweDomain || 'grom.exchange';
+      const statement = config.wallet.siweStatement || 'Sign in to GROM Exchange';
+      const uri = `https://${String(domain).replace(/^https?:\/\//, '')}`;
+      const message = buildSiweMessage({
+        address: addr,
+        domain,
+        statement,
+        uri,
+        chainId,
+        nonce,
+      });
+
+      const code = randomBytes(4).toString('hex'); // 8 hex chars
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      await query(
+        `INSERT INTO device_logins (code, wallet_address, message, nonce, chain_id, status, expires_at)
+         VALUES ($1,$2,$3,$4,$5,'pending',$6)`,
+        [code, addr, message, nonce, chainId, expiresAt.toISOString()]
+      );
+
+      const signUrl = `${uri}/?grom_device=${code}`;
+      res.json({
+        code,
+        message,
+        chainId,
+        address: addr,
+        expiresAt: expiresAt.toISOString(),
+        signUrl,
+        trustUrl: `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(signUrl)}`,
+      });
+    } catch (err) {
+      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
+      next(err);
+    }
+  });
+
+  r.get('/device/:code', async (req, res, next) => {
+    try {
+      const code = String(req.params.code || '').toLowerCase();
+      if (!/^[a-f0-9]{8}$/.test(code)) return res.status(400).json({ error: 'bad_code' });
+      const { rows } = await query(
+        `SELECT code, wallet_address, message, chain_id, status, expires_at, token, user_json
+           FROM device_logins WHERE code=$1 LIMIT 1`,
+        [code]
+      );
+      const row = rows[0];
+      if (!row) return res.status(404).json({ error: 'not_found' });
+      if (new Date(row.expires_at).getTime() < Date.now() && row.status === 'pending') {
+        return res.status(410).json({ error: 'expired' });
+      }
+      if (row.status === 'done' && row.token) {
+        return res.json({ status: 'done', token: row.token, user: row.user_json });
+      }
+      res.json({
+        status: 'pending',
+        address: row.wallet_address,
+        message: row.message,
+        chainId: row.chain_id,
+        expiresAt: row.expires_at,
+      });
+    } catch (err) { next(err); }
+  });
+
+  const deviceCompleteSchema = z.object({
+    code: z.string().regex(/^[a-fA-F0-9]{8}$/),
+    signature: z.string().min(20),
+    referralCode: z.string().trim().max(16).optional(),
+  }).strict();
+
+  r.post('/device/complete', verifyLimiter, async (req, res, next) => {
+    try {
+      const { code, signature, referralCode } = deviceCompleteSchema.parse(req.body || {});
+      const codeNorm = code.toLowerCase();
+      const { rows } = await query(
+        `SELECT code, wallet_address, message, status, expires_at
+           FROM device_logins WHERE code=$1 LIMIT 1`,
+        [codeNorm]
+      );
+      const row = rows[0];
+      if (!row) return res.status(404).json({ error: 'not_found' });
+      if (row.status === 'done') return res.json({ ok: true, status: 'done' });
+      if (new Date(row.expires_at).getTime() < Date.now()) {
+        return res.status(410).json({ error: 'expired' });
+      }
+
+      const out = await completeSiweLogin({
+        message: row.message,
+        signature,
+        referralCode,
+        req,
+        method: 'device_siwe',
+      });
+      if (out.error) return res.status(out.status).json({ error: out.error, ...(out.extra || {}) });
+
+      await query(
+        `UPDATE device_logins
+            SET status='done', token=$2, user_json=$3::jsonb, completed_at=NOW()
+          WHERE code=$1`,
+        [codeNorm, out.token, JSON.stringify(out.user)]
+      );
+      res.json({ ok: true, status: 'done', token: out.token, user: out.user });
+    } catch (err) {
+      if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
+      logger.warn({ err: err.message }, 'device siwe complete failed');
+      res.status(401).json({ error: 'unauthorized' });
+    }
+  });
+
   r.get('/me', requireAuth, async (req, res, next) => {
     try {
+      await query(`UPDATE users SET last_seen_at = NOW() WHERE id = $1`, [req.user.sub]).catch(() => {});
       const { rows } = await query(
-        `SELECT id, wallet_address, chain_id, kyc_status, risk_level, role FROM users WHERE id=$1`,
+        `SELECT id, wallet_address, chain_id, risk_level, role FROM users WHERE id=$1`,
         [req.user.sub]
       );
       res.json({ user: rows[0] });
     } catch (err) { next(err); }
   });
 
-  r.post('/2fa/setup', requireAuth, async (req, res, next) => {
+  /** Lightweight heartbeat — keeps admin "online now" accurate while tab is open. */
+  r.post('/presence', requireAuth, async (req, res, next) => {
     try {
-      const secretBase32 = randomBase32(20);
-      const accountName = (req.user.addr || 'wallet').toLowerCase();
-      const otpauthUrl = buildOtpAuthUrl({
-        issuer: 'GROM',
-        accountName,
-        secretBase32,
-      });
-      const { rows } = await query(
-        `INSERT INTO two_fa_secrets (user_id, secret_base32, enabled, verified_at, disabled_at, last_used_step, updated_at)
-         VALUES ($1, $2, FALSE, NULL, NULL, NULL, NOW())
-         ON CONFLICT (user_id)
-         DO UPDATE SET secret_base32=EXCLUDED.secret_base32,
-                       enabled=FALSE,
-                       verified_at=NULL,
-                       disabled_at=NULL,
-                       last_used_step=NULL,
-                       updated_at=NOW()
-         RETURNING user_id, enabled`,
-        [req.user.sub, secretBase32]
-      );
-      await ensureUserSettingsRow(req.user.sub);
-      res.status(201).json({
-        secret_base32: secretBase32,
-        otpauth_url: otpauthUrl,
-        enabled: rows[0]?.enabled || false,
-      });
-    } catch (err) { next(err); }
-  });
-
-  r.post('/2fa/verify', requireAuth, async (req, res, next) => {
-    try {
-      const token = String(req.body?.token || '').trim();
-      const { rows } = await query(
-        `SELECT secret_base32, enabled, last_used_step
-           FROM two_fa_secrets
-          WHERE user_id=$1`,
-        [req.user.sub]
-      );
-      const row = rows[0];
-      if (!row) return res.status(404).json({ error: 'two_fa_not_setup' });
-      const result = verifyTotp(row.secret_base32, token);
-      if (!result.ok) return res.status(400).json({ error: 'invalid_totp' });
-      if (row.last_used_step != null && Number(row.last_used_step) === Number(result.step)) {
-        return res.status(409).json({ error: 'totp_replay' });
-      }
-      await query(
-        `UPDATE two_fa_secrets
-            SET enabled=TRUE, verified_at=COALESCE(verified_at, NOW()), disabled_at=NULL, last_used_step=$2, updated_at=NOW()
-          WHERE user_id=$1`,
-        [req.user.sub, result.step]
-      );
-      await ensureUserSettingsRow(req.user.sub);
-      await query(
-        `UPDATE user_settings
-            SET security=jsonb_set(COALESCE(security,'{}'::jsonb), '{two_fa}', 'true'::jsonb, true),
-                updated_at=NOW()
-          WHERE user_id=$1`,
-        [req.user.sub]
-      );
-      res.json({ ok: true, enabled: true });
-    } catch (err) { next(err); }
-  });
-
-  r.post('/2fa/disable', requireAuth, async (req, res, next) => {
-    try {
-      const token = String(req.body?.token || '').trim();
-      const { rows } = await query(
-        `SELECT secret_base32, enabled, last_used_step
-           FROM two_fa_secrets
-          WHERE user_id=$1`,
-        [req.user.sub]
-      );
-      const row = rows[0];
-      if (!row || !row.enabled) return res.status(404).json({ error: 'two_fa_not_enabled' });
-      const result = verifyTotp(row.secret_base32, token);
-      if (!result.ok) return res.status(400).json({ error: 'invalid_totp' });
-      await query(
-        `UPDATE two_fa_secrets
-            SET enabled=FALSE, disabled_at=NOW(), last_used_step=$2, updated_at=NOW()
-          WHERE user_id=$1`,
-        [req.user.sub, result.step]
-      );
-      await ensureUserSettingsRow(req.user.sub);
-      await query(
-        `UPDATE user_settings
-            SET security=jsonb_set(COALESCE(security,'{}'::jsonb), '{two_fa}', 'false'::jsonb, true),
-                updated_at=NOW()
-          WHERE user_id=$1`,
-        [req.user.sub]
-      );
-      res.json({ ok: true, enabled: false });
+      await query(`UPDATE users SET last_seen_at = NOW() WHERE id = $1`, [req.user.sub]);
+      res.json({ ok: true });
     } catch (err) { next(err); }
   });
 
@@ -328,7 +375,9 @@ export async function requireAuth(req, res, next) {
   try {
     req.user = jwt.verify(m[1], config.auth.jwtSecret);
     const { rows } = await query(
-      `SELECT status, risk_level FROM users WHERE id=$1 LIMIT 1`,
+      `SELECT u.status, u.risk_level, u.role,
+              (SELECT security->>'forced_logout_at' FROM user_settings WHERE user_id=u.id) AS forced_logout_at
+         FROM users u WHERE u.id=$1 LIMIT 1`,
       [req.user.sub]
     );
     const row = rows[0];
@@ -336,6 +385,13 @@ export async function requireAuth(req, res, next) {
     if (row.status === 'suspended' || row.risk_level === 'blocked') {
       return res.status(403).json({ error: 'account_suspended' });
     }
+    if (row.forced_logout_at && req.user.iat) {
+      const forcedAt = new Date(row.forced_logout_at).getTime() / 1000;
+      if (req.user.iat < forcedAt) {
+        return res.status(401).json({ error: 'session_revoked' });
+      }
+    }
+    req.user.role = row.role || req.user.role || 'user';
     next();
   } catch {
     res.status(401).json({ error: 'invalid token' });

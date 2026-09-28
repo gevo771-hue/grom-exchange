@@ -1,5 +1,5 @@
 /**
- * DEX aggregator — returns best-quote swap for non-custodial "Convert" function.
+ * DEX aggregator — returns best-quote swap for non-custodial Instant Swap.
  * Queries 1inch and Odos in parallel, returns best.
  *
  * NOTE: For production, also consider `Jupiter` for Solana and `LI.FI` for cross-chain.

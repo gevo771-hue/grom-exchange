@@ -1,0 +1,19 @@
+{
+  "estimate": {
+    "feeCosts": [
+      {
+        "name": "Integrator Fee",
+        "description": "Integrator Fee",
+        "percentage": "0.002",
+        "amountUSD": "1.25",
+        "included": true,
+        "token": {
+          "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+          "symbol": "USDC",
+          "decimals": 6
+        }
+      }
+    ],
+    "toAmount": "1000000"
+  }
+}

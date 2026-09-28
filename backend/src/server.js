@@ -1,206 +1,115 @@
 /**
  * GROM Exchange — backend entrypoint.
- *   - Express HTTP (auth, binary, spot scaffold, metrics)
- *   - WebSocket (binary rounds, live prices)
- *   - Binary options engine
- *   - Price aggregator (Binance → Kraken → Coinbase failover)
+ *   - Express HTTP (auth, wallet, markets, metrics)
+ *   - WebSocket (live prices)
+ *   - Price aggregator (leader worker only)
  */
 import http from 'node:http';
 import express from 'express';
 import helmet from 'helmet';
-import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 
 import config from './config/index.js';
 import logger from './utils/logger.js';
 import { metrics, registry } from './utils/metrics.js';
 import { pool } from './db/pool.js';
-import { closeSentry, initSentry, sentryErrorMiddleware, sentryRequestMiddleware } from './utils/sentry.js';
-import geoBlockMiddleware from './middleware/geo-block.js';
-import maintenanceMiddleware from './middleware/maintenance.js';
-import { marketGate } from './middleware/market-control.js';
+import { closeRedis } from './utils/redis.js';
 
 import createAuthRouter, { requireAuth } from './wallet/siwe.js';
 import createWalletRouter from './wallet/routes.js';
-import startWithdrawalQueueWorker from './wallet/queue-worker.js';
-import startNotificationsWorker from './notifications/worker.js';
-import createSpotRouter from './spot/routes.js';
-import startSpotStopWorker from './spot/stop-worker.js';
-import createBinaryRouter from './binary/routes.js';
+import createWsBroadcaster from './ws/broadcaster.js';
 import createMarketRouter from './market/routes.js';
-import createFuturesRouter from './futures/routes.js';
-import startFuturesMarkLoop from './futures/mark-loop.js';
-import startFuturesFundingLoop from './futures/funding-loop.js';
-import startMarketMaker from './services/market-maker/index.js';
-import createSettingsRouter from './settings/routes.js';
-import createSessionsRouter from './sessions/routes.js';
-import createReferralRouter from './referral/routes.js';
-import createSwapRouter from './swap/routes.js';
-import createAiRouter from './ai/routes.js';
-import createApiKeysRouter from './apikeys/routes.js';
-import createSupportRouter from './support/routes.js';
+import createHlFuturesRouter from './futures/hl-routes.js';
 import createAdminRouter from './admin/routes.js';
-import createKycRouter from './kyc/routes.js';
-import createOnrampRouter from './onramp/routes.js';
-import BinaryEngine from './binary/engine.js';
-import createWsBroadcaster from './binary/ws.js';
-import startBinanceConfirmWatcher from './wallet/binance-confirmation-watcher.js';
-import startBinanceDepositReconciler from './wallet/binance-deposit-reconciler.js';
-import { binance as binanceClient } from './integrations/binance/client.js';
-import { supportedBinanceNetworkPairs, supportedAssets } from './integrations/binance/network-map.js';
+import createActivityRouter from './activity/routes.js';
+import createDimensionsRouter from './dimensions/routes.js';
+import { startHealthPulse, getHealthSnapshot } from './activity/health-pulse.js';
+import createAiRouter from './ai/routes.js';
+import {
+  jupiterEnabled,
+  jupiterFeeEnabled,
+  jupiterFeeReady,
+  jupFeeModeFromConfig,
+  jupFeeBpsFromConfig,
+} from './wallet/jup-fee.js';
+import { createOdosRouter } from './liquidity/odos-routes.js';
 
-import BinanceSource from './liquidity/binance.js';
-import KrakenSource  from './liquidity/kraken.js';
-import CoinbaseSource from './liquidity/coinbase.js';
+import CoinGeckoSource from './liquidity/coingecko.js';
+import DefiLlamaSource from './liquidity/defillama.js';
 import PriceAggregator from './liquidity/price-aggregator.js';
 import DexAggregator from './liquidity/dex-aggregator.js';
 
-// Minimal inline CORS to avoid an extra dep.
+/** pm2 cluster sets NODE_APP_INSTANCE (0..n-1). Single-process dev = leader. */
+const isLeader = !process.env.NODE_APP_INSTANCE || process.env.NODE_APP_INSTANCE === '0';
+
 const corsMw = (req, res, next) => {
   res.header('Access-Control-Allow-Origin', config.cors.origin);
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Credentials', 'true');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 };
 
-function normaliseSseChannels(channels, userId) {
-  const requested = String(channels || '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean);
-  const defaults = ['balances', 'orders', 'positions', 'notifications'];
-  return (requested.length ? requested : defaults).map((channel) => {
-    if (channel.includes('.')) return channel;
-    if (['balances', 'orders', 'positions', 'notifications'].includes(channel)) {
-      return `${channel}.user.${userId}`;
-    }
-    return channel;
-  });
-}
-
-function attachSseRoute(app, ws) {
-  app.get('/api/stream/sse', (req, res) => {
-    const token = String(req.query.token || '').trim();
-    if (!token) return res.status(401).json({ error: 'token_required' });
-
-    let user;
-    try {
-      user = jwt.verify(token, config.auth.jwtSecret);
-    } catch {
-      return res.status(401).json({ error: 'invalid_token' });
-    }
-
-    const channels = normaliseSseChannels(req.query.channels, user.sub);
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders?.();
-    res.write(`event: ready\ndata: ${JSON.stringify({ channels })}\n\n`);
-
-    const unsubs = channels.map((channel) => ws.subscribeServer(channel, (event) => {
-      res.write(`event: message\ndata: ${JSON.stringify(event)}\n\n`);
-    }));
-    const heartbeat = setInterval(() => res.write(`event: heartbeat\ndata: ${Date.now()}\n\n`), 30_000);
-    heartbeat.unref?.();
-
-    req.on('close', () => {
-      clearInterval(heartbeat);
-      for (const unsub of unsubs) unsub();
-    });
-  });
-}
-
 async function main() {
-  initSentry();
   const app = express();
-  app.set('trust proxy', true);
+  app.set('trust proxy', 1);
   app.use(helmet());
   app.use(corsMw);
+  const { captureRawBody } = await import('./utils/webhook-sig.js');
   app.use(express.json({
-    limit: '64kb',
-    verify: (req, _res, buf) => {
-      req.rawBody = buf.toString('utf8');
-    },
+    limit: '256kb',
+    verify: captureRawBody,
   }));
-  app.use(sentryRequestMiddleware());
-  app.use(maintenanceMiddleware());
 
-  // Metrics per request
   app.use((req, res, next) => {
-    const start = Date.now();
     res.on('finish', () => {
       metrics.httpRequests.inc({ method: req.method, route: req.route?.path || req.path, status: res.statusCode });
     });
     next();
   });
 
-  // Liquidity
-  const assets = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT'];
-  const binance  = new BinanceSource({ assets });
-  const kraken   = new KrakenSource({ assets });
-  const coinbase = new CoinbaseSource({ assets });
-  const priceAggregator = new PriceAggregator([binance, kraken, coinbase]);
+  const assets = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT', 'BNB/USDT'];
+  const coingecko = new CoinGeckoSource({ assets });
+  const defillama = new DefiLlamaSource({ assets });
+  const priceAggregator = new PriceAggregator([coingecko, defillama]);
   const dex = new DexAggregator();
-  await priceAggregator.start();
 
-  // WS + HTTP share the same server to reuse port
   const server = http.createServer(app);
-  const ws = createWsBroadcaster(server);
+  const ws = await createWsBroadcaster(server);
+  if (isLeader) {
+    logger.info({ worker: process.env.NODE_APP_INSTANCE ?? 'solo' }, 'cluster leader — starting price feed');
+    await priceAggregator.start();
 
-  // Broadcast every tick at most 5× per second per asset
-  const throttle = new Map();
-  for (const s of [binance, kraken, coinbase]) {
-    s.on('tick', ({ asset, price, ts }) => {
-      const key = asset;
-      const now = Date.now();
-      if ((throttle.get(key) || 0) + 200 > now) return;
-      throttle.set(key, now);
-      ws.broadcast(`price:${asset}`, { asset, price, ts, source: s.name });
-      ws.broadcast(`prices.${asset}`, { asset, price, ts, source: s.name });
-    });
+    const throttle = new Map();
+    for (const src of [coingecko, defillama]) {
+      src.on('tick', ({ asset, price, ts }) => {
+        const now = Date.now();
+        if ((throttle.get(asset) || 0) + 200 > now) return;
+        throttle.set(asset, now);
+        ws.broadcast(`price:${asset}`, { asset, price, ts, source: src.name });
+      });
+    }
+  } else {
+    logger.info({ worker: process.env.NODE_APP_INSTANCE }, 'cluster worker — HTTP/WS (scheduler on leader)');
   }
-
-  // Binary engine
-  const engine = new BinaryEngine({ priceAggregator, wsBroadcaster: ws });
-  await engine.start();
-  const withdrawalWorker = startWithdrawalQueueWorker();
-  const notificationsWorker = startNotificationsWorker({ wsBroadcaster: ws });
-  const spotStopWorker = startSpotStopWorker({ priceAggregator, wsBroadcaster: ws });
-  const futuresMarkLoop = startFuturesMarkLoop({ priceAggregator, wsBroadcaster: ws });
-  const futuresFundingLoop = startFuturesFundingLoop({ priceAggregator, wsBroadcaster: ws });
-  const marketMaker = await startMarketMaker({ priceAggregator, wsBroadcaster: ws });
-  const binanceHealth = config.binance.useAsHotWallet ? binanceClient.startHealthCheck() : null;
-  const binanceConfirmWatcher = config.binance.useAsHotWallet ? startBinanceConfirmWatcher() : null;
-  const binanceDepositReconciler = config.binance.useAsHotWallet ? startBinanceDepositReconciler({ wsBroadcaster: ws }) : null;
 
   app.get('/api/config', (_req, res) => {
     res.json({
-      payout: config.binary.payout,
-      durations: config.binary.durations,
       assets,
       devLogin: Boolean(config.allowDevLogin),
-      sentry: { publicDsn: config.sentry.publicDsn },
-      sentryPublicDsn: config.sentry.publicDsn,
-    });
-  });
-  app.get('/api/config/networks', (_req, res) => {
-    res.json({
-      mode: config.binance.useAsHotWallet ? 'binance' : 'native_signers',
-      custodialEnabled: !!config.binance.useAsHotWallet,
-      assets: supportedAssets(),
-      networks: supportedBinanceNetworkPairs(),
     });
   });
 
-  // Routes
   app.get('/health', async (_req, res) => {
     try {
       await pool.query('SELECT 1');
       res.json({
         status: 'ok',
         env: config.env,
-        price_sources: priceAggregator.health(),
+        worker: process.env.NODE_APP_INSTANCE ?? 'solo',
+        leader: isLeader,
+        price_sources: isLeader ? priceAggregator.health() : { leader: false },
         dev_login: Boolean(config.allowDevLogin),
       });
     } catch (err) {
@@ -213,25 +122,37 @@ async function main() {
     res.end(await registry.metrics());
   });
 
-  app.use('/auth', geoBlockMiddleware(), createAuthRouter());
+  app.use('/auth',   createAuthRouter());
+  app.use('/api', createWalletRouter({ requireAuth, priceAggregator, wsBroadcaster: ws }));
   app.use('/api/market', createMarketRouter());
-  app.use('/api', geoBlockMiddleware(), createWalletRouter({ requireAuth, priceAggregator, wsBroadcaster: ws }));
-  app.use('/api/spot', marketGate('spot'), createSpotRouter({ requireAuth, priceAggregator, wsBroadcaster: ws }));
-  app.use('/api/futures', marketGate('futures'), createFuturesRouter({ requireAuth, priceAggregator, wsBroadcaster: ws }));
-  app.use('/api/binary', marketGate('binary'), createBinaryRouter({ engine, requireAuth, priceAggregator }));
-  app.use('/api/settings', createSettingsRouter({ requireAuth }));
-  app.use('/api/sessions', createSessionsRouter({ requireAuth }));
-  app.use('/api/referral', createReferralRouter({ requireAuth }));
-  app.use('/api/swap',     createSwapRouter({ requireAuth }));
-  app.use('/api/ai',       createAiRouter({ requireAuth }));
-  app.use('/api/apikeys',  createApiKeysRouter({ requireAuth }));
-  app.use('/api/support',  createSupportRouter({ requireAuth }));
-  app.use('/api/kyc',      createKycRouter({ requireAuth }));
-  app.use('/api/onramp',   createOnrampRouter({ requireAuth, wsBroadcaster: ws }));
-  app.use('/api/admin',    createAdminRouter({ requireAuth }));
-  attachSseRoute(app, ws);
+  app.use('/api/futures/hl', createHlFuturesRouter());
+  app.use('/api/ai', createAiRouter({ requireAuth }));
+  app.use('/api/activity', createActivityRouter({ requireAuth }));
+  app.use('/api', createDimensionsRouter({ requireAuth }));
+  app.use('/api/admin', createAdminRouter({ requireAuth, getHealthSnapshot }));
 
-  // DEX quote
+  let stopHealthPulse = () => {};
+  if (isLeader) {
+    stopHealthPulse = startHealthPulse({ priceAggregator, isLeader: true }) || (() => {});
+  }
+  /** Legacy backoffice risk save — PUT /api/settings */
+  app.put('/api/settings', requireAuth, async (req, res, next) => {
+    try {
+      if (req.user?.role !== 'admin') return res.status(403).json({ error: 'admin_required' });
+      const { query: dbQuery } = await import('./db/pool.js');
+      const { logAdminAudit, clientIp } = await import('./admin/audit.js');
+      const cur = await dbQuery(`SELECT value FROM admin_settings WHERE key='risk'`);
+      const risk = { ...(cur.rows[0]?.value || {}), ...(req.body?.risk || req.body || {}) };
+      await dbQuery(
+        `INSERT INTO admin_settings (key, value, updated_at, updated_by) VALUES ('risk',$1::jsonb,NOW(),$2)
+         ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW(), updated_by=EXCLUDED.updated_by`,
+        [JSON.stringify(risk), req.user.sub]
+      );
+      await logAdminAudit({ actorId: req.user.sub, action: 'risk_config_save', ip: clientIp(req), metadata: risk });
+      res.json({ risk });
+    } catch (err) { next(err); }
+  });
+
   app.post('/api/swap/quote', requireAuth, async (req, res, next) => {
     try {
       const { chainId, src, dst, amount, userAddress } = req.body || {};
@@ -241,32 +162,120 @@ async function main() {
     } catch (err) { next(err); }
   });
 
-  app.use(sentryErrorMiddleware());
+  const quoteLimiter = rateLimit({
+    windowMs: 60_000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: { trustProxy: false },
+  });
+
+  /** Public fee/config for Instant Swap aggregators — non-secret ids only. */
+  app.get('/api/swap/public-config', (_req, res) => {
+    const liq = config.liquidity || {};
+    let feeBps = Number(liq.feeBps);
+    if (!(feeBps === 20)) feeBps = 20; // only publish mandated Instant Swap fee
+    const feeReceiver = String(liq.feeReceiver || '').toLowerCase();
+    const recvOk = /^0x[a-f0-9]{40}$/.test(feeReceiver);
+    const lifiKeyOk = !!String(liq.lifiApiKey || '').trim();
+    const squidIntegratorId = String(liq.squidIntegratorId || '').trim();
+    const squidFeeBps = Number(liq.squidFeeBps);
+    const squidFeeOk = squidFeeBps === 45;
+    const squidOk = !!(squidIntegratorId && squidIntegratorId !== 'test-sdk' && squidIntegratorId.length >= 4 && squidFeeOk);
+    const odosReferralCode = Number(liq.odosReferralCode) || 0;
+    const odosOk = odosReferralCode > 0 && Number.isFinite(odosReferralCode);
+    const jupCfg = { liquidity: liq };
+    const jupMode = jupFeeModeFromConfig(jupCfg);
+    const jupOk = jupiterEnabled(jupCfg);
+    const jupFeeOn = jupiterFeeEnabled(jupCfg);
+    const jupFeeBps = jupOk ? jupFeeBpsFromConfig(jupCfg) : 0;
+    const jupAccountsOk = jupiterFeeReady(jupCfg);
+    res.json({
+      feeBps,
+      feeReceiver: recvOk ? feeReceiver : null,
+      squidIntegratorId: squidOk ? squidIntegratorId : null,
+      squidFeeBps: squidOk ? squidFeeBps : null,
+      odosReferralCode: odosOk ? Math.floor(odosReferralCode) : null,
+      /* Never publish fee account / mint map — backend selects per mint. */
+      jupiterFeeAccountsConfigured: jupAccountsOk,
+      jupiterFeeMode: jupMode,
+      jupiterFeeEnabled: jupFeeOn,
+      jupiterFeeBps: jupFeeBps,
+      aggregators: {
+        paraswap: recvOk,
+        kyber: recvOk,
+        lifi: lifiKeyOk && recvOk,
+        squid: squidOk && recvOk,
+        odos: odosOk,
+        jupiter: jupOk,
+      },
+    });
+  });
+
+  /** Cached LiFi on-chain quotes for Instant Swap (public read-only). */
+  app.post('/api/swap/oc-quote', quoteLimiter, async (req, res, next) => {
+    try {
+      if (!String(config.liquidity?.lifiApiKey || '').trim()) {
+        return res.status(503).json({ error: 'LI.FI route unavailable', code: 'lifi_unavailable' });
+      }
+      const { fetchLifiOcQuote } = await import('./liquidity/lifi-proxy.js');
+      const quote = await fetchLifiOcQuote(req.body || {});
+      res.json(quote);
+    } catch (err) {
+      const status = Number(err.status) || 0;
+      if (status === 400 || status === 422) {
+        return res.status(status).json({ error: err.message, code: err.code || 'bad_request' });
+      }
+      if (status === 404) {
+        return res.status(404).json({
+          error: err.message || 'no route',
+          code: err.code || 'no_route',
+          upstream: err.upstream || undefined,
+        });
+      }
+      if (status === 409) {
+        return res.status(409).json({ error: err.message, code: err.code || 'quote_context_mismatch', details: err.details });
+      }
+      if (status === 429) {
+        res.setHeader('Retry-After', '8');
+        return res.status(429).json({ error: 'quote rate limited — retry shortly' });
+      }
+      if (status === 502 || status === 504) {
+        return res.status(status).json({ error: err.message || 'upstream error' });
+      }
+      next(err);
+    }
+  });
+
+  /** Odos SOR proxy — production router (server forces referralCode). */
+  app.use('/api/swap', createOdosRouter({ config, quoteLimiter }));
+
   app.use((err, _req, res, _next) => {
     logger.error({ err: err.stack || err.message }, 'unhandled');
     res.status(500).json({ error: 'internal' });
   });
 
   server.listen(config.ports.backend, () => {
-    logger.info({ port: config.ports.backend }, 'GROM backend listening');
+    logger.info({
+      port: config.ports.backend,
+      worker: process.env.NODE_APP_INSTANCE ?? 'solo',
+      leader: isLeader,
+      dbPoolMax: config.db.max,
+    }, 'GROM backend listening');
   });
 
   const shutdown = async () => {
     logger.info('shutting down');
-    await engine.stop();
-    await withdrawalWorker.stop();
-    await notificationsWorker.stop();
-    await spotStopWorker.stop();
-    await futuresMarkLoop.stop();
-    await futuresFundingLoop.stop();
-    await marketMaker.stop();
-    await binanceConfirmWatcher?.stop();
-    await binanceDepositReconciler?.stop();
-    binanceHealth?.stop();
+    try { stopHealthPulse(); } catch (_) {}
+    if (isLeader) {
+      for (const s of [coingecko, defillama]) {
+        try { await s.stop?.(); } catch {}
+      }
+    }
     ws.close();
     server.close();
+    await closeRedis();
     await pool.end();
-    await closeSentry();
     process.exit(0);
   };
   process.on('SIGTERM', shutdown);

@@ -1,0 +1,141 @@
+
+      <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Админка</span></div>
+      <h1 class="page-title">Админ-панель</h1>
+      <p class="page-subtitle">Регистрации, входы, ставки, свопы и все действия клиентов на бирже.</p>
+
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px;padding:10px 12px;border-radius:10px;background:rgba(37,45,58,.45);border:1px solid rgba(136,192,208,.12)">
+        <span style="font-size:12px;font-weight:700;color:var(--silver4)">Период:</span>
+        <input type="date" id="boffDateFrom" class="set-input mono" style="width:auto;height:30px;padding:0 8px;font-size:12px" onchange="boffApplyPeriod()" />
+        <span style="color:var(--silver5)">—</span>
+        <input type="date" id="boffDateTo" class="set-input mono" style="width:auto;height:30px;padding:0 8px;font-size:12px" onchange="boffApplyPeriod()" />
+        <button type="button" class="mini-btn" onclick="boffApplyPeriod()">Применить</button>
+        <button type="button" class="mini-btn" onclick="boffClearPeriod()">Сбросить</button>
+        <span id="boffPeriodHint" style="font-size:11px;color:var(--silver5);margin-left:4px"></span>
+      </div>
+
+      <div class="boff-grid" id="boffKpiGrid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="boff-kpi"><div class="k"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.7);margin-right:5px;vertical-align:middle"></span>Онлайн</div><div class="v mono" id="boffKpiOnline">—</div><div class="s" id="boffKpiOnlineSub">сейчас на бирже</div></div>
+        <div class="boff-kpi"><div class="k">Посещения</div><div class="v mono" id="boffKpiVisits">—</div><div class="s" id="boffKpiVisitsSub">уник. за 24ч</div></div>
+        <div class="boff-kpi"><div class="k">Регистрации</div><div class="v mono" id="boffKpiReg">—</div><div class="s" id="boffKpiRegSub">сегодня · всего —</div></div>
+        <div class="boff-kpi"><div class="k">Своп</div><div class="v mono" id="boffKpiSwap">—</div><div class="s" id="boffKpiSwapSub">действий за 24ч</div></div>
+        <div class="boff-kpi"><div class="k">Спот</div><div class="v mono" id="boffKpiSpot">—</div><div class="s" id="boffKpiSpotSub">действий за 24ч</div></div>
+        <div class="boff-kpi"><div class="k">Фьючи</div><div class="v mono" id="boffKpiFut">—</div><div class="s" id="boffKpiFutSub">действий за 24ч</div></div>
+        <div class="boff-kpi"><div class="k">Прогнозы</div><div class="v mono" id="boffKpiPredict">—</div><div class="s" id="boffKpiPredictSub">действий за 24ч</div></div>
+        <div class="boff-kpi"><div class="k">Акции</div><div class="v mono" id="boffKpiXstocks">—</div><div class="s" id="boffKpiXstocksSub">действий за 24ч</div></div>
+      </div>
+
+      <div id="boffAuthBanner" hidden style="margin-top:14px;padding:12px 16px;border-radius:10px;background:rgba(245,185,77,.12);border:1px solid rgba(245,185,77,.35);font-size:13px;color:var(--warn)">
+        <div style="font-weight:700;margin-bottom:6px">Вход в админку</div>
+        <div style="margin-bottom:10px;line-height:1.45">
+          WalletConnect с телефона <b>не возвращает подпись</b> в Chrome/Safari.<br>
+          Отсканируйте QR <b>из Trust</b> (не камерой iPhone) или откройте сайт в <b>Trust → Browser</b>.
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <button class="mini-btn primary" onclick="boffStartDeviceLogin()">QR для Trust</button>
+          <button class="mini-btn" id="boffDirectSignBtn" onclick="boffDirectInjectedSign()" style="display:none">Подписать (Trust Browser)</button>
+          <button class="mini-btn" onclick="boffClaimSession()">Проверить вход</button>
+        </div>
+        <div id="boffDeviceLoginBox" hidden style="margin-top:14px;display:none;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div id="boffDeviceQr" style="flex:0 0 160px;width:160px;height:160px;background:#fff;border-radius:10px;padding:8px;box-sizing:border-box;overflow:hidden;isolation:isolate;position:relative;z-index:1"></div>
+          <div style="flex:1 1 220px;min-width:200px;max-width:100%;font-size:12px;color:var(--silver3);line-height:1.5;position:relative;z-index:0">
+            <div id="boffDeviceStatus" style="font-weight:700;color:var(--warn);margin-bottom:6px">Сканируйте QR приложением Trust</div>
+            <div>1. На телефоне: <b>Trust → сканер</b> (не камера iPhone)</div>
+            <div>2. Подтвердите подпись входа (без газа)</div>
+            <div>3. На компе админка откроется сама — вкладку не закрывайте</div>
+            <div style="margin-top:8px" class="mono" id="boffDeviceCode"></div>
+            <a id="boffDeviceLink" href="#" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;color:#00c2ff">Открыть в Trust на телефоне</a>
+          </div>
+        </div>
+        <div id="boffAuthStatus" style="margin-top:8px;font-size:12px;opacity:.85"></div>
+      </div>
+
+      <div class="card" style="margin-top:14px" id="boffHealthCard">
+        <div class="card-head">
+          <h3>AI pulse · здоровье биржи <span id="boffHealthStamp" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
+          <button type="button" class="mini-btn" onclick="loadBoffHealth()">Обновить</button>
+        </div>
+        <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
+          Постоянный мониторинг: БД, Redis, цены, Hyperliquid, event-loop и память. Плюс клиентский watchdog по разделам (языки, Markets, лаги UI). Сбои уходят в ленту ниже — при росте нагрузки это ранний сигнал, что биржа начинает тупить.
+        </p>
+        <div id="boffHealthGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px"></div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="card-head">
+          <h3>AI монитор · сбои пользователей <span id="boffIssuesCount" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="boffIssuesFilter" class="set-input mono" style="width:auto;height:30px;padding:0 8px;font-size:12px" onchange="loadBoffIssues()">
+              <option value="">Все продукты</option>
+              <option value="system">Система / pulse</option>
+              <option value="markets">Рынки</option>
+              <option value="wallet">Кошелёк / SIWE</option>
+              <option value="swap">Своп</option>
+              <option value="futures">Фьючи</option>
+              <option value="predict">Прогнозы</option>
+              <option value="xstocks">Акции</option>
+              <option value="auth">Авторизация</option>
+            </select>
+            <button class="mini-btn" onclick="loadBoffIssues()">Обновить</button>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
+          Клиентский AI-трекер ловит срывы (вход, своп, фьючи, ставки, акции), классифицирует причину и показывает здесь.
+        </p>
+        <div class="boff-row boff-head"><div>Время</div><div>Кошелёк</div><div>Продукт</div><div>Причина</div><div>AI вывод</div><div>Sev</div></div>
+        <div id="boffIssuesList">
+          <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
+        </div>
+        <div id="boffIssuesMore" hidden style="text-align:center;padding:10px 0 4px">
+          <button type="button" class="mini-btn" onclick="boffIssuesShowMore()">Показать ещё</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="card-head">
+          <h3>Лента активности</h3>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="boffFeedFilter" class="set-input mono" style="width:auto;height:30px;padding:0 8px;font-size:12px" onchange="loadBoffFeed()">
+              <option value="">Все действия</option>
+              <option value="auth">Регистрации / входы</option>
+              <option value="swap">Своп</option>
+              <option value="spot">Спот</option>
+              <option value="futures">Фьючи</option>
+              <option value="predict">Прогнозы</option>
+              <option value="xstocks">Акции</option>
+            </select>
+            <button class="mini-btn" onclick="loadBoffFeed()">Обновить</button>
+          </div>
+        </div>
+        <div class="boff-row boff-head"><div>Время</div><div>Кошелёк</div><div>Продукт</div><div>Действие</div><div>Детали</div><div>Статус</div></div>
+        <div id="boffFeedList">
+          <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
+        </div>
+        <div id="boffFeedMore" hidden style="text-align:center;padding:10px 0 4px">
+          <button type="button" class="mini-btn" onclick="boffFeedShowMore()">Показать ещё</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="card-head">
+          <h3>Пользователи <span id="boffUsersCount" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="boffUserSearch" class="set-input mono" placeholder="поиск по адресу" style="width:260px;height:30px;padding:0 8px;font-size:12px" oninput="debouncedUserSearch()" />
+            <button class="mini-btn" onclick="loadBoffUsers()">Обновить</button>
+          </div>
+        </div>
+        <div class="boff-row boff-head"><div>Кошелёк</div><div>Регистрация</div><div>Последний вход</div><div></div></div>
+        <div id="boffUsersList">
+          <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div></div>
+        </div>
+        <div id="boffUsersMore" hidden style="text-align:center;padding:10px 0 4px">
+          <button type="button" class="mini-btn" onclick="boffUsersShowMore()">Показать ещё</button>
+        </div>
+      </div>
+
+      <div id="boffUserDrawer" hidden class="card" style="margin-top:14px;border:1px solid rgba(0,194,255,0.3)">
+        <div class="card-head">
+          <h3>Клиент · <span id="boffUserDrawerId" class="mono" style="color:var(--accent)"></span></h3>
+          <button class="mini-btn" onclick="document.getElementById('boffUserDrawer').hidden = true">Закрыть</button>
+        </div>
+        <div class="card-body" id="boffUserDrawerBody"></div>
+      </div>

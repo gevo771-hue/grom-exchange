@@ -39,7 +39,7 @@ var CRYPTO = [
   ['APT','Aptos'],['ARB','Arbitrum'],['OP','Optimism'],['FIL','Filecoin'],['ICP','Internet Computer'],
   ['HBAR','Hedera'],['VET','VeChain'],['INJ','Injective'],['SUI','Sui'],['SEI','Sei'],
   ['TIA','Celestia'],['IMX','Immutable'],['LDO','Lido DAO'],['STX','Stacks'],['RUNE','THORChain'],
-  ['FTM','Fantom'],['ALGO','Algorand'],['QNT','Quant'],['AAVE','Aave'],['GRT','The Graph'],
+  ['ALGO','Algorand'],['QNT','Quant'],['AAVE','Aave'],['GRT','The Graph'],
   ['MKR','Maker'],['SAND','The Sandbox'],['AXS','Axie Infinity'],['EGLD','MultiversX'],['THETA','Theta Network'],
   ['XTZ','Tezos'],['EOS','EOS'],['MANA','Decentraland'],['FLOW','Flow'],['CHZ','Chiliz'],
   ['NEO','Neo'],['CRV','Curve DAO'],['SNX','Synthetix'],['XMR','Monero'],['ENJ','Enjin Coin'],
@@ -72,7 +72,7 @@ var CRYPTO = [
   ['ARKM','Arkham'],['ALT','Altlayer'],['MANTA','Manta Network'],['STRK','Starknet'],['ZK','ZKsync'],
   ['ENA','Ethena'],['W','Wormhole'],['REZ','Renzo'],['BB','BounceBit'],['IO','io.net'],
   ['ZRO','LayerZero'],['LISTA','Lista DAO'],['NOT','Notcoin'],['DOGS','DOGS'],['HMSTR','Hamster Kombat'],
-  ['CATI','Catizen'],['TON','Toncoin'],['BANANA','Banana Gun'],['BAKE','BakeryToken'],['BURGER','Burger Swap'],
+  ['CATI','Catizen'],['BANANA','Banana Gun'],['BAKE','BakeryToken'],['BURGER','Burger Swap'],
   ['CAKE','PancakeSwap'],['XRD','Radix'],['KAS','Kaspa'],['KASPA','Kaspa'],['DYM','Dymension'],
   ['SAGA','Saga'],['SUPER','SuperVerse'],['ETHFI','Ether.fi'],['OMNI','Omni Network'],['ONDO','Ondo'],
   ['TNSR','Tensor'],['PIXEL','Pixels'],['BEAMX','Beam'],['BICO','Biconomy'],['CYBER','CyberConnect'],
@@ -276,7 +276,6 @@ var NETWORKS = [
   { id:'BASE',    name:'Base',              symbol:'ETH',  min:0.001,   fee:0.0001,  confirm:1 },
   { id:'POLYGON', name:'Polygon (PoS)',     symbol:'MATIC',min:0.1,     fee:0.001,   confirm:128 },
   { id:'AVAX',    name:'Avalanche C-Chain', symbol:'AVAX', min:0.01,    fee:0.0025,  confirm:1 },
-  { id:'TON',     name:'TON',               symbol:'TON',  min:0.01,    fee:0.005,   confirm:1 },
   { id:'NEAR',    name:'NEAR',              symbol:'NEAR', min:0.01,    fee:0.001,   confirm:1 },
   { id:'XLM',     name:'Stellar',           symbol:'XLM',  min:1,       fee:0.00001, confirm:1 },
   { id:'XRP',     name:'XRP Ledger',        symbol:'XRP',  min:1,       fee:0.0001,  confirm:1 },
@@ -430,75 +429,84 @@ function seedPrice(it) {
 
 /* ---------- Live price store ---------- */
 var PRICES = Object.create(null);
+var SEEDS = Object.create(null);
+var LIVE = Object.create(null);
 var CHANGES = Object.create(null); // 24h % change
 var SUBS = [];
 
+function isStaleQuoteBook(crypto) {
+  if (!crypto) return true;
+  return Number(crypto.BTC) === 104218.4 && Number(crypto.ETH) === 3684.15;
+}
+
 REG.forEach(function (it) {
-  PRICES[it.symbol] = seedPrice(it);
+  SEEDS[it.symbol] = seedPrice(it);
+  PRICES[it.symbol] = SEEDS[it.symbol];
   CHANGES[it.symbol] = ((hashStr(it.symbol + 'chg') % 2000) / 100) - 10; // -10% .. +10%
 });
 
 function notifySubs() {
+  var mobileSafari = false;
+  try {
+    mobileSafari = !!(window.GROM_SAFARI || window.GROM_MOBILE);
+  } catch (_) {}
+  if (mobileSafari) {
+    if (window.__gromNotifyTimer) return;
+    window.__gromNotifyTimer = setTimeout(function () {
+      window.__gromNotifyTimer = null;
+      notifySubsNow();
+    }, window.GROM_SAFARI ? 6000 : 4000);
+    return;
+  }
+  notifySubsNow();
+}
+function notifySubsNow() {
   for (var i = 0; i < SUBS.length; i++) {
     try { SUBS[i](); } catch (_) {}
   }
 }
 
-/* ---------- Binance public WS (live crypto) ---------- */
+/* ---------- Reference prices via /api/market/quotes ---------- */
 var WS = null, WS_RETRY = 0;
 
 function connectBinanceWS() {
-  if (typeof WebSocket === 'undefined') return;
-  if (location.protocol === 'file:') return; // file:// → CSP/CORS; работает только http(s)
-  try {
-    WS = new WebSocket('wss://stream.binance.com:9443/ws/!miniTicker@arr');
-    WS.onopen = function () {
-      WS_RETRY = 0;
-      console.log('[grom-instruments] Binance miniTicker stream connected');
-      try {
-        window.__gromLiveFeedActive = true;
-        window.__gromLastLiveTick = Date.now();
-        window.dispatchEvent(new CustomEvent('grom-public-feed', { detail: { active: true, source: 'binance' } }));
-      } catch (_) {}
-    };
-    WS.onmessage = function (ev) {
-      try {
-        var arr = JSON.parse(ev.data);
-        if (!Array.isArray(arr)) return;
-        var changed = false;
-        for (var i = 0; i < arr.length; i++) {
-          var t = arr[i];
-          if (!t || !t.s) continue;
-          if (PRICES[t.s] === undefined) continue;
-          var p = parseFloat(t.c);
-          if (!isFinite(p) || p <= 0) continue;
-          PRICES[t.s] = p;
-          if (t.o) {
-            var open = parseFloat(t.o);
-            if (isFinite(open) && open > 0) CHANGES[t.s] = ((p - open) / open) * 100;
-          }
-          changed = true;
-        }
-        if (changed) {
-          try {
-            window.__gromLiveFeedActive = true;
-            window.__gromLastLiveTick = Date.now();
-            window.dispatchEvent(new CustomEvent('grom-public-feed', { detail: { active: true, source: 'binance' } }));
-          } catch (_) {}
-          notifySubs();
-        }
-      } catch (_) {}
-    };
-    WS.onclose = function () {
-      WS = null;
-      WS_RETRY++;
-      var delay = Math.min(30000, 1000 * Math.pow(2, WS_RETRY));
-      setTimeout(connectBinanceWS, delay);
-    };
-    WS.onerror = function () { try { WS.close(); } catch (_) {} };
-  } catch (e) {
-    console.warn('[grom-instruments] WS init failed', e);
+  /* CEX Binance WS retired — reference prices via neutral /api/market/quotes. */
+  if (location.protocol === 'file:') return;
+  async function poll() {
+    try {
+      let j = null;
+      if (typeof window.gwFetchMarketQuotes === 'function') {
+        j = await window.gwFetchMarketQuotes();
+      } else {
+        const r = await fetch('/api/market/quotes', { headers: { accept: 'application/json' } });
+        if (!r.ok) return;
+        j = await r.json();
+      }
+      if (!j) return;
+      const crypto = j && j.crypto ? j.crypto : {};
+      if (isStaleQuoteBook(crypto)) return;
+      let changed = false;
+      for (const asset of Object.keys(crypto)) {
+        const sym = asset + 'USDT';
+        const p = Number(crypto[asset]);
+        if (!isFinite(p) || p <= 0) continue;
+        if (PRICES[sym] === undefined) continue;
+        if (p === SEEDS[sym]) continue;
+        if (PRICES[sym] !== p) { PRICES[sym] = p; changed = true; }
+        LIVE[sym] = 1;
+      }
+      if (changed) {
+        try {
+          window.__gromLiveFeedActive = true;
+          window.__gromLastLiveTick = Date.now();
+          window.dispatchEvent(new CustomEvent('grom-public-feed', { detail: { active: true, source: 'coingecko' } }));
+        } catch (_) {}
+        notifySubsNow();
+      }
+    } catch (_) {}
   }
+  poll();
+  setInterval(poll, 20000);
 }
 
 /* ---------- Mock движения для не-крипты (раз в секунду) ---------- */
@@ -514,7 +522,14 @@ function mockTickNonCrypto() {
   }
   notifySubs();
 }
-setInterval(mockTickNonCrypto, 1000);
+setInterval(function () {
+  if (window.GROM_SAFARI || window.GROM_MOBILE) return;
+  mockTickNonCrypto();
+}, 1000);
+setInterval(function () {
+  if (!window.GROM_SAFARI && !window.GROM_MOBILE) return;
+  mockTickNonCrypto();
+}, 12000);
 
 /* ---------- Public API ---------- */
 window.GROM_INSTRUMENTS = REG;
@@ -545,12 +560,14 @@ window.gromInstrumentLogo = function (it) {
 window.gromLivePrice = function (sym) {
   var it = window.gromGetInstrument(sym);
   if (!it) return null;
+  if (it.type === 'crypto' && !LIVE[it.symbol]) return null;
   return PRICES[it.symbol];
 };
 
 window.gromLiveChange = function (sym) {
   var it = window.gromGetInstrument(sym);
   if (!it) return 0;
+  if (it.type === 'crypto' && !LIVE[it.symbol]) return NaN;
   return CHANGES[it.symbol] || 0;
 };
 

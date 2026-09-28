@@ -17,12 +17,18 @@ services:
     image: postgres:16-alpine
     container_name: grom_postgres
     restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=512MB
     environment:
       POSTGRES_DB: ${GROM_DB_NAME:-grom}
       POSTGRES_USER: ${GROM_DB_USER:-grom}
       POSTGRES_PASSWORD: ${GROM_DB_PASSWORD}
     ports:
-      - "54320:5432"     # exposed on non-standard host port to avoid Granium clash
+      - "127.0.0.1:54320:5432"     # loopback only — not public
     volumes:
       - grom_pg_data:/var/lib/postgresql/data
       - ./backend/src/db/migrations:/docker-entrypoint-initdb.d:ro
@@ -36,9 +42,16 @@ services:
     image: redis:7-alpine
     container_name: grom_redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
     ports:
-      - "63790:6379"
+      - "127.0.0.1:63790:6379"
     volumes:
       - grom_redis_data:/data
     healthcheck:
@@ -53,9 +66,12 @@ services:
     container_name: grom_backend
     restart: unless-stopped
     env_file: .env
+    environment:
+      GROM_DB_POOL_MAX: ${GROM_DB_POOL_MAX:-50}
+      GROM_QUOTE_CACHE_TTL_SEC: ${GROM_QUOTE_CACHE_TTL_SEC:-8}
     ports:
-      - "${GROM_BACKEND_PORT:-4000}:4000"
-      - "9464:9464"      # prometheus metrics (WebSocket /ws is on port 4000)
+      - "127.0.0.1:${GROM_BACKEND_PORT:-4000}:4000"
+      - "127.0.0.1:9464:9464"      # prometheus metrics (WebSocket /ws is on port 4000)
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
@@ -75,19 +91,6 @@ services:
       - "${GROM_FRONTEND_PORT:-5273}:80"
     depends_on:
       backend: { condition: service_healthy }
-    networks: [grom_net]
-
-  hummingbot:
-    profiles: ["mm"]
-    image: hummingbot/hummingbot:latest
-    container_name: grom_hummingbot
-    restart: unless-stopped
-    ports:
-      - "15889:15888"
-    volumes:
-      - ./hummingbot/conf:/conf
-      - ./hummingbot/logs:/logs
-      - ./hummingbot/data:/data
     networks: [grom_net]
 
   prometheus:

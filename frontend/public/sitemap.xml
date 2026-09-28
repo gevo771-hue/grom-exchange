@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://grom.exchange/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grom.exchange/?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://grom.exchange/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://grom.exchange/?lang=es"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://grom.exchange/?lang=de"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grom.exchange/?lang=ko"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grom.exchange/?lang=zh"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grom.exchange/?lang=ja"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grom.exchange/"/>
+  </url>
+  <url><loc>https://grom.exchange/#markets</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://grom.exchange/#futures</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://grom.exchange/#predict</loc><changefreq>hourly</changefreq><priority>0.85</priority></url>
+  <url><loc>https://grom.exchange/#xstocks</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
+  <url><loc>https://grom.exchange/?lang=ru</loc><changefreq>daily</changefreq><priority>0.95</priority></url>
+  <url><loc>https://grom.exchange/?lang=es</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://grom.exchange/?lang=de</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://grom.exchange/?lang=ko</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://grom.exchange/?lang=zh</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://grom.exchange/?lang=ja</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://grom.exchange/?lang=fr</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
+  <url><loc>https://grom.exchange/?lang=pt</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
+  <url><loc>https://grom.exchange/?lang=tr</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
+  <url><loc>https://grom.exchange/?lang=ar</loc><changefreq>daily</changefreq><priority>0.85</priority></url>
+  <url><loc>https://grom.exchange/?lang=vi</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://grom.exchange/?lang=id</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://grom.exchange/?lang=pl</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://grom.exchange/?lang=uk</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://grom.exchange/?lang=it</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+</urlset>

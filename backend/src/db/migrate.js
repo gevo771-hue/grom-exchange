@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pool } from './pool.js';
+import { shouldDeferLegacyCustodialMigration } from './migration-policy.js';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const migDir = join(__dir, 'migrations');
@@ -20,6 +21,10 @@ async function main() {
     const { rows } = await pool.query('SELECT 1 FROM schema_migrations WHERE version=$1', [file]);
     if (rows.length) {
       console.log('skip', file);
+      continue;
+    }
+    if (shouldDeferLegacyCustodialMigration(file)) {
+      console.log('defer', file, '(GROM_DEFER_LEGACY_CUSTODIAL=1; preserving legacy data)');
       continue;
     }
     const sql = readFileSync(join(migDir, file), 'utf8');

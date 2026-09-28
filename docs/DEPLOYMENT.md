@@ -25,6 +25,14 @@ git diff --check
 3. Учесть, что migration 002 нормализует неизвестную роль `market_maker` в `user`.
 4. Прогнать полный migration chain 001→текущая на копии БД.
 
+Текущий production rollout намеренно запускает migrator с
+`GROM_DEFER_LEGACY_CUSTODIAL=1`. Это оставляет миграции 027–031 pending и
+сохраняет существующие balances, transfers и связанные таблицы без изменений;
+добавительная migration 032 при этом применяется. Удалять legacy ledger можно
+отдельной выкладкой только после reconciliation и owner review. Для чистого CI
+и новых баз флаг не задаётся, поэтому полный migration chain продолжает
+проверяться.
+
 ## Конфигурация
 
 - Секреты находятся только в production `.env`.

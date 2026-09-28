@@ -121,11 +121,9 @@ jobs:
           head: HEAD
           extra_args: --only-verified
 
-      - name: Dependency review
-        if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
+      - name: Full dependency audit
+        working-directory: backend
+        run: npm audit --audit-level=high
 
   build-and-push:
     name: Build & push Docker image

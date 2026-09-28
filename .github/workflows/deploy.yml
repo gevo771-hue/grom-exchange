@@ -65,7 +65,9 @@ jobs:
               node scripts/assert-frontend-clean.mjs
 
               docker compose up -d --build --wait --wait-timeout 300
-              docker compose exec -T backend npm run migrate
+              # Keep existing custodial ledgers untouched during the wallet-only rollout.
+              # 027–031 remain pending until balances/transfers are reconciled and reviewed.
+              docker compose exec -T -e GROM_DEFER_LEGACY_CUSTODIAL=1 backend npm run migrate
 
               # Wipe then copy — docker cp merges and would leave OLD hashed twins forever.
               docker exec grom_frontend sh -c 'find /usr/share/nginx/html -mindepth 1 -maxdepth 1 ! -name .well-known -exec rm -rf {} +'

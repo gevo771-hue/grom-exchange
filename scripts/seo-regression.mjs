@@ -73,8 +73,8 @@ if (!seoRuntime.includes("document.documentElement.hasAttribute('data-grom-local
 if (!seoRuntime.includes('function canonicalUrlFor(page, lang)')) {
   fail('SEO runtime must map SPA pages to canonical product paths');
 }
-function loadSeoRuntime(search, locale) {
-  const window = {};
+function loadSeoRuntime(search, locale, uiLang = 'en') {
+  const window = { getGromLang: () => uiLang };
   const document = {
     readyState: 'loading',
     addEventListener() {},
@@ -90,12 +90,16 @@ function loadSeoRuntime(search, locale) {
   return window.GROM_SEO_I18N;
 }
 const ptRuntime = loadSeoRuntime('', 'pt-BR');
-if (ptRuntime.curLang() !== 'pt' || ptRuntime.htmlLangFor('pt') !== 'pt-BR' || ptRuntime.canonicalUrlFor('futures', 'pt') !== 'https://grom.exchange/pt-BR/futures') {
+if (ptRuntime.curLang() !== 'pt' || ptRuntime.seoLang() !== 'pt' || ptRuntime.htmlLangFor('pt') !== 'pt-BR' || ptRuntime.canonicalUrlFor('futures', 'pt') !== 'https://grom.exchange/pt-BR/futures') {
   fail('SEO runtime must preserve the pt-BR locale and canonical route');
 }
 const ruRuntime = loadSeoRuntime('?lang=ru', 'en');
-if (ruRuntime.curLang() !== 'ru' || ruRuntime.canonicalUrlFor('markets', 'ru') !== 'https://grom.exchange/ru/markets') {
+if (ruRuntime.curLang() !== 'ru' || ruRuntime.seoLang() !== 'ru' || ruRuntime.canonicalUrlFor('markets', 'ru') !== 'https://grom.exchange/ru/markets') {
   fail('SEO runtime must canonicalize localized routes to their path-based URL');
+}
+const englishRoute = loadSeoRuntime('', 'en', 'ru');
+if (englishRoute.curLang() !== 'ru' || englishRoute.seoLang() !== 'en' || englishRoute.htmlLangFor('en') !== 'ru') {
+  fail('SEO locale metadata must stay canonical while the user changes the UI language');
 }
 
 for (const page of PAGES) {

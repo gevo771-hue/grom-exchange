@@ -478,13 +478,25 @@
     } catch (_) {}
     try {
       var renderedLocale = normalizeLang(document.documentElement.getAttribute('data-grom-locale'));
-      if (LANGS.indexOf(renderedLocale) !== -1) return renderedLocale;
+      if (renderedLocale && renderedLocale !== 'en' && LANGS.indexOf(renderedLocale) !== -1) return renderedLocale;
     } catch (_) {}
     if (typeof window.getGromLang === 'function') {
       var g = normalizeLang(window.getGromLang());
       if (LANGS.indexOf(g) !== -1) return g;
     }
     return 'en';
+  }
+
+  function seoLang() {
+    try {
+      var queryLang = normalizeLang(new URLSearchParams(location.search).get('lang'));
+      if (queryLang && LANGS.indexOf(queryLang) !== -1) return queryLang;
+    } catch (_) {}
+    try {
+      var renderedLocale = normalizeLang(document.documentElement.getAttribute('data-grom-locale'));
+      if (LANGS.indexOf(renderedLocale) !== -1) return renderedLocale;
+    } catch (_) {}
+    return curLang();
   }
 
   function esc(s) {
@@ -692,7 +704,8 @@
           : (HREFLANG[normalizeLang(queryLang)] || queryLang);
       }
       var renderedLocale = document.documentElement.getAttribute('data-grom-locale');
-      if (renderedLocale) return renderedLocale;
+      if (renderedLocale && normalizeLang(renderedLocale) !== 'en') return renderedLocale;
+      if (renderedLocale === 'en') lang = curLang();
     } catch (_) {}
     return HREFLANG[normalizeLang(lang)] || normalizeLang(lang) || 'en';
   }
@@ -812,6 +825,7 @@
     currentSeoPage: currentSeoPage,
     canonicalUrlFor: canonicalUrlFor,
     htmlLangFor: htmlLangFor,
+    seoLang: seoLang,
     pageBlurb: pageBlurb,
     curLang: curLang,
     renderPrimaryBlock: renderPrimaryBlock,

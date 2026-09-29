@@ -7709,7 +7709,7 @@ function gromSeoSetProp(prop, value) {
 }
 function updateRouteSeo(page) {
   var key = page || 'landing';
-  var lang = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.curLang) ? window.GROM_SEO_I18N.curLang() : ((typeof getGromLang === 'function') ? getGromLang() : 'en');
+  var lang = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.seoLang) ? window.GROM_SEO_I18N.seoLang() : ((typeof getGromLang === 'function') ? getGromLang() : 'en');
   var i18nMeta = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.getRouteMeta) ? window.GROM_SEO_I18N.getRouteMeta(key, lang) : null;
   var pack = GROM_SEO_VARIANTS[GROM_SEO_AB] || GROM_SEO_VARIANTS.a;
   var seo = i18nMeta || (pack.routes && pack.routes[key]) || pack.base;

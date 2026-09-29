@@ -9,11 +9,10 @@
  *   открой http://localhost:8080/grom-preview.html
  * ========================================================================== */
 
-// >>>>>>>>>>>>>>>>>>  ВПИШИ СЮДА СВОЙ PROJECT ID  <<<<<<<<<<<<<<<<<<
-// Получен на https://cloud.reown.com → Projects → Project ID
-// Reown / WalletConnect Project ID. Это публичный client-side идентификатор, не secret.
-const WC_PROJECT_ID = '28302d1699a8833692b54f0454164625';
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+// The deployment's public Reown id comes from /api/swap/public-config.
+// Keep a fallback for standalone previews that do not have the backend config endpoint.
+const WC_PROJECT_ID_FALLBACK = '28302d1699a8833692b54f0454164625';
+let WC_PROJECT_ID = WC_PROJECT_ID_FALLBACK;
 
 /**
  * WalletConnect SignClient calls confirmOnlineStateOrThrow → navigator.onLine.
@@ -3979,6 +3978,8 @@ async function gwLoadSignClient() {
  * Parallel callers share _wcClientPromise so restore+connect cannot spawn two Cores.
  */
 async function gwWcClient() {
+  /* Use the backend's configured public Reown id before SignClient initialization. */
+  try { await gwEnsureFeeConfig(); } catch (_) {}
   if (_wcClient) return _wcClient;
   if (_wcClientPromise) {
     /* Stuck init from a prior restore/tab — drop and start clean (multi-tab WC deadlock). */
@@ -19609,6 +19610,7 @@ const GW_SWAP_FEE_RECEIVER = GW_LIFI_FEE_ADDR;
 /** Server public fee config — single source of truth; never snapshot before fetch completes. */
 const _gwFeeCfg = {
   ready: false,
+  walletConnectProjectId: '',
   feeBps: GW_SWAP_FEE_BPS,
   feeReceiver: '',
   squidIntegratorId: '',
@@ -19624,6 +19626,11 @@ let _gwFeeCfgPromise = null;
 function gwApplyPublicFeeConfig(cfg) {
   if (!cfg || typeof cfg !== 'object') return;
   try {
+    const wcProjectId = String(cfg.walletConnectProjectId || '').trim();
+    if (/^[a-f0-9]{32}$/i.test(wcProjectId)) {
+      WC_PROJECT_ID = wcProjectId;
+      _gwFeeCfg.walletConnectProjectId = wcProjectId;
+    }
     const bps = Number(cfg.feeBps);
     if (bps === 20) _gwFeeCfg.feeBps = 20;
     if (cfg.feeReceiver && /^0x[a-f0-9]{40}$/i.test(cfg.feeReceiver)) {
@@ -19685,7 +19692,10 @@ function gwRefreshSolanaChipAvailability() {
 
 async function gwLoadPublicFeeConfig() {
   try {
-    const r = await fetch('/api/swap/public-config', { headers: { accept: 'application/json' } });
+    const r = await fetch('/api/swap/public-config', {
+      cache: 'no-store',
+      headers: { accept: 'application/json' },
+    });
     if (!r.ok) { _gwFeeCfg.ready = true; return _gwFeeCfg; }
     const j = await r.json();
     gwApplyPublicFeeConfig(j);

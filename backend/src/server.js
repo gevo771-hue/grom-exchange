@@ -33,6 +33,7 @@ import {
   jupFeeBpsFromConfig,
 } from './wallet/jup-fee.js';
 import { createOdosRouter } from './liquidity/odos-routes.js';
+import { walletConnectProjectIdForClient } from './wallet/public-config.js';
 
 import CoinGeckoSource from './liquidity/coingecko.js';
 import DefiLlamaSource from './liquidity/defillama.js';
@@ -170,8 +171,9 @@ async function main() {
     validate: { trustProxy: false },
   });
 
-  /** Public fee/config for Instant Swap aggregators — non-secret ids only. */
+  /** Public client config — fee settings and non-secret integration ids only. */
   app.get('/api/swap/public-config', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
     const liq = config.liquidity || {};
     let feeBps = Number(liq.feeBps);
     if (!(feeBps === 20)) feeBps = 20; // only publish mandated Instant Swap fee
@@ -191,6 +193,7 @@ async function main() {
     const jupFeeBps = jupOk ? jupFeeBpsFromConfig(jupCfg) : 0;
     const jupAccountsOk = jupiterFeeReady(jupCfg);
     res.json({
+      walletConnectProjectId: walletConnectProjectIdForClient(config.wallet?.walletConnectProjectId),
       feeBps,
       feeReceiver: recvOk ? feeReceiver : null,
       squidIntegratorId: squidOk ? squidIntegratorId : null,

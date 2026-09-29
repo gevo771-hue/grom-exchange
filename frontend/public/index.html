@@ -331,6 +331,8 @@
   } catch (_) {}
   var home = walletHome ? 'dashboard' : 'landing';
   var route = fromPath || ((hash && ALLOW[hash]) ? hash : home);
+  /* A connected wallet must never land on the marketing page, including #landing. */
+  if (walletHome && route === 'landing') route = 'dashboard';
   /* /stocks#futures must not lock Stocks forever — honor intentional hash. */
   if (hash && ALLOW[hash] && fromPath && hash !== fromPath) {
     route = hash;
@@ -8478,6 +8480,7 @@ if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefau
   if (!pending && !fromHash && !fromPath) {
     start = home;
   }
+  if (walletHome && start === 'landing') start = 'dashboard';
   if (document.getElementById('page-' + start)) {
     show(start);
   } else if (start === 'backoffice') {
@@ -18167,6 +18170,16 @@ updateAuthUi = function updateAuthUiPatched() {
     if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
   }
   gromSyncAuthedClass();
+  /* WalletConnect can restore after the initial route boot and without emitting
+   * grom:wallet-connected. Re-check after this update so root/landing resolves
+   * to the dashboard as soon as the restored identity is known. */
+  if (connected) {
+    setTimeout(function () {
+      var route = '';
+      try { route = document.documentElement.getAttribute('data-grom-route') || ''; } catch (_) {}
+      if (route === 'landing' && typeof gromIsAuthed === 'function' && gromIsAuthed()) show('dashboard');
+    }, 0);
+  }
 };
 try { updateAuthUi(); } catch (_) {}
 window.addEventListener('wallet-disconnected', function () { gromResetAuthedUi(); });
@@ -18195,6 +18208,9 @@ function gromIsAuthed() {
   return !!(window.GROM_CONN && window.GROM_CONN.connected && window.GROM_CONN.label);
 }
 show = function showLivePatched(page) {
+  /* Landing is exclusively for disconnected visitors. Keep this invariant for
+   * logo/menu/command navigation as well as direct #landing links. */
+  if (page === 'landing' && gromIsAuthed()) page = 'dashboard';
   if (page !== 'wallet' && !gromIsAuthed() && GW_GATED_PAGES.indexOf(page) >= 0) {
     var walletLive = false;
     try {
@@ -18214,6 +18230,17 @@ show = function showLivePatched(page) {
   try { gromResetScrollHard(); } catch (_) {}
   try { if (typeof window.gromSyncPrettyPath === 'function') window.gromSyncPrettyPath(page); } catch (_) {}
 };
+function gromRouteConnectedWalletHome() {
+  if (typeof gromIsAuthed !== 'function' || !gromIsAuthed()) return;
+  var route = '';
+  try { route = document.documentElement.getAttribute('data-grom-route') || ''; } catch (_) {}
+  if (route === 'landing') show('dashboard');
+}
+document.addEventListener('grom:wallet-connected', gromRouteConnectedWalletHome);
+window.addEventListener('grom:wallet-connected', gromRouteConnectedWalletHome);
+document.addEventListener('grom:wallet-address-known', gromRouteConnectedWalletHome);
+window.addEventListener('grom:wallet-address-known', gromRouteConnectedWalletHome);
+setTimeout(gromRouteConnectedWalletHome, 0);
 window.addEventListener('hashchange', function () {
   var p = (location.hash || '').replace(/^#/, '').split('?')[0];
   if (p === 'trade') p = 'futures';

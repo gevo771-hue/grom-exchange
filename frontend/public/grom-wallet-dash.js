@@ -33,7 +33,7 @@ function gwSetupTrending() {
 
 /* ==========================================================================
  * MEGA-SHIP 2026-07-09: Items #7 (LimitLop), #8 (Rebalance), #10 (NFT),
- *                       #11 (Perp), #12 (AI bot), #13 (Referral 2.0)
+ *                       #11 (Perp), #12 (AI bot)
  * Compact card injections. Each ~30-50 lines with live public API.
  * ========================================================================== */
 function gwInjectMegaCss() {
@@ -493,8 +493,6 @@ const GW_DP_TR = {
     walletA1: 'Мгновенный своп', walletA1s: '20+ сетей', walletA2: 'Bridge между сетями', walletA2s: 'LiFi + Squid', walletA3: 'Открыть в explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Свап через wallet', walletA4s: 'Non-custodial',
     setH: '⚙ DEX Preferences', setSub: 'Настройки маршрутизации и защиты от MEV',
     setSlip: 'Slippage по умолчанию', setSlipS: 'Максимальное проскальзывание для свапов', setMev: 'MEV protection', setMevS: 'Приоритет CoWSwap batch, если доступно', setAgg: 'Основной агрегатор', setAggS: 'Наш meta-agg сравнивает 6 источников', setRpc: 'Свой RPC (опционально)', setRpcS: 'Для приватного нод-провайдера',
-    refH: '📖 Как работает non-custodial реферал', refSub: 'Простая формула: делись, получай процент. Без KYC.',
-    refStep1: 'Ты подключаешь кошелёк — получаешь линк с уникальным кодом', refStep2: 'Друг переходит по линку и торгует через любой наш свап', refStep3: '50% от нашей 0.20% комиссии автоматически идёт тебе — навсегда',
     saved: 'Сохранено',
   },
   en: {
@@ -502,8 +500,6 @@ const GW_DP_TR = {
     walletA1: 'Instant Swap', walletA1s: '20+ chains', walletA2: 'Cross-chain Bridge', walletA2s: 'LiFi + Squid', walletA3: 'View on explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Swap via wallet', walletA4s: 'Non-custodial',
     setH: '⚙ DEX Preferences', setSub: 'Routing settings and MEV protection',
     setSlip: 'Default slippage', setSlipS: 'Maximum slippage tolerated on swaps', setMev: 'MEV protection', setMevS: 'Prefer CoWSwap batch when available', setAgg: 'Preferred aggregator', setAggS: 'Our meta-agg compares 6 sources', setRpc: 'Custom RPC (optional)', setRpcS: 'For private node providers',
-    refH: '📖 How non-custodial referral works', refSub: 'Simple: share, earn a cut. No KYC.',
-    refStep1: 'Connect wallet — get a link with your unique code', refStep2: 'Friend follows the link and trades via any of our swaps', refStep3: "50% of our 0.20% fee is routed to you automatically — forever",
     saved: 'Saved',
   },
 };
@@ -661,102 +657,21 @@ function gwFixReferralQR() {
   }
 }
 
-function gwRenderDexReferralExplainer() {
-  const page = document.getElementById('page-referral'); if (!page) return;
-  gwInjectDexPagesCss();
-  let wrap = document.getElementById('gwDpReferralExplainer');
-  if (!wrap) {
-    wrap = document.createElement('div'); wrap.id = 'gwDpReferralExplainer'; wrap.className = 'gw-dp-wrap';
-    // Insert AFTER Referral 2.0 card if it exists, else before first card.
-    const ref2 = document.getElementById('gwRef2CardPage');
-    const firstCard = page.querySelector('.card');
-    if (ref2) ref2.after(wrap);
-    else if (firstCard) firstCard.before(wrap);
-    else page.appendChild(wrap);
-  }
-  const t = gwDpLang();
-  wrap.innerHTML = `<div class="gw-dp-card g">
-    <div class="gw-dp-head"><div>
-      <h3 class="gw-dp-h">${t.refH}</h3>
-      <p class="gw-dp-sub">${t.refSub}</p>
-    </div><span class="gw-dp-badge" style="background:rgba(34,193,124,.12);border-color:rgba(34,193,124,.30);color:#22c17c">50/50</span></div>
-    <div style="display:flex;gap:14px;flex-wrap:wrap">
-      ${[t.refStep1, t.refStep2, t.refStep3].map((s, i) => `
-        <div style="flex:1 1 220px;padding:16px 18px;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)">
-          <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#22c17c,#10a06a);color:#04160a;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;margin-bottom:10px">${i + 1}</div>
-          <div style="color:#e7eef8;font-size:13.5px;line-height:1.5">${s}</div>
-        </div>
-      `).join('')}
-    </div>
-  </div>`;
-}
-
 function gwSetupDexPages() {
   const run = gwDebounce(() => {
     try { if (document.getElementById('page-wallet'))   gwRenderDexWalletActions();   } catch (_) {}
     try { if (document.getElementById('page-settings')) gwRenderDexSettings();        } catch (_) {}
     try { if (document.getElementById('page-referral')) {
-      gwRenderDexReferralExplainer();
       gwFixReferralQR();
     } } catch (_) {}
   }, 250);
   run();
-  let n = 0; const id = setInterval(() => { n++; const anyMounted = document.getElementById('gwDpWalletCard') || document.getElementById('gwDpSettingsCard') || document.getElementById('gwDpReferralExplainer'); if (anyMounted || n >= 20) clearInterval(id); else run(); }, 500);
+  let n = 0; const id = setInterval(() => { n++; const anyMounted = document.getElementById('gwDpWalletCard') || document.getElementById('gwDpSettingsCard'); if (anyMounted || n >= 20) clearInterval(id); else run(); }, 500);
   gwOnRoute(run);
   window.addEventListener('grom:lang-change', () => {
-    ['gwDpWalletCard', 'gwDpSettingsCard', 'gwDpReferralExplainer'].forEach(id => document.getElementById(id)?.remove());
+    ['gwDpWalletCard', 'gwDpSettingsCard'].forEach(id => document.getElementById(id)?.remove());
     run();
   });
-}
-
-/* Referral 2.0 — mounts on #page-referral (not dashboard). */
-function gwSetupReferralPage2() {
-  const run = gwDebounce(() => {
-    const page = document.getElementById('page-referral');
-    if (!page) return;
-    gwInjectMegaCss();
-    let wrap = document.getElementById('gwRef2CardPage');
-    if (!wrap) {
-      wrap = document.createElement('div'); wrap.id = 'gwRef2CardPage'; wrap.className = 'gw-mg-wrap';
-      // Prepend as the first inner card of the referral page for high visibility.
-      page.insertBefore(wrap, page.firstChild);
-    }
-    const code = (localStorage.getItem('grom_ref_code') || '').toUpperCase();
-    const isAuth = !!code || !!localStorage.getItem('grom_jwt') || !!localStorage.getItem('gw_addr');
-    if (!isAuth) {
-      wrap.innerHTML = `<div class="gw-mg-card ref">
-        <div class="gw-mg-head"><div>
-          <h3 class="gw-mg-h">🎁 Referral 2.0 · 50/50 split forever</h3>
-          <p class="gw-mg-sub">Войди — получи персональный линк и забирай половину нашей 0.20% комиссии со свапов каждого приведённого пользователя</p>
-        </div><span class="gw-mg-badge">50/50</span></div>
-        <button class="gw-mg-cta g" id="gwRef2PSignIn">Sign in to unlock →</button>
-      </div>`;
-      document.getElementById('gwRef2PSignIn').onclick = () => {
-        try { if (typeof openConnectModal === 'function') openConnectModal(); else if (typeof cnConnect === 'function') cnConnect(); } catch (_) {}
-      };
-      return;
-    }
-    const link = `https://grom.exchange/?ref=${code || 'you'}`;
-    wrap.innerHTML = `<div class="gw-mg-card ref">
-      <div class="gw-mg-head"><div>
-        <h3 class="gw-mg-h">🎁 Referral 2.0 · 50/50 split forever</h3>
-        <p class="gw-mg-sub">Earn half of GROM's 0.20% swap fee from every friend you refer — paid daily, forever</p>
-      </div><span class="gw-mg-badge">50/50</span></div>
-      <div class="gw-mg-grid" style="margin-bottom:12px;grid-template-columns:2fr 1fr">
-        <div class="gw-mg-item"><div class="k">Your link</div><div class="v" style="font-size:11.5px;font-family:'JetBrains Mono',monospace;word-break:break-all">${link}</div></div>
-        <div class="gw-mg-item"><div class="k">Earned</div><div class="v">0.00 USDT</div><div class="s">Paid daily</div></div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="gw-mg-cta g" id="gwRef2PCopy">Copy link</button>
-        <a class="gw-mg-cta" href="https://twitter.com/intent/tweet?text=Trading%20on%20GROM%20—%20non-custodial%20DEX%20across%2020%2B%20chains&url=${encodeURIComponent(link)}" target="_blank" rel="noopener">Share on 𝕏</a>
-        <a class="gw-mg-cta p" href="https://t.me/share/url?url=${encodeURIComponent(link)}&text=GROM%20exchange" target="_blank" rel="noopener">Share to Telegram</a>
-      </div>
-    </div>`;
-    document.getElementById('gwRef2PCopy').onclick = () => { navigator.clipboard?.writeText(link); gwToast('Referral link copied', 'success'); };
-  }, 300);
-  run();
-  gwOnRoute(run);
-  window.addEventListener('grom:lang-change', () => { document.getElementById('gwRef2CardPage')?.remove(); run(); });
 }
 
 function gwSetupYield() {
@@ -981,7 +896,6 @@ window.__gwDashImpl = Object.assign(window.__gwDashImpl || {}, {
   gwSetupDexPages,
   gwSetupMegaCards,
   gwSetupPredictArb,
-  gwSetupReferralPage2,
   gwSetupTrending,
   gwSetupYield,
 });

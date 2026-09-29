@@ -6904,15 +6904,15 @@
         <div class="ref-how-card">
           <div class="ref-how-head">
             <div>
-              <h3 data-i18n="ref_how_title">📖 Как работает non-custodial реферал</h3>
-              <p data-i18n="ref_how_sub">Простая формула: делись, получай процент. Без KYC.</p>
+              <h3 data-i18n="ref_how_title">📖 How the non-custodial referral program works</h3>
+              <p data-i18n="ref_how_sub">A simple formula: share your link and earn a fee share. No KYC.</p>
             </div>
             <span class="ref-how-badge">50/50</span>
           </div>
           <div class="ref-how-steps">
-            <div class="ref-how-step"><span>1</span><p data-i18n="ref_step_1">Ты подключаешь кошелёк — получаешь линк с уникальным кодом</p></div>
-            <div class="ref-how-step"><span>2</span><p data-i18n="ref_step_2">Друг переходит по линку и торгует через любой наш свап</p></div>
-            <div class="ref-how-step"><span>3</span><p data-i18n="ref_step_3">50% от нашей 0.20% комиссии автоматически идёт тебе — навсегда</p></div>
+            <div class="ref-how-step"><span>1</span><p data-i18n="ref_step_1">Connect your wallet to get a link with a unique code</p></div>
+            <div class="ref-how-step"><span>2</span><p data-i18n="ref_step_2">Your friend follows the link and swaps through GROM</p></div>
+            <div class="ref-how-step"><span>3</span><p data-i18n="ref_step_3">You automatically receive 50% of our 0.20% fee</p></div>
           </div>
         </div>
         <div class="card ref-commission-card">
@@ -7708,7 +7708,7 @@ function gromSeoSetProp(prop, value) {
   if (n) n.setAttribute('content', value);
 }
 function updateRouteSeo(page) {
-  var key = page === 'dashboard' ? 'landing' : page;
+  var key = page || 'landing';
   var lang = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.curLang) ? window.GROM_SEO_I18N.curLang() : ((typeof getGromLang === 'function') ? getGromLang() : 'en');
   var i18nMeta = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.getRouteMeta) ? window.GROM_SEO_I18N.getRouteMeta(key, lang) : null;
   var pack = GROM_SEO_VARIANTS[GROM_SEO_AB] || GROM_SEO_VARIANTS.a;
@@ -7723,12 +7723,17 @@ function updateRouteSeo(page) {
   gromSeoSet('twitter:title', title);
   gromSeoSet('twitter:description', desc);
   gromSeoSet('keywords', kw);
-  var routeHash = (page && page !== 'landing' && page !== 'dashboard') ? ('#' + page) : '';
-  var canonicalUrl = 'https://grom.exchange/' + (lang && lang !== 'en' ? ('?lang=' + encodeURIComponent(lang)) : '') + routeHash;
+  var canonicalUrl = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.canonicalUrlFor)
+    ? window.GROM_SEO_I18N.canonicalUrlFor(page, lang)
+    : 'https://grom.exchange/';
   var canonical = document.querySelector('link[rel="canonical"]');
   if (canonical) canonical.setAttribute('href', canonicalUrl);
   gromSeoSetProp('og:url', canonicalUrl);
-  try { document.documentElement.lang = lang === 'zh' ? 'zh-Hans' : lang; } catch (_) {}
+  try {
+    document.documentElement.lang = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.htmlLangFor)
+      ? window.GROM_SEO_I18N.htmlLangFor(lang)
+      : (lang === 'zh' ? 'zh-Hans' : lang);
+  } catch (_) {}
 }
 window.gromSeoRefreshRouteMeta = updateRouteSeo;
 

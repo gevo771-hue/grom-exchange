@@ -13,6 +13,20 @@
     vi: 'vi', id: 'id', th: 'th', pl: 'pl', uk: 'uk', it: 'it',
   };
 
+  /* Only these locales have canonical, pre-rendered SEO routes and sitemap URLs. */
+  var SEO_LOCALE_PREFIX = {
+    en: '', es: '/es', 'pt-BR': '/pt-BR', tr: '/tr', ru: '/ru', vi: '/vi', id: '/id',
+  };
+  var SEO_ROUTE_PATH = {
+    landing: '/', dashboard: '/swap', markets: '/markets',
+    futures: '/futures', predict: '/predict', xstocks: '/stocks',
+  };
+
+  function normalizeLang(code) {
+    var value = String(code || '').toLowerCase();
+    return value === 'pt-br' ? 'pt' : value;
+  }
+
   function blk(label, htmlLang, h2, intro, kw, links) {
     return { label: label, htmlLang: htmlLang, h2: h2, intro: intro, kw: kw, links: links };
   }
@@ -458,8 +472,16 @@
   }
 
   function curLang() {
+    try {
+      var queryLang = normalizeLang(new URLSearchParams(location.search).get('lang'));
+      if (queryLang && LANGS.indexOf(queryLang) !== -1) return queryLang;
+    } catch (_) {}
+    try {
+      var renderedLocale = normalizeLang(document.documentElement.getAttribute('data-grom-locale'));
+      if (LANGS.indexOf(renderedLocale) !== -1) return renderedLocale;
+    } catch (_) {}
     if (typeof window.getGromLang === 'function') {
-      var g = window.getGromLang();
+      var g = normalizeLang(window.getGromLang());
       if (LANGS.indexOf(g) !== -1) return g;
     }
     return 'en';
@@ -572,19 +594,23 @@
     }
   }
 
-  function injectHreflang() {
+  function injectHreflang(force) {
     var head = document.head;
-    if (!head || head.querySelector('[data-grom-hreflang]')) return;
+    if (!head) return;
+    /* The crawler HTML already has the exact path-based alternates from the build. */
+    try {
+      if (document.documentElement.hasAttribute('data-grom-locale')) return;
+    } catch (_) {}
+    if (!force && head.querySelector('[data-grom-hreflang]')) return;
+    head.querySelectorAll('[data-grom-hreflang]').forEach(function (link) { link.remove(); });
     var page = currentSeoPage();
     var path = pathForSeoPage(page);
-    var basePath = path === '/' ? '/' : path;
-    LANGS.forEach(function (code) {
+    Object.keys(SEO_LOCALE_PREFIX).forEach(function (code) {
+      var basePath = SEO_LOCALE_PREFIX[code] + (path === '/' ? '/' : path);
       var link = document.createElement('link');
       link.rel = 'alternate';
       link.hreflang = HREFLANG[code] || code;
-      link.href = basePath === '/'
-        ? ('https://grom.exchange/?lang=' + encodeURIComponent(code))
-        : ('https://grom.exchange' + basePath + '?lang=' + encodeURIComponent(code));
+      link.href = 'https://grom.exchange' + basePath;
       link.setAttribute('data-grom-hreflang', '1');
       head.appendChild(link);
     });
@@ -642,8 +668,33 @@
   function pathForSeoPage(page) {
     var pathOf = window.GROM_PATH_OF || {};
     if (pathOf[page]) return pathOf[page];
-    if (page === 'landing') return '/';
-    return '/';
+    return SEO_ROUTE_PATH[page] || '/';
+  }
+
+  function canonicalUrlFor(page, lang) {
+    var key = page || 'landing';
+    if (key === 'trade') key = 'futures';
+    if (key === 'stocks' || key === 'stock') key = 'xstocks';
+    if (key === 'binary' || key === 'spot') key = 'dashboard';
+    var locale = normalizeLang(lang) === 'pt' ? 'pt-BR' : normalizeLang(lang);
+    var prefix = Object.prototype.hasOwnProperty.call(SEO_LOCALE_PREFIX, locale)
+      ? SEO_LOCALE_PREFIX[locale]
+      : '';
+    return 'https://grom.exchange' + prefix + (SEO_ROUTE_PATH[key] || '/');
+  }
+
+  function htmlLangFor(lang) {
+    try {
+      var queryLang = new URLSearchParams(location.search).get('lang');
+      if (queryLang && LANGS.indexOf(normalizeLang(queryLang)) !== -1) {
+        return normalizeLang(queryLang) === 'pt' && queryLang.toLowerCase() === 'pt-br'
+          ? 'pt-BR'
+          : (HREFLANG[normalizeLang(queryLang)] || queryLang);
+      }
+      var renderedLocale = document.documentElement.getAttribute('data-grom-locale');
+      if (renderedLocale) return renderedLocale;
+    } catch (_) {}
+    return HREFLANG[normalizeLang(lang)] || normalizeLang(lang) || 'en';
   }
 
   function pageBlurb(route, lang) {
@@ -704,6 +755,7 @@
           if (typeof window.gromSeoRefreshRouteMeta === 'function') {
             window.gromSeoRefreshRouteMeta(page);
           }
+          injectHreflang(true);
         } catch (_) {}
       });
     } catch (_) {}
@@ -758,6 +810,8 @@
     PAGE_BLURBS: PAGE_BLURBS,
     getRouteMeta: getRouteMeta,
     currentSeoPage: currentSeoPage,
+    canonicalUrlFor: canonicalUrlFor,
+    htmlLangFor: htmlLangFor,
     pageBlurb: pageBlurb,
     curLang: curLang,
     renderPrimaryBlock: renderPrimaryBlock,

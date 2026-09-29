@@ -5,6 +5,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { SEO_COPY, wordCount, buildRouteArticleHtml } from './seo-route-content.mjs';
 import {
   ROUTE_KEEP_PAGES,
@@ -41,6 +42,21 @@ function canonicalOf(html) {
   const m = html.match(/<link\s+rel="canonical"\s+href="([^"]*)"/i);
   return m ? m[1] : '';
 }
+function metaAttrContent(html, attr, key) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = html.match(new RegExp(`<meta\\s+${attr}="${escaped}"\\s+content="([^"]*)"`, 'i'))
+    || html.match(new RegExp(`<meta\\s+content="([^"]*)"\\s+${attr}="${escaped}"`, 'i'));
+  return m ? m[1] : '';
+}
+function structuredData(html, label) {
+  const scripts = [...html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];
+  const entries = [];
+  for (const match of scripts) {
+    try { entries.push(JSON.parse(match[1])); }
+    catch { fail(`${label}: invalid JSON-LD`); }
+  }
+  return entries;
+}
 
 if (!existsSync(OUT)) {
   console.error('Run build-frontend.mjs first — missing', OUT);
@@ -50,6 +66,37 @@ if (!existsSync(OUT)) {
 const titles = new Set();
 const descs = new Set();
 const PAGES = allLocalizedPages();
+const seoRuntime = readFileSync('frontend/public/grom-seo-i18n.js', 'utf8');
+if (!seoRuntime.includes("document.documentElement.hasAttribute('data-grom-locale')")) {
+  fail('SEO runtime must preserve build-time canonical/hreflang metadata on static SEO pages');
+}
+if (!seoRuntime.includes('function canonicalUrlFor(page, lang)')) {
+  fail('SEO runtime must map SPA pages to canonical product paths');
+}
+function loadSeoRuntime(search, locale) {
+  const window = {};
+  const document = {
+    readyState: 'loading',
+    addEventListener() {},
+    documentElement: { getAttribute: (name) => name === 'data-grom-locale' ? locale : '' },
+    head: {},
+  };
+  runInNewContext(seoRuntime, {
+    window,
+    document,
+    location: { search, pathname: '/pt-BR/futures', hash: '' },
+    URLSearchParams,
+  });
+  return window.GROM_SEO_I18N;
+}
+const ptRuntime = loadSeoRuntime('', 'pt-BR');
+if (ptRuntime.curLang() !== 'pt' || ptRuntime.htmlLangFor('pt') !== 'pt-BR' || ptRuntime.canonicalUrlFor('futures', 'pt') !== 'https://grom.exchange/pt-BR/futures') {
+  fail('SEO runtime must preserve the pt-BR locale and canonical route');
+}
+const ruRuntime = loadSeoRuntime('?lang=ru', 'en');
+if (ruRuntime.curLang() !== 'ru' || ruRuntime.canonicalUrlFor('markets', 'ru') !== 'https://grom.exchange/ru/markets') {
+  fail('SEO runtime must canonicalize localized routes to their path-based URL');
+}
 
 for (const page of PAGES) {
   const file = page.dir ? `${page.dir}/index.html` : 'index.html';
@@ -68,13 +115,22 @@ for (const page of PAGES) {
   if (!new RegExp(`<html[^>]*\\blang="${loc.htmlLang}"`, 'i').test(html)) {
     fail(`${label}: html lang is not ${loc.htmlLang}`);
   } else ok(`${label}: lang=${loc.htmlLang}`);
+  if (!html.includes(`data-grom-locale="${loc.code}"`)) fail(`${label}: missing rendered SEO locale marker`);
 
-  if (/noindex/i.test(metaContent(html, 'robots'))) fail(`${label}: robots contains noindex`);
+  const robots = metaContent(html, 'robots');
+  if (/noindex/i.test(robots)) fail(`${label}: robots contains noindex`);
+  if (!/\bindex\b/i.test(robots) || !/\bfollow\b/i.test(robots)) fail(`${label}: robots must allow index,follow`);
 
   const canon = canonicalOf(html);
   const expectCanon = 'https://grom.exchange' + (page.path === '/' ? '/' : page.path);
   if (canon !== expectCanon) fail(`${label}: canonical ${canon} ≠ ${expectCanon}`);
   else ok(`${label}: canonical`);
+  if ([...html.matchAll(/<link\s+rel="canonical"/gi)].length !== 1) fail(`${label}: expected exactly one canonical`);
+
+  for (const [attr, key] of [['property', 'og:title'], ['property', 'og:description'], ['property', 'og:image'], ['property', 'og:url'], ['name', 'twitter:card'], ['name', 'twitter:title'], ['name', 'twitter:description'], ['name', 'twitter:image']]) {
+    if (!metaAttrContent(html, attr, key)) fail(`${label}: missing ${key}`);
+  }
+  if (metaAttrContent(html, 'property', 'og:url') !== expectCanon) fail(`${label}: og:url does not match canonical`);
 
   const title = titleOf(html);
   const desc = metaContent(html, 'description');
@@ -93,6 +149,10 @@ for (const page of PAGES) {
   if (!html.includes('gromSeoWebAppLd') || !html.includes('gromSeoFaqLd')) {
     fail(`${label}: missing JSON-LD`);
   }
+  const schemas = structuredData(html, label).map((entry) => entry['@type']);
+  for (const required of ['Organization', 'WebSite', 'ItemList', 'WebApplication', 'FAQPage']) {
+    if (!schemas.includes(required)) fail(`${label}: missing ${required} structured data`);
+  }
   if (!html.includes('grom-seo-details') || !html.includes('grom-seo-summary')) {
     fail(`${label}: SEO must be visible <details>`);
   }
@@ -103,11 +163,20 @@ for (const page of PAGES) {
     fail(`${label}: SEO copy must live inside <main>`);
   }
 
+  const alternates = [...html.matchAll(/<link\s+rel="alternate"\s+hreflang="([^"]+)"\s+href="([^"]+)"\s*\/?\s*>/gi)];
+  const alternateLangs = alternates.map((m) => m[1]);
   for (const l of SEO_LOCALES) {
-    if (!html.includes(`hreflang="${l.hreflang}"`)) fail(`${label}: missing hreflang ${l.hreflang}`);
+    const expectedHref = 'https://grom.exchange' + (l.prefix
+      ? (page.productPath === '/' ? `${l.prefix}/` : `${l.prefix}${page.productPath}`)
+      : (page.productPath === '/' ? '/' : page.productPath));
+    const alternate = alternates.find((m) => m[1] === l.hreflang);
+    if (!alternate) fail(`${label}: missing hreflang ${l.hreflang}`);
+    else if (alternate[2] !== expectedHref) fail(`${label}: hreflang ${l.hreflang} points to ${alternate[2]} instead of ${expectedHref}`);
   }
-  if (!html.includes('hreflang="x-default"')) fail(`${label}: missing x-default`);
-  else ok(`${label}: hreflang set`);
+  if (!alternateLangs.includes('x-default')) fail(`${label}: missing x-default`);
+  if (alternateLangs.length !== SEO_LOCALES.length + 1 || new Set(alternateLangs).size !== alternateLangs.length) {
+    fail(`${label}: expected one path-based hreflang set without duplicates`);
+  } else ok(`${label}: hreflang set`);
 
   if (!html.includes('grom-seo-langs')) fail(`${label}: missing crawlable language switcher`);
 
@@ -181,6 +250,10 @@ if (!existsSync(sm)) fail('sitemap.xml missing');
 else {
   const sx = readFileSync(sm, 'utf8');
   if (!sx.includes('xmlns:xhtml')) fail('sitemap missing xhtml hreflang');
+  const sitemapUrls = [...sx.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  if (sitemapUrls.length !== PAGES.length) fail(`sitemap has ${sitemapUrls.length} entries; expected ${PAGES.length}`);
+  if (new Set(sitemapUrls).size !== sitemapUrls.length) fail('sitemap contains duplicate URLs');
+  if (sitemapUrls.some((url) => /[?#]/.test(url))) fail('sitemap must use canonical paths without query/hash URLs');
   for (const p of PAGES) {
     const loc = 'https://grom.exchange' + (p.path === '/' ? '/' : p.path);
     if (!sx.includes(`<loc>${loc}</loc>`)) fail(`sitemap missing ${loc}`);

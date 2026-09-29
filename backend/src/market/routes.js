@@ -186,7 +186,8 @@ async function fetchBackedXstocksCatalog() {
       tradeable: true,
       halted: !!n.isTradingHalted,
       price: 0,
-      chg: 0,
+      chg: null,
+      chgSource: null,
       vol24: '—',
       mc: '—',
     });
@@ -276,7 +277,8 @@ async function fetchYahooEquityMetrics(items) {
         const px = Number(r.regularMarketPrice);
         const shares = Number(r.regularMarketVolume);
         const mc = Number(r.marketCap);
-        const chg = Number(r.regularMarketChangePercent);
+        const rawChg = r.regularMarketChangePercent;
+        const chg = rawChg == null ? null : Number(rawChg);
         const dollarVol = (Number.isFinite(px) && Number.isFinite(shares) && px > 0 && shares > 0)
           ? px * shares
           : 0;
@@ -284,7 +286,8 @@ async function fetchYahooEquityMetrics(items) {
           vol24: fmtCompactUsd(dollarVol),
           mc: fmtCompactUsd(mc),
           equityPx: Number.isFinite(px) && px > 0 ? px : 0,
-          chg: Number.isFinite(chg) ? chg : 0,
+          chg: Number.isFinite(chg) ? chg : null,
+          chgSource: Number.isFinite(chg) ? 'yahoo' : null,
         });
       }
     } catch (e) {
@@ -350,7 +353,10 @@ async function enrichXstocksMetrics(items) {
     for (const it of items) {
       const m = metrics.get(String(it.sym || '').toUpperCase());
       if (!m) continue;
-      if (m.chg) it.chg = m.chg;
+      if (m.chg != null) {
+        it.chg = m.chg;
+        it.chgSource = m.chgSource;
+      }
       /* Market cap = underlying company (what «КАПИТАЛИЗАЦИЯ» means on Stocks). */
       if (m.mc && m.mc !== '—') it.mc = m.mc;
       /* Keep Yahoo equity $ volume as fallback; Dex pool vol preferred below. */

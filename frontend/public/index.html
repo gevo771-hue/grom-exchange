@@ -1364,15 +1364,20 @@
     flex: 0 1 auto; min-width: 0;
   }
   .hub-nav {
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    flex: 1; min-width: 0; overflow-x: auto; padding: 0 8px;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    flex: 1; min-width: 0; overflow-x: auto; padding: 4px 5px;
+    border: 1px solid rgba(151,178,199,.16);
+    border-radius: 15px;
+    background: linear-gradient(145deg, rgba(20,30,43,.72), rgba(30,43,58,.66));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.045);
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
   .hub-nav::-webkit-scrollbar { display: none; }
   .hub-link {
     font-size: 12px; font-weight: 700; letter-spacing: 0.045em; text-transform: uppercase;
-    color: rgba(214, 221, 232, 0.72); padding: 10px 15px; border-radius: 999px; white-space: nowrap;
+    color: rgba(214, 221, 232, 0.72); padding: 10px 15px; border-radius: 10px; white-space: nowrap;
+    min-height: 40px;
     background: transparent; border: none; cursor: pointer; font-family: inherit;
     flex-shrink: 0; transition: color 0.18s, background 0.18s, box-shadow 0.18s, border-color 0.18s;
     -webkit-font-smoothing: antialiased;
@@ -1380,14 +1385,12 @@
     text-rendering: geometricPrecision;
     border: 1px solid transparent;
   }
-  .hub-link:hover { color: rgba(241, 245, 251, 0.94); background: rgba(59, 69, 88, 0.42); border-color: rgba(200,212,232,0.08); }
+  .hub-link:hover { color: rgba(241, 245, 251, 0.94); background: rgba(145,180,197,.09); border-color: rgba(164,205,221,.15); }
   .hub-link.active {
-    color: #8fcaff;
-    background: linear-gradient(165deg, rgba(38, 126, 214, 0.26), rgba(14, 38, 84, 0.16));
-    box-shadow:
-      inset 0 0 0 1px rgba(130, 205, 255, 0.18),
-      0 8px 20px rgba(0, 0, 0, 0.22);
-    border-color: rgba(95, 171, 255, 0.2);
+    color: #edf5f9;
+    background: linear-gradient(180deg, rgba(133,154,170,.28), rgba(83,103,122,.24));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 3px 9px -7px rgba(0,0,0,.9);
+    border-color: rgba(174,207,222,.18);
   }
   .topbar-ico {
     display: inline-flex;
@@ -14723,7 +14726,9 @@ var GROM_XSTOCKS = [
     item.tradeable = item.halted ? false : true;
     if (!item.vol24 || item.vol24 === '—') item.vol24 = '—';
     if (!item.mc || item.mc === '—') item.mc = '—';
-    item.chg = item.chg || 0;
+    item.chg = item.chgSource && item.chg != null && isFinite(Number(item.chg))
+      ? Number(item.chg)
+      : null;
     item.price = item.price || 0;
     return item;
   }
@@ -14923,6 +14928,118 @@ var GROM_XSTOCKS = [
     }
     // Patch visible rows only — full re-render drops mobile "Load more" window and janks scroll.
     try { refreshStockPrices(); } catch (_) { renderXstocksRows(); }
+  }
+  // List prices use the same live buy-quote engine as the trade dialog. We
+  // quote a $100 USDT purchase so the displayed per-share price includes the
+  // selected route and GROM fee; the dialog refreshes at the amount entered.
+  var GWX_BUY_QUOTE_AMOUNT = 100;
+  var GWX_BUY_QUOTE_TTL = 30000;
+  var GWX_BUY_QUOTE_FAIL_TTL = 15000;
+  var GWX_BUY_QUOTE_CONCURRENCY = 2;
+  var gwxBuyQuoteQueue = [];
+  var gwxBuyQuoteInFlight = Object.create(null);
+  var gwxBuyQuoteWorkers = 0;
+  function gwxRowIsOnScreen(row) {
+    if (!row || !row.getBoundingClientRect) return false;
+    var box = row.getBoundingClientRect();
+    return box.bottom > 0 && box.top < (window.innerHeight || document.documentElement.clientHeight || 0);
+  }
+  function gwxFormatBuyPrice(price) {
+    if (!(Number(price) > 0) || !isFinite(Number(price))) return '—';
+    var n = Number(price);
+    return '$' + n.toLocaleString('en-US', {
+      minimumFractionDigits: n < 1 ? 4 : 2,
+      maximumFractionDigits: n < 1 ? 4 : 2,
+    });
+  }
+  function gwxQuoteOutputTokens(q, trade) {
+    if (Number(q && q.outTokens) > 0) return Number(q.outTokens);
+    if (!q || q.toAmount == null) return 0;
+    var decimals = Number(q.outDecimals);
+    if (!(decimals >= 0 && decimals <= 36)) {
+      decimals = q.venue === 'solana' || q.venue === 'bridge-sol'
+        ? Number(trade.solDecimals || 8)
+        : Number(trade.decimals || 18);
+    }
+    try { return Number(BigInt(q.toAmount)) / Math.pow(10, decimals); } catch (_) { return 0; }
+  }
+  function gwxPaintBuyQuote(stock) {
+    var page = document.getElementById('page-xstocks');
+    var row = page && page.querySelector('.gwx-row[data-sym="' + stock.sym + '"]');
+    var cell = row && row.querySelector('.gwx-price');
+    if (!cell) return;
+    var price = Number(stock.buyQuotePrice);
+    cell.textContent = gwxFormatBuyPrice(price);
+    cell.title = price > 0
+      ? tx('px_buy_quote_help', 'Average buy-route price from a $100 USDT quote. The trade dialog recalculates for your amount; network gas is separate.')
+      : (stock.buyQuoteStatus === 'loading'
+        ? tx('px_quoting', 'Fetching route…')
+        : tx('px_buy_quote_unavailable', 'No executable buy quote is available right now.'));
+  }
+  function gwxPumpBuyQuoteQueue() {
+    while (gwxBuyQuoteWorkers < GWX_BUY_QUOTE_CONCURRENCY && gwxBuyQuoteQueue.length) {
+      var stock = gwxBuyQuoteQueue.shift();
+      delete gwxBuyQuoteInFlight[stock.sym];
+      if (!stock || !STOCK_MAP[stock.sym] || !gwxIsActiveXstocksPage()) continue;
+      var trade = gwxPickTrade(stock);
+      if (!trade || stock.halted || typeof window.gwXstocksQuote !== 'function') {
+        stock.buyQuoteStatus = 'unavailable';
+        stock.buyQuoteAt = Date.now();
+        gwxPaintBuyQuote(stock);
+        continue;
+      }
+      gwxBuyQuoteInFlight[stock.sym] = true;
+      gwxBuyQuoteWorkers++;
+      (async function (item, route) {
+        try {
+          var q = await window.gwXstocksQuote({
+            fromSym: 'USDT', toSym: route.tokenSym, amtNum: GWX_BUY_QUOTE_AMOUNT,
+            chainId: route.chainId, address: route.address, decimals: route.decimals,
+            name: item.name, logo: item.logo, solMint: route.solMint,
+            solDecimals: route.solDecimals, addrsByChain: item.addrs || null,
+            refPrice: Number(item.price) || 0,
+            probeLite: !!route.solMint,
+          });
+          var tokens = gwxQuoteOutputTokens(q, route);
+          var spend = Number(q && q.amountInUsd) || GWX_BUY_QUOTE_AMOUNT;
+          var price = q && !q.impactBlocked && tokens > 0 ? spend / tokens : 0;
+          item.buyQuotePrice = price > 0 && isFinite(price) ? price : 0;
+          item.buyQuoteStatus = item.buyQuotePrice > 0 ? 'ready' : 'unavailable';
+          item.buyQuoteAt = Date.now();
+          item.buyQuoteRoute = q ? String(q.aggregator || q.tool || 'DEX') : '';
+        } catch (_) {
+          item.buyQuotePrice = 0;
+          item.buyQuoteStatus = 'unavailable';
+          item.buyQuoteAt = Date.now();
+        } finally {
+          delete gwxBuyQuoteInFlight[item.sym];
+          gwxBuyQuoteWorkers = Math.max(0, gwxBuyQuoteWorkers - 1);
+          gwxPaintBuyQuote(item);
+          gwxPumpBuyQuoteQueue();
+        }
+      })(stock, trade);
+    }
+  }
+  function gwxIsActiveXstocksPage() {
+    var page = document.getElementById('page-xstocks');
+    return !!(page && page.classList.contains('active') && !document.hidden);
+  }
+  function gwxQueueVisibleBuyQuotes() {
+    if (!gwxIsActiveXstocksPage() || typeof window.gwXstocksQuote !== 'function') return;
+    var page = document.getElementById('page-xstocks');
+    var now = Date.now();
+    page.querySelectorAll('.gwx-row[data-sym]').forEach(function (row) {
+      if (!gwxRowIsOnScreen(row)) return;
+      var stock = STOCK_MAP[row.dataset.sym];
+      if (!stock || stock.halted || gwxBuyQuoteInFlight[stock.sym]) return;
+      var ttl = stock.buyQuoteStatus === 'ready' ? GWX_BUY_QUOTE_TTL : GWX_BUY_QUOTE_FAIL_TTL;
+      if (stock.buyQuoteAt && now - stock.buyQuoteAt < ttl) return;
+      if (gwxBuyQuoteQueue.some(function (item) { return item.sym === stock.sym; })) return;
+      stock.buyQuoteStatus = 'loading';
+      gwxPaintBuyQuote(stock);
+      gwxBuyQuoteQueue.push(stock);
+    });
+    gwxPumpBuyQuoteQueue();
   }
   async function refreshUsdtBalChip() {
     try {
@@ -15927,9 +16044,9 @@ var GROM_XSTOCKS = [
       + (predictWhen(m) ? '<span>' + esc(predictWhen(m)) + '</span>' : '') + '</div></div>';
   }
   function stockRowHtml(s) {
-    var px = curPx(s.sym) || s.price || 0;
-    var b0 = gwxB0[s.sym] || s.price || px || 1;
-    var chg = s.chg != null ? s.chg : ((px / b0 - 1) * 100);
+    var px = Number(s.buyQuotePrice) || 0;
+    var hasChg = !!(s.chgSource && s.chg != null && isFinite(Number(s.chg)));
+    var chg = hasChg ? Number(s.chg) : 0;
     var cls = chg >= 0 ? 'gwx-up' : 'gwx-dn';
     var ini = s.sym.replace(/[^A-Z]/g, '').slice(0, 2) || s.sym.slice(0, 2);
     var trade = gwxPickTrade(s);
@@ -15947,11 +16064,11 @@ var GROM_XSTOCKS = [
         + '<button type="button" class="gwx-trade gwx-sell" style="width:100%;min-width:0;box-sizing:border-box" data-sym="' + s.sym + '" data-side="sell">' + tx('px_sell', 'Sell') + '</button>';
     }
     var tickLbl = s.tokenSym ? (s.sym + ' <small style="opacity:.55;font-weight:600">' + esc(s.tokenSym) + '</small>') : s.sym;
-    return '<div class="gwx-row" data-sym="' + s.sym + '" data-b0="' + b0 + '">'
+    return '<div class="gwx-row" data-sym="' + s.sym + '">'
       + '<div class="gwx-row-sym">' + logoHtml(s.sym, ini)
       + '<div class="nm"><div class="gwx-tick">' + tickLbl + '</div><div class="gwx-name">' + esc(s.name) + '</div></div></div>'
-      + '<div class="gwx-price">' + (px ? ('$' + px.toFixed(2)) : '—') + '</div>'
-      + '<div class="gwx-chg ' + cls + '">' + (px ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—') + '</div>'
+      + '<div class="gwx-price" title="' + escA(tx('px_buy_quote_help', 'Average buy-route price from a $100 USDT quote. The trade dialog recalculates for your amount; network gas is separate.')) + '">' + (px ? gwxFormatBuyPrice(px) : '—') + '</div>'
+      + '<div class="gwx-chg ' + (hasChg ? cls : '') + '">' + (hasChg ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—') + '</div>'
       + '<div class="gwx-col-vol">' + (s.vol24 || '—') + '</div>'
       + '<div class="gwx-col-mc">' + (s.mc || '—') + '</div>'
       + '<div class="gwx-row-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:100%;min-width:0;flex:1 0 100%;box-sizing:border-box">' + actions + '</div>'
@@ -16016,7 +16133,7 @@ var GROM_XSTOCKS = [
       + '<div class="gwx-toolbar"><div class="gwx-cats">' + catTabsHtml(GROM_SCATS, gwxState.sCat, false) + '</div>'
       + '<div class="gwx-search"><input type="text" placeholder="' + esc(tx('px_search_stocks', 'Search ticker…')) + '" /></div></div>'
       + '<div class="gwx-seo"><p>' + esc((window.GROM_SEO_I18N && window.GROM_SEO_I18N.pageBlurb) ? window.GROM_SEO_I18N.pageBlurb('xstocks', (window.GROM_SEO_I18N.curLang ? window.GROM_SEO_I18N.curLang() : 'en')) : 'Tokenized stocks and xStocks on GROM.') + '</p><div class="gwx-seo-nav"><button type="button" onclick="show(\'markets\')">Crypto markets</button><button type="button" onclick="show(\'futures\')">Futures</button><button type="button" onclick="show(\'predict\')">Predictions</button><button type="button" onclick="show(\'help\')">Help</button></div></div>'
-      + '<div class="gwx-table"><div class="gwx-thead"><div>' + tx('px_col_ticker', 'Ticker') + '</div><div>' + tx('px_col_price', 'Price') + '</div><div>' + tx('px_col_chg', '24h %') + '</div><div class="gwx-col-vol">' + tx('px_col_vol', '24h vol') + '</div><div class="gwx-col-mc">' + tx('px_col_mc', 'Market cap') + '</div><div></div></div><div class="gwx-rows"></div></div>'
+      + '<div class="gwx-table"><div class="gwx-thead"><div>' + tx('px_col_ticker', 'Ticker') + '</div><div title="' + escA(tx('px_buy_quote_help', 'Average buy-route price from a $100 USDT quote. The trade dialog recalculates for your amount; network gas is separate.')) + '">' + tx('px_col_price', 'Buy price · $100 USDT') + '</div><div>' + tx('px_col_chg', '24h %') + '</div><div class="gwx-col-vol">' + tx('px_col_vol', '24h vol') + '</div><div class="gwx-col-mc">' + tx('px_col_mc', 'Market cap') + '</div><div></div></div><div class="gwx-rows"></div></div>'
       + '<div class="gxp" id="gromStockPos"><div class="gxp-h">' + tx('px_my_positions', 'My positions') + '</div><div class="gxp-list"></div></div>'
       + '<div class="gwx-foot">' + tx('px_foot_xstocks', 'Powered by Backed xStocks · fee 0.20% · non-custodial via LiFi') + '</div></div>';
   }
@@ -16925,8 +17042,8 @@ var GROM_XSTOCKS = [
       return catOk && (!q || s.sym.toLowerCase().indexOf(q) >= 0 || s.name.toLowerCase().indexOf(q) >= 0 || String(s.tokenSym || '').toLowerCase().indexOf(q) >= 0);
     });
     list.sort(function (a, b) {
-      var ap = (curPx(a.sym) || a.price || 0) > 0 ? 0 : 1;
-      var bp = (curPx(b.sym) || b.price || 0) > 0 ? 0 : 1;
+      var ap = Number(a.buyQuotePrice) > 0 ? 0 : 1;
+      var bp = Number(b.buyQuotePrice) > 0 ? 0 : 1;
       if (ap !== bp) return ap - bp;
       return String(a.tokenSym || a.sym).localeCompare(String(b.tokenSym || b.sym));
     });
@@ -16949,6 +17066,7 @@ var GROM_XSTOCKS = [
     if (typeof gromHydrateLogos === 'function') gromHydrateLogos(host);
     var countEl = document.getElementById('gwxTickerCount');
     if (countEl) countEl.textContent = String(GROM_XSTOCKS.length);
+    if (visible.length) setTimeout(gwxQueueVisibleBuyQuotes, 0);
   }
 
   function gwxCurrentLang() {
@@ -17556,22 +17674,22 @@ var GROM_XSTOCKS = [
   function refreshStockPrices() {
     var page = document.getElementById('page-xstocks'); if (!page || !page.classList.contains('active')) return;
     initPx();
-    // Paint cached LiFi / catalog prices — no fake random drift on live markets
+    // Never substitute issuer, seed, or DEX mids for an executable buy quote.
     page.querySelectorAll('.gwx-row[data-sym]').forEach(function (row) {
       var sym = row.dataset.sym;
       var s = STOCK_MAP[sym];
-      var b0 = parseFloat(row.dataset.b0) || gwxB0[sym] || (s && s.price) || curPx(sym) || 1;
-      var p = curPx(sym) || (s && s.price) || 0;
-      if (!p) return;
-      var chg = s && s.chg != null ? s.chg : ((p / b0 - 1) * 100);
-      var pe = row.querySelector('.gwx-price'); if (pe) pe.textContent = '$' + p.toFixed(2);
+      var p = Number(s && s.buyQuotePrice) || 0;
+      var pe = row.querySelector('.gwx-price'); if (pe) pe.textContent = gwxFormatBuyPrice(p);
       var ce = row.querySelector('.gwx-chg');
+      var hasChg = !!(s && s.chgSource && s.chg != null && isFinite(Number(s.chg)));
+      var chg = hasChg ? Number(s.chg) : 0;
       if (ce) {
-        ce.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
-        ce.classList.toggle('gwx-up', chg >= 0);
-        ce.classList.toggle('gwx-dn', chg < 0);
+        ce.textContent = hasChg ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—';
+        ce.classList.toggle('gwx-up', hasChg && chg >= 0);
+        ce.classList.toggle('gwx-dn', hasChg && chg < 0);
       }
     });
+    gwxQueueVisibleBuyQuotes();
   }
   function driftPredict() {
     var page = document.getElementById('page-predict'); if (!page || !page.classList.contains('active')) return;

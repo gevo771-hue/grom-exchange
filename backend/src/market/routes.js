@@ -1,36 +1,201 @@
 import express from 'express';
 import axios from 'axios';
+import fs from 'fs';
+import config from '../config/index.js';
 
-const BINANCE_SYMBOLS = [
-  'BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT','LINKUSDT',
-  'TONUSDT','TRXUSDT','DOTUSDT','ATOMUSDT','NEARUSDT','LTCUSDT','BCHUSDT','SUIUSDT','1000PEPEUSDT',
-  '1000SHIBUSDT','APTUSDT','UNIUSDT','ETCUSDT','ICPUSDT','ARBUSDT','OPUSDT'
-];
+const CG_IDS = {
+  BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin', XRP: 'ripple',
+  ADA: 'cardano', DOGE: 'dogecoin', AVAX: 'avalanche-2', LINK: 'chainlink',
+TRX: 'tron', DOT: 'polkadot', ATOM: 'cosmos',
+  NEAR: 'near', LTC: 'litecoin', BCH: 'bitcoin-cash', SUI: 'sui',
+  PEPE: 'pepe', SHIB: 'shiba-inu', APT: 'aptos', UNI: 'uniswap',
+  ETC: 'ethereum-classic', ICP: 'internet-computer', ARB: 'arbitrum', OP: 'optimism',
+  SUN: 'sun-token',
+};
 
 function fallbackQuotes() {
   return {
+    cryptoChange24h: {},
     crypto: {
       BTC: 104218.4, ETH: 3684.15, SOL: 182.27, BNB: 612.88, XRP: 2.48, ADA: 0.752, DOGE: 0.1942,
-      AVAX: 38.44, LINK: 17.28, TON: 6.42, TRX: 0.1462, DOT: 7.11, ATOM: 8.54, NEAR: 6.37, LTC: 96.42,
+      AVAX: 38.44, LINK: 17.28, TRX: 0.1462, DOT: 7.11, ATOM: 8.54, NEAR: 6.37, LTC: 96.42,
       BCH: 522.18, SUI: 1.84, PEPE: 0.0000124, SHIB: 0.0000246, APT: 9.87, UNI: 11.42, ETC: 31.75,
-      ICP: 14.33, ARB: 1.06, OP: 2.91,
+      ICP: 14.33, ARB: 1.06, OP: 2.91, SUN: 0.0165,
     },
     fx: { EURUSD: 1.0842, GBPJPY: 193.482, USDJPY: 151.12 },
     equities: { AAPL: 206.8, TSLA: 173.4, MSFT: 417.2, NVDA: 922.4 },
   };
 }
 
+/** Quotes used to await CoinGecko + FX + Stooq serially (~5–15s). Cache + parallel. */
+let _quotesCache = { ts: 0, data: null };
+let _quotesRefreshPromise = null;
+const QUOTES_TTL_MS = 30_000;
+const QUOTES_STALE_MS = 10 * 60_000;
+
 // ---- Polymarket prediction-markets proxy (public, cached) ----
-let _predictCache = { ts: 0, data: null };
-const PREDICT_TTL = 60_000;
+/** Per-locale browse catalogs (Polymarket `locale=`). */
+const _predictCacheByLocale = new Map(); // locale → { ts, data, meta, refreshing }
+const _predictSearchCache = new Map(); // key → { ts, payload }
+const PREDICT_TTL = 90_000; // fresh window — keep odds close to Polymarket
+const PREDICT_STALE_TTL = 20 * 60_000; // serve stale while revalidating
+const PREDICT_SEARCH_TTL = 30_000;
+/** Locales Polymarket Gamma accepts (probe 2026-08). Others fall back to en. */
+const PM_LOCALES = new Set(['en', 'es', 'zh', 'ru', 'hi', 'tr', 'pt', 'fr', 'de']);
+function pmLocale(raw) {
+  const l = String(raw || 'en').trim().toLowerCase().split(/[-_]/)[0];
+  if (!l || l === 'ar') return 'en'; // Arabic unsupported on Gamma → English titles
+  return PM_LOCALES.has(l) ? l : 'en';
+}
+/** Browse catalog — quick volume pages first, then expand via tags. */
+const PREDICT_MAX_EVENTS = 2500;
+const PREDICT_MAX_OUTCOMES = 12;
+const PREDICT_PAGE = 100;
+const PREDICT_VOLUME_PAGES_QUICK = 6; // ~600 events, cold path ~1–2s
+const PREDICT_VOLUME_PAGES_FULL = 10;
+const PREDICT_TAG_PAGES = 3;
+const PREDICT_FETCH_CONCURRENCY = 6;
+const PREDICT_TAG_SLUGS = [
+  // Sports leagues first so «Спорт» fills quickly
+  'mlb', 'nba', 'nfl', 'soccer', 'tennis', 'ufc', 'hockey', 'cricket', 'baseball', 'basketball',
+  'politics', 'crypto', 'esports', 'finance', 'pop-culture', 'tech', 'ai',
+];
+const PREDICT_DEFAULT_LIMIT = 60;
+const PREDICT_MAX_LIMIT = 120;
+const PM_UA = { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' };
 
 // ---- Backed xStocks catalog proxy (public, cached) — browser can't call api.backed.fi (no CORS) ----
 let _xstocksCache = { ts: 0, data: null };
+let _xstocksRefreshPromise = null;
+let _xstocksEnrichPromise = null;
 const XSTOCKS_TTL = 5 * 60_000;
+const XSTOCKS_DISK = '/tmp/grom-xstocks-cache.json';
 const GWX_NET = {
   Ethereum: 1, Arbitrum: 42161, Optimism: 10, BinanceSmartChain: 56,
   Base: 8453, Polygon: 137, Avalanche: 43114, Mantle: 5000,
 };
+
+function loadXstocksDiskCache() {
+  try {
+    if (!fs.existsSync(XSTOCKS_DISK)) return;
+    const raw = JSON.parse(fs.readFileSync(XSTOCKS_DISK, 'utf8'));
+    const items = Array.isArray(raw?.items) ? raw.items : null;
+    const ts = Number(raw?.ts) || 0;
+    if (items?.length >= 40) _xstocksCache = { ts: ts || Date.now(), data: items };
+  } catch (_) {}
+}
+function saveXstocksDiskCache(items) {
+  try {
+    fs.writeFileSync(XSTOCKS_DISK, JSON.stringify({ ts: Date.now(), items }), 'utf8');
+  } catch (_) {}
+}
+loadXstocksDiskCache();
+
+function xstocksMetricsMostlyBlank(items) {
+  const sample = (items || []).slice(0, 50);
+  if (!sample.length) return true;
+  let blank = 0;
+  for (const it of sample) {
+    if (!it?.vol24 || it.vol24 === '—' || !it?.mc || it.mc === '—') blank += 1;
+  }
+  return blank >= Math.ceil(sample.length * 0.6);
+}
+
+function scheduleXstocksEnrich(items) {
+  if (!items?.length || _xstocksEnrichPromise) return;
+  const snap = items;
+  _xstocksEnrichPromise = (async () => {
+    try {
+      const copy = snap.map((it) => ({ ...it, addrs: { ...(it.addrs || {}) }, chains: (it.chains || []).slice() }));
+      await enrichXstocksMetrics(copy);
+      if (copy.length) {
+        _xstocksCache = { ts: Date.now(), data: copy };
+        saveXstocksDiskCache(copy);
+      }
+    } catch (_) {}
+    finally { _xstocksEnrichPromise = null; }
+  })();
+}
+/* Disk cache from before vol/mc restore may be all "—" — re-enrich on boot. */
+try {
+  if (_xstocksCache.data?.length && xstocksMetricsMostlyBlank(_xstocksCache.data)) {
+    scheduleXstocksEnrich(_xstocksCache.data);
+  }
+} catch (_) {}
+
+async function fetchBackedXstocksCatalog() {
+  const all = [];
+  for (let page = 0; page < 24; page++) {
+    const { data } = await axios.get('https://api.backed.fi/api/v2/public/assets', {
+      params: { page },
+      timeout: 12000,
+      headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' },
+    });
+    const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
+    all.push(...nodes);
+    if (!data?.page?.hasNextPage) break;
+  }
+  const seen = new Set();
+  const items = [];
+  for (const n of all) {
+    const name = String(n?.name || '');
+    const tokenSym = String(n?.symbol || '');
+    if (!/xStock$/i.test(name)) continue;
+    if (!/x$/i.test(tokenSym)) continue;
+    const rawUnd = String(n.underlyingSymbol || '').trim();
+    // HKEX codes are numeric ("1", "1024") — don't use those as the UI ticker.
+    const displaySym = (/^\d+$/.test(rawUnd)
+      ? tokenSym.replace(/x$/i, '')
+      : (rawUnd || tokenSym.replace(/x$/i, ''))).toUpperCase();
+    if (!displaySym || seen.has(displaySym)) continue;
+    const addrs = {};
+    const chains = [];
+    let solMint = '';
+    for (const dep of (n.deployments || [])) {
+      const addr = dep.address || dep.wrapperAddressV2 || dep.wrapperAddress;
+      if (!addr) continue;
+      // Solana SPL mint (base58) — primary DEX liquidity for xStocks
+      if (String(dep.network) === 'Solana' && !/^0x/i.test(addr) && addr.length >= 32) {
+        solMint = String(addr);
+        continue;
+      }
+      const cid = GWX_NET[dep.network];
+      if (!cid || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) continue;
+      addrs[cid] = addr;
+      chains.push(cid);
+    }
+    // Prefer EVM for UI chain chips; Solana mint kept separately for Jupiter / LiFi bridge
+    if (!chains.length && !solMint) continue;
+    seen.add(displaySym);
+    const pref = [1, 42161, 10, 56, 8453].find((c) => addrs[c]) || chains[0] || null;
+    items.push({
+      sym: displaySym,
+      yahooSym: toYahooSymbol(rawUnd || displaySym, n.underlyingIsin),
+      tokenSym,
+      name,
+      logo: n.logo || '',
+      addrs,
+      chains,
+      solMint,
+      solDecimals: 8,
+      chain: pref || 'solana',
+      chainLabel: pref
+        ? (Object.keys(GWX_NET).find((k) => GWX_NET[k] === pref) || String(pref))
+        : 'Solana',
+      decimals: 18,
+      tradeable: true,
+      halted: !!n.isTradingHalted,
+      price: 0,
+      chg: 0,
+      vol24: '—',
+      mc: '—',
+    });
+  }
+  items.sort((a, b) => String(a.tokenSym || a.sym).localeCompare(String(b.tokenSym || b.sym)));
+  // Routes first — Yahoo/Dex enrich runs in background so cold /xstocks is not 30–60s.
+  scheduleXstocksEnrich(items);
+  return items;
+}
 
 // Yahoo Finance session (crumb + cookie) for equity volume / market cap.
 let _yfSession = { crumb: '', cookie: '', ts: 0 };
@@ -46,9 +211,16 @@ function fmtCompactUsd(n) {
   return `$${v.toFixed(0)}`;
 }
 
-function toYahooSymbol(sym) {
-  // BRK.B → BRK-B, etc.
-  return String(sym || '').toUpperCase().replace(/\./g, '-');
+function toYahooSymbol(sym, isin) {
+  const s = String(sym || '').toUpperCase().trim();
+  // HKEX numeric codes (0001 CK Hutchison, 1024 Kuaishou, …)
+  if (/^\d+$/.test(s)) return s.padStart(4, '0') + '.HK';
+  const isinS = String(isin || '').toUpperCase();
+  if (/^\d+$/.test(s.replace(/^0+/, '') || s) && (isinS.startsWith('HK') || isinS.startsWith('KYG') || isinS.startsWith('CNE'))) {
+    return s.replace(/\D/g, '').padStart(4, '0') + '.HK';
+  }
+  // BRK.B → BRK-B
+  return s.replace(/\./g, '-');
 }
 
 async function ensureYahooSession() {
@@ -75,29 +247,31 @@ async function ensureYahooSession() {
   return _yfSession;
 }
 
-/** Batch Yahoo quotes → Map(underlyingSym → { vol24, mc, equityPx, chg }) */
-async function fetchYahooEquityMetrics(symbols) {
-  const uniq = [...new Set((symbols || []).map((s) => String(s || '').toUpperCase()).filter(Boolean))];
+/** Batch Yahoo quotes → Map(item.sym → { vol24, mc, equityPx, chg }) */
+async function fetchYahooEquityMetrics(items) {
+  const rows = (items || []).map((it) => ({
+    key: String(it?.sym || '').toUpperCase(),
+    ysym: String(it?.yahooSym || toYahooSymbol(it?.sym, it?.underlyingIsin)).toUpperCase(),
+  })).filter((r) => r.key && r.ysym);
   const out = new Map();
-  if (!uniq.length) return out;
+  if (!rows.length) return out;
   let session;
   try { session = await ensureYahooSession(); } catch (_) { return out; }
 
   const chunkSize = 80;
-  for (let i = 0; i < uniq.length; i += chunkSize) {
-    const chunk = uniq.slice(i, i + chunkSize);
-    const ysyms = chunk.map(toYahooSymbol);
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    const ysyms = chunk.map((r) => r.ysym);
     try {
       const { data } = await axios.get('https://query1.finance.yahoo.com/v7/finance/quote', {
         timeout: 12000,
         params: { symbols: ysyms.join(','), crumb: session.crumb },
         headers: { 'User-Agent': YF_UA, Cookie: session.cookie, Accept: 'application/json' },
       });
-      const rows = data?.quoteResponse?.result || [];
-      const byY = new Map(rows.map((r) => [String(r.symbol || '').toUpperCase(), r]));
-      for (let j = 0; j < chunk.length; j++) {
-        const sym = chunk[j];
-        const r = byY.get(ysyms[j]) || byY.get(sym);
+      const quotes = data?.quoteResponse?.result || [];
+      const byY = new Map(quotes.map((r) => [String(r.symbol || '').toUpperCase(), r]));
+      for (const row of chunk) {
+        const r = byY.get(row.ysym);
         if (!r) continue;
         const px = Number(r.regularMarketPrice);
         const shares = Number(r.regularMarketVolume);
@@ -106,7 +280,7 @@ async function fetchYahooEquityMetrics(symbols) {
         const dollarVol = (Number.isFinite(px) && Number.isFinite(shares) && px > 0 && shares > 0)
           ? px * shares
           : 0;
-        out.set(sym, {
+        out.set(row.key, {
           vol24: fmtCompactUsd(dollarVol),
           mc: fmtCompactUsd(mc),
           equityPx: Number.isFinite(px) && px > 0 ? px : 0,
@@ -114,12 +288,11 @@ async function fetchYahooEquityMetrics(symbols) {
         });
       }
     } catch (e) {
-      // Crumb expiry → reset once and retry this chunk
       if (String(e?.response?.status || '') === '401' || String(e?.response?.status || '') === '403') {
         _yfSession = { crumb: '', cookie: '', ts: 0 };
         try {
           session = await ensureYahooSession();
-          i -= chunkSize; // retry chunk
+          i -= chunkSize;
           continue;
         } catch (_) { break; }
       }
@@ -128,257 +301,1164 @@ async function fetchYahooEquityMetrics(symbols) {
   return out;
 }
 
+/** Live xStock *token* mids + 24h pool volume from DexScreener (Solana).
+ *  Never use Yahoo equity price here — post-split names (NFLX 10:1) diverge. */
+async function fetchDexScreenerTokenPrices(items) {
+  if (!Array.isArray(items) || !items.length) return items;
+  const mints = [...new Set(items.map((it) => String(it.solMint || '')).filter((m) => m.length >= 32))];
+  if (!mints.length) return items;
+  const byMint = new Map();
+  const chunkSize = 25;
+  const chunks = [];
+  for (let i = 0; i < mints.length; i += chunkSize) chunks.push(mints.slice(i, i + chunkSize));
+
+  const runChunk = async (part) => {
+    try {
+      const { data } = await axios.get(
+        `https://api.dexscreener.com/tokens/v1/solana/${part.join(',')}`,
+        { timeout: 12000, headers: { Accept: 'application/json' } },
+      );
+      const pairs = Array.isArray(data) ? data : [];
+      for (const p of pairs) {
+        const mint = String(p?.baseToken?.address || '');
+        const px = Number(p?.priceUsd);
+        const liq = Number(p?.liquidity?.usd || 0);
+        const vol = Number(p?.volume?.h24 || 0);
+        if (!mint || !(px > 0)) continue;
+        const prev = byMint.get(mint);
+        if (!prev || liq > prev.liq) byMint.set(mint, { px, liq, vol });
+      }
+    } catch (_) { /* keep whatever we already have */ }
+  };
+
+  const conc = 4;
+  for (let i = 0; i < chunks.length; i += conc) {
+    await Promise.all(chunks.slice(i, i + conc).map(runChunk));
+  }
+  for (const it of items) {
+    const hit = byMint.get(String(it.solMint || ''));
+    if (hit?.px > 0) it.price = hit.px;
+    if (hit?.vol > 0) it._dexVol24 = hit.vol;
+  }
+  return items;
+}
+
 async function enrichXstocksMetrics(items) {
   if (!Array.isArray(items) || !items.length) return items;
-  const metrics = await fetchYahooEquityMetrics(items.map((it) => it.sym));
-  if (!metrics.size) return items;
+  const metrics = await fetchYahooEquityMetrics(items);
+  if (metrics.size) {
+    for (const it of items) {
+      const m = metrics.get(String(it.sym || '').toUpperCase());
+      if (!m) continue;
+      if (m.chg) it.chg = m.chg;
+      /* Market cap = underlying company (what «КАПИТАЛИЗАЦИЯ» means on Stocks). */
+      if (m.mc && m.mc !== '—') it.mc = m.mc;
+      /* Keep Yahoo equity $ volume as fallback; Dex pool vol preferred below. */
+      if (m.vol24 && m.vol24 !== '—') it.vol24 = m.vol24;
+    }
+  }
+  try { await fetchDexScreenerTokenPrices(items); } catch (_) {}
   for (const it of items) {
-    const m = metrics.get(String(it.sym || '').toUpperCase());
-    if (!m) continue;
-    if (m.vol24 && m.vol24 !== '—') it.vol24 = m.vol24;
-    if (m.mc && m.mc !== '—') it.mc = m.mc;
-    // Keep LiFi/token mid as live trade price when FE fills it; seed equity px if empty.
-    if (!(Number(it.price) > 0) && m.equityPx > 0) it.price = m.equityPx;
-    if (m.chg) it.chg = m.chg;
+    /* Prefer on-chain 24h pool volume when DexScreener has it — honest token depth. */
+    if (Number(it._dexVol24) > 0) {
+      it.vol24 = fmtCompactUsd(it._dexVol24);
+    }
+    delete it._dexVol24;
+  }
+  // Dex mid wins (handles NFLX 10:1 vs unsplitted NFLXx). Yahoo equity only if no pool
+  // and the quote is USD (skip *.HK — those prints are HKD).
+  if (metrics.size) {
+    for (const it of items) {
+      if (Number(it.price) > 0) continue;
+      if (/\.HK$/i.test(String(it.yahooSym || ''))) continue;
+      const m = metrics.get(String(it.sym || '').toUpperCase());
+      if (m?.equityPx > 0) it.price = m.equityPx;
+    }
   }
   return items;
 }
 
 function safeJson(str, def) { try { return JSON.parse(str); } catch { return def; } }
+
+/** Classify Polymarket events — tags are localized (en/ru/…), so match both. */
 function pmCategory(ev) {
-  const tags = Array.isArray(ev.tags) ? ev.tags.map((t) => t.label || t.slug || '') : [];
-  const hay = [ev.category || '', ev.title || '', ...tags].join(' ').toLowerCase();
-  const has = (...ks) => ks.some((k) => hay.includes(k));
-  if (has('esport', 'league of legends', 'dota', 'counter-strike', 'cs2', 'valorant', 'gaming')) return 'esports';
-  if (has('sport', 'nfl', 'nba', 'mlb', 'soccer', 'football', 'tennis', 'baseball', 'basketball', 'hockey', 'ufc', 'f1', 'golf', 'world cup', 'champions league')) return 'sport';
-  if (has('crypto', 'bitcoin', 'ethereum', 'solana', 'memecoin', 'altcoin', 'dogecoin', 'ripple')) return 'crypto';
-  if (has('econom', 'fed ', 'inflation', 'interest rate', 'cpi', 'gdp', 'jobs', 'recession', 'rate cut')) return 'economy';
-  if (has('stock', 'earnings', 'nasdaq', 's&p', 'tech', 'business', 'ipo', 'company', 'tesla', 'nvidia', 'apple')) return 'finance';
-  if (has('politic', 'election', 'trump', 'biden', 'senate', 'congress', 'geopolit', 'war', 'president')) return 'politics';
-  if (has('culture', 'movie', 'music', 'tv ', 'celebrit', 'award', 'oscar', 'entertain', 'pop ', 'grammy')) return 'culture';
+  const tags = (Array.isArray(ev.tags) ? ev.tags : [])
+    .map((t) => String(t?.label || t?.slug || '').toLowerCase().trim())
+    .filter(Boolean);
+  const title = String(ev.title || ev.question || '').toLowerCase();
+  const series = String(ev.seriesSlug || (Array.isArray(ev.series) && ev.series[0]?.slug) || '').toLowerCase();
+  const hay = [String(ev.category || ''), title, series, ...tags].join(' ').toLowerCase();
+  const has = (...ks) => ks.some((k) => k && hay.includes(String(k).toLowerCase()));
+  const tagHas = (...ks) => tags.some((t) => ks.some((k) => {
+    const n = String(k).toLowerCase();
+    return t === n || t.includes(n);
+  }));
+
+  // Esports BEFORE sport — RU "киберспорт" contains "спорт"
+  if (
+    tagHas('esport', 'киберспорт', 'gaming', 'игры', 'games')
+    || has(
+      'esport', 'киберспорт', 'league of legends', 'лига легенд', 'lol:', 'dota', 'counter-strike',
+      'cs2', 'cs:go', 'valorant', 'valorant:', 'overwatch', 'call of duty', 'mobile legends',
+      'lck', 'lpl', 'lec', 'lcs', 'worlds', 'asgard', 'epl masters',
+    )
+  ) return 'esports';
+
+  if (
+    tagHas('crypto', 'крипто', 'bitcoin', 'биткоин', 'ethereum', 'эфириум')
+    || has(
+      'crypto', 'крипто', 'bitcoin', 'btc', 'биткоин', 'ethereum', 'eth', 'эфириум', 'solana', 'sol ',
+      'memecoin', 'dogecoin', 'ripple', 'xrp', 'altcoin', 'defi', 'up or down', 'вверх или вниз',
+    )
+  ) return 'crypto';
+
+  if (
+    tagHas(
+      'mlb', 'nba', 'nfl', 'nhl', 'soccer', 'футбол', 'tennis', 'теннис', 'ufc', 'hockey', 'хоккей',
+      'cricket', 'baseball', 'basketball', 'баскетбол', 'sport', 'спорт',
+    )
+    || has(
+      'nfl', 'nba', 'mlb', 'nhl', 'wnba', 'soccer', 'football', 'футбол', 'tennis', 'теннис',
+      'baseball', 'бейсбол', 'basketball', 'баскетбол', 'hockey', 'хоккей', 'ufc', 'mma', 'f1',
+      'golf', 'world cup', 'champions league', 'premier league', 'la liga', 'serie a', 'bundesliga',
+      'olympic', 'олимпи', 'cricket', 'atp ', 'wta ', 'grand slam',
+    )
+  ) return 'sport';
+
+  // Fed / macro → economy (even if also tagged Politics)
+  if (
+    tagHas('economy', 'экономи', 'fed', 'фрс', 'fomc', 'inflation', 'инфляц', 'gdp', 'cpi')
+    || has(
+      'fed decision', 'fed rate', 'fomc', 'rate cut', 'interest rate', 'inflation', 'инфляц',
+      'cpi', 'gdp', 'recession', 'рецесс', 'jobs report', 'безработиц', 'econom', 'экономи',
+      'фрс', 'ставк',
+    )
+  ) return 'economy';
+
+  if (
+    tagHas('finance', 'финанс', 'stock', 'акци', 'ipo', 'earnings', 'nasdaq', 'commodit', 'сырь')
+    || has(
+      'stock', 'акци', 'earnings', 'отчётн', 'nasdaq', 's&p', 'ipo', 'market cap', 'капитализац',
+      'tesla', 'nvidia', 'apple', 'gold', 'золот', 'silver', 'серебр', 'oil', 'нефть', 'crude',
+      'wti', 'commodit', 'финанс', 'finance',
+    )
+  ) return 'finance';
+
+  if (
+    tagHas('politic', 'политик', 'election', 'выбор', 'geopolit', 'геополит', 'iran', 'иран')
+    || has(
+      'politic', 'политик', 'election', 'выбор', 'president', 'президент', 'senate', 'сенат',
+      'congress', 'конгресс', 'geopolit', 'геополит', 'trump', 'трамп', 'biden', 'байден',
+      'iran', 'иран', 'war', 'войн', 'ceasefire', 'перемири', 'prime minister', 'премьер',
+      'governor', 'губернатор', 'парламент', 'демократ', 'республик',
+    )
+  ) return 'politics';
+
+  if (
+    tagHas('culture', 'культур', 'entertainment', 'развлеч', 'movie', 'music', 'музык', 'ai', 'ии')
+    || has(
+      'culture', 'культур', 'movie', 'фильм', 'music', 'музык', 'tv ', 'celebrit', 'award',
+      'oscar', 'оскар', 'grammy', 'грамми', 'entertain', 'развлеч', 'pop culture',
+      'anthropic', 'openai', 'gemini', 'gpt-', 'claude', 'искусственн', 'ai model', 'ai lab',
+      'ии-модел', 'модель ии',
+    )
+  ) return 'culture';
+
+  // Weather / natural events stay in "all" (shown under Все)
   return 'all';
 }
 function pmEmoji(cat) {
   return { sport: '⚽', crypto: '🪙', esports: '🎮', politics: '🏛️', culture: '🎬', finance: '💹', economy: '📊' }[cat] || '🌐';
 }
-function pmEnds(iso) {
-  if (!iso) return '';
-  const d = new Date(iso); if (Number.isNaN(d.getTime())) return '';
-  try { return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }); } catch { return ''; }
+function pmDateLocale(locale = 'en') {
+  const loc = pmLocale(locale);
+  const map = {
+    en: 'en-US', es: 'es-ES', zh: 'zh-CN', ru: 'ru-RU',
+    hi: 'hi-IN', tr: 'tr-TR', pt: 'pt-BR', fr: 'fr-FR', de: 'de-DE',
+  };
+  return map[loc] || 'en-US';
 }
-function pmTime(iso) {
+function pmEnds(iso, locale = 'en') {
   if (!iso) return '';
   const d = new Date(iso); if (Number.isNaN(d.getTime())) return '';
-  try { return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
+  try { return d.toLocaleDateString(pmDateLocale(locale), { day: 'numeric', month: 'short' }); } catch { return ''; }
+}
+function pmTime(iso, locale = 'en') {
+  if (!iso) return '';
+  const d = new Date(iso); if (Number.isNaN(d.getTime())) return '';
+  try { return d.toLocaleTimeString(pmDateLocale(locale), { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
 }
 function pmEndsAt(iso) {
   if (!iso) return null;
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
-function normalizePolymarket(events) {
+/** Polymarket multi-date events often ship stub titles: "… by...?" / "… к...?" */
+function isPmStubTitle(s) {
+  const t = String(s || '').trim();
+  if (!t) return true;
+  // Any ellipsis in the title is treated as incomplete (incl. mid-phrase "к...? (…)")
+  // Note: "___" blanks (Bitcoin above ___ on …) are intentional multi-strike titles — not stubs.
+  if (/\.{2,}/.test(t) || /…/.test(t)) return true;
+  return false;
+}
+function expandPmStubTitle(stub, fill) {
+  if (!stub || !fill) return '';
+  let expanded = String(stub)
+    .replace(/\b(by)\s*\.{2,}\s*\??/gi, `by ${fill}`)
+    .replace(/\b(к)\s*\.{2,}\s*\??/gi, `к ${fill}`)
+    .replace(/\b(by)\s*…\s*\??/gi, `by ${fill}`)
+    .replace(/\b(к)\s*…\s*\??/gi, `к ${fill}`)
+    .replace(/\.{2,}\s*\??/g, fill)
+    .replace(/…\s*\??/g, fill);
+  expanded = expanded.replace(/\s+\?/g, '?').replace(/\?{2,}/g, '?').replace(/\s{2,}/g, ' ').trim();
+  return (expanded && !isPmStubTitle(expanded)) ? expanded : '';
+}
+/**
+ * Card title must match Polymarket's EVENT title for multi-outcome markets.
+ * Never promote a single strike question (e.g. "…$70,000…") over
+ * "What price will Bitcoin hit in August?" — that desyncs title vs rows.
+ */
+function pickPmTitle(ev, markets, topOutcomeName) {
+  const mk = Array.isArray(markets) ? markets : [];
+  const openMk = mk.filter((m) => !m?.closed && !m?.archived);
+  const multi = openMk.length > 1;
+  const evTitle = String(ev?.title || '').trim();
+  const fill = String(topOutcomeName || '').trim();
+
+  if (multi && evTitle) {
+    if (!isPmStubTitle(evTitle)) return evTitle;
+    const expanded = expandPmStubTitle(evTitle, fill);
+    if (expanded) return expanded;
+    // Keep intentional blanks: "Bitcoin above ___ on August 27?"
+    return evTitle;
+  }
+
+  const marketQs = openMk.map((m) => String(m?.question || '').trim()).filter(Boolean);
+  const candidates = [evTitle, String(ev?.question || '').trim(), ...marketQs]
+    .map((s) => String(s || '').trim())
+    .filter(Boolean);
+  const full = candidates.filter((s) => !isPmStubTitle(s));
+  full.sort((a, b) => b.length - a.length);
+  if (full[0]) return full[0];
+  const stub = candidates.slice().sort((a, b) => b.length - a.length)[0] || '';
+  const expanded = expandPmStubTitle(stub, fill);
+  if (expanded) return expanded;
+  return stub;
+}
+function pmEventIsLive(ev) {
+  if (!ev || ev.closed === true || ev.archived === true) return false;
+  if (ev.active === false) return false;
+  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : 0;
+  // Polymarket sometimes keeps esports events "active" days after match end.
+  if (endMs && endMs < Date.now() - 3 * 3600_000) return false;
+  return true;
+}
+/** Unsettled prop markets stuck at exactly 50/50 after the event ended. */
+function isPmZombieMarket(m, eventEnded) {
+  if (!eventEnded || !m) return false;
+  const prices = safeJson(m.outcomePrices, null);
+  if (!Array.isArray(prices) || prices.length < 2) return false;
+  const yes = Number(prices[0]);
+  const no = Number(prices[1]);
+  return Number.isFinite(yes) && Number.isFinite(no)
+    && Math.abs(yes - 0.5) < 0.0001 && Math.abs(no - 0.5) < 0.0001;
+}
+function normalizePolymarket(events, { maxEvents = PREDICT_MAX_EVENTS, maxOutcomes = PREDICT_MAX_OUTCOMES, locale = 'en' } = {}) {
   const out = [];
+  const seen = new Set();
   for (const ev of Array.isArray(events) ? events : []) {
+    if (!pmEventIsLive(ev)) continue;
+    const eid = String(ev.id || ev.slug || '');
+    if (eid && seen.has(eid)) continue;
     const mk = Array.isArray(ev.markets) ? ev.markets : [];
+    const eventEnded = !!(ev.endDate && new Date(ev.endDate).getTime() < Date.now() - 3 * 3600_000);
     let rows = [];
     for (const m of mk) {
       if (m.closed || m.archived) continue;
+      if (m.enableOrderBook === false) continue;
+      if (isPmZombieMarket(m, eventEnded)) continue;
       const prices = safeJson(m.outcomePrices, null);
       const outs = safeJson(m.outcomes, null);
+      const tokens = safeJson(m.clobTokenIds, null);
       if (!Array.isArray(prices) || !prices.length) continue;
       const yes = Number(prices[0]);
       if (!Number.isFinite(yes)) continue;
+      const noRaw = prices.length > 1 ? Number(prices[1]) : NaN;
+      const noPx = Number.isFinite(noRaw) ? noRaw : (1 - yes);
+      const tokenYes = Array.isArray(tokens) ? String(tokens[0] || '') : '';
+      const tokenNo = Array.isArray(tokens) ? String(tokens[1] || '') : '';
       let name = (m.groupItemTitle && String(m.groupItemTitle).trim())
-        || (Array.isArray(outs) && outs[0] && outs[0] !== 'Yes' ? outs[0] : 'Да');
-      rows.push({ n: String(name).slice(0, 42), p: Math.max(1, Math.min(99, Math.round(yes * 100))) });
+        || (Array.isArray(outs) && outs[0] && outs[0] !== 'Yes' ? outs[0] : 'Yes');
+      rows.push({
+        n: String(name).trim(),
+        p: Math.max(1, Math.min(99, Math.round(yes * 100))),
+        pNo: Math.max(1, Math.min(99, Math.round(noPx * 100))),
+        tokenYes,
+        tokenNo,
+        conditionId: String(m.conditionId || ''),
+        marketId: String(m.id || ''),
+        slug: String(m.slug || ''),
+        tickSize: String(m.orderPriceMinTickSize || '0.01'),
+        minSize: Number(m.orderMinSize) || 5,
+        negRisk: !!m.negRisk,
+        tradeable: !!(tokenYes && tokenNo),
+      });
     }
     if (!rows.length) continue;
+    // Multi-outcome: drop near-certain / dust prices (useless for staking UI)
+    if (rows.length > 1) {
+      const usable = rows.filter((r) => r.p >= 5 && r.p <= 95);
+      if (usable.length) rows = usable;
+      else continue; // all extremes — skip event
+    }
     // Show the top favourites first (multi-outcome events can have dozens of markets).
     if (rows.length > 1) rows.sort((a, b) => b.p - a.p);
-    rows = rows.slice(0, 6);
+    rows = rows.slice(0, maxOutcomes);
     const cat = pmCategory(ev);
+    if (eid) seen.add(eid);
+    // Prefer full market questions over Polymarket stubs like "by...?" / "к...?"
+    const q = pickPmTitle(ev, mk, rows[0] && rows[0].n);
+    const img = String(ev.image || ev.icon || (mk[0] && (mk[0].image || mk[0].icon)) || '').trim();
     out.push({
       id: 'pm_' + (ev.id || ev.slug || out.length),
+      eventId: String(ev.id || ''),
+      slug: String(ev.slug || ''),
       cat,
       ico: pmEmoji(cat),
-      q: String(ev.title || ev.question || '').slice(0, 150),
+      img,
+      q,
       vol: Number(ev.volume || ev.volume24hr || 0) || 0,
       vol24: Number(ev.volume24hr || 0) || 0,
-      ends: pmEnds(ev.endDate),
+      ends: pmEnds(ev.endDate, locale),
       endsAt: pmEndsAt(ev.endDate),
-      time: pmTime(ev.endDate),
-      live: true,
+      time: pmTime(ev.endDate, locale),
+      live: pmEventIsLive(ev),
+      source: 'polymarket',
       rows,
     });
-    if (out.length >= 48) break;
+    if (out.length >= maxEvents) break;
   }
   return out;
+}
+
+async function fetchPmEventsPage(params, timeout = 10000) {
+  try {
+    const { data } = await axios.get('https://gamma-api.polymarket.com/events', {
+      params,
+      timeout,
+      headers: PM_UA,
+    });
+    return Array.isArray(data) ? data : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+async function mapPool(items, concurrency, worker) {
+  const out = new Array(items.length);
+  let cursor = 0;
+  async function run() {
+    while (cursor < items.length) {
+      const i = cursor++;
+      out[i] = await worker(items[i], i);
+    }
+  }
+  const n = Math.min(concurrency, Math.max(1, items.length));
+  await Promise.all(Array.from({ length: n }, () => run()));
+  return out;
+}
+
+function dedupePmEvents(batches) {
+  const all = [];
+  const seen = new Set();
+  for (const batch of batches) {
+    for (const ev of batch || []) {
+      const id = String(ev?.id || ev?.slug || '');
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      all.push(ev);
+    }
+  }
+  all.sort((a, b) => (Number(b.volume24hr) || 0) - (Number(a.volume24hr) || 0));
+  return all;
+}
+
+/**
+ * mode=quick → volume pages only (fast cold start)
+ * mode=full  → volume + tag/league pages (background expand)
+ */
+async function fetchPolymarketEvents(locale = 'en', mode = 'full') {
+  const loc = pmLocale(locale);
+  const volPages = mode === 'quick' ? PREDICT_VOLUME_PAGES_QUICK : PREDICT_VOLUME_PAGES_FULL;
+  const jobs = [];
+  for (let page = 0; page < volPages; page++) {
+    jobs.push({
+      closed: false,
+      active: true,
+      archived: false,
+      order: 'volume24hr',
+      ascending: false,
+      limit: PREDICT_PAGE,
+      offset: page * PREDICT_PAGE,
+      locale: loc,
+    });
+  }
+  if (mode === 'full') {
+    for (const tag of PREDICT_TAG_SLUGS) {
+      for (let page = 0; page < PREDICT_TAG_PAGES; page++) {
+        jobs.push({
+          tag_slug: tag,
+          closed: false,
+          active: true,
+          archived: false,
+          order: 'volume24hr',
+          ascending: false,
+          limit: PREDICT_PAGE,
+          offset: page * PREDICT_PAGE,
+          locale: loc,
+        });
+      }
+    }
+  }
+  const batches = await mapPool(jobs, PREDICT_FETCH_CONCURRENCY, (params) => fetchPmEventsPage(params));
+  return dedupePmEvents(batches);
+}
+
+/** Re-fetch events by id with locale (public-search ignores locale). */
+async function localizePmEvents(events, locale = 'en') {
+  const loc = pmLocale(locale);
+  const list = Array.isArray(events) ? events : [];
+  if (!list.length || loc === 'en') return list;
+  const ids = [...new Set(list.map((e) => e?.id).filter(Boolean).map(String))];
+  if (!ids.length) return list;
+  const byId = new Map();
+  for (let i = 0; i < ids.length; i += 40) {
+    const chunk = ids.slice(i, i + 40);
+    try {
+      const qs = chunk.map((id) => 'id=' + encodeURIComponent(id)).join('&')
+        + '&locale=' + encodeURIComponent(loc);
+      const { data } = await axios.get('https://gamma-api.polymarket.com/events?' + qs, {
+        timeout: 14000,
+        headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' },
+      });
+      for (const ev of (Array.isArray(data) ? data : [])) {
+        if (ev?.id != null) byId.set(String(ev.id), ev);
+      }
+    } catch (_) {}
+  }
+  if (!byId.size) return list;
+  return list.map((e) => byId.get(String(e.id)) || e);
+}
+
+function looksLikePmSlug(s) {
+  const t = String(s || '').trim();
+  return /^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(t) && t.length >= 6 && t.length <= 160;
+}
+
+function extractPmSlug(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  const m = raw.match(/polymarket\.com\/(?:event|market)\/([a-z0-9][a-z0-9-]*)/i);
+  if (m) return m[1];
+  if (looksLikePmSlug(raw)) return raw.toLowerCase();
+  return '';
+}
+
+async function fetchPolymarketBySlug(slug, locale = 'en') {
+  const s = String(slug || '').trim();
+  if (!s) return [];
+  const loc = pmLocale(locale);
+  const { data } = await axios.get('https://gamma-api.polymarket.com/events', {
+    params: { slug: s, locale: loc },
+    timeout: 12000,
+    headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' },
+  });
+  return Array.isArray(data) ? data : [];
+}
+
+async function fetchPolymarketSearch(q, page = 1, limitPerType = 40, locale = 'en') {
+  const loc = pmLocale(locale);
+  const { data } = await axios.get('https://gamma-api.polymarket.com/public-search', {
+    params: {
+      q: String(q || '').trim().slice(0, 120),
+      page: Math.max(1, Number(page) || 1),
+      limit_per_type: Math.min(50, Math.max(5, Number(limitPerType) || 40)),
+      events_status: 'active',
+      locale: loc,
+    },
+    timeout: 14000,
+    headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' },
+  });
+  let events = Array.isArray(data?.events) ? data.events : [];
+  // public-search often ignores locale — rehydrate titles/questions by id
+  if (loc !== 'en' && events.length) {
+    events = await localizePmEvents(events, loc);
+  }
+  const pag = data?.pagination || {};
+  return {
+    events,
+    hasMore: !!pag.hasMore,
+    totalResults: Number(pag.totalResults) || events.length,
+    page: Math.max(1, Number(page) || 1),
+  };
+}
+
+function filterStalePredictMarkets(markets) {
+  const cutoff = Date.now() - 3 * 3600_000;
+  return (markets || []).filter((m) => {
+    if (!m?.endsAt) return true;
+    const t = new Date(m.endsAt).getTime();
+    return !Number.isFinite(t) || t > cutoff;
+  });
+}
+function mergePredictEvents(loc, events, { partial = true } = {}) {
+  const hit = _predictCacheByLocale.get(loc);
+  const prevIds = new Set((hit?.data || []).map((m) => m.eventId || m.id));
+  const fresh = normalizePolymarket(events, { maxEvents: PREDICT_MAX_EVENTS, locale: loc });
+  if (!fresh.length && hit?.data?.length) return hit.data.length;
+  const byId = new Map();
+  for (const m of (hit?.data || [])) byId.set(m.id, m);
+  for (const m of fresh) byId.set(m.id, m);
+  let merged = filterStalePredictMarkets([...byId.values()]);
+  merged.sort((a, b) => (b.vol24 || b.vol || 0) - (a.vol24 || a.vol || 0));
+  if (merged.length > PREDICT_MAX_EVENTS) merged = merged.slice(0, PREDICT_MAX_EVENTS);
+  const added = fresh.filter((m) => !prevIds.has(m.eventId || m.id)).length;
+  _predictCacheByLocale.set(loc, {
+    ts: Date.now(),
+    data: merged,
+    meta: {
+      upstreamEvents: merged.length,
+      capped: merged.length >= PREDICT_MAX_EVENTS,
+      maxEvents: PREDICT_MAX_EVENTS,
+      locale: loc,
+      partial,
+    },
+    refreshing: hit?.refreshing || false,
+    expanding: hit?.expanding || false,
+  });
+  return { size: merged.length, added };
+}
+
+/** Progressive fill: page-by-page so cache grows even if Gamma is slow.
+ *  Also re-fetches page 0 and prunes closed events so titles/odds stay in sync. */
+async function fillPredictCatalog(loc) {
+  const hit0 = _predictCacheByLocale.get(loc);
+  if (hit0?.expanding) return;
+  if (hit0) hit0.expanding = true;
+  const seenIds = new Set();
+  const markSeen = (batch) => {
+    for (const ev of batch || []) {
+      const id = String(ev?.id || '');
+      const slug = String(ev?.slug || '');
+      if (id) {
+        seenIds.add(id);
+        seenIds.add('pm_' + id);
+      }
+      if (slug) {
+        seenIds.add(slug);
+        seenIds.add('pm_' + slug);
+      }
+    }
+  };
+  try {
+    // Revalidate from page 0 so top-volume odds/titles don't go stale.
+    for (let page = 0; page < PREDICT_VOLUME_PAGES_FULL; page++) {
+      const batch = await fetchPmEventsPage({
+        closed: false,
+        active: true,
+        archived: false,
+        order: 'volume24hr',
+        ascending: false,
+        limit: PREDICT_PAGE,
+        offset: page * PREDICT_PAGE,
+        locale: loc,
+      });
+      if (!batch.length) break;
+      markSeen(batch);
+      mergePredictEvents(loc, batch, { partial: true });
+    }
+    // League / topic tags (sports leagues first)
+    for (const tag of PREDICT_TAG_SLUGS) {
+      for (let page = 0; page < PREDICT_TAG_PAGES; page++) {
+        const batch = await fetchPmEventsPage({
+          tag_slug: tag,
+          closed: false,
+          active: true,
+          archived: false,
+          order: 'volume24hr',
+          ascending: false,
+          limit: PREDICT_PAGE,
+          offset: page * PREDICT_PAGE,
+          locale: loc,
+        });
+        if (!batch.length) break;
+        markSeen(batch);
+        mergePredictEvents(loc, batch, { partial: true });
+      }
+    }
+    const cur = _predictCacheByLocale.get(loc);
+    // Drop closed/expired events that Gamma no longer returns as active.
+    if (cur?.data?.length && seenIds.size >= 40) {
+      const before = cur.data.length;
+      cur.data = cur.data.filter((m) => {
+        const eid = String(m.eventId || '');
+        const id = String(m.id || '');
+        const slug = String(m.slug || '');
+        return (eid && seenIds.has(eid))
+          || (id && seenIds.has(id))
+          || (slug && seenIds.has(slug));
+      });
+      if (cur.meta) {
+        cur.meta.upstreamEvents = cur.data.length;
+        cur.meta.pruned = Math.max(0, before - cur.data.length);
+        cur.meta.partial = false;
+      }
+    } else if (cur?.meta) {
+      cur.meta.partial = false;
+    }
+    if (cur) cur.ts = Date.now();
+  } catch (_) {
+    /* keep whatever we merged */
+  } finally {
+    const cur = _predictCacheByLocale.get(loc);
+    if (cur) cur.expanding = false;
+  }
+}
+
+function schedulePredictFill(loc) {
+  const hit = _predictCacheByLocale.get(loc);
+  if (hit?.expanding) return;
+  setTimeout(() => { fillPredictCatalog(loc).catch(() => {}); }, 0);
+}
+
+async function rebuildPredictCatalog(loc) {
+  // Ultra-fast cold path: first volume page only, then progressive fill
+  const first = await fetchPmEventsPage({
+    closed: false,
+    active: true,
+    archived: false,
+    order: 'volume24hr',
+    ascending: false,
+    limit: PREDICT_PAGE,
+    offset: 0,
+    locale: loc,
+  });
+  const markets = normalizePolymarket(first, { maxEvents: PREDICT_MAX_EVENTS, locale: loc });
+  const meta = {
+    upstreamEvents: first.length,
+    capped: false,
+    maxEvents: PREDICT_MAX_EVENTS,
+    locale: loc,
+    partial: true,
+  };
+  if (markets.length) {
+    _predictCacheByLocale.set(loc, { ts: Date.now(), data: markets, meta, refreshing: false, expanding: false });
+  }
+  schedulePredictFill(loc);
+  return { markets, meta, cached: false, locale: loc };
+}
+
+function schedulePredictRefresh(loc) {
+  const hit = _predictCacheByLocale.get(loc);
+  if (!hit || hit.refreshing || hit.expanding) return;
+  hit.refreshing = true;
+  const p = hit.data?.length ? fillPredictCatalog(loc) : rebuildPredictCatalog(loc);
+  Promise.resolve(p)
+    .catch(() => {})
+    .finally(() => {
+      const cur = _predictCacheByLocale.get(loc);
+      if (cur) cur.refreshing = false;
+    });
+}
+
+async function ensurePredictCatalog(locale = 'en') {
+  const loc = pmLocale(locale);
+  const now = Date.now();
+  const hit = _predictCacheByLocale.get(loc);
+  const pack = (markets, meta, extra) => ({
+    markets: filterStalePredictMarkets(markets),
+    meta: meta || {},
+    locale: loc,
+    ...extra,
+  });
+  if (hit?.data?.length && now - hit.ts < PREDICT_TTL) {
+    if (hit.meta?.partial) schedulePredictFill(loc);
+    return pack(hit.data, hit.meta, { cached: true });
+  }
+  // Stale-while-revalidate: never block the UI for 10–20s on refresh
+  if (hit?.data?.length && now - hit.ts < PREDICT_STALE_TTL) {
+    schedulePredictRefresh(loc);
+    return pack(hit.data, hit.meta, { cached: true, stale: true });
+  }
+  const rebuilt = await rebuildPredictCatalog(loc);
+  return pack(rebuilt.markets, rebuilt.meta, { cached: rebuilt.cached });
+}
+
+/** Warm EN+RU catalogs so first visitor after deploy isn't cold. */
+setTimeout(() => {
+  ensurePredictCatalog('en').catch(() => {});
+  ensurePredictCatalog('ru').catch(() => {});
+}, 1500);
+setInterval(() => {
+  for (const loc of ['en', 'ru', 'zh', 'es']) schedulePredictRefresh(loc);
+}, 90_000);
+
+function slicePredictPage(markets, offset, limit) {
+  const off = Math.max(0, Number(offset) || 0);
+  const lim = Math.min(PREDICT_MAX_LIMIT, Math.max(1, Number(limit) || PREDICT_DEFAULT_LIMIT));
+  const slice = markets.slice(off, off + lim);
+  return {
+    markets: slice,
+    offset: off,
+    limit: lim,
+    count: slice.length,
+    total: markets.length,
+    hasMore: off + slice.length < markets.length,
+  };
 }
 
 export function createMarketRouter() {
   const r = express.Router();
 
+  // Equity / xStock sparkline for trade modal (Yahoo underlying).
+  const _xChartCache = new Map(); // key -> { ts, payload }
+  r.get('/xstocks/chart', async (req, res) => {
+    try {
+      const sym = String(req.query.symbol || req.query.sym || '').toUpperCase().trim();
+      let yahoo = String(req.query.yahoo || '').toUpperCase().trim();
+      if (!yahoo && sym) yahoo = toYahooSymbol(sym);
+      if (!yahoo) return res.status(400).json({ points: [], error: 'symbol required' });
+      const range = String(req.query.range || '5d');
+      const interval = String(req.query.interval || (range === '1d' ? '5m' : range === '1mo' ? '1d' : '15m'));
+      const cacheKey = `${yahoo}|${range}|${interval}`;
+      const hit = _xChartCache.get(cacheKey);
+      if (hit && Date.now() - hit.ts < 60_000) {
+        return res.json(hit.payload);
+      }
+      let session = null;
+      try { session = await ensureYahooSession(); } catch (_) {}
+      const headers = { 'User-Agent': YF_UA, Accept: 'application/json' };
+      if (session?.cookie) headers.Cookie = session.cookie;
+      const params = { interval, range, includePrePost: 'false' };
+      if (session?.crumb) params.crumb = session.crumb;
+      const { data } = await axios.get(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahoo)}`,
+        { timeout: 12000, params, headers },
+      );
+      const result = data?.chart?.result?.[0];
+      const ts = result?.timestamp || [];
+      const closes = result?.indicators?.quote?.[0]?.close || [];
+      const points = [];
+      for (let i = 0; i < ts.length; i++) {
+        const c = Number(closes[i]);
+        if (!Number.isFinite(c) || !(c > 0)) continue;
+        points.push({ t: Number(ts[i]) * 1000, c });
+      }
+      const meta = result?.meta || {};
+      const payload = {
+        symbol: sym || yahoo,
+        yahoo,
+        range,
+        interval,
+        currency: meta.currency || 'USD',
+        points,
+        last: points.length ? points[points.length - 1].c : (Number(meta.regularMarketPrice) || 0),
+      };
+      if (points.length) _xChartCache.set(cacheKey, { ts: Date.now(), payload });
+      return res.json(payload);
+    } catch (e) {
+      return res.status(502).json({ points: [], error: String(e?.message || e) });
+    }
+  });
+
   // Backed xStocks catalog (server-side to bypass CORS on api.backed.fi).
   // Only products whose name ends with "xStock" — never the full LiFi token soup.
   r.get('/xstocks', async (_req, res) => {
     const now = Date.now();
+    const send = (payload, cacheSec = 60) => res
+      .set('Cache-Control', `public, max-age=${cacheSec}, stale-while-revalidate=120`)
+      .json(payload);
     if (_xstocksCache.data && now - _xstocksCache.ts < XSTOCKS_TTL) {
-      return res.json({ items: _xstocksCache.data, cached: true, source: 'backed' });
+      if (xstocksMetricsMostlyBlank(_xstocksCache.data)) {
+        try { scheduleXstocksEnrich(_xstocksCache.data); } catch (_) {}
+      }
+      return send({ items: _xstocksCache.data, cached: true, source: 'backed' }, 90);
     }
+    // Stale-while-revalidate: never make mobile wait 20s+ for Backed pagination.
+    if (_xstocksCache.data?.length) {
+      const stale = _xstocksCache.data;
+      if (xstocksMetricsMostlyBlank(stale)) {
+        try { scheduleXstocksEnrich(stale); } catch (_) {}
+      }
+      if (!_xstocksRefreshPromise) {
+        _xstocksRefreshPromise = (async () => {
+          try {
+            const items = await fetchBackedXstocksCatalog();
+            if (items?.length) {
+              _xstocksCache = { ts: Date.now(), data: items };
+              saveXstocksDiskCache(items);
+            }
+          } catch (_) {}
+          finally { _xstocksRefreshPromise = null; }
+        })();
+      }
+      return send({ items: stale, cached: true, source: 'backed', refreshing: true }, 30);
+    }
+    // Cold path: coalesce concurrent browsers (landing + stocks + gwx) into one Backed crawl.
     try {
-      const all = [];
-      for (let page = 0; page < 24; page++) {
-        const { data } = await axios.get('https://api.backed.fi/api/v2/public/assets', {
-          params: { page },
-          timeout: 12000,
-          headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' },
-        });
-        const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
-        all.push(...nodes);
-        if (!data?.page?.hasNextPage) break;
+      if (!_xstocksRefreshPromise) {
+        _xstocksRefreshPromise = (async () => {
+          try {
+            const items = await fetchBackedXstocksCatalog();
+            if (items?.length) {
+              _xstocksCache = { ts: Date.now(), data: items };
+              saveXstocksDiskCache(items);
+            }
+            return items || [];
+          } finally {
+            _xstocksRefreshPromise = null;
+          }
+        })();
       }
-      const seen = new Set();
-      const items = [];
-      for (const n of all) {
-        const name = String(n?.name || '');
-        const tokenSym = String(n?.symbol || '');
-        if (!/xStock$/i.test(name)) continue;
-        if (!/x$/i.test(tokenSym)) continue;
-        const underlying = String(n.underlyingSymbol || tokenSym.replace(/x$/i, '') || tokenSym).toUpperCase();
-        if (!underlying || seen.has(underlying)) continue;
-        const addrs = {};
-        const chains = [];
-        for (const dep of (n.deployments || [])) {
-          const cid = GWX_NET[dep.network];
-          const addr = dep.address || dep.wrapperAddressV2 || dep.wrapperAddress;
-          if (!cid || !addr || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) continue;
-          addrs[cid] = addr;
-          chains.push(cid);
-        }
-        if (!chains.length) continue;
-        seen.add(underlying);
-        const pref = [1, 42161, 10, 56, 8453].find((c) => addrs[c]) || chains[0];
-        items.push({
-          sym: underlying,
-          tokenSym,
-          name,
-          logo: n.logo || '',
-          addrs,
-          chains,
-          chain: pref,
-          chainLabel: Object.keys(GWX_NET).find((k) => GWX_NET[k] === pref) || String(pref),
-          decimals: 18,
-          tradeable: true,
-          halted: !!n.isTradingHalted,
-          price: 0,
-          chg: 0,
-          vol24: '—',
-          mc: '—',
-        });
+      const items = await _xstocksRefreshPromise;
+      if (items?.length) {
+        return send({ items, source: 'backed', count: items.length }, 60);
       }
-      items.sort((a, b) => a.sym.localeCompare(b.sym));
-      // Underlying equity 24h $ volume + market cap (Yahoo). Token mid stays FE/LiFi.
-      try { await enrichXstocksMetrics(items); } catch (_) {}
-      if (items.length) _xstocksCache = { ts: now, data: items };
-      return res.json({ items, source: 'backed', count: items.length });
+      return res.status(502).json({ items: [], error: 'empty' });
     } catch (e) {
       if (_xstocksCache.data?.length) {
-        return res.json({ items: _xstocksCache.data, cached: true, source: 'backed', error: 'upstream' });
+        return send({ items: _xstocksCache.data, cached: true, source: 'backed', error: 'upstream' }, 15);
       }
       return res.status(502).json({ items: [], error: String(e?.message || e) });
     }
   });
 
+  // Public builder config (builderCode is attribution id — safe to expose).
+  r.get('/predict/config', (_req, res) => {
+    const builderCode = String(config.polymarket?.builderCode || process.env.GROM_POLYMARKET_BUILDER_CODE || '').trim();
+    const enabled = !!builderCode && /^0x[a-fA-F0-9]{64}$/.test(builderCode);
+    res.json({
+      enabled,
+      builderCode: enabled ? builderCode : '',
+      chainId: 137,
+      clobHost: '/api/market/clob',
+      dataHost: '/api/market/pm-data',
+      collateral: 'pUSD',
+      docs: 'https://docs.polymarket.com/programs/builders/overview',
+    });
+  });
+
   // Live prediction markets from Polymarket (server-side to bypass CORS).
-  r.get('/predict', async (_req, res) => {
-    const now = Date.now();
-    if (_predictCache.data && now - _predictCache.ts < PREDICT_TTL) {
-      return res.json({ markets: _predictCache.data, cached: true });
-    }
+  // Query: ?q= / ?slug= / ?lang= / ?locale= / ?cat= / ?offset=&limit= / ?page=
+  const PREDICT_CATS = new Set(['all', 'sport', 'crypto', 'esports', 'politics', 'culture', 'finance', 'economy']);
+  function filterPredictCat(markets, cat) {
+    const c = String(cat || 'all').toLowerCase();
+    if (!c || c === 'all' || !PREDICT_CATS.has(c)) return markets || [];
+    return (markets || []).filter((m) => m && m.cat === c);
+  }
+
+  r.get('/predict', async (req, res) => {
+    const qRaw = String(req.query.q || req.query.search || '').trim();
+    const slugParam = String(req.query.slug || '').trim() || extractPmSlug(qRaw);
+    const locale = pmLocale(req.query.lang || req.query.locale || 'en');
+    const catParam = String(req.query.cat || 'all').trim().toLowerCase() || 'all';
+    const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
+    const limit = Math.min(
+      PREDICT_MAX_LIMIT,
+      Math.max(1, parseInt(String(req.query.limit || String(PREDICT_DEFAULT_LIMIT)), 10) || PREDICT_DEFAULT_LIMIT),
+    );
+    const searchPage = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+    const wantAll = String(req.query.all || '') === '1'; // legacy: return full browse catalog
+
     try {
-      const { data } = await axios.get('https://gamma-api.polymarket.com/events', {
-        params: { closed: false, active: true, archived: false, order: 'volume24hr', ascending: false, limit: 120 },
-        timeout: 7000,
+      // 1) Exact slug (or polymarket.com/event/<slug> pasted into search)
+      if (slugParam && (!qRaw || extractPmSlug(qRaw) === slugParam)) {
+        const cacheKey = `slug:${locale}:${slugParam.toLowerCase()}`;
+        const hit = _predictSearchCache.get(cacheKey);
+        if (hit && Date.now() - hit.ts < PREDICT_SEARCH_TTL) {
+          return res.json(hit.payload);
+        }
+        const events = await fetchPolymarketBySlug(slugParam, locale);
+        const markets = normalizePolymarket(events, { maxEvents: 20, locale });
+        const payload = {
+          markets,
+          source: 'polymarket',
+          mode: 'slug',
+          slug: slugParam,
+          locale,
+          count: markets.length,
+          total: markets.length,
+          offset: 0,
+          limit,
+          hasMore: false,
+          page: 1,
+        };
+        _predictSearchCache.set(cacheKey, { ts: Date.now(), payload });
+        return res.json(payload);
+      }
+
+      // 2) Free-text / slug search via Polymarket public-search (+ local catalog filter)
+      if (qRaw) {
+        const cacheKey = `q:${locale}:${qRaw.toLowerCase()}:p${searchPage}:l${limit}`;
+        const hit = _predictSearchCache.get(cacheKey);
+        if (hit && Date.now() - hit.ts < PREDICT_SEARCH_TTL) {
+          return res.json(hit.payload);
+        }
+
+        let events = [];
+        let hasMore = false;
+        let totalResults = 0;
+        try {
+          const searched = await fetchPolymarketSearch(qRaw, searchPage, Math.min(50, limit), locale);
+          events = searched.events;
+          hasMore = searched.hasMore;
+          totalResults = searched.totalResults;
+        } catch (_) {}
+
+        // Also try slug fetch if query looks like a slug and search was thin
+        if (looksLikePmSlug(qRaw) && events.length < 3) {
+          try {
+            const bySlug = await fetchPolymarketBySlug(qRaw.toLowerCase(), locale);
+            events = bySlug.concat(events);
+          } catch (_) {}
+        }
+
+        let markets = normalizePolymarket(events, { maxEvents: PREDICT_MAX_LIMIT, locale });
+
+        // Enrich with catalog matches (volume-ranked) when search is sparse
+        if (markets.length < 8) {
+          try {
+            const cat = await ensurePredictCatalog(locale);
+            const ql = qRaw.toLowerCase();
+            const extra = (cat.markets || []).filter((m) => {
+              const blob = ((m.q || '') + ' ' + (m.slug || '') + ' ' + (m.eventId || '')).toLowerCase();
+              return blob.includes(ql);
+            });
+            const seen = new Set(markets.map((m) => m.id));
+            for (const m of extra) {
+              if (seen.has(m.id)) continue;
+              markets.push(m);
+              seen.add(m.id);
+              if (markets.length >= limit) break;
+            }
+          } catch (_) {}
+        }
+
+        markets = markets.slice(0, limit);
+        const payload = {
+          markets,
+          source: 'polymarket',
+          mode: 'search',
+          q: qRaw,
+          locale,
+          count: markets.length,
+          total: totalResults || markets.length,
+          offset: (searchPage - 1) * limit,
+          limit,
+          hasMore,
+          page: searchPage,
+        };
+        _predictSearchCache.set(cacheKey, { ts: Date.now(), payload });
+        return res.json(payload);
+      }
+
+      // 3) Browse catalog (volume-ranked), paginated for mobile-friendly UI
+      const catalog = await ensurePredictCatalog(locale);
+      const filtered = filterPredictCat(catalog.markets, catParam);
+      if (wantAll) {
+        return res.json({
+          markets: filtered,
+          source: 'polymarket',
+          mode: 'browse',
+          locale,
+          cat: catParam,
+          cached: catalog.cached,
+          count: filtered.length,
+          total: filtered.length,
+          offset: 0,
+          limit: filtered.length,
+          hasMore: false,
+          ...(catalog.meta || {}),
+        });
+      }
+      const page = slicePredictPage(filtered, offset, limit);
+      return res.json({
+        ...page,
+        source: 'polymarket',
+        mode: 'browse',
+        locale,
+        cat: catParam,
+        cached: catalog.cached,
+        ...(catalog.meta || {}),
       });
-      const markets = normalizePolymarket(data);
-      if (markets.length) _predictCache = { ts: now, data: markets };
-      return res.json({ markets, source: 'polymarket' });
-    } catch (_) {
-      return res.json({ markets: _predictCache.data || [], error: 'upstream' });
+    } catch (e) {
+      const fallback = _predictCacheByLocale.get(locale) || _predictCacheByLocale.get('en');
+      if (fallback?.data?.length && !qRaw && !slugParam) {
+        const page = slicePredictPage(filterPredictCat(fallback.data, catParam), offset, limit);
+        return res.json({
+          ...page,
+          cached: true,
+          source: 'polymarket',
+          mode: 'browse',
+          locale,
+          cat: catParam,
+          error: 'upstream',
+          ...(fallback.meta || {}),
+        });
+      }
+      return res.status(502).json({ markets: [], error: String(e?.message || e), source: 'polymarket', locale });
     }
   });
 
-  r.get('/quotes', async (_req, res) => {
+  // CLOB proxy — browser SDK hits our origin (avoids CORS / builder-fee 404 issues).
+  r.use('/clob', async (req, res) => {
+    try {
+      const sub = req.url || '/';
+      const url = 'https://clob.polymarket.com' + (sub.startsWith('/') ? sub : '/' + sub);
+      // Soft-stub builder fee lookup so browser SDK does not hard-fail on CORS/404.
+      if (/\/fees\/builder-fees\//i.test(sub)) {
+        return res.json({ base_fee: 0, fee_rate: 0, feeRate: 0, rate: 0 });
+      }
+      const headers = { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' };
+      for (const h of ['content-type', 'poly_api_key', 'poly_passphrase', 'poly_signature', 'poly_timestamp', 'poly_address', 'authorization']) {
+        const v = req.headers[h];
+        if (v) headers[h] = v;
+      }
+      const upstream = await axios({
+        method: req.method,
+        url,
+        data: ['GET', 'HEAD'].includes(req.method) ? undefined : req.body,
+        headers,
+        timeout: 20000,
+        validateStatus: () => true,
+        responseType: 'json',
+      });
+      res.status(upstream.status).set('cache-control', 'no-store');
+      return res.send(upstream.data);
+    } catch (e) {
+      return res.status(502).json({ error: String(e?.message || e) });
+    }
+  });
+
+  // Data API proxy (positions).
+  r.get('/pm-data/positions', async (req, res) => {
+    try {
+      const user = String(req.query.user || '');
+      if (!/^0x[a-fA-F0-9]{40}$/.test(user)) return res.status(400).json({ error: 'bad user' });
+      const { data } = await axios.get('https://data-api.polymarket.com/positions', {
+        params: { user, sizeThreshold: 0 },
+        timeout: 12000,
+        headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' },
+      });
+      return res.json(Array.isArray(data) ? data : (data?.positions || []));
+    } catch (e) {
+      return res.status(502).json({ error: String(e?.message || e) });
+    }
+  });
+
+  async function refreshQuotesPayload() {
     const payload = fallbackQuotes();
+    if (_quotesCache.data?.crypto) {
+      Object.assign(payload.crypto, _quotesCache.data.crypto);
+      Object.assign(payload.cryptoChange24h, _quotesCache.data.cryptoChange24h || {});
+      Object.assign(payload.fx, _quotesCache.data.fx || {});
+      Object.assign(payload.equities, _quotesCache.data.equities || {});
+    }
 
-    try {
-      const { data } = await axios.get('https://api.binance.com/api/v3/ticker/price', {
-        params: { symbols: JSON.stringify(BINANCE_SYMBOLS) },
-        timeout: 5000,
-      });
-      if (Array.isArray(data)) {
-        data.forEach((row) => {
-          const price = Number(row.price);
-          if (!Number.isFinite(price)) return;
-          const symbol = String(row.symbol || '').toUpperCase();
-          const set = (asset, value) => { payload.crypto[asset] = value; };
-          if (symbol === 'BTCUSDT') set('BTC', price);
-          else if (symbol === 'ETHUSDT') set('ETH', price);
-          else if (symbol === 'SOLUSDT') set('SOL', price);
-          else if (symbol === 'BNBUSDT') set('BNB', price);
-          else if (symbol === 'XRPUSDT') set('XRP', price);
-          else if (symbol === 'ADAUSDT') set('ADA', price);
-          else if (symbol === 'DOGEUSDT') set('DOGE', price);
-          else if (symbol === 'AVAXUSDT') set('AVAX', price);
-          else if (symbol === 'LINKUSDT') set('LINK', price);
-          else if (symbol === 'TONUSDT') set('TON', price);
-          else if (symbol === 'TRXUSDT') set('TRX', price);
-          else if (symbol === 'DOTUSDT') set('DOT', price);
-          else if (symbol === 'ATOMUSDT') set('ATOM', price);
-          else if (symbol === 'NEARUSDT') set('NEAR', price);
-          else if (symbol === 'LTCUSDT') set('LTC', price);
-          else if (symbol === 'BCHUSDT') set('BCH', price);
-          else if (symbol === 'SUIUSDT') set('SUI', price);
-          else if (symbol === '1000PEPEUSDT') set('PEPE', price / 1000);
-          else if (symbol === '1000SHIBUSDT') set('SHIB', price / 1000);
-          else if (symbol === 'APTUSDT') set('APT', price);
-          else if (symbol === 'UNIUSDT') set('UNI', price);
-          else if (symbol === 'ETCUSDT') set('ETC', price);
-          else if (symbol === 'ICPUSDT') set('ICP', price);
-          else if (symbol === 'ARBUSDT') set('ARB', price);
-          else if (symbol === 'OPUSDT') set('OP', price);
+    const jobs = [];
+
+    jobs.push((async () => {
+      try {
+        const ids = Object.values(CG_IDS).join(',');
+        const headers = { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' };
+        const cgKey = String(process.env.COINGECKO_API_KEY || process.env.GROM_COINGECKO_API_KEY || '').trim();
+        if (cgKey) headers['x-cg-pro-api-key'] = cgKey;
+        const base = cgKey ? 'https://pro-api.coingecko.com/api/v3' : 'https://api.coingecko.com/api/v3';
+        const { data } = await axios.get(`${base}/simple/price`, {
+          params: { ids, vs_currencies: 'usd', include_24hr_change: true },
+          timeout: 2500,
+          headers,
         });
+        for (const [asset, id] of Object.entries(CG_IDS)) {
+          const price = Number(data?.[id]?.usd);
+          if (Number.isFinite(price) && price > 0) payload.crypto[asset] = price;
+          const change24h = Number(data?.[id]?.usd_24h_change);
+          if (Number.isFinite(change24h)) payload.cryptoChange24h[asset] = change24h;
+        }
+      } catch (_) {}
+    })());
+
+    jobs.push((async () => {
+      try {
+        const { data } = await axios.get('https://open.er-api.com/v6/latest/USD', { timeout: 2000 });
+        if (data && data.rates) {
+          const eur = Number(data.rates.EUR);
+          const gbp = Number(data.rates.GBP);
+          const jpy = Number(data.rates.JPY);
+          if (eur) payload.fx.EURUSD = 1 / eur;
+          if (gbp && jpy) payload.fx.GBPJPY = (1 / gbp) * jpy;
+          if (jpy) payload.fx.USDJPY = jpy;
+        }
+      } catch (_) {}
+    })());
+
+    jobs.push((async () => {
+      try {
+        const { data } = await axios.get('https://stooq.com/q/l/?s=aapl.us,tsla.us,msft.us,nvda.us&i=d', { timeout: 2000 });
+        String(data || '').split('\n').forEach((line) => {
+          const parts = line.split(',');
+          if (parts.length < 7 || parts[0] === 'Symbol') return;
+          const symbol = String(parts[0]).toUpperCase();
+          const close = Number(parts[6]);
+          if (!Number.isFinite(close)) return;
+          if (symbol === 'AAPL.US') payload.equities.AAPL = close;
+          else if (symbol === 'TSLA.US') payload.equities.TSLA = close;
+          else if (symbol === 'MSFT.US') payload.equities.MSFT = close;
+          else if (symbol === 'NVDA.US') payload.equities.NVDA = close;
+        });
+      } catch (_) {}
+    })());
+
+    await Promise.all(jobs);
+    _quotesCache = { ts: Date.now(), data: payload };
+    return payload;
+  }
+
+  r.get('/quotes', async (_req, res) => {
+    const now = Date.now();
+    if (_quotesCache.data && now - _quotesCache.ts < QUOTES_TTL_MS) {
+      return res.json(_quotesCache.data);
+    }
+    if (_quotesCache.data && now - _quotesCache.ts < QUOTES_STALE_MS) {
+      if (!_quotesRefreshPromise) {
+        _quotesRefreshPromise = refreshQuotesPayload()
+          .catch(() => null)
+          .finally(() => { _quotesRefreshPromise = null; });
       }
-    } catch (_) {}
-
+      return res.json(_quotesCache.data);
+    }
     try {
-      const { data } = await axios.get('https://open.er-api.com/v6/latest/USD', { timeout: 5000 });
-      if (data && data.rates) {
-        const eur = Number(data.rates.EUR);
-        const gbp = Number(data.rates.GBP);
-        const jpy = Number(data.rates.JPY);
-        if (eur) payload.fx.EURUSD = 1 / eur;
-        if (gbp && jpy) payload.fx.GBPJPY = (1 / gbp) * jpy;
-        if (jpy) payload.fx.USDJPY = jpy;
+      if (!_quotesRefreshPromise) {
+        _quotesRefreshPromise = refreshQuotesPayload()
+          .finally(() => { _quotesRefreshPromise = null; });
       }
-    } catch (_) {}
+      const payload = await _quotesRefreshPromise;
+      return res.json(payload || fallbackQuotes());
+    } catch (_) {
+      return res.json(_quotesCache.data || fallbackQuotes());
+    }
+  });
 
+  /** GeckoTerminal trending — cached server proxy (avoids browser 429 bursts). */
+  r.get('/trending', async (req, res) => {
     try {
-      const { data } = await axios.get('https://stooq.com/q/l/?s=aapl.us,tsla.us,msft.us,nvda.us&i=d', { timeout: 5000 });
-      String(data || '').split('\n').forEach((line) => {
-        const parts = line.split(',');
-        if (parts.length < 7 || parts[0] === 'Symbol') return;
-        const symbol = String(parts[0]).toUpperCase();
-        const close = Number(parts[6]);
-        if (!Number.isFinite(close)) return;
-        if (symbol === 'AAPL.US') payload.equities.AAPL = close;
-        else if (symbol === 'TSLA.US') payload.equities.TSLA = close;
-        else if (symbol === 'MSFT.US') payload.equities.MSFT = close;
-        else if (symbol === 'NVDA.US') payload.equities.NVDA = close;
-      });
-    } catch (_) {}
-
-    res.json(payload);
+      const { getTrending } = await import('./trending.js');
+      const payload = await getTrending(req.query.net);
+      res.json(payload);
+    } catch (e) {
+      res.status(502).json({ net: String(req.query.net || 'all'), rows: [], error: String(e?.message || e) });
+    }
   });
 
   return r;

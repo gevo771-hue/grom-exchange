@@ -1,0 +1,32 @@
+{
+  "action": {
+    "fromAmount": "10000000"
+  },
+  "estimate": {
+    "fromAmount": "10000000",
+    "toAmount": "9955000",
+    "feeCosts": [
+      {
+        "name": "LIFI Fixed Fee",
+        "description": "Fixed LIFI fee, independent of any other fee",
+        "percentage": "0.0045",
+        "amount": "45000",
+        "amountUSD": "0.0450",
+        "included": true,
+        "token": {
+          "address": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+          "symbol": "USDC",
+          "decimals": 6
+        },
+        "feeSplit": {
+          "lifiFee": "25000",
+          "integratorFee": "20000",
+          "recipients": [
+            { "name": "lifi", "type": "FIXED", "fee": "25000" },
+            { "name": "grom-exchange", "type": "FIXED", "fee": "20000" }
+          ]
+        }
+      }
+    ]
+  }
+}

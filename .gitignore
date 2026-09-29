@@ -1,30 +1,36 @@
+.DS_Store
+
+# Dependencies
+node_modules
+node_modules/
+**/node_modules/
+
+# Environment and secrets
 .env
 .env.*
 !.env.example
 
-node_modules/
-backend/node_modules/
-frontend/node_modules/
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
+# Build outputs
 dist/
 build/
 coverage/
-.DS_Store
-.env.deploy
+.cache/
 
-*.log
-logs/
+# WalletConnect bundle scratch (never ship)
+.wc-bundle-tmp/
 
-*.bak
-*.orig
-*.rej
+# Runtime data
+*.pid
+*.seed
 
-*.pem
-*.key
-*.crt
-*.p12
-*.pfx
-
-hummingbot/conf/
-hummingbot/logs/
-hummingbot/data/
+# Editor/system
+.idea/
+.vscode/
+*.swp

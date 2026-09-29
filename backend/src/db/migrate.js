@@ -1,53 +1,42 @@
-import { readdir, readFile } from 'node:fs/promises';
-import path from 'node:path';
+#!/usr/bin/env node
+/** Run SQL migrations in src/db/migrations/ (sorted by filename). */
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pool, withTx } from './pool.js';
-import logger from '../utils/logger.js';
+import { pool } from './pool.js';
+import { shouldDeferLegacyCustodialMigration } from './migration-policy.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const migrationsDir = path.join(__dirname, 'migrations');
+const __dir = dirname(fileURLToPath(import.meta.url));
+const migDir = join(__dir, 'migrations');
 
-async function ensureMigrationsTable() {
+async function main() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version TEXT PRIMARY KEY,
       applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
-}
-
-async function appliedVersions() {
-  const { rows } = await pool.query('SELECT version FROM schema_migrations');
-  return new Set(rows.map((row) => row.version));
-}
-
-async function run() {
-  await ensureMigrationsTable();
-  const applied = await appliedVersions();
-  const files = (await readdir(migrationsDir))
-    .filter((name) => name.endsWith('.sql'))
-    .sort();
-
+  const files = readdirSync(migDir).filter((f) => f.endsWith('.sql')).sort();
   for (const file of files) {
-    if (applied.has(file)) continue;
-    const sql = await readFile(path.join(migrationsDir, file), 'utf8');
-    await withTx(async (tx) => {
-      await tx.query(sql);
-      await tx.query(
-        'INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING',
-        [file]
-      );
-    });
-    logger.info({ file }, 'migration applied');
+    const { rows } = await pool.query('SELECT 1 FROM schema_migrations WHERE version=$1', [file]);
+    if (rows.length) {
+      console.log('skip', file);
+      continue;
+    }
+    if (shouldDeferLegacyCustodialMigration(file)) {
+      console.log('defer', file, '(GROM_DEFER_LEGACY_CUSTODIAL=1; preserving legacy data)');
+      continue;
+    }
+    const sql = readFileSync(join(migDir, file), 'utf8');
+    console.log('apply', file);
+    await pool.query(sql);
+    await pool.query('INSERT INTO schema_migrations (version) VALUES ($1)', [file]);
   }
+  await pool.end();
+  console.log('done');
 }
 
-run()
-  .then(async () => {
-    await pool.end();
-  })
-  .catch(async (err) => {
-    logger.error({ err }, 'migration failed');
-    await pool.end();
-    process.exit(1);
-  });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -1,0 +1,11 @@
+{
+  "route": {
+    "params": {
+      "collectFees": {
+        "integratorAddress": "0xCFeF272536D6E91A4945063d40ac7CbA7Eb657B5",
+        "fee": 45
+      }
+    },
+    "estimate": { "toAmount": "1000000" }
+  }
+}

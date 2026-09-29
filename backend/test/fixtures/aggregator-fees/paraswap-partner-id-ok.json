@@ -1,0 +1,7 @@
+{
+  "priceRoute": {
+    "destAmount": "999000",
+    "partner": "grom-exchange",
+    "srcAmount": "1000000"
+  }
+}

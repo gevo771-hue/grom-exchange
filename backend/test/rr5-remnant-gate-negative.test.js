@@ -21,15 +21,20 @@ function writeMinimalValidTree(dir) {
   mkdirSync(join(dir, 'scripts'), { recursive: true });
   mkdirSync(join(dir, 'backend/src'), { recursive: true });
   writeFileSync(join(dir, 'frontend/public/index.html'), `<!doctype html><html><head>
-    <meta property="og:image" content="/assets/og-share-nord.png">
-    <meta name="twitter:image" content="/assets/og-share-nord.png">
+    <meta property="og:image" content="/assets/og-share-grom-20260930.png">
+    <meta name="twitter:image" content="/assets/og-share-grom-20260930.png">
     <style>html.grom-js-ready:not([data-grom-route="landing"]) #gromSeoRouteCopy{display:none}</style>
+    <script>window.gromReferralShareUrl=function(){return 'https://grom.exchange/share/' + (code ? '?ref=' : '')};window.refShareX=function(){window.gromReferralShareUrl()};window.refShareTelegram=function(){window.gromReferralShareUrl()};</script>
     </head><body><div id="page-futures"></div><span class="trade-mode-spot"></span>
     <script>/* ALWAYS hard-load the full SPA */</script></body></html>`);
   writeFileSync(join(dir, 'frontend/public/pages/backoffice.html'), '<div>ok</div>');
   writeFileSync(join(dir, 'frontend/nginx.conf'), 'location @spa { rewrite ^ /app.html last; }\nlocation @crawler_seo_route {}\n');
   writeFileSync(join(dir, 'frontend/public/assets/og-share-nord.png'), 'fixture');
-  writeFileSync(join(dir, 'frontend/public/share/index.html'), '<!doctype html>');
+  writeFileSync(join(dir, 'frontend/public/assets/og-share-grom-20260930.png'), 'fixture');
+  writeFileSync(join(dir, 'frontend/public/share/index.html'), `<!doctype html>
+    <meta property="og:image" content="/assets/og-share-grom-20260930.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <a href="/?ref=" + encodeURIComponent(ref) + "#landing">Open</a>`);
   writeFileSync(join(dir, 'scripts/assert-product-health.mjs'), "console.log('ok');\n");
   copyFileSync(gateScript, join(dir, 'scripts/assert-frontend-clean.mjs'));
 }

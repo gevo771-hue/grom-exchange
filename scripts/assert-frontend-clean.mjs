@@ -167,17 +167,31 @@ if (existsSync('frontend/public')) {
   } else {
     fail('missing frontend/nginx.conf');
   }
-  if (!existsSync('frontend/public/assets/og-share-nord.png')) {
-    fail('missing OG card: frontend/public/assets/og-share-nord.png');
+  const socialCard = 'frontend/public/assets/og-share-grom-20260930.png';
+  if (!existsSync(socialCard)) {
+    fail(`missing OG card: ${socialCard}`);
   }
   if (!existsSync('frontend/public/share/index.html')) {
     fail('missing share OG page: frontend/public/share/index.html');
   }
-  if (!/og-share-nord\.png/.test(idx)) {
-    fail('index.html must point og:image / twitter:image at og-share-nord.png');
+  if (!/og-share-grom-20260930\.png/.test(idx)) {
+    fail('index.html must point og:image / twitter:image at the current GROM social card');
   }
-  if (/assets\/og-card\.png\?v=20260(6|9)1/i.test(idx)) {
-    fail('stale og-card.png cache-bust in index.html — use og-share-nord.png only');
+  const shareHtml = readFileSync('frontend/public/share/index.html', 'utf8');
+  if (!/og-share-grom-20260930\.png/.test(shareHtml)) {
+    fail('share/index.html must use the current GROM social card');
+  }
+  if (!/name="twitter:card" content="summary_large_image"/.test(shareHtml)) {
+    fail('share/index.html must advertise a large social preview');
+  }
+  if (!/\?ref=.{0,120}#landing/.test(shareHtml)) {
+    fail('share/index.html must carry referral codes through to the app');
+  }
+  if (!/window\.gromReferralShareUrl\(\)/.test(idx) || !/share\/.*\?ref=/.test(idx)) {
+    fail('X and Telegram referral sharing must use the dedicated share preview URL');
+  }
+  if (/assets\/(?:og-card|og-share-nord)\.png\?v=/.test(idx)) {
+    fail('index.html still points to the retired social card URL');
   }
   // Hard-ban Binary Options text in any shipped OG PNG metadata / embedded strings
   // og-card.png may exist only as a byte-identical twin of og-share-nord.png
@@ -189,7 +203,7 @@ if (existsSync('frontend/public')) {
       fail('og-card.png must be an exact copy of og-share-nord.png (no Binary-era art)');
     }
   }
-  for (const ogName of ['og-share-nord.png', 'og-card-v3.png', 'og-card.png']) {
+  for (const ogName of ['og-share-nord.png', 'og-card-v3.png', 'og-card.png', 'og-share-grom-20260930.png']) {
     const ogPath = join('frontend/public/assets', ogName);
     if (!existsSync(ogPath)) continue;
     const buf = readFileSync(ogPath);

@@ -1872,7 +1872,9 @@ function gwBindSideChainAddress(kind, address, opts) {
       document.dispatchEvent(new CustomEvent('grom:tron-connected', { detail: { address: addr } }));
     } catch (_) {}
     if (typeof gwTronActivateUi === 'function' && opts.activateUi) {
-      try { gwTronActivateUi(addr); } catch (_) {}
+      let preserveEvm = false;
+      try { preserveEvm = !!gwOcConnectedAddress(); } catch (_) {}
+      try { gwTronActivateUi(addr, { preserveEvm }); } catch (_) {}
     }
     return true;
   }
@@ -3137,10 +3139,17 @@ function gwNotifyWalletConnected(addr, opts) {
   const address = addr.trim();
   const method = opts?.method || gwDetectWalletMethod(address);
   const isEvm = gwAddrOk(address);
+  // Linking a second namespace (for example a Trust Wallet TRON session) must
+  // not replace an already-connected EVM account or force the swap onto TRON.
+  let priorEvmAddress = '';
+  if (!isEvm && method === 'tron') {
+    try { priorEvmAddress = gwOcConnectedAddress() || ''; } catch (_) {}
+  }
+  const keepEvmAccount = !!priorEvmAddress;
   // Only EVM addresses belong in currentAccount (SIWE / eth_accounts paths).
   if (isEvm) currentAccount = address;
   try {
-    localStorage.setItem('grom_wallet_label', address);
+    localStorage.setItem('grom_wallet_label', keepEvmAccount ? priorEvmAddress : address);
     localStorage.setItem('grom_wallet_method', method);
     localStorage.removeItem('grom:logged_out');
     if (method === 'tron') localStorage.setItem('grom_tron_addr', address);
@@ -3148,24 +3157,24 @@ function gwNotifyWalletConnected(addr, opts) {
   } catch (_) {}
   if (window.GROM_CONN) {
     window.GROM_CONN.connected = true;
-    window.GROM_CONN.label = address;
+    window.GROM_CONN.label = keepEvmAccount ? priorEvmAddress : address;
     window.GROM_CONN.method = method;
     if (method === 'tron') window.GROM_CONN.tron = address;
     if (method === 'solana') window.GROM_CONN.solana = address;
   }
-  const short = gwShortWalletLabel(address);
+  const short = gwShortWalletLabel(keepEvmAccount ? priorEvmAddress : address);
   try { if (typeof window.setWalletLabel === 'function') window.setWalletLabel(short); } catch (_) {}
   try { if (typeof window.closeConnectModal === 'function') window.closeConnectModal(); } catch (_) {}
   try { if (typeof window.updateAuthUi === 'function') window.updateAuthUi(); } catch (_) {}
-  if (method === 'tron' && typeof gwTronActivateUi === 'function') {
-    try { gwTronActivateUi(address); } catch (_) {}
-  }
   try {
     if (method === 'tron' && window.__gwTkHoldingsCache) {
       window.__gwTkHoldingsCache.at = 0;
       window.__gwTkHoldingsCache.rows = [];
     }
   } catch (_) {}
+  if (method === 'tron' && typeof gwTronActivateUi === 'function') {
+    try { gwTronActivateUi(address, { preserveEvm: keepEvmAccount }); } catch (_) {}
+  }
   const detail = { address, method };
   try {
     document.dispatchEvent(new CustomEvent('grom:wallet-address-known', { detail, bubbles: true }));
@@ -4706,7 +4715,9 @@ async function connectTronWallet() {
   window.__gwTronAddr = addr;
   if (window.GROM_CONN) window.GROM_CONN.method = 'tron';
   gwNotifyWalletConnected(addr, { method: 'tron', toast: true });
-  try { gwTronActivateUi(addr); } catch (_) {}
+  let preserveEvm = false;
+  try { preserveEvm = !!gwOcConnectedAddress(); } catch (_) {}
+  try { gwTronActivateUi(addr, { preserveEvm }); } catch (_) {}
   try { __gwTronBalCache.delete?.(String(addr).trim()); } catch (_) {}
   try { if (typeof gwRenderOnchainCard === 'function') await gwRenderOnchainCard(); } catch (_) {}
   try { if (typeof gwHydrateWalletPageAssets === 'function') await gwHydrateWalletPageAssets(); } catch (_) {}
@@ -12030,7 +12041,29 @@ async function gwTronSwapExec({ fromSym, toSym, amtHuman, skipGasCheck }) {
 }
 
 /** Mark TRX chip active + set swap context to Tron (YOU PAY defaults to USDT if held). */
-function gwTronActivateUi(addr) {
+function gwTronActivateUi(addr, opts) {
+  if (opts?.preserveEvm) {
+    if (addr) gwTronSaveAddr(addr);
+    const activeCid = typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : null;
+    if (!window.__gwDsManualSelection && (!activeCid || Number(activeCid) === GW_TRON_CHAIN_ID)) {
+      try { document.querySelectorAll('.gw-ds-chain').forEach((x) => x.classList.remove('on')); } catch (_) {}
+      let fallbackCid = 42161;
+      try {
+        const currentCid = Number(currentChainId) || 0;
+        if (currentCid && currentCid !== GW_TRON_CHAIN_ID && GW_OC_SWAP[currentCid]) fallbackCid = currentCid;
+      } catch (_) {}
+      try { gwDsSetActiveChain(fallbackCid); } catch (_) {
+        try { document.querySelector(`.gw-ds-chain[data-cid="${fallbackCid}"]`)?.classList.add('on'); } catch (_) {}
+      }
+    }
+    // Balance ranking will choose a funded, swappable EVM network once the
+    // multi-chain holdings request finishes. A manual chip choice still wins.
+    if (!window.__gwDsManualSelection) {
+      window.__gwDsAutoSelectedAccount = null;
+      setTimeout(() => { try { gwDsAutoPickFromToken?.(); } catch (_) {} }, 0);
+    }
+    return;
+  }
   try {
     document.querySelectorAll('.gw-ds-chain').forEach((x) => x.classList.remove('on'));
     const chip = document.querySelector('.gw-ds-chain[data-nonevm="trx"]');
@@ -14759,7 +14792,7 @@ async function gwTkRender(q) {
 
   if (which === 'to' && window.__gwUxTokenFilter && window.__gwUxTokenFilter !== 'popular') {
     const filter=window.__gwUxTokenFilter;
-    const rows=filter==='holdings'?await gwTkLoadHoldings(false):gwUxSaved(filter==='favorites'?'gw_swap_favorites':'gw_swap_recent_tokens');
+    const rows=filter==='holdings'?gwTkFilterSpendableHoldings(await gwTkLoadHoldings(false)):gwUxSaved(filter==='favorites'?'gw_swap_favorites':'gw_swap_recent_tokens');
     if(!stillLive())return;
     const cid=gwTkGetToCatalogChain(gwTkGetFromContext().chainId);
     const filtered=rows.filter(a=>Number(a.chainId)===Number(cid) && (!query || String(a.sym).toUpperCase().includes(query) || String(a.address||'').toUpperCase().includes(query)));
@@ -14794,9 +14827,14 @@ async function gwTkRender(q) {
       !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query) || (a.chain || '').toUpperCase().includes(query)
     );
     if (!filtered.length) {
+      const eligibleRows = gwTkFilterSpendableHoldings(rows);
       list.innerHTML = `<div class="gw-tk-empty">${query
         ? `Nothing matches «${q}»`
-        : tx('tk_empty_wallet', 'No tokens in your wallet yet — deposit first, then choose what to pay with.')}</div>`;
+        : (rows.length && !eligibleRows.length
+          ? gwUxText('Нет пригодных для свопа балансов. Нулевые остатки, пыль меньше $0.10, неподдерживаемые токены и активы без средств на комиссию скрыты.', 'No usable swap balances. Zero balances, dust under $0.10, unsupported tokens, and assets without network gas are hidden.')
+          : (['favorites', 'recent'].includes(window.__gwUxTokenFilter)
+            ? gwUxText('В этом списке пока нет пригодных активов.', 'No usable wallet assets in this list yet.')
+            : tx('tk_empty_wallet', 'No tokens in your wallet yet — deposit first, then choose what to pay with.')))}</div>`;
       return;
     }
     list.innerHTML = filtered.map((a) => rowHtml(a,
@@ -16008,7 +16046,9 @@ try { window.gwDsPickBestPayHolding = gwDsPickBestPayHolding; } catch (_) {}
 /** Rank networks by their total USD holdings, then choose their largest asset. */
 function gwDsLargestNetworkHolding(rows) {
   const totals = new Map();
-  const valid = (rows || []).filter(r => Number(r.chainId) > 0 && Number(r.amt) > 0
+  const valid = (typeof window.gwTkFilterSpendableHoldings === 'function'
+    ? window.gwTkFilterSpendableHoldings(rows || [], 0.5)
+    : (rows || [])).filter(r => Number(r.chainId) > 0 && Number(r.amt) > 0
     && Number.isFinite(Number(r.usd)) && Number(r.usd) > 0 && r.sym);
   for (const r of valid) totals.set(Number(r.chainId), (totals.get(Number(r.chainId)) || 0) + Number(r.usd));
   return valid.slice().sort((a, b) =>
@@ -16272,6 +16312,49 @@ function gwUxOpChanged(op) {
 function gwUxTokenKey(a) {return String(a.chainId)+'|'+String(a.address || a.sym || '');}
 function gwUxSaved(key) {try {const v=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(v)?v:[];}catch(_){return [];}}
 function gwUxRemember(a) {const rows=gwUxSaved('gw_swap_recent_tokens');localStorage.setItem('gw_swap_recent_tokens',JSON.stringify([a,...rows.filter(r=>gwUxTokenKey(r)!==gwUxTokenKey(a))].slice(0,20)));}
+const GW_TK_MIN_SWAP_BALANCE_USD = 0.1;
+/** Keep swap choices to non-dust balances with a supported pay-side resolver. */
+function gwTkIsSwapSpendableHolding(row, minUsd) {
+  if (!row) return false;
+  const sym = String(row.sym || '').toUpperCase();
+  const chainId = Number(row.chainId) || 0;
+  const amt = Number(row.amt);
+  const usd = Number(row.usd);
+  const floorUsd = Number.isFinite(Number(minUsd)) ? Math.max(0, Number(minUsd)) : GW_TK_MIN_SWAP_BALANCE_USD;
+  if (!sym || !chainId || !(amt > 0) || !Number.isFinite(usd) || usd < floorUsd) return false;
+  if (chainId === GW_TRON_CHAIN_ID) {
+    return typeof gwTronResolveToken === 'function' && !!gwTronResolveToken(sym, 'from');
+  }
+  if (chainId === GW_LIFI_SOL_CHAIN) {
+    return typeof gwJupiterReady === 'function' && gwJupiterReady()
+      && typeof gwSolResolveToken === 'function' && !!gwSolResolveToken(sym);
+  }
+  return typeof gwResolveEvmToken === 'function' && !!gwResolveEvmToken(chainId, sym, 'from');
+}
+try { window.gwTkIsSwapSpendableHolding = gwTkIsSwapSpendableHolding; } catch (_) {}
+function gwTkFilterSpendableHoldings(rows, minUsd) {
+  const list = Array.isArray(rows) ? rows : [];
+  const floorUsd = Number.isFinite(Number(minUsd)) ? Math.max(0, Number(minUsd)) : GW_TK_MIN_SWAP_BALANCE_USD;
+  const chainUsd = new Map();
+  for (const row of list) {
+    const cid = Number(row?.chainId) || 0;
+    const sym = String(row?.sym || '').toUpperCase();
+    const cfg = GW_OC_SWAP[cid];
+    const native = cfg?.native || (cid === GW_TRON_CHAIN_ID ? 'TRX' : cid === GW_LIFI_SOL_CHAIN ? 'SOL' : '');
+    if (native && sym === native && Number(row.amt) > 0) chainUsd.set(cid, Number(row.usd) || 0);
+  }
+  return list.filter((row) => {
+    if (!gwTkIsSwapSpendableHolding(row, floorUsd)) return false;
+    const cid = Number(row.chainId) || 0;
+    const sym = String(row.sym || '').toUpperCase();
+    const cfg = GW_OC_SWAP[cid];
+    const native = cfg?.native || (cid === GW_TRON_CHAIN_ID ? 'TRX' : cid === GW_LIFI_SOL_CHAIN ? 'SOL' : '');
+    // ERC-20 / TRC-20 / SPL assets are not executable without gas in their
+    // source network. Keep the native fee balance itself visible separately.
+    return !native || sym === native || (chainUsd.get(cid) || 0) >= GW_TK_MIN_SWAP_BALANCE_USD;
+  });
+}
+try { window.gwTkFilterSpendableHoldings = gwTkFilterSpendableHoldings; } catch (_) {}
 function gwUxPickerBar(which) {
   gwUxCss();const panel=document.getElementById('gw-tk-panel');if(!panel)return;
   let bar=document.getElementById('gwUxPickerTabs');if(!bar){bar=document.createElement('div');bar.id='gwUxPickerTabs';bar.className='gw-ux-picker-tabs';panel.querySelector('.search').before(bar);}
@@ -16282,7 +16365,8 @@ function gwUxPickerBar(which) {
   bar.querySelectorAll('button').forEach(b=>b.onclick=()=>{window.__gwUxTokenFilter=b.dataset.filter;gwUxPickerBar(which);gwTkRender(document.getElementById('gwTkSearch')?.value || '');});
 }
 function gwUxFilterRows(rows) {
-  const f=window.__gwUxTokenFilter;if(f==='favorites'||f==='recent'){const saved=gwUxSaved(f==='favorites'?'gw_swap_favorites':'gw_swap_recent_tokens');const keys=new Set(saved.map(gwUxTokenKey));return rows.filter(a=>keys.has(gwUxTokenKey(a)));}return rows;
+  const usable=gwTkFilterSpendableHoldings(rows);
+  const f=window.__gwUxTokenFilter;if(f==='favorites'||f==='recent'){const saved=gwUxSaved(f==='favorites'?'gw_swap_favorites':'gw_swap_recent_tokens');const keys=new Set(saved.map(gwUxTokenKey));return usable.filter(a=>keys.has(gwUxTokenKey(a)));}return usable;
 }
 function gwUxWireStars(list) {
   const fav=gwUxSaved('gw_swap_favorites');
@@ -23717,34 +23801,36 @@ function gwInjectDashSwapPanel() {
           || window.GROM_CONN?.tron
           || '';
       } catch (_) {}
-      const tronOnly = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(String(tronAddr).trim())
-        && !(window.GROM_CONN?.label && /^0x[a-fA-F0-9]{40}$/i.test(String(window.GROM_CONN.label)));
+      let evmAddr = '';
+      try { evmAddr = (typeof gwOcConnectedAddress === 'function' && gwOcConnectedAddress()) || ''; } catch (_) {}
+      const tronOnly = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(String(tronAddr).trim()) && !evmAddr;
       if (tronOnly && typeof gwTronActivateUi === 'function') {
         try { gwTronActivateUi(tronAddr); } catch (_) {}
         return;
       }
       if (tronAddr && typeof gwTronActivateUi === 'function'
-          && (window.GROM_CONN?.method === 'tron' || !window.ethereum)) {
+          && !evmAddr && (window.GROM_CONN?.method === 'tron' || !window.ethereum)) {
         try { gwTronActivateUi(tronAddr); } catch (_) {}
       }
       const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
         ? window.gromWallet.wcProvider
         : window.ethereum;
       if (!provider) {
-        if (tronAddr && typeof gwTronActivateUi === 'function') {
+        if (tronAddr && !evmAddr && typeof gwTronActivateUi === 'function') {
           try { gwTronActivateUi(tronAddr); } catch (_) {}
         }
         return;
       }
       const hex = await provider.request({ method: 'eth_chainId' }).catch(() => null);
       if (!hex) {
-        if (tronAddr && typeof gwTronActivateUi === 'function') {
+        if (tronAddr && !evmAddr && typeof gwTronActivateUi === 'function') {
           try { gwTronActivateUi(tronAddr); } catch (_) {}
         }
         return;
       }
-      // Prefer TRX chip when user just connected TronLink (even if EVM inject exists).
-      if (window.GROM_CONN?.method === 'tron' && tronAddr && typeof gwTronActivateUi === 'function') {
+      // A Tron namespace may be linked alongside EVM. Prefer the EVM wallet
+      // when it is connected; Tron-only wallets still select TRX above.
+      if (!evmAddr && window.GROM_CONN?.method === 'tron' && tronAddr && typeof gwTronActivateUi === 'function') {
         try { gwTronActivateUi(tronAddr); } catch (_) {}
         return;
       }

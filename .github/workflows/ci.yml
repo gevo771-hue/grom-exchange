@@ -8,6 +8,7 @@ on:
       - 'frontend/**'
       - 'scripts/assert-frontend-clean.mjs'
       - 'scripts/build-frontend.mjs'
+      - 'scripts/seo-*.mjs'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - 'frontend/**'
       - 'scripts/assert-frontend-clean.mjs'
       - 'scripts/build-frontend.mjs'
+      - 'scripts/seo-*.mjs'
       - '.github/workflows/ci.yml'
 
 env:
@@ -77,6 +79,13 @@ jobs:
       - name: Frontend JS syntax + clean gate
         working-directory: .
         run: |
+          node scripts/assert-frontend-clean.mjs
+
+      - name: Build frontend and verify SEO output
+        working-directory: .
+        run: |
+          GROM_SKIP_WC_BUNDLE=1 node scripts/build-frontend.mjs
+          node scripts/seo-regression.mjs
           node scripts/assert-frontend-clean.mjs
 
       - name: Run database migrations (full chain)

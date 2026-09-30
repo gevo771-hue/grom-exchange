@@ -331,6 +331,8 @@
   } catch (_) {}
   var home = walletHome ? 'dashboard' : 'landing';
   var route = fromPath || ((hash && ALLOW[hash]) ? hash : home);
+  /* A connected wallet must never land on the marketing page, including #landing. */
+  if (walletHome && route === 'landing') route = 'dashboard';
   /* /stocks#futures must not lock Stocks forever — honor intentional hash. */
   if (hash && ALLOW[hash] && fromPath && hash !== fromPath) {
     route = hash;
@@ -583,18 +585,18 @@
 <meta property="og:title" content="GROM Exchange — Crypto DEX, Futures, Prediction Markets & Tokenized stocks" />
 <meta property="og:description" content="Non-custodial crypto DEX: cross-chain swaps, perpetual futures, prediction markets, and tokenized stocks from your wallet." />
 <meta property="og:url" content="https://grom.exchange/" />
-<meta property="og:image" content="https://grom.exchange/assets/og-share-nord.png?v=20260922i" />
-<meta property="og:image:secure_url" content="https://grom.exchange/assets/og-share-nord.png?v=20260922i" />
+<meta property="og:image" content="https://grom.exchange/assets/og-share-grom-20260930.png" />
+<meta property="og:image:secure_url" content="https://grom.exchange/assets/og-share-grom-20260930.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="GROM — Spot Perps Prediction Stocks" />
+<meta property="og:image:alt" content="GROM Exchange — One wallet. All of DeFi. Swap, perps, predictions, and tokenized stocks." />
 <meta property="og:locale" content="en_US" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="GROM Exchange — Crypto DEX, Futures, Prediction Markets & Tokenized stocks" />
 <meta name="twitter:description" content="Non-custodial DEX: cross-chain swaps, perpetual futures, prediction markets, and tokenized stocks." />
-<meta name="twitter:image" content="https://grom.exchange/assets/og-share-nord.png?v=20260922i" />
-<meta name="twitter:image:alt" content="GROM — Spot Perps Prediction Stocks" />
+<meta name="twitter:image" content="https://grom.exchange/assets/og-share-grom-20260930.png" />
+<meta name="twitter:image:alt" content="GROM Exchange — One wallet. All of DeFi. Swap, perps, predictions, and tokenized stocks." />
 <meta name="twitter:site" content="@GromExchange" />
 <meta name="twitter:creator" content="@GromExchange" />
 <!-- SEO:END -->
@@ -6305,22 +6307,6 @@
         #page-landing .lp-p-cta{font-size:13px;font-weight:700;color:#5dd5ff;letter-spacing:.04em;position:relative;margin-top:auto}
         #page-landing .lp-h2{font-size:42px;font-weight:800;letter-spacing:-.02em;margin:0 0 16px;color:#fff;text-align:center}
         @media(max-width:768px){#page-landing .lp-h2{font-size:30px}}
-        #page-landing .lp-why{margin-bottom:80px}
-        #page-landing .lp-why-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px}
-        @media(max-width:900px){#page-landing .lp-why-grid{grid-template-columns:1fr 1fr}}
-        @media(max-width:600px){#page-landing .lp-why-grid{grid-template-columns:1fr}}
-        #page-landing .lp-why-cell{padding:28px;background:rgba(37,45,58,.5);border:1px solid rgba(136,192,208,.12);border-radius:16px;transition:all .2s}
-        #page-landing .lp-why-cell:hover{background:rgba(37,45,58,.7);border-color:rgba(0,194,255,.28)}
-        #page-landing .lp-why-emoji{font-size:28px;margin-bottom:12px}
-        #page-landing .lp-why-cell h4{font-size:17px;font-weight:800;margin:0 0 8px;color:#e8f1fa}
-        #page-landing .lp-why-cell p{font-size:13.5px;line-height:1.55;color:#9bb3c7;margin:0}
-        #page-landing .lp-how{margin-bottom:80px}
-        #page-landing .lp-how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-top:48px}
-        @media(max-width:900px){#page-landing .lp-how-grid{grid-template-columns:1fr}}
-        #page-landing .lp-how-step{text-align:center;padding:24px}
-        #page-landing .lp-how-num{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg, #88c0d0, #81a1c1);color:#1f2a38;font-size:24px;font-weight:900;margin-bottom:20px;box-shadow:0 8px 24px rgba(136,192,208,.35)}
-        #page-landing .lp-how-step h4{font-size:18px;font-weight:800;margin:0 0 8px;color:#e8f1fa}
-        #page-landing .lp-how-step p{font-size:14px;line-height:1.55;color:#9bb3c7;margin:0}
         #page-landing .lp-security{padding:60px 40px;background:radial-gradient(circle at 50% 0%,rgba(34,193,124,.12),transparent 70%),linear-gradient(180deg,rgba(37,45,58,.7),rgba(32,39,55,.5));border:1px solid rgba(34,193,124,.24);border-radius:24px;margin-bottom:60px;position:relative;overflow:hidden}
         #page-landing .lp-sec-badge{display:inline-block;padding:6px 14px;background:rgba(34,193,124,.14);border:1px solid rgba(34,193,124,.4);border-radius:99px;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#5cd2a3;margin-bottom:20px}
         #page-landing .lp-sec-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:40px}
@@ -6373,17 +6359,6 @@
           #page-landing .lp-product-card h3{font-size:20px;margin-bottom:8px}
           #page-landing .lp-product-card p{font-size:13px;margin-bottom:14px}
           #page-landing .lp-p-icon{font-size:30px;margin-bottom:10px}
-          #page-landing .lp-why{margin-bottom:48px}
-          #page-landing .lp-why-grid{gap:12px;margin-top:28px}
-          #page-landing .lp-why-cell{padding:20px}
-          #page-landing .lp-why-cell h4{font-size:15.5px}
-          #page-landing .lp-why-cell p{font-size:13px}
-          #page-landing .lp-how{margin-bottom:48px}
-          #page-landing .lp-how-grid{gap:18px;margin-top:28px}
-          #page-landing .lp-how-step{padding:14px 8px}
-          #page-landing .lp-how-num{width:48px;height:48px;font-size:20px;margin-bottom:12px}
-          #page-landing .lp-how-step h4{font-size:16px}
-          #page-landing .lp-how-step p{font-size:13px}
           #page-landing .lp-security{padding:36px 20px;margin-bottom:40px}
           #page-landing .lp-sec-grid{gap:12px;margin-top:24px}
           #page-landing .lp-sec-item{padding:14px;font-size:12.5px}
@@ -6444,61 +6419,6 @@
             <button type="button" class="lp-btn-secondary" onclick="show('xstocks')" data-i18n="lp_predict_cta2">Tokenized stocks</button>
           </div>
         </section>
-
-        <!-- WHY GROM DEX -->
-        <div class="lp-why">
-          <h2 class="lp-h2" data-i18n="lp_why_h2">The sharpest DEX in the world</h2>
-          <p data-i18n-html="lp_why_intro" style="text-align:center;color:#9bb3c7;max-width:680px;margin:0 auto 16px;font-size:16px">Most DEXes route through <b style="color:#e8f1fa">one aggregator</b> and pray for a good price. GROM queries <b style="color:#e8f1fa">seven sources in parallel</b>, picks the best route, and you sign once — funds never touch our servers.</p>
-          <div class="lp-why-grid">
-            <div class="lp-why-cell">
-              <div class="lp-why-emoji">🔐</div>
-              <h4 data-i18n="lp_why_c1_h">100% non-custodial</h4>
-              <p data-i18n="lp_why_c1_p">GROM never holds your tokens. Every swap is a wallet signature → on-chain settlement. We cannot freeze, seize, or rehypothecate your assets.</p>
-            </div>
-            <div class="lp-why-cell">
-              <div class="lp-why-emoji">⚡</div>
-              <h4 data-i18n="lp_why_c2_h">Meta-aggregator routing</h4>
-              <p data-i18n="lp_why_c2_p">LiFi · CoWSwap · Squid · Paraswap · Kyber · Odos · Jupiter queried simultaneously. You see the best price, not the first quote.</p>
-            </div>
-            <div class="lp-why-cell">
-              <div class="lp-why-emoji">🌐</div>
-              <h4 data-i18n="lp_why_c3_h">20+ chains, one tab</h4>
-              <p data-i18n="lp_why_c3_p">Ethereum · Solana · BSC · Arbitrum · Base · Polygon · Optimism · Avalanche · Bitcoin · Tron. Dynamic token list — 10 000+ assets, updated live via LiFi.</p>
-            </div>
-            <div class="lp-why-cell">
-              <div class="lp-why-emoji">🕶</div>
-              <h4 data-i18n="lp_why_c4_h">No email, no KYC</h4>
-              <p data-i18n="lp_why_c4_p">Connect Trust, MetaMask, Phantom, TronLink or WalletConnect — sign a message and start swapping from your wallet.</p>
-            </div>
-            <div class="lp-why-cell">
-              <div class="lp-why-emoji">📊</div>
-              <h4 data-i18n="lp_why_c5_h">Pro-grade terminal</h4>
-              <p data-i18n="lp_why_c5_p">Live charts · depth from real DEX quotes · AI route coach · portfolio across all chains · prediction markets — all from one wallet connection.</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- HOW IT WORKS -->
-        <div class="lp-how">
-          <h2 class="lp-h2" data-i18n="lp_how_h2">How GROM DEX works</h2>
-          <div class="lp-how-grid">
-            <div class="lp-how-step">
-              <div class="lp-how-num">1</div>
-              <h4 data-i18n="lp_how_s1_h">Connect your wallet</h4>
-              <p data-i18n="lp_how_s1_p">Trust, MetaMask, Phantom, TronLink, OKX, Coinbase or WalletConnect. One SIWE signature — no email, no password, no seed phrase on our servers.</p>
-            </div>
-            <div class="lp-how-step">
-              <div class="lp-how-num">2</div>
-              <h4 data-i18n="lp_how_s2_h">Pick token &amp; chain</h4>
-              <p data-i18n="lp_how_s2_p">Search 10 000+ tokens across 20+ networks. GROM shows your on-chain balance per chain and finds the best swap route automatically.</p>
-            </div>
-            <div class="lp-how-step">
-              <div class="lp-how-num">3</div>
-              <h4 data-i18n="lp_how_s3_h">Sign &amp; settle on-chain</h4>
-              <p data-i18n="lp_how_s3_p">Review the aggregated quote and sign in your wallet. Tokens settle directly to your wallet address.</p>
-            </div>
-          </div>
-        </div>
 
         <!-- SECURITY -->
         <div class="lp-security">
@@ -6986,15 +6906,15 @@
         <div class="ref-how-card">
           <div class="ref-how-head">
             <div>
-              <h3 data-i18n="ref_how_title">📖 Как работает non-custodial реферал</h3>
-              <p data-i18n="ref_how_sub">Простая формула: делись, получай процент. Без KYC.</p>
+              <h3 data-i18n="ref_how_title">📖 How the non-custodial referral program works</h3>
+              <p data-i18n="ref_how_sub">A simple formula: share your link and earn a fee share. No KYC.</p>
             </div>
             <span class="ref-how-badge">50/50</span>
           </div>
           <div class="ref-how-steps">
-            <div class="ref-how-step"><span>1</span><p data-i18n="ref_step_1">Ты подключаешь кошелёк — получаешь линк с уникальным кодом</p></div>
-            <div class="ref-how-step"><span>2</span><p data-i18n="ref_step_2">Друг переходит по линку и торгует через любой наш свап</p></div>
-            <div class="ref-how-step"><span>3</span><p data-i18n="ref_step_3">50% от нашей 0.20% комиссии автоматически идёт тебе — навсегда</p></div>
+            <div class="ref-how-step"><span>1</span><p data-i18n="ref_step_1">Connect your wallet to get a link with a unique code</p></div>
+            <div class="ref-how-step"><span>2</span><p data-i18n="ref_step_2">Your friend follows the link and swaps through GROM</p></div>
+            <div class="ref-how-step"><span>3</span><p data-i18n="ref_step_3">You automatically receive 50% of our 0.20% fee</p></div>
           </div>
         </div>
         <div class="card ref-commission-card">
@@ -7790,8 +7710,8 @@ function gromSeoSetProp(prop, value) {
   if (n) n.setAttribute('content', value);
 }
 function updateRouteSeo(page) {
-  var key = page === 'dashboard' ? 'landing' : page;
-  var lang = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.curLang) ? window.GROM_SEO_I18N.curLang() : ((typeof getGromLang === 'function') ? getGromLang() : 'en');
+  var key = page || 'landing';
+  var lang = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.seoLang) ? window.GROM_SEO_I18N.seoLang() : ((typeof getGromLang === 'function') ? getGromLang() : 'en');
   var i18nMeta = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.getRouteMeta) ? window.GROM_SEO_I18N.getRouteMeta(key, lang) : null;
   var pack = GROM_SEO_VARIANTS[GROM_SEO_AB] || GROM_SEO_VARIANTS.a;
   var seo = i18nMeta || (pack.routes && pack.routes[key]) || pack.base;
@@ -7805,12 +7725,17 @@ function updateRouteSeo(page) {
   gromSeoSet('twitter:title', title);
   gromSeoSet('twitter:description', desc);
   gromSeoSet('keywords', kw);
-  var routeHash = (page && page !== 'landing' && page !== 'dashboard') ? ('#' + page) : '';
-  var canonicalUrl = 'https://grom.exchange/' + (lang && lang !== 'en' ? ('?lang=' + encodeURIComponent(lang)) : '') + routeHash;
+  var canonicalUrl = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.canonicalUrlFor)
+    ? window.GROM_SEO_I18N.canonicalUrlFor(page, lang)
+    : 'https://grom.exchange/';
   var canonical = document.querySelector('link[rel="canonical"]');
   if (canonical) canonical.setAttribute('href', canonicalUrl);
   gromSeoSetProp('og:url', canonicalUrl);
-  try { document.documentElement.lang = lang === 'zh' ? 'zh-Hans' : lang; } catch (_) {}
+  try {
+    document.documentElement.lang = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.htmlLangFor)
+      ? window.GROM_SEO_I18N.htmlLangFor(lang)
+      : (lang === 'zh' ? 'zh-Hans' : lang);
+  } catch (_) {}
 }
 window.gromSeoRefreshRouteMeta = updateRouteSeo;
 
@@ -8555,6 +8480,7 @@ if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefau
   if (!pending && !fromHash && !fromPath) {
     start = home;
   }
+  if (walletHome && start === 'landing') start = 'dashboard';
   if (document.getElementById('page-' + start)) {
     show(start);
   } else if (start === 'backoffice') {
@@ -18244,6 +18170,16 @@ updateAuthUi = function updateAuthUiPatched() {
     if (typeof window.hydrateWalletSlice === 'function') window.hydrateWalletSlice(true);
   }
   gromSyncAuthedClass();
+  /* WalletConnect can restore after the initial route boot and without emitting
+   * grom:wallet-connected. Re-check after this update so root/landing resolves
+   * to the dashboard as soon as the restored identity is known. */
+  if (connected) {
+    setTimeout(function () {
+      var route = '';
+      try { route = document.documentElement.getAttribute('data-grom-route') || ''; } catch (_) {}
+      if (route === 'landing' && typeof gromIsAuthed === 'function' && gromIsAuthed()) show('dashboard');
+    }, 0);
+  }
 };
 try { updateAuthUi(); } catch (_) {}
 window.addEventListener('wallet-disconnected', function () { gromResetAuthedUi(); });
@@ -18272,6 +18208,9 @@ function gromIsAuthed() {
   return !!(window.GROM_CONN && window.GROM_CONN.connected && window.GROM_CONN.label);
 }
 show = function showLivePatched(page) {
+  /* Landing is exclusively for disconnected visitors. Keep this invariant for
+   * logo/menu/command navigation as well as direct #landing links. */
+  if (page === 'landing' && gromIsAuthed()) page = 'dashboard';
   if (page !== 'wallet' && !gromIsAuthed() && GW_GATED_PAGES.indexOf(page) >= 0) {
     var walletLive = false;
     try {
@@ -18291,6 +18230,17 @@ show = function showLivePatched(page) {
   try { gromResetScrollHard(); } catch (_) {}
   try { if (typeof window.gromSyncPrettyPath === 'function') window.gromSyncPrettyPath(page); } catch (_) {}
 };
+function gromRouteConnectedWalletHome() {
+  if (typeof gromIsAuthed !== 'function' || !gromIsAuthed()) return;
+  var route = '';
+  try { route = document.documentElement.getAttribute('data-grom-route') || ''; } catch (_) {}
+  if (route === 'landing') show('dashboard');
+}
+document.addEventListener('grom:wallet-connected', gromRouteConnectedWalletHome);
+window.addEventListener('grom:wallet-connected', gromRouteConnectedWalletHome);
+document.addEventListener('grom:wallet-address-known', gromRouteConnectedWalletHome);
+window.addEventListener('grom:wallet-address-known', gromRouteConnectedWalletHome);
+setTimeout(gromRouteConnectedWalletHome, 0);
 window.addEventListener('hashchange', function () {
   var p = (location.hash || '').replace(/^#/, '').split('?')[0];
   if (p === 'trade') p = 'futures';
@@ -19854,23 +19804,24 @@ window.openSupportTicket = async function (cat, title) {
 };
 
 /* ===== Referral X / Telegram share ===== */
-window.refShareX = function () {
+window.gromReferralShareUrl = function () {
   var linkEl = document.getElementById('refLink');
-  var url = linkEl ? String(linkEl.textContent || '').trim() : '';
-  if (!url || url.indexOf('http') !== 0) {
-    var code = document.getElementById('refCode')?.textContent?.trim() || 'GROM';
-    url = 'https://grom.exchange/r/' + encodeURIComponent(code.replace(/^GROM-?/i, ''));
+  var raw = linkEl ? String(linkEl.textContent || '').trim() : '';
+  var match = raw.match(/\/r\/([A-Za-z0-9]{1,64})\b/);
+  var code = match ? match[1] : '';
+  if (!code) {
+    code = document.getElementById('refCode')?.textContent?.trim()?.replace(/^GROM-?/i, '') || '';
   }
+  code = String(code).replace(/[^A-Za-z0-9]/g, '').slice(0, 64);
+  return 'https://grom.exchange/share/' + (code ? '?ref=' + encodeURIComponent(code) : '');
+};
+window.refShareX = function () {
+  var url = window.gromReferralShareUrl();
   var text = 'Trading on GROM — non-custodial DEX. Cross-chain swaps, Hyperliquid perps, xStocks.';
   window.open('https://x.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url), '_blank', 'noopener');
 };
 window.refShareTelegram = function () {
-  var linkEl = document.getElementById('refLink');
-  var url = linkEl ? String(linkEl.textContent || '').trim() : '';
-  if (!url || url.indexOf('http') !== 0) {
-    var code = document.getElementById('refCode')?.textContent?.trim() || 'GROM';
-    url = 'https://grom.exchange/r/' + encodeURIComponent(code.replace(/^GROM-?/i, ''));
-  }
+  var url = window.gromReferralShareUrl();
   var text = 'Trade on GROM with my referral link';
   window.open('https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text), '_blank', 'noopener');
 };

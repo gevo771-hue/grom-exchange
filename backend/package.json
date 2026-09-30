@@ -47,6 +47,7 @@
     "eslint": "^9.39.5"
   },
   "overrides": {
+    "axios": "$axios",
     "js-yaml": "4.3.2",
     "qs": "6.16.0"
   }

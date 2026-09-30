@@ -59,10 +59,10 @@ test('Swap, Limit and DCA share the Instant Swap card and fee is not painted',()
  assert.doesNotMatch(walletSrc,/gwUxDetails\([^)]*feeLabel/);
  assert.doesNotMatch(walletSrc,/\$\{t\.fee\}<\/span><span class="v">/);
 });
-test('landing keeps the active sections as siblings and removes retired product cards',()=>{
+test('landing removes the retired explainer sections and keeps active landing content',()=>{
  assert.doesNotMatch(landingHtml,/class="lp-products"/);
- for(const marker of ['class="lp-why"','class="lp-how"','class="lp-security"','id="lpSeoPrimaryWrap"','id="lpSeoMultilangWrap"'])assert.match(landingHtml,new RegExp(marker));
- assert.match(landingHtml,/lp_why_c5_p[\s\S]*?<\/div>\s*<\/div>\s*<\/div>\s*<!-- HOW IT WORKS -->/);
+ for(const marker of ['class="lp-why"','class="lp-how"'])assert.doesNotMatch(landingHtml,new RegExp(marker));
+ for(const marker of ['class="lp-hero"','id="lpPredictSec"','class="lp-security"','class="lp-final-cta"','id="lpSeoPrimaryWrap"','id="lpSeoMultilangWrap"'])assert.match(landingHtml,new RegExp(marker));
  assert.doesNotMatch(landingCss,/\.lp-products\s*\{\s*display:\s*none/);
  assert.doesNotMatch(landingCss,/\.lp-(?:why|how)\s*\{\s*display:\s*none/);
 });

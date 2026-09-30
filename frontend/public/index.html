@@ -1364,20 +1364,16 @@
     flex: 0 1 auto; min-width: 0;
   }
   .hub-nav {
-    display: flex; align-items: center; justify-content: center; gap: 4px;
-    flex: 1; min-width: 0; overflow-x: auto; padding: 4px 5px;
-    border: 1px solid rgba(151,178,199,.16);
-    border-radius: 15px;
-    background: linear-gradient(145deg, rgba(20,30,43,.72), rgba(30,43,58,.66));
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.045);
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    flex: 1; min-width: 0; overflow-x: auto; padding: 0 8px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
   .hub-nav::-webkit-scrollbar { display: none; }
   .hub-link {
+    position: relative;
     font-size: 12px; font-weight: 700; letter-spacing: 0.045em; text-transform: uppercase;
-    color: rgba(214, 221, 232, 0.72); padding: 10px 15px; border-radius: 10px; white-space: nowrap;
-    min-height: 40px;
+    color: rgba(214, 221, 232, 0.72); padding: 10px 15px; border-radius: 999px; white-space: nowrap;
     background: transparent; border: none; cursor: pointer; font-family: inherit;
     flex-shrink: 0; transition: color 0.18s, background 0.18s, box-shadow 0.18s, border-color 0.18s;
     -webkit-font-smoothing: antialiased;
@@ -1385,12 +1381,17 @@
     text-rendering: geometricPrecision;
     border: 1px solid transparent;
   }
-  .hub-link:hover { color: rgba(241, 245, 251, 0.94); background: rgba(145,180,197,.09); border-color: rgba(164,205,221,.15); }
+  .hub-link:hover { color: rgba(241, 245, 251, 0.94); background: rgba(59, 69, 88, 0.42); border-color: rgba(200,212,232,0.08); }
   .hub-link.active {
-    color: #edf5f9;
-    background: linear-gradient(180deg, rgba(133,154,170,.28), rgba(83,103,122,.24));
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 3px 9px -7px rgba(0,0,0,.9);
-    border-color: rgba(174,207,222,.18);
+    color: #8fcaff;
+    background: transparent;
+    box-shadow: none;
+    border-color: transparent;
+  }
+  .hub-link.active::after {
+    content: ""; position: absolute; left: 50%; bottom: 3px; width: 18px; height: 2px;
+    border-radius: 2px; background: linear-gradient(90deg, #78c8d9, #a9dce5);
+    transform: translateX(-50%); opacity: .9;
   }
   .topbar-ico {
     display: inline-flex;

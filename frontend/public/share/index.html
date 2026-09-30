@@ -3,36 +3,54 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>GROM Exchange — Crypto DEX, Futures, Prediction Markets & Tokenized stocks</title>
-<meta name="description" content="Swaps, perpetual futures, prediction markets and tokenized stocks from your own wallet. No sign-up, no deposits, no KYC for swaps." />
+<title>GROM Exchange — One Wallet. All of DeFi.</title>
+<meta name="description" content="One wallet for cross-chain swaps, perpetual futures, prediction markets, and tokenized stocks. Trade directly from your wallet on GROM Exchange." />
 <meta name="robots" content="noindex,follow" />
 <link rel="canonical" href="https://grom.exchange/" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="GROM" />
-<meta property="og:title" content="GROM Exchange — Crypto DEX, Futures, Prediction Markets & Tokenized stocks" />
-<meta property="og:description" content="Swaps, perpetual futures, prediction markets and tokenized stocks from your own wallet. No sign-up, no deposits, no KYC for swaps." />
-<meta property="og:url" content="https://grom.exchange/share" />
-<meta property="og:image" content="https://grom.exchange/assets/og-share-nord.png?v=20260922i" />
-<meta property="og:image:secure_url" content="https://grom.exchange/assets/og-share-nord.png?v=20260922i" />
+<meta property="og:title" content="GROM Exchange — One Wallet. All of DeFi." />
+<meta property="og:description" content="One wallet for cross-chain swaps, perpetual futures, prediction markets, and tokenized stocks. Trade directly from your wallet on GROM Exchange." />
+<meta property="og:url" content="https://grom.exchange/share/" />
+<meta property="og:image" content="https://grom.exchange/assets/og-share-grom-20260930.png" />
+<meta property="og:image:secure_url" content="https://grom.exchange/assets/og-share-grom-20260930.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="GROM — Spot Perps Prediction Stocks" />
+<meta property="og:image:alt" content="GROM Exchange — One wallet. All of DeFi. Swap, perps, predictions, and tokenized stocks." />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="GROM Exchange — Crypto DEX, Futures, Prediction Markets & Tokenized stocks" />
-<meta name="twitter:description" content="Swaps, perpetual futures, prediction markets and tokenized stocks from your own wallet." />
-<meta name="twitter:image" content="https://grom.exchange/assets/og-share-nord.png?v=20260922i" />
+<meta name="twitter:title" content="GROM Exchange — One Wallet. All of DeFi." />
+<meta name="twitter:description" content="One wallet for cross-chain swaps, perpetual futures, prediction markets, and tokenized stocks." />
+<meta name="twitter:image" content="https://grom.exchange/assets/og-share-grom-20260930.png" />
+<meta name="twitter:image:alt" content="GROM Exchange — One wallet. All of DeFi. Swap, perps, predictions, and tokenized stocks." />
 <style>
-  html,body{margin:0;min-height:100%;background:#343a46;color:#eceff4;font:16px/1.45 system-ui,sans-serif}
-  main{max-width:28rem;margin:20vh auto;padding:24px;text-align:center}
-  a{display:inline-block;margin-top:16px;padding:12px 20px;border-radius:12px;background:#88c0d0;color:#1f2a38;font-weight:700;text-decoration:none}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:#111a27;color:#edf5ff;font:16px/1.45 system-ui,sans-serif}
+  body{display:grid;min-height:100vh;place-items:center;padding:24px;background:radial-gradient(ellipse at 75% 18%,#12395a 0,transparent 45%),linear-gradient(145deg,#101722,#253346)}
+  main{width:min(100%,720px);padding:20px;border:1px solid #47627e;border-radius:24px;background:#172332e8;box-shadow:0 24px 80px #0008}
+  img{display:block;width:100%;height:auto;border-radius:14px}
+  .copy{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 4px 2px}
+  p{margin:0;color:#b9c9dc}
+  strong{display:block;color:#f3f8ff;font-size:20px}
+  a{flex:none;padding:12px 20px;border-radius:12px;background:linear-gradient(110deg,#75d8f1,#91b7f3);color:#102134;font-weight:750;text-decoration:none}
+  @media(max-width:560px){.copy{align-items:stretch;flex-direction:column}a{text-align:center}}
 </style>
 </head>
 <body>
 <main>
-  <p>GROM Exchange</p>
-  <p>Spot · Perps · Prediction · Stocks</p>
-  <a href="https://grom.exchange/">Open GROM</a>
+  <img src="https://grom.exchange/assets/og-share-grom-20260930.png" width="1200" height="630" alt="GROM Exchange — One wallet. All of DeFi." />
+  <div class="copy">
+    <p><strong>One wallet. All of DeFi.</strong>Swap · Perps · Predictions · Tokenized stocks</p>
+    <a id="gromShareOpen" href="https://grom.exchange/">Open GROM</a>
+  </div>
 </main>
+<script>
+  try {
+    var ref = new URLSearchParams(location.search).get('ref') || '';
+    if (/^[A-Za-z0-9]{1,64}$/.test(ref)) {
+      document.getElementById('gromShareOpen').href = '/?ref=' + encodeURIComponent(ref) + '#landing';
+    }
+  } catch (_) {}
+</script>
 </body>
 </html>

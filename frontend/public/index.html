@@ -585,18 +585,18 @@
 <meta property="og:title" content="GROM Exchange — Crypto DEX, Futures, Prediction Markets & Tokenized stocks" />
 <meta property="og:description" content="Non-custodial crypto DEX: cross-chain swaps, perpetual futures, prediction markets, and tokenized stocks from your wallet." />
 <meta property="og:url" content="https://grom.exchange/" />
-<meta property="og:image" content="https://grom.exchange/assets/og-share-nord.png?v=20260922i" />
-<meta property="og:image:secure_url" content="https://grom.exchange/assets/og-share-nord.png?v=20260922i" />
+<meta property="og:image" content="https://grom.exchange/assets/og-share-grom-20260930.png" />
+<meta property="og:image:secure_url" content="https://grom.exchange/assets/og-share-grom-20260930.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="GROM — Spot Perps Prediction Stocks" />
+<meta property="og:image:alt" content="GROM Exchange — One wallet. All of DeFi. Swap, perps, predictions, and tokenized stocks." />
 <meta property="og:locale" content="en_US" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="GROM Exchange — Crypto DEX, Futures, Prediction Markets & Tokenized stocks" />
 <meta name="twitter:description" content="Non-custodial DEX: cross-chain swaps, perpetual futures, prediction markets, and tokenized stocks." />
-<meta name="twitter:image" content="https://grom.exchange/assets/og-share-nord.png?v=20260922i" />
-<meta name="twitter:image:alt" content="GROM — Spot Perps Prediction Stocks" />
+<meta name="twitter:image" content="https://grom.exchange/assets/og-share-grom-20260930.png" />
+<meta name="twitter:image:alt" content="GROM Exchange — One wallet. All of DeFi. Swap, perps, predictions, and tokenized stocks." />
 <meta name="twitter:site" content="@GromExchange" />
 <meta name="twitter:creator" content="@GromExchange" />
 <!-- SEO:END -->
@@ -19804,23 +19804,24 @@ window.openSupportTicket = async function (cat, title) {
 };
 
 /* ===== Referral X / Telegram share ===== */
-window.refShareX = function () {
+window.gromReferralShareUrl = function () {
   var linkEl = document.getElementById('refLink');
-  var url = linkEl ? String(linkEl.textContent || '').trim() : '';
-  if (!url || url.indexOf('http') !== 0) {
-    var code = document.getElementById('refCode')?.textContent?.trim() || 'GROM';
-    url = 'https://grom.exchange/r/' + encodeURIComponent(code.replace(/^GROM-?/i, ''));
+  var raw = linkEl ? String(linkEl.textContent || '').trim() : '';
+  var match = raw.match(/\/r\/([A-Za-z0-9]{1,64})\b/);
+  var code = match ? match[1] : '';
+  if (!code) {
+    code = document.getElementById('refCode')?.textContent?.trim()?.replace(/^GROM-?/i, '') || '';
   }
+  code = String(code).replace(/[^A-Za-z0-9]/g, '').slice(0, 64);
+  return 'https://grom.exchange/share/' + (code ? '?ref=' + encodeURIComponent(code) : '');
+};
+window.refShareX = function () {
+  var url = window.gromReferralShareUrl();
   var text = 'Trading on GROM — non-custodial DEX. Cross-chain swaps, Hyperliquid perps, xStocks.';
   window.open('https://x.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url), '_blank', 'noopener');
 };
 window.refShareTelegram = function () {
-  var linkEl = document.getElementById('refLink');
-  var url = linkEl ? String(linkEl.textContent || '').trim() : '';
-  if (!url || url.indexOf('http') !== 0) {
-    var code = document.getElementById('refCode')?.textContent?.trim() || 'GROM';
-    url = 'https://grom.exchange/r/' + encodeURIComponent(code.replace(/^GROM-?/i, ''));
-  }
+  var url = window.gromReferralShareUrl();
   var text = 'Trade on GROM with my referral link';
   window.open('https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text), '_blank', 'noopener');
 };

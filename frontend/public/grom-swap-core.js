@@ -339,6 +339,44 @@
     return { impact, inUsd, outUsd, blocked: impact > lim };
   }
 
+  /**
+   * Buy-side xStock guard. An aggregator's USD output is not a price oracle for
+   * the stock token: compare the received units against an independent share
+   * price, and fail closed when either input is unavailable.
+   */
+  function xstockBuyQuoteImpact({ amountInUsd, amountOutTokens, referencePriceUsd, maxImpact = 0.05 } = {}) {
+    const inUsd = Number(amountInUsd);
+    const tokens = Number(amountOutTokens);
+    const referencePrice = Number(referencePriceUsd);
+    if (!(inUsd > 0) || !Number.isFinite(inUsd)
+        || !(tokens > 0) || !Number.isFinite(tokens)
+        || !(referencePrice > 0) || !Number.isFinite(referencePrice)) {
+      return {
+        impact: NaN,
+        inUsd: Number.isFinite(inUsd) && inUsd > 0 ? inUsd : 0,
+        outUsd: Number.isFinite(tokens * referencePrice) && tokens > 0 && referencePrice > 0
+          ? tokens * referencePrice : 0,
+        blocked: true,
+        reason: 'missing_fair_value',
+      };
+    }
+    const fairValueOutUsd = tokens * referencePrice;
+    if (!(fairValueOutUsd > 0) || !Number.isFinite(fairValueOutUsd)) {
+      return {
+        impact: NaN,
+        inUsd,
+        outUsd: 0,
+        blocked: true,
+        reason: 'invalid_fair_value',
+      };
+    }
+    return quoteUsdImpact({
+      amountInUsd: inUsd,
+      amountOutUsd: fairValueOutUsd,
+      maxImpact,
+    });
+  }
+
   /** Score an xStock quote by USD out when known; else token amount (legacy). */
   function xstockQuoteValueScore(q, { refPrice, buy } = {}) {
     if (!q) return 0;
@@ -498,6 +536,7 @@
     classifyTronTxInfo,
     classifyEvmReceipt,
     quoteUsdImpact,
+    xstockBuyQuoteImpact,
     xstockQuoteValueScore,
     shouldClearSwapOpAfterSubmit,
     resolveSwapUiNamespace,

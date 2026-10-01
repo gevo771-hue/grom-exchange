@@ -18917,16 +18917,25 @@ function gwXstocksEnrichUsd(q, { amtNum, buy, refPrice } = {}) {
   if (outUsd > 0) q.amountOutUsd = outUsd;
   if (equityOutUsd > 0) q.amountOutUsdEquity = equityOutUsd;
   if (buy && tokens > 0 && inUsd > 0) q.execPrice = inUsd / tokens;
-  const impactOut = (buy && equityOutUsd > 0) ? equityOutUsd : outUsd;
-  const imp = window.GromSwapCore?.quoteUsdImpact
-    ? window.GromSwapCore.quoteUsdImpact({
-      amountInUsd: inUsd,
-      amountOutUsd: impactOut,
-      maxImpact: GW_XSTOCKS_MAX_IMPACT,
-    })
-    : { impact: NaN, blocked: false, inUsd, outUsd: impactOut };
+  const imp = buy
+    ? (window.GromSwapCore?.xstockBuyQuoteImpact
+      ? window.GromSwapCore.xstockBuyQuoteImpact({
+        amountInUsd: inUsd,
+        amountOutTokens: tokens,
+        referencePriceUsd: px,
+        maxImpact: GW_XSTOCKS_MAX_IMPACT,
+      })
+      : { impact: NaN, blocked: true, reason: 'missing_fair_value', inUsd, outUsd: 0 })
+    : (window.GromSwapCore?.quoteUsdImpact
+      ? window.GromSwapCore.quoteUsdImpact({
+        amountInUsd: inUsd,
+        amountOutUsd: outUsd,
+        maxImpact: GW_XSTOCKS_MAX_IMPACT,
+      })
+      : { impact: NaN, blocked: false, inUsd, outUsd });
   q.priceImpact = imp.impact;
   q.impactBlocked = !!imp.blocked;
+  if (imp.reason) q.impactBlockReason = imp.reason;
   q.outTokens = tokens;
   return q;
 }

@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
 const GromSwapCore = require('../../frontend/public/grom-swap-core.js');
@@ -24,6 +25,54 @@ describe('BUG-1 xStocks USD impact guard', () => {
     });
     assert.ok(r.impact < 0.05);
     assert.equal(r.blocked, false);
+  });
+
+  it('fails closed when a buy quote has no independent stock reference price', () => {
+    const r = GromSwapCore.xstockBuyQuoteImpact({
+      amountInUsd: 100,
+      amountOutTokens: 0.0001,
+      referencePriceUsd: 0,
+    });
+    assert.equal(r.blocked, true);
+    assert.equal(r.reason, 'missing_fair_value');
+  });
+
+  it('blocks a buy route whose token output is far below reference value', () => {
+    const r = GromSwapCore.xstockBuyQuoteImpact({
+      amountInUsd: 100,
+      amountOutTokens: 0.0001,
+      referencePriceUsd: 40,
+    });
+    assert.ok(r.impact > 0.95);
+    assert.equal(r.blocked, true);
+  });
+
+  it('allows a buy route close to independently referenced share value', () => {
+    const r = GromSwapCore.xstockBuyQuoteImpact({
+      amountInUsd: 100,
+      amountOutTokens: 2.5,
+      referencePriceUsd: 39.5,
+      maxImpact: 0.05,
+    });
+    assert.ok(r.impact < 0.05);
+    assert.equal(r.blocked, false);
+  });
+
+  it('blocks overflowed reference values instead of accepting them as zero impact', () => {
+    const r = GromSwapCore.xstockBuyQuoteImpact({
+      amountInUsd: 100,
+      amountOutTokens: Number.MAX_VALUE,
+      referencePriceUsd: Number.MAX_VALUE,
+    });
+    assert.equal(r.blocked, true);
+    assert.equal(r.reason, 'invalid_fair_value');
+  });
+
+  it('reuses the reference price when the stock dialog submits its final buy quote', () => {
+    const html = readFileSync(new URL('../../frontend/public/index.html', import.meta.url), 'utf8');
+    const call = html.match(/await window\.gwXstocksBuy\(\{([\s\S]*?)\n\s*\}\);/);
+    assert.ok(call, 'stock buy confirmation call exists');
+    assert.match(call[1], /refPrice:\s*px/);
   });
 
   it('scores by amountOutUsd when present (not raw token count)', () => {

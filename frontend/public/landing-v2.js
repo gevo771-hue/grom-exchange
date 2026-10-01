@@ -67,9 +67,6 @@
       diag_pred_m: 'Прогнозы',
       diag_stocks_m: 'Акции',
       diag_cap: '<strong>Никаких депозитов на GROM.</strong> Каждая сделка подписана твоим кошельком и исполнена ончейн.',
-      live_eye: 'Live',
-      live_h: 'Четыре рынка. Одна подпись.',
-      live_sub: 'Реальные данные из каждого направления. Без перезагрузок, без нарисованных цифр.',
       updates: '🚀 <b>Только что:</b> Акции · Прогнозы · Futures · 20+ сетей',
       faq_q: 'Как работает GROM DEX?',
       faq_a: 'GROM — мета-агрегатор: при каждом свопе он запрашивает котировки у 6 источников на EVM параллельно (LiFi, Paraswap, Kyber, Odos, CoWSwap, Squid, Jupiter) и исполняет сделку через того, кто даёт лучшую цену. Ты подписываешь транзакцию своим кошельком — токены приходят на твой адрес напрямую. GROM не хранит средства, не запрашивает KYC и не открывает счетов.',
@@ -110,15 +107,6 @@
       tip_predict_a: 'Ставишь USDC на исход события (Yes/No). Цена = рыночная вероятность. Выплата в USDC на твой кошелёк — без proxy-депозита и без KYC на GROM.',
       tip_stocks_q: 'Это настоящие акции?',
       tip_stocks_a: 'Токенизированные акции (xStocks): ончейн-требования на базовый актив. Торговля 24/7, дробные от $0,01, расчёт в кошелёк — не брокерский счёт.',
-      tick_label: '● Live activity',
-      tick_ago_s: 'с назад',
-      tick_ago_m: 'м назад',
-      tick_save: 'экономия',
-      tick_open: 'открыт',
-      tick_bought: 'куплена',
-      tick_bet: 'ставка',
-      tick_frac: 'дробная',
-      tick_long: 'long',
     },
     en: {
       kicker: 'Non-custodial · Swap · Futures · Predictions · Stocks',
@@ -157,9 +145,6 @@
       diag_pred_m: 'Predict',
       diag_stocks_m: 'Stocks',
       diag_cap: '<strong>No deposits to GROM.</strong> Every trade is signed by your wallet and settled on-chain.',
-      live_eye: 'Live',
-      live_h: 'Four markets. One signature.',
-      live_sub: 'Live data from every vertical. No reloads, no painted numbers.',
       updates: '🚀 <b>Just shipped:</b> Stocks · Predictions · Futures · 20+ chains',
       faq_q: 'How does GROM DEX work?',
       faq_a: 'GROM is a meta-aggregator: on every swap it queries 6 EVM liquidity sources in parallel (LiFi, Paraswap, Kyber, Odos, CoWSwap, Squid, Jupiter) and executes through the best price. You sign with your wallet — tokens arrive at your address directly. GROM never holds funds, never asks for KYC, and never opens accounts.',
@@ -200,15 +185,6 @@
       tip_predict_a: 'Stake USDC on an outcome (Yes/No). Price = market probability. Payout lands in your wallet — no proxy deposit, no GROM KYC.',
       tip_stocks_q: 'Are these real stocks?',
       tip_stocks_a: 'Tokenized stocks (xStocks): on-chain claims on the underlying. Trade 24/7, fractionals from $0.01, settle to your wallet — not a brokerage account.',
-      tick_label: '● Live activity',
-      tick_ago_s: 's ago',
-      tick_ago_m: 'm ago',
-      tick_save: 'saved',
-      tick_open: 'opened',
-      tick_bought: 'bought',
-      tick_bet: 'stake',
-      tick_frac: 'fractional',
-      tick_long: 'long',
     },
     ua: {
       kicker: 'Non-custodial · Swap · Ф\'ючерси · Прогнози · Акції',
@@ -247,9 +223,6 @@
       diag_pred_m: 'Прогнози',
       diag_stocks_m: 'Акції',
       diag_cap: '<strong>Жодних депозитів на GROM.</strong> Кожну угоду підписує твій гаманець і виконує ончейн.',
-      live_eye: 'Live',
-      live_h: 'Чотири ринки. Один підпис.',
-      live_sub: 'Живі дані з кожного напряму. Без перезавантажень, без намальованих цифр.',
       updates: '🚀 <b>Щойно:</b> Акції · Прогнози · Futures · 20+ мереж',
       faq_q: 'Як працює GROM DEX?',
       faq_a: 'GROM — мета-агрегатор: на кожному свопі він запитує котирування у 7 джерел ліквідності паралельно (LiFi, Paraswap, Kyber, Odos, CoWSwap, Squid, Jupiter) і виконує угоду через того, хто дає кращу ціну. Ти підписуєш транзакцію своїм гаманцем — токени приходять на твою адресу напряму. GROM не зберігає кошти, не запитує KYC і не відкриває рахунків.',
@@ -290,15 +263,6 @@
       tip_predict_a: 'Ставиш USDC на результат події (Yes/No). Ціна = ринкова ймовірність. Виплата в USDC на твій гаманець — без proxy-депозиту і без KYC на GROM.',
       tip_stocks_q: 'Це справжні акції?',
       tip_stocks_a: 'Токенізовані акції (xStocks): ончейн-вимоги на базовий актив. Торгівля 24/7, дробові від $0,01, розрахунок у гаманець — не брокерський рахунок.',
-      tick_label: '● Live activity',
-      tick_ago_s: 'с тому',
-      tick_ago_m: 'хв тому',
-      tick_save: 'економія',
-      tick_open: 'відкрито',
-      tick_bought: 'куплено',
-      tick_bet: 'ставка',
-      tick_frac: 'дробова',
-      tick_long: 'long',
     },
   };
 
@@ -340,9 +304,6 @@
         diag_swap: 'Swap · 10k tokens', diag_perps: 'Futures · hasta 100×', diag_pred: 'Predicciones', diag_stocks: 'Acciones 24/7',
         diag_swap_m: 'Swap', diag_perps_m: 'Futures', diag_pred_m: 'Predict', diag_stocks_m: 'Acciones',
         diag_cap: '<strong>Sin depósitos en GROM.</strong> Cada operación la firmas tú y se liquida on-chain.',
-        live_eye: 'Live',
-        live_h: 'Cuatro mercados. Una firma.',
-        live_sub: 'Datos reales de cada vertical. Sin recargas ni cifras inventadas.',
         updates: '🚀 <b>Recién:</b> Acciones · Predicciones · Futures · 20+ redes',
         faq_q: '¿Cómo funciona GROM DEX?',
         faq_a: 'GROM es un meta-agregador: en cada swap consulta 7 fuentes de liquidez en paralelo (LiFi, Paraswap, Kyber, Odos, CoWSwap, Squid, Jupiter) y ejecuta por el mejor precio. Firmas con tu billetera — los tokens llegan a tu dirección. GROM no custodia fondos, no pide KYC y no abre cuentas.',
@@ -382,9 +343,6 @@
         diag_swap: 'Swap · 10k', diag_perps: 'Futures · حتى 100×', diag_pred: 'التنبؤات', diag_stocks: 'الأسهم 24/7',
         diag_swap_m: 'Swap', diag_perps_m: 'Futures', diag_pred_m: 'Predict', diag_stocks_m: 'أسهم',
         diag_cap: '<strong>لا إيداعات في GROM.</strong> كل صفقة توقّعها أنت وتُسوّى على السلسلة.',
-        live_eye: 'مباشر',
-        live_h: 'أربعة أسواق. توقيع واحد.',
-        live_sub: 'بيانات حقيقية من كل اتجاه. بلا إعادة تحميل وبلا أرقام مزيفة.',
         updates: '🚀 <b>جديد:</b> الأسهم · التنبؤات · Futures · 20+ شبكة',
         faq_q: 'كيف يعمل GROM DEX؟',
         faq_a: 'GROM مُجمّع سيولة: عند كل مقايضة يستعلم 7 مصادر بالتوازي وينفّذ بأفضل سعر. توقّع من محفظتك — تصل الرموز إلى عنوانك مباشرة. لا وصاية، لا KYC، لا حسابات.',
@@ -424,9 +382,6 @@
         diag_swap: 'Swap · 1万代币', diag_perps: 'Futures · 最高 100×', diag_pred: '预测市场', diag_stocks: '股票 24/7',
         diag_swap_m: 'Swap', diag_perps_m: 'Futures', diag_pred_m: '预测', diag_stocks_m: '股票',
         diag_cap: '<strong>无需向 GROM 充值。</strong>每笔交易由你签名并在链上结算。',
-        live_eye: '实时',
-        live_h: '四个市场。一次签名。',
-        live_sub: '每个方向的真实数据。无需刷新，没有虚构数字。',
         updates: '🚀 <b>刚刚上线:</b> 股票 · 预测 · Futures · 20+ 链',
         faq_q: 'GROM DEX 如何运作？',
         faq_a: 'GROM 是元聚合器：每次兑换并行查询 7 个流动性源并按最优价格执行。你用钱包签名——代币直接到账。不托管、不要 KYC、不开户。',
@@ -466,9 +421,6 @@
         diag_swap: 'Swap · 10k टोकन', diag_perps: 'Futures · 100× तक', diag_pred: 'प्रेडिक्शन्स', diag_stocks: 'स्टॉक्स 24/7',
         diag_swap_m: 'Swap', diag_perps_m: 'Futures', diag_pred_m: 'Predict', diag_stocks_m: 'स्टॉक्स',
         diag_cap: '<strong>GROM पर कोई डिपॉजिट नहीं।</strong> हर ट्रेड आपके वॉलेट से साइन होकर ऑन-चेन सेटल होता है।',
-        live_eye: 'लाइव',
-        live_h: 'चार मार्केट। एक सिग्नेचर।',
-        live_sub: 'हर वर्टिकल से असली डेटा। कोई रीलोड नहीं, कोई नकली नंबर नहीं।',
         updates: '🚀 <b>अभी:</b> स्टॉक्स · प्रेडिक्शन्स · Futures · 20+ चेन',
         faq_q: 'GROM DEX कैसे काम करता है?',
         faq_a: 'GROM एक मेटा-एग्रीगेटर है: हर स्वैप पर 7 लिक्विडिटी सोर्स समानांतर पूछता है और बेस्ट प्राइस पर एक्ज़ीक्यूट करता है। आप वॉलेट से साइन करते हैं — टोकन सीधे आपके पते पर आते हैं।',
@@ -508,9 +460,6 @@
         diag_swap: 'Swap · 10k token', diag_perps: 'Futures · 100×’e kadar', diag_pred: 'Tahminler', diag_stocks: 'Hisse 24/7',
         diag_swap_m: 'Swap', diag_perps_m: 'Futures', diag_pred_m: 'Predict', diag_stocks_m: 'Hisse',
         diag_cap: '<strong>GROM’a yatırma yok.</strong> Her işlem cüzdanınla imzalanır ve zincirde yerleşir.',
-        live_eye: 'Canlı',
-        live_h: 'Dört piyasa. Tek imza.',
-        live_sub: 'Her dikeyden gerçek veri. Yenileme yok, uydurma rakam yok.',
         updates: '🚀 <b>Yeni:</b> Hisse · Tahminler · Futures · 20+ ağ',
         faq_q: 'GROM DEX nasıl çalışır?',
         faq_a: 'GROM bir meta-toplayıcıdır: her swap’te 7 likidite kaynağını paralel sorar ve en iyi fiyatla yürütür. Cüzdanınla imzalarsın — tokenler doğrudan adresine gelir. Saklama yok, KYC yok, hesap yok.',
@@ -1715,7 +1664,7 @@
   }
 
   function removePreview() {
-    document.querySelectorAll('#landing-v2-root .lv2-live-sec, .lv2-live-sec').forEach(function (el) {
+    document.querySelectorAll('#landing-v2-root .lv2-live-sec, .lv2-live-sec, #landing-v2-ticker, .lv2-ticker-wrap').forEach(function (el) {
       el.remove();
     });
   }
@@ -1741,77 +1690,6 @@
       var panel = hw.querySelector('.lv2-panel[data-panel="' + id + '"]');
       if (panel) panel.innerHTML = map[id];
     });
-  }
-
-  function buildTickerItems(data) {
-    var eth = (data && data.eth) || 2500;
-    var get = Math.round(0.5 * eth);
-    var save = Math.max(3, Math.round(get * 0.0067 * 100) / 100);
-    var btc = data && data.perps && data.perps.rows && data.perps.rows[0];
-    var stk = data && data.stocks && data.stocks.movers && data.stocks.movers[0];
-    var pred = data && data.predict && data.predict[0];
-    var items = [
-      '<span class="amt">0,5 ETH → ' + get.toLocaleString('ru-RU') + ' USDC</span> · <span class="win">' + esc(t('tick_save')) + ' ' + fmtUsd(save) + '</span> · 8' + esc(t('tick_ago_s')),
-      '<span class="amt">BTC-PERP ' + esc(t('tick_long')) + ' ×3</span> · ' + esc(t('tick_open')) + ' · 42' + esc(t('tick_ago_s')),
-      '<span class="amt">' + esc((stk && stk.ticker) || 'PLTR') + ' ' + esc(t('tick_frac')) + '</span> · ' + esc(t('tick_bought')) + ' · 1' + esc(t('tick_ago_m')),
-      '<span class="amt">' + esc(t('yes')) + ' @ ' + Math.round((pred && pred.yes) || 42) + '%</span> · $500 ' + esc(t('tick_bet')) + ' · 2' + esc(t('tick_ago_m')),
-      '<span class="amt">USDT → USDC · Arbitrum</span> · <span class="win">' + esc(t('tick_save')) + ' $2,10</span> · 3' + esc(t('tick_ago_m')),
-    ];
-    if (btc && btc.price) {
-      items[1] = '<span class="amt">BTC-PERP ' + esc(t('tick_long')) + ' ×3</span> · ' + fmtUsd(btc.price) + ' · ' + esc(t('tick_open')) + ' · 42' + esc(t('tick_ago_s'));
-    }
-    return items;
-  }
-
-  function placePreFinal(el) {
-    var wrap = document.querySelector('#page-landing .lp-wrap');
-    if (!wrap || !el) return;
-    var finalCta = wrap.querySelector('.lp-final-cta');
-    var updates = document.getElementById('landing-v2-updates');
-    var ticker = document.getElementById('landing-v2-ticker');
-    if (el.id === 'landing-v2-ticker') {
-      if (updates) wrap.insertBefore(el, updates);
-      else if (finalCta) wrap.insertBefore(el, finalCta);
-      else wrap.appendChild(el);
-      return;
-    }
-    if (el.id === 'landing-v2-updates') {
-      if (finalCta) wrap.insertBefore(el, finalCta);
-      else wrap.appendChild(el);
-      if (ticker && ticker.parentNode === wrap) {
-        wrap.insertBefore(ticker, el);
-      }
-      return;
-    }
-    if (finalCta) wrap.insertBefore(el, finalCta);
-    else wrap.appendChild(el);
-  }
-
-  function mountTicker(data) {
-    if (lv2StableUi() && _painted && document.getElementById('landing-v2-ticker')) return;
-    var wrap = document.querySelector('#page-landing .lp-wrap');
-    if (!wrap) return;
-    var el = document.getElementById('landing-v2-ticker');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'landing-v2-ticker';
-      el.className = 'lv2-ticker-wrap';
-      el.setAttribute('data-lv2-ticker', '1');
-    }
-    var items = buildTickerItems(data || {});
-    var track = items.map(function (html) {
-      return '<span class="lv2-ticker-item">' + html + '</span>';
-    }).join('<span class="lv2-ticker-sep" aria-hidden="true">|</span>');
-    el.hidden = false;
-    el.style.display = '';
-    el.innerHTML =
-      '<div class="lv2-ticker" aria-label="Live activity">' +
-        '<div class="lv2-ticker-label">' + esc(t('tick_label')) + '</div>' +
-        '<div class="lv2-ticker-viewport">' +
-          '<div class="lv2-ticker-track">' + track + '<span class="lv2-ticker-sep" aria-hidden="true">|</span>' + track + '</div>' +
-        '</div>' +
-      '</div>';
-    placePreFinal(el);
   }
 
   function removeUpdates() {
@@ -1983,14 +1861,12 @@
           mountLandingTrending(root);
           mountDiagram(root);
         }
-        mountTicker(_live);
         injectFaq();
         _painted = true;
         _lang = lang();
         needShell = false; /* progressive fills only patch after first shell */
       } else {
         patchHeroPanels(_live);
-        mountTicker(_live);
       }
       removeUpdates();
       bind(root);

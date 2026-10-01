@@ -6685,8 +6685,8 @@ function gwMpDexLang() {
   let lang = 'en';
   try { lang = String(localStorage.getItem('grom_lang') || document.documentElement.lang || 'en').split('-')[0]; } catch (_) {}
   const tr = {
-    ru: { eye: 'МЕТА-ПОРТФЕЛЬ', sub: 'On-chain · Hyperliquid Spot / Perp · Прогнозы · Акции', connect: 'Подключи кошелёк, чтобы увидеть все DEX-активы', empty: 'На подключённом кошельке пока нет активов', on: 'On-chain', trade: 'Trade', pred: 'Прогнозы', stocks: 'Акции', chains: 'сетей', pos: 'позиций', loading: 'Загружаем портфель…' },
-    en: { eye: 'META PORTFOLIO', sub: 'On-chain · Hyperliquid Spot / Perp · Predictions · Stocks', connect: 'Connect a wallet to see all DEX assets', empty: 'No assets found for this wallet yet', on: 'On-chain', trade: 'Trade', pred: 'Predictions', stocks: 'Stocks', chains: 'chains', pos: 'positions', loading: 'Loading portfolio…' },
+    ru: { eye: 'МЕТА-ПОРТФЕЛЬ', on: 'On-chain', trade: 'Trade', pred: 'Прогнозы', stocks: 'Акции', chains: 'сетей', pos: 'позиций', loading: 'Загружаем портфель…' },
+    en: { eye: 'META PORTFOLIO', on: 'On-chain', trade: 'Trade', pred: 'Predictions', stocks: 'Stocks', chains: 'chains', pos: 'positions', loading: 'Loading portfolio…' },
   };
   return tr[lang] || tr.en;
 }
@@ -6701,33 +6701,28 @@ function gwInjectMetaPortfolioCss() {
   s.id = 'gw-mp-css';
   s.textContent = `
     .gw-mp-wrap { margin: 0; background: transparent !important; }
-    .gw-mp-card { position:relative; overflow:hidden; padding:22px; border-radius:24px;
+    .gw-mp-card { position:relative; overflow:hidden; padding:18px 20px; border-radius:22px;
       background:linear-gradient(160deg,#2f3543 0%,#202737 55%,#1f2a38 100%);
       outline:1px solid rgba(136,192,208,.14); outline-offset:-1px; color:#e7eef8; }
-    .gw-mp-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; margin-bottom:14px; }
-    .gw-mp-eyebrow { margin:0 0 4px; font-size:10.5px; letter-spacing:.18em; color:#7e8ea7; font-weight:800; }
-    .gw-mp-total { margin:0; font-size:34px; line-height:1.08; font-weight:800; letter-spacing:-.02em;
+    .gw-mp-head { display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:10px; }
+    .gw-mp-eyebrow { margin:0 0 3px; font-size:10.5px; letter-spacing:.18em; color:#7e8ea7; font-weight:800; }
+    .gw-mp-total { margin:0; font-size:32px; line-height:1.08; font-weight:800; letter-spacing:-.02em;
       background:linear-gradient(180deg,#fff,#c7d8ec); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; font-variant-numeric:tabular-nums; }
-    .gw-mp-sub { margin:5px 0 0; color:#98a8c0; font-size:12.5px; }
-    .gw-mp-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px;
-      background:rgba(136,192,208,.12); color:#9bd1df; border:1px solid rgba(136,192,208,.28); font-size:10px; font-weight:800; letter-spacing:.14em; }
-    .gw-mp-badge::before { content:''; width:6px; height:6px; border-radius:50%; background:#88c0d0; box-shadow:0 0 7px rgba(136,192,208,.7); }
-    .gw-mp-bar { display:flex; height:8px; margin:12px 0 10px; overflow:hidden; border-radius:999px; background:rgba(255,255,255,.04); }
+    .gw-mp-bar { display:flex; height:7px; margin:10px 0 8px; overflow:hidden; border-radius:999px; background:rgba(255,255,255,.04); }
     .gw-mp-bar span { height:100%; transition:width .3s ease; }
     .gw-mp-cats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
-    .gw-mp-cat { min-width:0; padding:12px; border-radius:14px; background:rgba(255,255,255,.025); border:1px solid rgba(255,255,255,.06); }
-    .gw-mp-cat.onchain { border-color:rgba(163,190,140,.24); }
-    .gw-mp-cat.trade { border-color:rgba(136,192,208,.24); }
-    .gw-mp-cat.predict { border-color:rgba(180,142,173,.22); }
-    .gw-mp-cat.stocks { border-color:rgba(235,203,139,.22); }
+    .gw-mp-cat { min-width:0; padding:10px 11px; border-radius:13px; background:rgba(255,255,255,.025); border:1px solid rgba(255,255,255,.06); }
+    .gw-mp-cat.onchain { --mp-accent:#22c17c; border-color:rgba(34,193,124,.34); background:rgba(34,193,124,.045); }
+    .gw-mp-cat.trade { --mp-accent:#00c2ff; border-color:rgba(0,194,255,.34); background:rgba(0,194,255,.045); }
+    .gw-mp-cat.predict { --mp-accent:#ed72d2; border-color:rgba(237,114,210,.32); background:rgba(237,114,210,.045); }
+    .gw-mp-cat.stocks { --mp-accent:#f5b942; border-color:rgba(245,185,66,.34); background:rgba(245,185,66,.045); }
     .gw-mp-cat-lbl { display:flex; align-items:center; gap:6px; color:#7e8ea7; font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
-    .gw-mp-dot { width:8px; height:8px; border-radius:50%; background:#88c0d0; }
-    .gw-mp-cat.onchain .gw-mp-dot { background:#a3be8c; } .gw-mp-cat.predict .gw-mp-dot { background:#b48ead; } .gw-mp-cat.stocks .gw-mp-dot { background:#ebcb8b; }
-    .gw-mp-cat-val { margin-top:5px; color:#e7eef8; font-size:18px; font-weight:800; font-variant-numeric:tabular-nums; }
+    .gw-mp-dot { width:8px; height:8px; flex:0 0 8px; border-radius:50%; background:var(--mp-accent,#00c2ff); box-shadow:0 0 8px var(--mp-accent,#00c2ff); }
+    .gw-mp-cat-val { margin-top:4px; color:#e7eef8; font-size:18px; font-weight:800; font-variant-numeric:tabular-nums; }
     .gw-mp-cat-sub { margin-top:2px; color:#6f8099; font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .gw-mp-loading { color:#98a8c0; font-size:12.5px; padding:4px 0; }
     @media (max-width:720px) { .gw-mp-cats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-    @media (max-width:600px) { .gw-mp-card { padding:13px; border-radius:16px; } .gw-mp-total { font-size:25px; } .gw-mp-sub { font-size:11px; } .gw-mp-cats { gap:6px; } .gw-mp-cat { padding:9px; } .gw-mp-cat-val { font-size:15px; } }
+    @media (max-width:600px) { .gw-mp-card { padding:12px; border-radius:16px; } .gw-mp-total { font-size:25px; } .gw-mp-cats { gap:6px; } .gw-mp-cat { padding:8px; } .gw-mp-cat-val { font-size:15px; } }
   `;
   document.head.appendChild(s);
 }
@@ -6893,16 +6888,15 @@ function gwMpDexPaint(data, loading) {
   const t = gwMpDexLang();
   const d = data || gwMpDexZero();
   const connected = gwMpDexConnected();
-  const sub = !connected ? t.connect : (d.total > .005 ? t.sub : t.empty);
   const tradeSub = [d.trade.perp > .005 ? `Perp ${gwMpDexFmt(d.trade.perp)}` : '', d.trade.spot > .005 ? `Spot ${gwMpDexFmt(d.trade.spot)}` : ''].filter(Boolean).join(' · ') || '—';
   const cats = [
-    ['onchain', t.on, d.onchain.usd, d.onchain.chainsN ? `${d.onchain.chainsN} ${t.chains}` : '—', '#a3be8c'],
-    ['trade', t.trade, d.trade.usd, tradeSub, '#88c0d0'],
-    ['predict', t.pred, d.pred.usd, d.pred.positionsN ? `${d.pred.positionsN} ${t.pos}` : '—', '#b48ead'],
-    ['stocks', t.stocks, d.xst.usd, d.xst.positionsN ? `${d.xst.positionsN} ${t.pos}` : '—', '#ebcb8b'],
+    ['onchain', t.on, d.onchain.usd, d.onchain.chainsN ? `${d.onchain.chainsN} ${t.chains}` : '—', '#22c17c'],
+    ['trade', t.trade, d.trade.usd, tradeSub, '#00c2ff'],
+    ['predict', t.pred, d.pred.usd, d.pred.positionsN ? `${d.pred.positionsN} ${t.pos}` : '—', '#ed72d2'],
+    ['stocks', t.stocks, d.xst.usd, d.xst.positionsN ? `${d.xst.positionsN} ${t.pos}` : '—', '#f5b942'],
   ];
   wrap.innerHTML = `<div class="gw-mp-card">
-    <div class="gw-mp-head"><div><p class="gw-mp-eyebrow">${t.eye}</p><p class="gw-mp-total">${connected ? gwMpDexFmt(d.total) : '—'}</p><p class="gw-mp-sub">${sub}</p></div><span class="gw-mp-badge">DEX</span></div>
+    <div class="gw-mp-head"><div><p class="gw-mp-eyebrow">${t.eye}</p><p class="gw-mp-total">${connected ? gwMpDexFmt(d.total) : '—'}</p></div><span class="gw-ds-badge">DEX</span></div>
     ${loading ? `<div class="gw-mp-loading">${t.loading}</div>` : ''}
     ${connected && !loading ? `<div class="gw-mp-bar">${cats.map((c) => `<span style="width:${d.total > 0 ? Math.max(0, c[2] / d.total * 100) : 0}%;background:${c[4]}"></span>`).join('')}</div>
     <div class="gw-mp-cats">${cats.map((c) => `<div class="gw-mp-cat ${c[0]}"><div class="gw-mp-cat-lbl"><span class="gw-mp-dot"></span>${c[1]}</div><div class="gw-mp-cat-val">${gwMpDexFmt(c[2])}</div><div class="gw-mp-cat-sub">${c[3]}</div></div>`).join('')}</div>` : ''}

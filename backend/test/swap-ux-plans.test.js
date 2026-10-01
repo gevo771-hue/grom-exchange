@@ -81,5 +81,15 @@ test('referral UI does not promise inactive payouts or commission rates',()=>{
  const copy=[landingHtml,i18n,i18nExtra].join('\n');
  for(const claim of ['Up to 50%','До 50%','Hasta 50%','最高 50%','50% तक','%50\\\'ye kadar','You automatically receive 50% of our 0.20% fee — forever','50% от нашей 0.20% комиссии автоматически идёт тебе — навсегда','paid daily 00:00 UTC','Share your link — when friends swap on-chain, you earn a share of fees. Payouts are on-chain weekly.'])assert.equal(copy.includes(claim),false,claim);
  assert.doesNotMatch(copy,/50\/50|ref_tag:[^\n]*(?:50\s*%|%\s*50)|automatically receive.*fee|автоматически идёт тебе/i);
- assert.match(landingHtml,/Referral tracking and payouts will be announced after launch/);
+ assert.match(landingHtml,/New wallet signups are counted once; rewards and payouts are not enabled/);
+ assert.match(landingHtml,/Existing accounts are never reassigned/);
+ assert.doesNotMatch(landingHtml,/Your earnings|Total earned|Pending payout/);
+});
+
+test('referral invite identity is generated and attributed by the authenticated backend',()=>{
+ assert.match(walletSrc,/fetch\('\/api\/referral\/summary'/);
+ assert.match(walletSrc,/Date\.now\(\) - capturedAt > 30 \* 24 \* 60 \* 60 \* 1000/);
+ assert.doesNotMatch(walletSrc,/function gwInviteCodeFromSeed|function gwApplyLocalInviteIdentity/);
+ assert.match(landingHtml,/id="refKpiSignups30d"/);
+ assert.match(landingHtml,/rememberReferral\(m\[1\]\)/);
 });

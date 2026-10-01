@@ -297,16 +297,25 @@
 </style>
 <script>
 (function () {
+  function rememberReferral(raw) {
+    var code = String(raw || '').trim().toUpperCase().replace(/^GROM-/, '');
+    if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)) return false;
+    try {
+      localStorage.setItem('grom_ref', code);
+      localStorage.setItem('grom_ref_at', String(Date.now()));
+    } catch (_) {}
+    return true;
+  }
   var m = location.pathname.match(/^\/r\/([A-Za-z0-9]+)\/?$/i);
   if (m) {
-    try { localStorage.setItem('grom_ref', m[1].toUpperCase()); } catch (_) {}
-    location.replace('/' + (location.search || '') + '#landing');
+    rememberReferral(m[1]);
+    location.replace('/#landing');
     return;
   }
   try {
     var ref = new URLSearchParams(location.search).get('ref');
     if (ref) {
-      localStorage.setItem('grom_ref', ref.toUpperCase());
+      rememberReferral(ref);
       history.replaceState(null, '', location.pathname + location.hash);
     }
   } catch (_) {}
@@ -4327,7 +4336,7 @@
   }
   .ref-lbl { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--silver5); }
   .ref-val { font-size: 22px; font-weight: 800; color: var(--silver1); margin: 6px 0 10px; letter-spacing: 0.03em; word-break: break-all; }
-  .ref-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+  .ref-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
   @media (max-width: 800px) { .ref-kpis { grid-template-columns: repeat(2,1fr); } }
   .kpi-card {
     background: linear-gradient(180deg, rgba(48,54,66,0.65), rgba(37,45,58,0.55));
@@ -6861,18 +6870,18 @@
 
     <!-- REFERRAL -->
     <section class="page" id="page-referral">
-      <h1 class="page-title"><span data-i18n="ref_title">Referral program</span> <span class="tag" data-i18n="ref_tag">Not active yet</span></h1>
-      <p class="page-subtitle">Share your link — earn a share of swap fees your friends pay on GROM DEX. Payouts sent on-chain in USDT.</p>
+      <h1 class="page-title"><span data-i18n="ref_title">Referral tracking</span> <span class="tag" data-i18n="ref_tag">Tracking only</span></h1>
+      <p class="page-subtitle" data-i18n="ref_tracking_disclosure">Invite friends with your link. New wallet signups are counted once; rewards and payouts are not enabled.</p>
 
       <div class="ref-hero">
         <div class="ref-code">
           <div class="ref-lbl" data-i18n="ref_invite_code">Your invite code</div>
-          <div class="ref-val mono" id="refCode">GROM-G7K3Q9</div>
+          <div class="ref-val mono" id="refCode" data-i18n="ref_connect_wallet_code">Connect wallet to generate</div>
           <button class="btn-primary" onclick="copyRef()" id="refCopyBtn" data-i18n="common_copy">Copy</button>
         </div>
         <div class="ref-link">
           <div class="ref-lbl" data-i18n="ref_invite_link">Invite link</div>
-          <div class="ref-val mono" id="refLink" style="font-size:13px">https://grom.exchange/r/G7K3Q9</div>
+          <div class="ref-val mono" id="refLink" style="font-size:13px" data-i18n="ref_connect_wallet_link">Connect wallet to reveal your link</div>
           <div style="display:flex;gap:6px;margin-top:6px">
             <button class="btn-ghost" onclick="copyRefLink()" data-i18n="ref_copy_link">Copy link</button>
             <button class="btn-ghost" onclick="refShareX()" data-i18n="ref_share_x">Share on X</button>
@@ -6881,68 +6890,30 @@
         </div>
         <div class="ref-qr">
           <div class="ref-lbl" style="text-align:center" data-i18n="ref_scan_join">Scan to join</div>
-          <svg viewBox="0 0 100 100" width="120" height="120" style="display:block;margin:6px auto 0;background:#fff;border-radius:10px;padding:6px">
-            <g fill="#0a1224">
-              <rect x="0" y="0" width="28" height="28"/><rect x="4" y="4" width="20" height="20" fill="#fff"/><rect x="8" y="8" width="12" height="12"/>
-              <rect x="72" y="0" width="28" height="28"/><rect x="76" y="4" width="20" height="20" fill="#fff"/><rect x="80" y="8" width="12" height="12"/>
-              <rect x="0" y="72" width="28" height="28"/><rect x="4" y="76" width="20" height="20" fill="#fff"/><rect x="8" y="80" width="12" height="12"/>
-              <rect x="34" y="6" width="4" height="4"/><rect x="42" y="2" width="4" height="4"/><rect x="50" y="10" width="4" height="4"/><rect x="58" y="4" width="4" height="4"/><rect x="64" y="10" width="4" height="4"/>
-              <rect x="32" y="34" width="4" height="4"/><rect x="40" y="38" width="4" height="4"/><rect x="50" y="34" width="4" height="4"/><rect x="60" y="40" width="4" height="4"/><rect x="68" y="36" width="4" height="4"/>
-              <rect x="34" y="48" width="4" height="4"/><rect x="44" y="50" width="4" height="4"/><rect x="54" y="48" width="4" height="4"/><rect x="64" y="52" width="4" height="4"/><rect x="74" y="48" width="4" height="4"/>
-              <rect x="36" y="60" width="4" height="4"/><rect x="46" y="66" width="4" height="4"/><rect x="56" y="62" width="4" height="4"/><rect x="68" y="66" width="4" height="4"/><rect x="78" y="60" width="4" height="4"/>
-              <rect x="34" y="78" width="4" height="4"/><rect x="46" y="82" width="4" height="4"/><rect x="54" y="86" width="4" height="4"/><rect x="66" y="82" width="4" height="4"/><rect x="76" y="80" width="4" height="4"/>
-              <rect x="82" y="34" width="4" height="4"/><rect x="88" y="42" width="4" height="4"/><rect x="84" y="52" width="4" height="4"/><rect x="94" y="60" width="4" height="4"/><rect x="86" y="68" width="4" height="4"/>
-            </g>
-          </svg>
+          <div id="refQr" aria-live="polite" style="width:120px;height:120px;margin:6px auto 0"></div>
         </div>
       </div>
 
       <div class="ref-kpis" data-authed-only="1">
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_referred">Total referred</div><div class="kpi-val mono" id="refKpiTotalReferred">—</div><div class="kpi-sub up" id="refKpiTotalReferredDelta" data-i18n="ref_week_delta">—</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_active_30d">Active (30d)</div><div class="kpi-val mono" id="refKpiActive30d">—</div><div class="kpi-sub up" id="refKpiActivationRate" data-i18n="ref_activation_rate">—</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_earned">Total earned</div><div class="kpi-val mono" id="refKpiTotalEarned">—</div><div class="kpi-sub up" id="refKpiTotalEarnedDelta" data-i18n="ref_earned_delta">—</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_pending_payout">Pending payout</div><div class="kpi-val mono" id="refKpiPendingPayout">—</div><div class="kpi-sub" data-i18n="ref_paid_daily">Payout schedule not active</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_referred">Wallets invited</div><div class="kpi-val mono" id="refKpiTotalReferred">—</div><div class="kpi-sub" data-i18n="ref_total_invited_note">Accounts attributed to your code</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_signups_30d">New signups (30d)</div><div class="kpi-val mono" id="refKpiSignups30d">—</div><div class="kpi-sub" data-i18n="ref_signups_note">Created in the last 30 days</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_active_30d">Seen (30d)</div><div class="kpi-val mono" id="refKpiActive30d">—</div><div class="kpi-sub" data-i18n="ref_active_note">Last seen in the last 30 days</div></div>
       </div>
 
       <div class="ref-workbench">
         <div class="ref-how-card">
           <div class="ref-how-head">
             <div>
-              <h3 data-i18n="ref_how_title">Referral program not active</h3>
-              <p data-i18n="ref_how_sub">Referral tracking and payouts will be announced after launch.</p>
+              <h3 data-i18n="ref_how_title">How invite tracking works</h3>
+              <p data-i18n="ref_how_sub">A new wallet is attributed once when it first signs in through your link. Existing accounts are never reassigned.</p>
             </div>
-            <span class="ref-how-badge">Inactive</span>
+            <span class="ref-how-badge" data-i18n="ref_rewards_inactive">Rewards inactive</span>
           </div>
           <div class="ref-how-steps">
-            <div class="ref-how-step"><span>1</span><p data-i18n="ref_step_1">Referral links are not available yet.</p></div>
-            <div class="ref-how-step"><span>2</span><p data-i18n="ref_step_2">Referral tracking is not active yet.</p></div>
-            <div class="ref-how-step"><span>3</span><p data-i18n="ref_step_3">Payout terms will be published when the program launches.</p></div>
+            <div class="ref-how-step"><span>1</span><p data-i18n="ref_step_1">Share your unique invite link.</p></div>
+            <div class="ref-how-step"><span>2</span><p data-i18n="ref_step_2">A first-time wallet signup is attributed once.</p></div>
+            <div class="ref-how-step"><span>3</span><p data-i18n="ref_step_3">Self-referrals are rejected. Rewards and payouts are not enabled.</p></div>
           </div>
-        </div>
-        <div class="card ref-commission-card">
-          <div class="card-head"><h3 data-i18n="ref_commission_status">Commission status</h3><span class="sub ref-pill" data-i18n="ref_status_live">Inactive</span></div>
-          <div class="card-body ref-grid-2">
-            <div class="ref-mini-card">
-              <div class="k" data-i18n="ref_today_accrual">Today accrual</div>
-              <div class="v mono" id="refTodayAccrual">—</div>
-              <div class="s" id="refNextBatch" data-i18n="ref_awaiting">Tracking is not active yet</div>
-            </div>
-            <div class="ref-mini-card">
-              <div class="k" data-i18n="ref_pending_label">Pending payout</div>
-              <div class="v mono" id="refPendingMini">—</div>
-              <div class="s" data-i18n="ref_paid_onchain">Payouts are not active yet</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-head"><h3 data-i18n="ref_your_referrals">Your referrals</h3><span class="sub" data-i18n="ref_last_10">last 10</span></div>
-        <div class="ref-table-head">
-          <div data-i18n="ref_tbl_user">User</div><div data-i18n="ref_tbl_joined">Joined</div><div data-i18n="ref_tbl_volume_30d">Volume 30d</div><div data-i18n="ref_tbl_tier">Tier</div><div style="text-align:right" data-i18n="ref_tbl_earnings">Your earnings</div>
-        </div>
-        <div id="refReferralsList">
-          <div class="ref-row" style="opacity:.65"><div data-i18n="ref_empty_list">No referrals yet — share your link</div><div></div><div></div><div></div><div></div></div>
         </div>
       </div>
     </section>
@@ -9416,7 +9387,8 @@ window.addEventListener('resize', () => {
 
 /* ========== Referral ========== */
 function copyRef() {
-  const code = document.getElementById('refCode')?.textContent || '';
+  const code = document.getElementById('refCode')?.textContent?.trim() || '';
+  if (!/^GROM-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)) { toast('Connect wallet to create your invite code','info'); return; }
   if (!navigator.clipboard) { toast('Clipboard not available','error'); return; }
   navigator.clipboard.writeText(code).then(() => {
     const b = document.getElementById('refCopyBtn');
@@ -9425,7 +9397,8 @@ function copyRef() {
   }).catch(() => toast('Copy failed','error'));
 }
 function copyRefLink() {
-  const link = document.getElementById('refLink')?.textContent || '';
+  const link = document.getElementById('refLink')?.textContent?.trim() || '';
+  if (!/^https?:\/\/[^/]+\/r\/[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(link)) { toast('Connect wallet to reveal your invite link','info'); return; }
   if (!navigator.clipboard) { toast('Clipboard not available','error'); return; }
   navigator.clipboard.writeText(link).then(() => toast('Referral link copied','success'));
 }
@@ -18115,8 +18088,7 @@ function gromResetAuthedUi() {
     dashPnlVal: '—', dashPnlMeta: '—',
     dashOpenPos: '0', dashOpenMeta: '—',
     dashWinRate: '—', dashWinMeta: '—',
-    refKpiTotalReferred: '—', refKpiActive30d: '—',
-    refKpiTotalEarned: '—', refKpiPendingPayout: '—'
+    refKpiTotalReferred: '—', refKpiSignups30d: '—', refKpiActive30d: '—'
   };
   Object.keys(reset).forEach(function (id) {
     var el = document.getElementById(id);
@@ -18134,6 +18106,7 @@ function gromResetAuthedUi() {
   if (window.GROM_CONN) { window.GROM_CONN.connected = false; window.GROM_CONN.label = ''; window.GROM_CONN.method = ''; }
   window.__gromWalletOverview = null;
   gromSyncAuthedClass();
+  try { if (typeof window.gwZeroRefStatsPlaceholders === 'function') window.gwZeroRefStatsPlaceholders(); } catch (_) {}
   try { if (typeof window.gromResetWalletUi === 'function') window.gromResetWalletUi(); } catch (_) {}
   try { setWalletLabel(gromSignInLabel()); } catch (_) {}
 }
@@ -19897,20 +19870,14 @@ window.openSupportTicket = async function (cat, title) {
 window.refShareX = function () {
   var linkEl = document.getElementById('refLink');
   var url = linkEl ? String(linkEl.textContent || '').trim() : '';
-  if (!url || url.indexOf('http') !== 0) {
-    var code = document.getElementById('refCode')?.textContent?.trim() || 'GROM';
-    url = 'https://grom.exchange/r/' + encodeURIComponent(code.replace(/^GROM-?/i, ''));
-  }
+  if (!/^https?:\/\/[^/]+\/r\/[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(url)) { toast('Connect wallet to reveal your invite link','info'); return; }
   var text = 'Trading on GROM — non-custodial DEX. Cross-chain swaps, Hyperliquid perps, xStocks.';
   window.open('https://x.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url), '_blank', 'noopener');
 };
 window.refShareTelegram = function () {
   var linkEl = document.getElementById('refLink');
   var url = linkEl ? String(linkEl.textContent || '').trim() : '';
-  if (!url || url.indexOf('http') !== 0) {
-    var code = document.getElementById('refCode')?.textContent?.trim() || 'GROM';
-    url = 'https://grom.exchange/r/' + encodeURIComponent(code.replace(/^GROM-?/i, ''));
-  }
+  if (!/^https?:\/\/[^/]+\/r\/[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(url)) { toast('Connect wallet to reveal your invite link','info'); return; }
   var text = 'Trade on GROM with my referral link';
   window.open('https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text), '_blank', 'noopener');
 };

@@ -10,6 +10,9 @@ function harness() {
  gwDsNormSym:s=>String(s).toUpperCase(),gwDsToSymIncompatibleWithPayChain:()=>false,gwDsDefaultReceiveSym:()=> 'USDC',
  gwDsEnsureTokenOption:()=>{},gwTkSyncButton:()=>{},gwDsClearForceBridge:()=>{c.window.__gwDsForceBridgeTo=null;},
  gwDsGetMode:()=> 'onchain', gwOcConnectedAddress:()=> 'wallet-A', gwTkLoadHoldings:async()=>[],
+ gwResolveEvmToken:(cid,sym)=>({address:`${cid}:${sym}`}),
+ gwTronResolveToken:sym=>['TRX','USDT','USDC'].includes(sym)?{address:sym}:null,
+ gwSolResolveToken:sym=>['SOL','USDC','USDT'].includes(sym)?{mint:sym}:null,
  gwDsSetActiveChain: cid=>{c.selected=cid;}, gwDsInvalidateQuoteUi:()=>{}, gwDsRefreshBalances:async()=>{},gwDsRefreshRate:()=>{} };
  vm.createContext(c);
  vm.runInContext(block('gwDsLargestNetworkHolding','/** Apply once'),c);
@@ -23,6 +26,20 @@ test('default ranks total network USD then largest holding, not raw token amount
  const hit=c.gwDsLargestNetworkHolding([{sym:'TRX',chainId:728126428,amt:1000,usd:0.001},{sym:'ETH',chainId:1,amt:1,usd:30},{sym:'USDC',chainId:42161,amt:22,usd:22},{sym:'ETH',chainId:42161,amt:0.1,usd:10}]);
  assert.equal(hit.chainId,42161); assert.equal(hit.sym,'USDC');
  assert.equal(c.gwDsLargestNetworkHolding([{sym:'BAD',chainId:1,amt:1,usd:NaN}]),null);
+});
+test('pay-from picker hides dust and assets without a supported source resolver',()=>{
+ const {c}=harness();
+ c.gwResolveEvmToken=(cid,sym)=>sym==='USDC'?{address:'arb-usdc'}:null;
+ const rows=c.gwDsSpendablePayHoldings([
+  {sym:'TRX',chainId:728126428,amt:0.000001,usd:0.000001},
+  {sym:'USDT',chainId:1,amt:0.49,usd:0.49},
+  {sym:'UNKNOWN',chainId:42161,amt:4,usd:12},
+  {sym:'USDC',chainId:42161,amt:0.5,usd:0.5},
+  {sym:'USDT',chainId:728126428,amt:9,usd:9},
+  {sym:'BONK',chainId:1151111081099710,amt:900000,usd:8},
+ ]);
+ assert.deepEqual(rows.map(r=>r.sym),['USDC','USDT']);
+ assert.deepEqual(rows.map(r=>r.chainId),[42161,728126428]);
 });
 test('changing source resets stale TRON destination, bridge and old token address',()=>{
  const {c,els}=harness(); els.gwDsFrom.value='ETH';
@@ -50,7 +67,10 @@ test('late balances cannot overwrite manual selection',async()=>{
 });
 test('automatic initial TRON selection can be replaced by funded network once',async()=>{
  const {c,els}=harness(); c.window.__gwDsUserPickedFrom={sym:'TRX',chainId:728126428};
- c.gwTkLoadHoldings=async()=>[{sym:'USDC',chainId:42161,amt:22,usd:22}];
+ c.gwTkLoadHoldings=async()=>[
+  {sym:'TRX',chainId:728126428,amt:0.000001,usd:0.000001},
+  {sym:'USDC',chainId:42161,amt:22,usd:22},
+ ];
  await c.gwDsAutoPickFromToken(); assert.equal(c.selected,42161); assert.equal(els.gwDsFrom.value,'USDC');
  assert.equal(c.window.__gwDsUserPickedTo.chainId,42161);
  c.gwTkLoadHoldings=async()=>[{sym:'ETH',chainId:1,amt:1,usd:1000}];

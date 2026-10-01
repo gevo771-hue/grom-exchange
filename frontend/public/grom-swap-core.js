@@ -344,11 +344,31 @@
    * the stock token: compare the received units against an independent share
    * price, and fail closed when either input is unavailable.
    */
-  function xstockBuyQuoteImpact({ amountInUsd, amountOutTokens, referencePriceUsd, maxImpact = 0.05 } = {}) {
+  function xstockBuyQuoteImpact({
+    amountInUsd,
+    amountOutTokens,
+    referencePriceUsd,
+    outputMultiplier = 1,
+    requireMultiplier = false,
+    maxImpact = 0.05,
+  } = {}) {
     const inUsd = Number(amountInUsd);
-    const tokens = Number(amountOutTokens);
+    const rawTokens = Number(amountOutTokens);
+    const multiplier = Number(outputMultiplier);
+    if (requireMultiplier && (!(multiplier > 0) || !Number.isFinite(multiplier))) {
+      return {
+        impact: NaN,
+        inUsd: Number.isFinite(inUsd) && inUsd > 0 ? inUsd : 0,
+        outUsd: 0,
+        blocked: true,
+        reason: 'missing_share_multiplier',
+      };
+    }
+    const tokens = rawTokens * multiplier;
     const referencePrice = Number(referencePriceUsd);
     if (!(inUsd > 0) || !Number.isFinite(inUsd)
+        || !(rawTokens > 0) || !Number.isFinite(rawTokens)
+        || !(multiplier > 0) || !Number.isFinite(multiplier)
         || !(tokens > 0) || !Number.isFinite(tokens)
         || !(referencePrice > 0) || !Number.isFinite(referencePrice)) {
       return {
@@ -370,11 +390,15 @@
         reason: 'invalid_fair_value',
       };
     }
-    return quoteUsdImpact({
-      amountInUsd: inUsd,
-      amountOutUsd: fairValueOutUsd,
-      maxImpact,
-    });
+    return {
+      ...quoteUsdImpact({
+        amountInUsd: inUsd,
+        amountOutUsd: fairValueOutUsd,
+        maxImpact,
+      }),
+      outputTokens: tokens,
+      rawOutputTokens: rawTokens,
+    };
   }
 
   /** Score an xStock quote by USD out when known; else token amount (legacy). */

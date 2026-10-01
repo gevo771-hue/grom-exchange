@@ -4,6 +4,7 @@ import fs from 'fs';
 import config from '../config/index.js';
 import { isCurrentPmEnd } from './predict-freshness.js';
 import { registerXstocksChartRoute } from './xstocks-chart.js';
+import { registerXstocksReferenceRoute } from './xstocks-reference.js';
 
 const CG_IDS = {
   BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin', XRP: 'ripple',
@@ -188,6 +189,9 @@ async function fetchBackedXstocksCatalog() {
       tradeable: true,
       halted: !!n.isTradingHalted,
       price: 0,
+      fairPrice: 0,
+      fairPriceSource: null,
+      fairPriceAt: 0,
       chg: null,
       chgSource: null,
       vol24: '—',
@@ -288,6 +292,7 @@ async function fetchYahooEquityMetrics(items) {
           vol24: fmtCompactUsd(dollarVol),
           mc: fmtCompactUsd(mc),
           equityPx: Number.isFinite(px) && px > 0 ? px : 0,
+          currency: String(r.currency || '').toUpperCase(),
           chg: Number.isFinite(chg) ? chg : null,
           chgSource: Number.isFinite(chg) ? 'yahoo' : null,
         });
@@ -355,6 +360,13 @@ async function enrichXstocksMetrics(items) {
     for (const it of items) {
       const m = metrics.get(String(it.sym || '').toUpperCase());
       if (!m) continue;
+      // Independent share-price reference for trade safety. The DEX mid below
+      // remains display/portfolio market data and must never validate itself.
+      if (m.equityPx > 0 && m.currency === 'USD' && !/\.HK$/i.test(String(it.yahooSym || ''))) {
+        it.fairPrice = m.equityPx;
+        it.fairPriceSource = 'yahoo-usd';
+        it.fairPriceAt = Date.now();
+      }
       if (m.chg != null) {
         it.chg = m.chg;
         it.chgSource = m.chgSource;
@@ -1020,6 +1032,20 @@ function slicePredictPage(markets, offset, limit) {
 
 export function createMarketRouter() {
   const r = express.Router();
+
+  // Public xStock indicative-price + multiplier proxy. Symbols are resolved
+  // only against the canonical Backed catalog before upstream requests.
+  registerXstocksReferenceRoute(r, {
+    getCatalog: () => _xstocksCache.data || [],
+    fetchPriceData: ({ tokenSym }) => axios.get(
+      `https://api.xstocks.fi/api/v2/public/assets/${encodeURIComponent(tokenSym)}/price-data`,
+      { timeout: 8000, headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' } },
+    ).then(({ data }) => data),
+    fetchMultiplier: ({ tokenSym, network }) => axios.get(
+      `https://api.xstocks.fi/api/v2/public/assets/${encodeURIComponent(tokenSym)}/multiplier`,
+      { timeout: 8000, params: { network }, headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' } },
+    ).then(({ data }) => data),
+  });
 
   // Public chart proxy is restricted to the canonical xStock catalog and fixed chart presets.
   registerXstocksChartRoute(r, {

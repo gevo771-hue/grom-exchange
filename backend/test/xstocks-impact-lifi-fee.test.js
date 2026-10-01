@@ -58,6 +58,31 @@ describe('BUG-1 xStocks USD impact guard', () => {
     assert.equal(r.blocked, false);
   });
 
+  it('values Solana raw output as adjusted shares using the active multiplier', () => {
+    const r = GromSwapCore.xstockBuyQuoteImpact({
+      amountInUsd: 100,
+      amountOutTokens: 1.25,
+      outputMultiplier: 2,
+      requireMultiplier: true,
+      referencePriceUsd: 39.5,
+    });
+    assert.equal(r.outputTokens, 2.5);
+    assert.equal(r.rawOutputTokens, 1.25);
+    assert.equal(r.blocked, false);
+  });
+
+  it('blocks Solana quote validation when the multiplier is unavailable', () => {
+    const r = GromSwapCore.xstockBuyQuoteImpact({
+      amountInUsd: 100,
+      amountOutTokens: 2.5,
+      outputMultiplier: null,
+      requireMultiplier: true,
+      referencePriceUsd: 39.5,
+    });
+    assert.equal(r.blocked, true);
+    assert.equal(r.reason, 'missing_share_multiplier');
+  });
+
   it('blocks overflowed reference values instead of accepting them as zero impact', () => {
     const r = GromSwapCore.xstockBuyQuoteImpact({
       amountInUsd: 100,

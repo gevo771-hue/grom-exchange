@@ -6878,6 +6878,7 @@
           <div class="ref-lbl" data-i18n="ref_invite_code">Your invite code</div>
           <div class="ref-val mono" id="refCode" data-i18n="ref_connect_wallet_code">Connect wallet to generate</div>
           <button class="btn-primary" onclick="copyRef()" id="refCopyBtn" data-i18n="common_copy">Copy</button>
+          <button class="btn-ghost" id="refSignInBtn" type="button" hidden onclick="gwReferralSignIn()" data-i18n="ref_sign_to_load">Sign in with wallet</button>
         </div>
         <div class="ref-link">
           <div class="ref-lbl" data-i18n="ref_invite_link">Invite link</div>
@@ -9196,13 +9197,19 @@ document.addEventListener('input', e => {
   }
 });
 function updateFuturesBoard() {
-  var px = priceForPair(futDeskState.pair);
+  var px = window.__gromHlActive
+    ? gromHlPriceForPair(futDeskState.pair, null, isTradeSpot() ? 'spot' : 'perp')
+    : NaN;
   var futBase = String(futDeskState.pair || 'BTC/USDT').split('/')[0] || 'BTC';
   var futQuote = String(futDeskState.pair || 'BTC/USDT').split('/')[1] || 'USDT';
   var futPriceEl = document.getElementById('futPrice');
   var pxOk = Number.isFinite(px) && px > 0;
   if (futPriceEl) futPriceEl.textContent = pxOk ? ('$' + marketFmt(px)) : '—';
   if (pxOk) syncFutPriceInput(px);
+  else {
+    var unavailablePriceInput = document.getElementById('futPriceInput');
+    if (unavailablePriceInput) unavailablePriceInput.value = '';
+  }
   var futSizeInput = document.getElementById('futSizeInput');
   var futSize = typeof futResolveBaseSize === 'function' ? futResolveBaseSize() : (function () {
     var futSizeRaw = parseFloat(futSizeInput && futSizeInput.value);
@@ -9591,14 +9598,9 @@ function futSizeInQuote() {
 function futDeskMidPx() {
   var pair = (window.futDeskState && futDeskState.pair) || 'BTC/USDT';
   var px = NaN;
-  try { px = typeof priceForPair === 'function' ? priceForPair(pair) : NaN; } catch (_) {}
-  if (!(px > 0)) {
-    try {
-      var coin = String(pair).split('/')[0];
-      if (isTradeSpot()) px = Number(window.__hlSpotMids && window.__hlSpotMids[coin]);
-      else px = Number(window.__hlMids && window.__hlMids[coin]);
-    } catch (_) {}
-  }
+  try {
+    if (window.__gromHlActive) px = gromHlPriceForPair(pair, null, isTradeSpot() ? 'spot' : 'perp');
+  } catch (_) {}
   return Number(px) || 0;
 }
 
@@ -9969,8 +9971,7 @@ function gromLiveChangeForPair(sym) {
   return Number(window.gromLiveChange(String(sym || '').toUpperCase().replace(/\//g, '')));
 }
 
-/** 24h % for Futures desk — prefer live HL mid vs prevDayPx (not OTC registry). */
-function futuresChg24ForPair(sym, coinHint) {
+function gromHlCoinForPair(sym, coinHint) {
   var coin = '';
   try {
     if (window.gromHL && typeof window.gromHL.coinFromPair === 'function') {
@@ -9981,45 +9982,59 @@ function futuresChg24ForPair(sym, coinHint) {
   } catch (_) {
     coin = String(coinHint || sym || '').split('/')[0].replace(/-PERP$/i, '').toUpperCase();
   }
+  return String(coin || '').toUpperCase();
+}
+
+/** Return only a quote from the requested Hyperliquid venue; never cross-fallback spot/perp. */
+function gromHlPriceForPair(sym, coinHint, mode) {
+  var coin = gromHlCoinForPair(sym, coinHint);
+  if (!coin) return NaN;
+  var spot = mode === 'spot';
+  var mids = spot ? window.__hlSpotMids : window.__hlMids;
+  var contexts = spot ? window.__hlSpotCtx : window.__hlCtx;
+  var mid = mids && mids[coin] != null ? Number(mids[coin]) : NaN;
+  if (Number.isFinite(mid) && mid > 0) return mid;
+  var ctx = contexts && contexts[coin];
+  var mark = ctx && ctx.markPx != null ? Number(ctx.markPx) : NaN;
+  return Number.isFinite(mark) && mark > 0 ? mark : NaN;
+}
+
+/** 24h % for Futures desk — prefer live HL mid vs prevDayPx (not OTC registry). */
+function futuresChg24ForPair(sym, coinHint, modeHint) {
+  var coin = gromHlCoinForPair(sym, coinHint);
+  var mode = modeHint || (window.futDeskState && futDeskState.tradeMode === 'spot' ? 'spot' : 'perp');
+  var spot = mode === 'spot';
   try {
-    if (window.__gromHlActive && window.futDeskState && futDeskState.tradeMode === 'spot' && window.__hlSpotCtx && coin) {
-      var sctx = window.__hlSpotCtx[coin];
-      if (sctx) {
-        var sprev = Number(sctx.prevDayPx) || 0;
-        var smid = 0;
-        if (window.__hlSpotMids && window.__hlSpotMids[coin] != null) smid = Number(window.__hlSpotMids[coin]) || 0;
-        if (!(smid > 0)) smid = Number(sctx.markPx) || 0;
-        if (sprev > 0 && smid > 0) return ((smid / sprev) - 1) * 100;
-        if (Number.isFinite(Number(sctx.chg24))) return Number(sctx.chg24);
-      }
-    }
-  } catch (_) {}
-  try {
-    if (window.__gromHlActive && window.__hlCtx && coin) {
-      var ctx = window.__hlCtx[coin];
+    if (window.__gromHlActive && coin) {
+      var contexts = spot ? window.__hlSpotCtx : window.__hlCtx;
+      var markets = spot ? window.__hlSpotMarkets : window.__hlMarkets;
+      var ctx = contexts && contexts[coin];
       if (ctx) {
-        var prev = Number(ctx.prevDayPx) || 0;
-        var mid = 0;
-        if (window.__hlMids && window.__hlMids[coin] != null) mid = Number(window.__hlMids[coin]) || 0;
-        if (!(mid > 0)) mid = Number(ctx.markPx) || 0;
-        if (prev > 0 && mid > 0) return ((mid / prev) - 1) * 100;
-        if (Number.isFinite(Number(ctx.chg24))) return Number(ctx.chg24);
-      }
-    }
-  } catch (_) {}
-  try {
-    if (window.__hlMarkets) {
-      for (var i = 0; i < window.__hlMarkets.length; i++) {
-        var m = window.__hlMarkets[i];
-        if (m && (m.sym === sym || m.coin === coin || m.coin === coinHint)) {
-          var rowChg = Number(m.chg24);
-          if (Number.isFinite(rowChg)) return rowChg;
-          break;
+        var prev = ctx.prevDayPx != null ? Number(ctx.prevDayPx) : NaN;
+        var mid = gromHlPriceForPair(sym, coin, mode);
+        if (Number.isFinite(prev) && prev > 0 && Number.isFinite(mid) && mid > 0) return ((mid / prev) - 1) * 100;
+        if (ctx.chg24 != null && ctx.chg24 !== '') {
+          var ctxChg = Number(ctx.chg24);
+          if (Number.isFinite(ctxChg)) return ctxChg;
         }
       }
+      if (markets) {
+        for (var i = 0; i < markets.length; i++) {
+          var m = markets[i];
+          if (m && !!m.spot === spot && (m.sym === sym || String(m.coin || '').toUpperCase() === coin)) {
+            if (m.chg24 == null || m.chg24 === '') return NaN;
+            var rowChg = Number(m.chg24);
+          if (Number.isFinite(rowChg)) return rowChg;
+            return NaN;
+          }
+        }
+      }
+      return NaN;
     }
   } catch (_) {}
-  return gromLiveChangeForPair(sym);
+  // Missing Hyperliquid data is unknown. Do not disguise it with seeded/demo
+  // values from the generic instrument registry.
+  return NaN;
 }
 
 /** Compact full price for narrow futures list (no ellipsis). */
@@ -13126,11 +13141,10 @@ function renderFuturesList(filter) {
   var showN = Math.min(rows.length, window.__futListShow || batch);
   var visible = rows.slice(0, showN);
   var html = visible.map(function (row) {
-    var px = NaN;
-    try { px = Number(priceForPair(row.sym)); } catch (_) { px = NaN; }
-    if (!(px > 0)) px = 0;
-    var chg = futuresChg24ForPair(row.sym, row.coin);
-    if (!Number.isFinite(chg)) chg = 0;
+    var mode = row.spot || isTradeSpot() ? 'spot' : 'perp';
+    var px = window.__gromHlActive ? gromHlPriceForPair(row.sym, row.coin, mode) : NaN;
+    if (!(px > 0)) px = NaN;
+    var chg = futuresChg24ForPair(row.sym, row.coin, mode);
     var nameLbl = row.label
       || (window.gromHL && typeof window.gromHL.displayCoinLabel === 'function'
         ? window.gromHL.displayCoinLabel(row.coin || row.sym)
@@ -13155,8 +13169,8 @@ function renderFuturesList(filter) {
     /* One row: name · change · price · max lev (no stacked lines / logos). */
     return '<div class="wl-item' + (row.sym === futDeskState.pair ? ' active' : '') + '" data-pair="' + row.sym + '" data-coin="' + String(row.coin || '').replace(/"/g, '') + '">' +
       '<div class="nm">' + nameLbl + '</div>' +
-      '<span class="chg ' + (chg >= 0 ? 'up' : 'down') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</span>' +
-      '<div class="px mono">$' + futuresListPriceFmt(px) + '</div>' +
+      '<span class="chg ' + (Number.isFinite(chg) ? (chg >= 0 ? 'up' : 'down') : '') + '">' + (Number.isFinite(chg) ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—') + '</span>' +
+      '<div class="px mono">' + (Number.isFinite(px) && px > 0 ? ('$' + futuresListPriceFmt(px)) : '—') + '</div>' +
       rightHtml + '</div>';
   }).join('');
   if (rows.length > showN) {
@@ -13269,17 +13283,17 @@ function updateQuoteRows() {
       var nm = row.querySelector('.nm');
       sym = nm ? (nm.textContent || '').trim().split(/\s+/)[0] : '';
     }
-    var px = priceForPair(sym);
-    if (!Number.isFinite(px)) return;
+    var px = window.__gromHlActive
+      ? gromHlPriceForPair(sym, row.dataset.coin, isTradeSpot() ? 'spot' : 'perp')
+      : NaN;
     var pxEl = row.querySelector('.px');
-    if (pxEl) pxEl.textContent = '$' + futuresListPriceFmt(px);
+    if (pxEl) pxEl.textContent = Number.isFinite(px) && px > 0 ? ('$' + futuresListPriceFmt(px)) : '—';
     var chgEl = row.querySelector('.chg');
     if (chgEl) {
       /* Must use HL 24h — gromLiveChangeForPair is OTC and forced +0.00% here. */
-      var chg = futuresChg24ForPair(sym, row.dataset.coin);
-      if (!Number.isFinite(chg)) chg = 0;
-      chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
-      chgEl.className = 'chg ' + (chg >= 0 ? 'up' : 'down');
+      var chg = futuresChg24ForPair(sym, row.dataset.coin, isTradeSpot() ? 'spot' : 'perp');
+      chgEl.textContent = Number.isFinite(chg) ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—';
+      chgEl.className = 'chg ' + (Number.isFinite(chg) ? (chg >= 0 ? 'up' : 'down') : '');
     }
     var payEl = row.querySelector('.pay');
     if (payEl) {
@@ -18021,25 +18035,6 @@ async function saveSettings() {
   bindList('bidList', 'bid');
 })();
 
-/* ========== Spot side toggle + smarter submit ========== */
-(function wireSpot() {
-  var tog = document.querySelector('#page-futures .side-toggle');
-  if (tog) tog.addEventListener('click', function (e) {
-    var b = e.target.closest('button'); if (!b) return;
-    tog.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
-    b.classList.add('active');
-    var submit = document.querySelector('#page-futures .btn-primary');
-    if (submit) submit.textContent = b.classList.contains('sell') ? 'Sell BTC' : 'Buy BTC';
-  });
-  var submit = document.querySelector('#page-futures .btn-primary');
-  if (submit) {
-    submit.onclick = function () {
-      var isSell = tog && tog.querySelector('.sell')?.classList.contains('active');
-      toast('Spot ' + (isSell ? 'SELL' : 'BUY') + ' 0.00500 BTC submitted', 'success');
-    };
-  }
-})();
-
 /* ===== Live UI restorations ===== */
 function gromSyncAuthedClass() {
   var authed = false;
@@ -18433,6 +18428,10 @@ function dashSymLabel(row) {
 }
 
 function dashWatchResolvePx(sym, coin) {
+  if (window.__gromHlActive) {
+    var hlPx = gromHlPriceForPair(sym, coin, 'perp');
+    return Number.isFinite(hlPx) && hlPx > 0 ? hlPx : null;
+  }
   var px = null;
   try {
     if (typeof priceForPair === 'function') px = Number(priceForPair(sym));
@@ -18467,8 +18466,8 @@ function dashWatchChg(sym, coinHint) {
   if (typeof futuresChg24ForPair === 'function') {
     try {
       /* Only trust when HL ctx exists — futuresChg24ForPair falls back to mock otherwise. */
-      if (window.__hlCtx && coin && window.__hlCtx[coin]) {
-        var hl = Number(futuresChg24ForPair(sym, coin));
+      if (window.__gromHlActive && window.__hlCtx && coin && window.__hlCtx[coin]) {
+        var hl = Number(futuresChg24ForPair(sym, coin, 'perp'));
         if (Number.isFinite(hl)) return hl;
       }
     } catch (_) {}
@@ -18481,7 +18480,7 @@ function dashWatchChg(sym, coinHint) {
       if (window.__hlMids && window.__hlMids[coin] != null) mid = Number(window.__hlMids[coin]) || 0;
       if (!(mid > 0)) mid = Number(ctx.markPx) || 0;
       if (prev > 0 && mid > 0) return ((mid / prev) - 1) * 100;
-      if (Number.isFinite(Number(ctx.chg24))) return Number(ctx.chg24);
+      if (ctx.chg24 != null && Number.isFinite(Number(ctx.chg24))) return Number(ctx.chg24);
     }
   } catch (_) {}
   try {
@@ -18490,6 +18489,7 @@ function dashWatchChg(sym, coinHint) {
         var m = window.__hlMarkets[i];
         if (!m) continue;
         if (m.sym === sym || String(m.coin || '').toUpperCase() === coin) {
+          if (m.chg24 == null || m.chg24 === '') return NaN;
           var rowChg = Number(m.chg24);
           if (Number.isFinite(rowChg)) return rowChg;
           break;
@@ -18497,7 +18497,7 @@ function dashWatchChg(sym, coinHint) {
       }
     }
   } catch (_) {}
-  return 0;
+  return NaN;
 }
 window.dashWatchChg = dashWatchChg;
 
@@ -18508,9 +18508,9 @@ function dashWatchRowHtml(row, idx) {
   var sym = row.sym || '';
   var coin = row.coin || '';
   var px = (row.price > 0) ? Number(row.price) : dashWatchResolvePx(sym, coin);
-  var chg = Number.isFinite(Number(row.chg)) ? Number(row.chg) : dashWatchChg(sym, coin);
-  if (!Number.isFinite(chg)) chg = 0;
-  var up = chg >= 0;
+  var chg = row.chg != null && row.chg !== '' && Number.isFinite(Number(row.chg)) ? Number(row.chg) : dashWatchChg(sym, coin);
+  var hasChg = Number.isFinite(chg);
+  var up = hasChg && chg >= 0;
   var name = row.name || coin || sym;
   var label = dashSymLabel(row);
   var safeSym = String(sym).replace(/'/g, "\\'");
@@ -18521,9 +18521,9 @@ function dashWatchRowHtml(row, idx) {
     '<span class="dw-rank">' + (idx + 1) + '</span>' +
     ico +
     '<div class="dw-info"><span class="dw-name">' + name + '</span><span class="dw-pair">' + label + '</span></div>' +
-    '<div class="dw-spark">' + dashWatchSpark(up, sym) + '</div>' +
+    '<div class="dw-spark">' + (hasChg ? dashWatchSpark(up, sym) : sparkPlaceholderHtml()) + '</div>' +
     '<div class="dw-price-col"><span class="dw-price mono" data-px>' + (px != null ? ('$' + marketFmt(px)) : '—') + '</span>' +
-    '<span class="dw-chg ' + (up ? 'up' : 'down') + '" data-chg>' + (up ? '+' : '') + Number(chg).toFixed(2) + '%</span></div>' +
+    '<span class="dw-chg ' + (hasChg ? (up ? 'up' : 'down') : '') + '" data-chg>' + (hasChg ? ((up ? '+' : '') + chg.toFixed(2) + '%') : '—') + '</span></div>' +
     '</div>';
 }
 
@@ -19055,16 +19055,15 @@ function updateDashboardWatchlistPrices() {
       }
     }
     var chg = dashWatchChg(sym, coin);
-    if (chg != null && Number.isFinite(Number(chg))) {
-      var chgEl = row.querySelector('[data-chg]');
-      if (chgEl) {
-        var up = Number(chg) >= 0;
-        chgEl.textContent = (up ? '+' : '') + Number(chg).toFixed(2) + '%';
-        chgEl.className = 'dw-chg ' + (up ? 'up' : 'down');
-      }
-      var sparkEl = row.querySelector('.dw-spark');
-      if (sparkEl && !noFlash) sparkEl.innerHTML = dashWatchSpark(Number(chg) >= 0, sym);
+    var chgEl = row.querySelector('[data-chg]');
+    var hasChg = chg != null && Number.isFinite(Number(chg));
+    if (chgEl) {
+      var up = hasChg && Number(chg) >= 0;
+      chgEl.textContent = hasChg ? ((up ? '+' : '') + Number(chg).toFixed(2) + '%') : '—';
+      chgEl.className = 'dw-chg ' + (hasChg ? (up ? 'up' : 'down') : '');
     }
+    var sparkEl = row.querySelector('.dw-spark');
+    if (sparkEl && !noFlash) sparkEl.innerHTML = hasChg ? dashWatchSpark(Number(chg) >= 0, sym) : sparkPlaceholderHtml();
   });
 }
 
@@ -19251,12 +19250,9 @@ function getMarketRowsFromHlLive() {
   return source.map(function (m, idx) {
     var sym = m.sym;
     var coin = m.coin || (sym ? String(sym).split('/')[0] : '');
-    var px = (typeof priceForPair === 'function') ? Number(priceForPair(sym)) : 0;
-    if (!(px > 0) && window.__hlMids && coin) px = Number(window.__hlMids[String(coin).toUpperCase()]) || 0;
-    var chg = (typeof futuresChg24ForPair === 'function')
-      ? Number(futuresChg24ForPair(sym, coin))
-      : Number(m.chg24);
-    if (!Number.isFinite(chg)) chg = 0;
+    var px = window.__gromHlActive ? gromHlPriceForPair(sym, coin, 'perp') : NaN;
+    if (!(px > 0)) px = NaN;
+    var chg = futuresChg24ForPair(sym, coin, 'perp');
     var volN = Number(m.dayNtlVlm);
     if (!(volN > 0) && window.__hlCtx && coin) {
       var ctx = window.__hlCtx[String(coin).toUpperCase()];
@@ -19300,9 +19296,10 @@ function getMarketRowsFromRegistryLive() {
   return window.GROM_INSTRUMENTS.filter(function (it) {
     return !it.type || it.type === 'crypto';
   }).map(function (it) {
-    var px = (typeof window.gromLivePrice === 'function') ? window.gromLivePrice(it.symbol) : null;
-    if (px == null || !isFinite(px)) px = 0;
-    var chg = (typeof window.gromLiveChange === 'function') ? window.gromLiveChange(it.symbol) : 0;
+    var px = (typeof window.gromLivePrice === 'function') ? Number(window.gromLivePrice(it.symbol)) : NaN;
+    if (!(px > 0) || !Number.isFinite(px)) px = NaN;
+    var chg = (typeof window.gromLiveChange === 'function') ? Number(window.gromLiveChange(it.symbol)) : NaN;
+    if (!Number.isFinite(chg)) chg = NaN;
     return {
       sym: it.symbol, name: it.name, type: 'crypto', base: it.base, quote: it.quote,
       price: px, chg: chg, vol: '—',
@@ -19352,19 +19349,18 @@ function updateMarketsLiveRows() {
     var sym = row.dataset.sym;
     var coin = row.dataset.coin || '';
     if (!sym) return;
-    var px = (typeof priceForPair === 'function') ? Number(priceForPair(sym)) : NaN;
-    if (!(px > 0) && typeof window.gromLivePrice === 'function') px = Number(window.gromLivePrice(sym));
-    if (!(px > 0)) px = 0;
-    var chg = (typeof futuresChg24ForPair === 'function')
-      ? Number(futuresChg24ForPair(sym, coin))
-      : Number(typeof window.gromLiveChange === 'function' ? window.gromLiveChange(sym) : 0);
-    if (!Number.isFinite(chg)) chg = 0;
+    var px = window.__gromHlActive
+      ? gromHlPriceForPair(sym, coin, 'perp')
+      : (typeof window.gromLivePrice === 'function' ? Number(window.gromLivePrice(sym)) : NaN);
+    if (!(px > 0) || !Number.isFinite(px)) px = NaN;
+    var chg = futuresChg24ForPair(sym, coin, 'perp');
+    if (!Number.isFinite(chg)) chg = NaN;
     var pxEl = row.querySelector('[data-mkt-price]');
-    if (pxEl) pxEl.textContent = '$' + marketFmt(px);
+    if (pxEl) pxEl.textContent = Number.isFinite(px) && px > 0 ? ('$' + marketFmt(px)) : '—';
     var chgEl = row.querySelector('[data-mkt-chg]');
     if (chgEl) {
-      chgEl.textContent = (chg >= 0 ? '+' : '') + (chg || 0).toFixed(2) + '%';
-      chgEl.className = (chg >= 0 ? 'chg up' : 'chg down');
+      chgEl.textContent = Number.isFinite(chg) ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—';
+      chgEl.className = 'chg ' + (Number.isFinite(chg) ? (chg >= 0 ? 'up' : 'down') : '');
     }
     var volEl = row.querySelector('[data-mkt-vol]');
     if (volEl && row.dataset.vol) {
@@ -19374,7 +19370,10 @@ function updateMarketsLiveRows() {
     var sparkEl = row.querySelector('[data-mkt-spark]');
     if (sparkEl) {
       var prev = Number(sparkEl.getAttribute('data-spark-chg'));
-      if (!Number.isFinite(prev) || Math.abs(prev - chg) > 0.05) {
+      if (!Number.isFinite(chg)) {
+        sparkEl.removeAttribute('data-spark-chg');
+        sparkEl.innerHTML = sparkPlaceholderHtml();
+      } else if (!Number.isFinite(prev) || Math.abs(prev - chg) > 0.05) {
         sparkEl.setAttribute('data-spark-chg', String(chg));
         sparkEl.innerHTML = sparkFromChg(chg);
       }
@@ -19443,8 +19442,11 @@ function renderMarketsEnhanced() {
     var typeLbl = p.type ? String(p.type).toUpperCase() : 'CRYPTO';
     if (p.tradfi && typeLbl === 'HIP3') typeLbl = 'TRADFI';
     var lev = p.maxLeverage ? (' · ' + p.maxLeverage + '×') : '';
-    var sparkHtml = sparkFromChg(p.chg);
-    return '<div class="mkt-row" data-sym="' + p.sym + '" data-coin="' + (p.coin || '') + '" data-vol="' + (p.dayNtlVlm || '') + '" role="button" tabindex="0" onclick="openSpotPair(\'' + p.sym + '\')"><div class="star ' + (p.fav ? 'on' : '') + '" onclick="event.stopPropagation();toggleFav(\'' + p.sym + '\')">★</div><div class="name">' + instrumentIcoHtmlLive(p) + '<span class="pair-copy"><span class="pair-symbol">' + (p.name || p.sym) + '</span><span class="pair-meta">' + p.sym + ' · ' + typeLbl + lev + '</span></span></div><div class="mono" data-mkt-price style="text-align:right;color:var(--silver1);font-weight:600">$' + marketFmt(p.price) + '</div><div data-mkt-chg style="text-align:right" class="' + (p.chg >= 0 ? 'chg up' : 'chg down') + '">' + (p.chg >= 0 ? '+' : '') + (p.chg || 0).toFixed(2) + '%</div><div class="mono" data-mkt-vol style="text-align:right;color:var(--silver4)">$' + p.vol + '</div><div data-mkt-spark data-spark-chg="' + (p.chg || 0) + '">' + sparkHtml + '</div><button class="trade-btn" onclick="event.stopPropagation(); openSpotPair(\'' + p.sym + '\')">' + (typeof t === 'function' ? t('mkt_trade') : 'Trade') + '</button></div>';
+    var hasPx = Number.isFinite(Number(p.price)) && Number(p.price) > 0;
+    var hasChg = p.chg != null && Number.isFinite(Number(p.chg));
+    var chg = hasChg ? Number(p.chg) : NaN;
+    var sparkHtml = hasChg ? sparkFromChg(chg) : sparkPlaceholderHtml();
+    return '<div class="mkt-row" data-sym="' + p.sym + '" data-coin="' + (p.coin || '') + '" data-vol="' + (p.dayNtlVlm || '') + '" role="button" tabindex="0" onclick="openSpotPair(\'' + p.sym + '\')"><div class="star ' + (p.fav ? 'on' : '') + '" onclick="event.stopPropagation();toggleFav(\'' + p.sym + '\')">★</div><div class="name">' + instrumentIcoHtmlLive(p) + '<span class="pair-copy"><span class="pair-symbol">' + (p.name || p.sym) + '</span><span class="pair-meta">' + p.sym + ' · ' + typeLbl + lev + '</span></span></div><div class="mono" data-mkt-price style="text-align:right;color:var(--silver1);font-weight:600">' + (hasPx ? ('$' + marketFmt(p.price)) : '—') + '</div><div data-mkt-chg style="text-align:right" class="' + (hasChg ? (chg >= 0 ? 'chg up' : 'chg down') : 'chg') + '">' + (hasChg ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—') + '</div><div class="mono" data-mkt-vol style="text-align:right;color:var(--silver4)">$' + p.vol + '</div><div data-mkt-spark ' + (hasChg ? ('data-spark-chg="' + chg + '"') : '') + '>' + sparkHtml + '</div><button class="trade-btn" onclick="event.stopPropagation(); openSpotPair(\'' + p.sym + '\')">' + (typeof t === 'function' ? t('mkt_trade') : 'Trade') + '</button></div>';
   }).join('');
   requestAnimationFrame(function () {
     gromHydrateLogos(el);
@@ -19644,11 +19646,13 @@ function paintFutOrderTypeUi() {
     }
     try {
       var pair = (window.futDeskState && futDeskState.pair) || 'BTC/USDT';
-      var px = typeof priceForPair === 'function' ? priceForPair(pair) : NaN;
+      var px = window.__gromHlActive
+        ? gromHlPriceForPair(pair, null, isTradeSpot() ? 'spot' : 'perp')
+        : NaN;
       if (Number.isFinite(px) && px > 0) {
         if (typeof syncFutPriceInput === 'function') syncFutPriceInput(px);
         else priceInput.value = String(px);
-      }
+      } else priceInput.value = '';
     } catch (_) {}
   } else {
     priceInput.readOnly = false;
@@ -19777,7 +19781,7 @@ window.submitFuturesOrder = async function (side) {
     toast((side === 'buy' ? 'Long ' : 'Short ') + leverage + '× ' + contract + ' · ' + size + ' @ ' + resp.order.type, 'success');
     if (typeof window.refreshFuturesBoard === 'function') window.refreshFuturesBoard();
   } else {
-    toast((side === 'buy' ? 'Long ' : 'Short ') + leverage + '× ' + contract + ' · queued (offline)', 'info');
+    toast('Futures service unavailable — no order was placed', 'error');
   }
 };
 

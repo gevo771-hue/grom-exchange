@@ -62,6 +62,22 @@ test('Swap, Limit and DCA share the Instant Swap card and fee is not painted',()
  assert.doesNotMatch(walletSrc,/gwUxDetails\([^)]*feeLabel/);
  assert.doesNotMatch(walletSrc,/\$\{t\.fee\}<\/span><span class="v">/);
 });
+test('futures funding controls are not hijacked by a fake spot-success handler',()=>{
+ assert.doesNotMatch(landingHtml,/function wireSpot\(\)|0\.00500 BTC submitted/);
+ assert.doesNotMatch(landingHtml,/queued \(offline\)/);
+ assert.match(landingHtml,/window\.submitFuturesOrder = async function \(side\)/);
+ assert.match(landingHtml,/if \(resp && resp\.order\)[\s\S]{0,500}Futures service unavailable — no order was placed/);
+ assert.match(landingHtml,/function updateFuturesBoard\(\)[\s\S]{0,180}window\.__gromHlActive[\s\S]{0,180}gromHlPriceForPair\(futDeskState\.pair, null, isTradeSpot\(\) \? 'spot' : 'perp'\)/);
+ assert.match(landingHtml,/function futDeskMidPx\(\)[\s\S]{0,220}gromHlPriceForPair\(pair, null, isTradeSpot\(\) \? 'spot' : 'perp'\)/);
+ assert.match(landingHtml,/id="hlFundPerpBtn"[^>]*>Fund Perp/);
+ assert.match(landingHtml,/id="hlFundSpotBtn"[^>]*>Fund Spot/);
+});
+test('referral access explains and explicitly starts wallet-message sign-in',()=>{
+ assert.match(landingHtml,/id="refSignInBtn"[^>]*onclick="gwReferralSignIn\(\)"/);
+ assert.match(walletSrc,/window\.addEventListener\('grom:wallet-connected',[\s\S]{0,150}hydrateReferralSlice\(true\)/);
+ assert.match(walletSrc,/window\.gwReferralSignIn = async function[\s\S]{0,600}gwEnsureSignedIn\(/);
+ assert.match(walletSrc,/No transaction will be sent/);
+});
 test('landing removes the retired explainer sections and keeps active landing content',()=>{
  assert.doesNotMatch(landingHtml,/class="lp-products"/);
  for(const marker of ['class="lp-why"','class="lp-how"'])assert.doesNotMatch(landingHtml,new RegExp(marker));

@@ -506,7 +506,7 @@
         u.marginMode === 'strictIsolated'
         || (u.onlyIsolated && maxLeverage <= 3)
       );
-      const chg24 = (prev > 0 && mid > 0) ? ((mid / prev) - 1) * 100 : 0;
+      const chg24 = (prev > 0 && mid > 0) ? ((mid / prev) - 1) * 100 : null;
       assetByCoin.set(coin, {
         id: assetId,
         name: coin,
@@ -843,7 +843,7 @@
       const szDecimals = hit.base.szDecimals != null ? Number(hit.base.szDecimals) : 4;
       const mid = hit.mid;
       const prev = Number(hit.ctx.prevDayPx || 0);
-      const chg24 = (prev > 0 && mid > 0) ? ((mid / prev) - 1) * 100 : 0;
+      const chg24 = (prev > 0 && mid > 0) ? ((mid / prev) - 1) * 100 : null;
       const sym = coin + '/USDC';
       const rec = {
         id: assetId,

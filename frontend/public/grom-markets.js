@@ -107,12 +107,13 @@ function getMarketRowsFromHlLive() {
   return source.map(function (m, idx) {
     var sym = m.sym;
     var coin = m.coin || (sym ? String(sym).split('/')[0] : '');
-    var px = (typeof priceForPair === 'function') ? Number(priceForPair(sym)) : 0;
-    if (!(px > 0) && window.__hlMids && coin) px = Number(window.__hlMids[String(coin).toUpperCase()]) || 0;
-    var chg = (typeof futuresChg24ForPair === 'function')
-      ? Number(futuresChg24ForPair(sym, coin))
-      : Number(m.chg24);
-    if (!Number.isFinite(chg)) chg = 0;
+    var px = window.__gromHlActive && typeof gromHlPriceForPair === 'function'
+      ? gromHlPriceForPair(sym, coin, 'perp')
+      : NaN;
+    if (!(px > 0)) px = NaN;
+    var chg = typeof futuresChg24ForPair === 'function'
+      ? futuresChg24ForPair(sym, coin, 'perp')
+      : (m.chg24 == null ? NaN : Number(m.chg24));
     var volN = Number(m.dayNtlVlm);
     if (!(volN > 0) && window.__hlCtx && coin) {
       var ctx = window.__hlCtx[String(coin).toUpperCase()];
@@ -167,9 +168,10 @@ function getMarketRowsFromRegistryLive() {
   return window.GROM_INSTRUMENTS.filter(function (it) {
     return !it.type || it.type === 'crypto';
   }).map(function (it) {
-    var px = (typeof window.gromLivePrice === 'function') ? window.gromLivePrice(it.symbol) : null;
-    if (px == null || !isFinite(px)) px = 0;
-    var chg = (typeof window.gromLiveChange === 'function') ? window.gromLiveChange(it.symbol) : 0;
+    var px = (typeof window.gromLivePrice === 'function') ? Number(window.gromLivePrice(it.symbol)) : NaN;
+    if (!(px > 0) || !Number.isFinite(px)) px = NaN;
+    var chg = (typeof window.gromLiveChange === 'function') ? Number(window.gromLiveChange(it.symbol)) : NaN;
+    if (!Number.isFinite(chg)) chg = NaN;
     return {
       sym: it.symbol, name: it.name, type: 'crypto', base: it.base, quote: it.quote,
       price: px, chg: chg, vol: '—',
@@ -219,19 +221,20 @@ function updateMarketsLiveRows() {
     var sym = row.dataset.sym;
     var coin = row.dataset.coin || '';
     if (!sym) return;
-    var px = (typeof priceForPair === 'function') ? Number(priceForPair(sym)) : NaN;
-    if (!(px > 0) && typeof window.gromLivePrice === 'function') px = Number(window.gromLivePrice(sym));
-    if (!(px > 0)) px = 0;
-    var chg = (typeof futuresChg24ForPair === 'function')
-      ? Number(futuresChg24ForPair(sym, coin))
-      : Number(typeof window.gromLiveChange === 'function' ? window.gromLiveChange(sym) : 0);
-    if (!Number.isFinite(chg)) chg = 0;
+    var px = window.__gromHlActive && typeof gromHlPriceForPair === 'function'
+      ? gromHlPriceForPair(sym, coin, 'perp')
+      : (typeof window.gromLivePrice === 'function' ? Number(window.gromLivePrice(sym)) : NaN);
+    if (!(px > 0) || !Number.isFinite(px)) px = NaN;
+    var chg = typeof futuresChg24ForPair === 'function'
+      ? futuresChg24ForPair(sym, coin, 'perp')
+      : (typeof window.gromLiveChange === 'function' ? Number(window.gromLiveChange(sym)) : NaN);
+    if (!Number.isFinite(chg)) chg = NaN;
     var pxEl = row.querySelector('[data-mkt-price]');
-    if (pxEl) pxEl.textContent = '$' + marketFmt(px);
+    if (pxEl) pxEl.textContent = Number.isFinite(px) && px > 0 ? ('$' + marketFmt(px)) : '—';
     var chgEl = row.querySelector('[data-mkt-chg]');
     if (chgEl) {
-      chgEl.textContent = (chg >= 0 ? '+' : '') + (chg || 0).toFixed(2) + '%';
-      chgEl.className = (chg >= 0 ? 'chg up' : 'chg down');
+      chgEl.textContent = Number.isFinite(chg) ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—';
+      chgEl.className = 'chg ' + (Number.isFinite(chg) ? (chg >= 0 ? 'up' : 'down') : '');
     }
     var volEl = row.querySelector('[data-mkt-vol]');
     if (volEl && row.dataset.vol) {
@@ -241,7 +244,10 @@ function updateMarketsLiveRows() {
     var sparkEl = row.querySelector('[data-mkt-spark]');
     if (sparkEl) {
       var prev = Number(sparkEl.getAttribute('data-spark-chg'));
-      if (!Number.isFinite(prev) || Math.abs(prev - chg) > 0.05) {
+      if (!Number.isFinite(chg)) {
+        sparkEl.removeAttribute('data-spark-chg');
+        sparkEl.innerHTML = sparkPlaceholderHtml();
+      } else if (!Number.isFinite(prev) || Math.abs(prev - chg) > 0.05) {
         sparkEl.setAttribute('data-spark-chg', String(chg));
         sparkEl.innerHTML = sparkFromChg(chg);
       }
@@ -283,8 +289,11 @@ function renderMarketsEnhanced() {
     var typeLbl = p.type ? String(p.type).toUpperCase() : 'CRYPTO';
     if (p.tradfi && typeLbl === 'HIP3') typeLbl = 'TRADFI';
     var lev = p.maxLeverage ? (' · ' + p.maxLeverage + '×') : '';
-    var sparkHtml = sparkFromChg(p.chg);
-    return '<div class="mkt-row" data-sym="' + p.sym + '" data-coin="' + (p.coin || '') + '" data-vol="' + (p.dayNtlVlm || '') + '" role="button" tabindex="0" onclick="openSpotPair(\'' + p.sym + '\')"><div class="star ' + (p.fav ? 'on' : '') + '" onclick="event.stopPropagation();toggleFav(\'' + p.sym + '\')">★</div><div class="name">' + instrumentIcoHtmlLive(p) + '<span class="pair-copy"><span class="pair-symbol">' + (p.name || p.sym) + '</span><span class="pair-meta">' + p.sym + ' · ' + typeLbl + lev + '</span></span></div><div class="mono" data-mkt-price style="text-align:right;color:var(--silver1);font-weight:600">$' + marketFmt(p.price) + '</div><div data-mkt-chg style="text-align:right" class="' + (p.chg >= 0 ? 'chg up' : 'chg down') + '">' + (p.chg >= 0 ? '+' : '') + (p.chg || 0).toFixed(2) + '%</div><div class="mono" data-mkt-vol style="text-align:right;color:var(--silver4)">$' + p.vol + '</div><div data-mkt-spark data-spark-chg="' + (p.chg || 0) + '">' + sparkHtml + '</div><button class="trade-btn" onclick="event.stopPropagation(); openSpotPair(\'' + p.sym + '\')">' + (typeof t === 'function' ? t('mkt_trade') : 'Trade') + '</button></div>';
+    var hasPx = Number.isFinite(Number(p.price)) && Number(p.price) > 0;
+    var hasChg = p.chg != null && Number.isFinite(Number(p.chg));
+    var chg = hasChg ? Number(p.chg) : NaN;
+    var sparkHtml = hasChg ? sparkFromChg(chg) : sparkPlaceholderHtml();
+    return '<div class="mkt-row" data-sym="' + p.sym + '" data-coin="' + (p.coin || '') + '" data-vol="' + (p.dayNtlVlm || '') + '" role="button" tabindex="0" onclick="openSpotPair(\'' + p.sym + '\')"><div class="star ' + (p.fav ? 'on' : '') + '" onclick="event.stopPropagation();toggleFav(\'' + p.sym + '\')">★</div><div class="name">' + instrumentIcoHtmlLive(p) + '<span class="pair-copy"><span class="pair-symbol">' + (p.name || p.sym) + '</span><span class="pair-meta">' + p.sym + ' · ' + typeLbl + lev + '</span></span></div><div class="mono" data-mkt-price style="text-align:right;color:var(--silver1);font-weight:600">' + (hasPx ? ('$' + marketFmt(p.price)) : '—') + '</div><div data-mkt-chg style="text-align:right" class="' + (hasChg ? (chg >= 0 ? 'chg up' : 'chg down') : 'chg') + '">' + (hasChg ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—') + '</div><div class="mono" data-mkt-vol style="text-align:right;color:var(--silver4)">$' + p.vol + '</div><div data-mkt-spark ' + (hasChg ? ('data-spark-chg="' + chg + '"') : '') + '>' + sparkHtml + '</div><button class="trade-btn" onclick="event.stopPropagation(); openSpotPair(\'' + p.sym + '\')">' + (typeof t === 'function' ? t('mkt_trade') : 'Trade') + '</button></div>';
   }).join('');
   requestAnimationFrame(function () {
     if (typeof gromHydrateLogos === 'function') gromHydrateLogos(el);

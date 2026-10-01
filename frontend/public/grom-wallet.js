@@ -4972,8 +4972,24 @@ function setText(id, text) {
   if (el && text != null) el.textContent = text;
 }
 function gwSetReferralEmpty() {
-  setText('refCode', gwUi('ref_connect_wallet_code', 'Connect wallet to generate'));
-  setText('refLink', gwUi('ref_connect_wallet_link', 'Connect wallet to reveal your link'));
+  let walletConnected = false;
+  try {
+    walletConnected = !!(
+      (typeof gwDisplayAddress === 'function' && gwDisplayAddress())
+      || (typeof gwReadOnlyAddress === 'function' && gwReadOnlyAddress())
+      || (window.GROM_CONN && window.GROM_CONN.connected && window.GROM_CONN.label)
+    );
+  } catch (_) {}
+  setText('refCode', gwUi(
+    walletConnected ? 'ref_sign_for_code' : 'ref_connect_wallet_code',
+    walletConnected ? 'Sign a message to generate your code' : 'Connect wallet to generate',
+  ));
+  setText('refLink', gwUi(
+    walletConnected ? 'ref_sign_for_link' : 'ref_connect_wallet_link',
+    walletConnected ? 'Sign a message to reveal your link' : 'Connect wallet to reveal your link',
+  ));
+  const signButton = document.getElementById('refSignInBtn');
+  if (signButton) signButton.hidden = !walletConnected;
   setText('refKpiTotalReferred', '—');
   setText('refKpiSignups30d', '—');
   setText('refKpiActive30d', '—');
@@ -5001,6 +5017,8 @@ async function hydrateReferralSlice(force) {
     const link = new URL(`/r/${raw}`, window.location.origin).toString();
     if (codeEl) codeEl.textContent = code;
     if (linkEl) linkEl.textContent = link;
+    const signButton = document.getElementById('refSignInBtn');
+    if (signButton) signButton.hidden = true;
     const count = (value) => {
       const n = Number(value);
       return Number.isSafeInteger(n) && n >= 0 ? n.toLocaleString() : '0';
@@ -5015,6 +5033,25 @@ async function hydrateReferralSlice(force) {
   }
 }
 window.hydrateReferralSlice = hydrateReferralSlice;
+window.addEventListener('grom:wallet-connected', () => {
+  if (document.getElementById('page-referral')) hydrateReferralSlice(true);
+});
+window.addEventListener('grom:wallet-disconnected', () => {
+  if (document.getElementById('page-referral')) gwSetReferralEmpty();
+});
+window.gwReferralSignIn = async function gwReferralSignIn() {
+  const provider = (typeof gwActiveSigningProvider === 'function' && gwActiveSigningProvider())
+    || window.gromWallet?.wcProvider || window.ethereum || null;
+  if (!provider?.request) {
+    try { gwToast('Reconnect your wallet to sign in and load referral details.', 'info'); } catch (_) {}
+    return false;
+  }
+  const ok = await gwEnsureSignedIn({
+    rejectToast: 'Sign the wallet message to load referral details. No transaction will be sent.',
+  });
+  if (ok) await hydrateReferralSlice(true);
+  return ok;
+};
 function gwZeroRefStatsPlaceholders() { gwSetReferralEmpty(); }
 window.gwZeroRefStatsPlaceholders = gwZeroRefStatsPlaceholders;
 

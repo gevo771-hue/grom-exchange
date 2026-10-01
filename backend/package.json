@@ -2,7 +2,7 @@
   "name": "grom-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "GROM Exchange \u2014 non-custodial DEX backend (swaps, Hyperliquid Trade, predict).",
+  "description": "GROM Exchange — non-custodial DEX backend (swaps, Hyperliquid Trade, predict).",
   "main": "src/server.js",
   "type": "module",
   "engines": {
@@ -33,7 +33,6 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.1",
     "pino": "^9.5.0",
-    "pm2": "^7.0.4",
     "prom-client": "^15.1.3",
     "siwe": "^2.3.2",
     "socket.io": "^4.8.1",

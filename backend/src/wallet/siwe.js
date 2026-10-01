@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { query } from '../db/pool.js';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
-import { attachReferralCode } from '../referral/invite.js';
+import { attachReferralCode, ensureReferralCode } from '../referral/invite.js';
 import { logUserActivity } from '../activity/log.js';
 
 const NONCE_TTL_MS = 5 * 60 * 1000;
@@ -110,22 +110,32 @@ async function completeSiweLogin({ message, signature, referralCode, req, method
     return { error: 'chain not supported', status: 400, extra: { supported } };
   }
 
-  const prev = await query(`SELECT id FROM users WHERE wallet_address=$1`, [addr]);
-  const isNew = prev.rowCount === 0;
-
-  const { rows } = await query(
+  const inserted = await query(
     `INSERT INTO users (wallet_address, chain_id)
      VALUES ($1,$2)
-     ON CONFLICT (wallet_address) DO UPDATE
-       SET last_seen_at = NOW(), chain_id = EXCLUDED.chain_id
+     ON CONFLICT (wallet_address) DO NOTHING
      RETURNING id, wallet_address, chain_id, risk_level, role`,
     [addr, chainId]
   );
-  const user = rows[0];
+  const isNew = inserted.rowCount === 1;
+  const resultUser = isNew ? inserted.rows[0] : (await query(
+    `UPDATE users SET last_seen_at=NOW(), chain_id=$2
+      WHERE wallet_address=$1
+      RETURNING id, wallet_address, chain_id, risk_level, role`,
+    [addr, chainId]
+  )).rows[0];
+  const user = resultUser;
+  if (!user) return { error: 'account unavailable', status: 401 };
   if (user.risk_level === 'blocked') return { error: 'account blocked', status: 403 };
 
   await ensureUserSettingsRow(user.id);
-  await attachReferralCode(user.id, referralCode).catch(() => {});
+  try {
+    await ensureReferralCode(user.id);
+    if (isNew && referralCode) await attachReferralCode(user.id, referralCode);
+  } catch (err) {
+    // Referral tracking must never block wallet authentication.
+    logger.warn({ err: err.message, userId: user.id }, 'referral attribution failed');
+  }
 
   await logUserActivity({
     userId: user.id,

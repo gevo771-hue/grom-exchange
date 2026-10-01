@@ -22,6 +22,7 @@ import createMarketRouter from './market/routes.js';
 import createHlFuturesRouter from './futures/hl-routes.js';
 import createAdminRouter from './admin/routes.js';
 import createActivityRouter from './activity/routes.js';
+import createReferralRouter from './referral/routes.js';
 import createDimensionsRouter from './dimensions/routes.js';
 import { startHealthPulse, getHealthSnapshot } from './activity/health-pulse.js';
 import createAiRouter from './ai/routes.js';
@@ -125,6 +126,7 @@ async function main() {
 
   app.use('/auth',   createAuthRouter());
   app.use('/api', createWalletRouter({ requireAuth, priceAggregator, wsBroadcaster: ws }));
+  app.use('/api', createReferralRouter({ requireAuth }));
   app.use('/api/market', createMarketRouter());
   app.use('/api/futures/hl', createHlFuturesRouter());
   app.use('/api/ai', createAiRouter({ requireAuth }));

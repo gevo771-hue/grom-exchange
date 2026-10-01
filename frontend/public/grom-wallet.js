@@ -1412,8 +1412,16 @@ function failToast(e) {
  */
 function gromReferralPayload() {
   try {
-    const code = localStorage.getItem('grom_ref');
-    return code ? { referralCode: code } : {};
+    const code = String(localStorage.getItem('grom_ref') || '').trim().toUpperCase();
+    const capturedAt = Number(localStorage.getItem('grom_ref_at') || 0);
+    if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)
+      || !Number.isFinite(capturedAt) || capturedAt <= 0
+      || Date.now() - capturedAt > 30 * 24 * 60 * 60 * 1000) {
+      localStorage.removeItem('grom_ref');
+      localStorage.removeItem('grom_ref_at');
+      return {};
+    }
+    return { referralCode: code };
   } catch (_) { return {}; }
 }
 
@@ -4954,217 +4962,62 @@ function gwInjectDexPagesCss() {
   document.head.appendChild(s);
 }
 
-/* -------------------------------------------------------------------------
- * Referral slice hydration.
- * Backend (/api/referral/summary) returns:
- *   { code, link, totals: {total_settled, total_pending, total_accrued},
- *     payout: {payout_wallet, payout_chain, schedule, min_payout, asset},
- *     funnel: {clicks_30d, signups_30d, first_trade_30d} }
- * We patch DOM IDs Cursor added on index.html:
- *   #refCode, #refLink — invite identity (always patched)
- *   #refKpiTotalReferred / #refKpiActive30d / #refKpiTotalEarned / #refKpiPendingPayout
- *   #refKpiActivationRate (derived = first_trade/signups)
- *   #refFunnelClicks / #refFunnelSignups / #refFunnelFirstTrade
- *   #refFunnelSignupsCvr / #refFunnelFirstTradeRate (derived)
- *   #refPayoutAsset / #refDestWallet / #refPayoutSchedule
- *   *Delta fields (refKpiTotalEarnedDelta etc.) — backend doesn't track yet,
- *   left untouched until /summary returns week-over-week deltas.
- * Numbers are formatted with thousand separators; balances use 2 decimals
- * and a leading "$"; rates use one decimal and "%".
- * -----------------------------------------------------------------------*/
-function fmtInt(n) {
-  const v = Number(n);
-  return Number.isFinite(v) ? v.toLocaleString('en-US') : '—';
-}
-function fmtUsd(n) {
-  const v = Number(n);
-  return Number.isFinite(v)
-    ? '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : '—';
-}
-function fmtPct(num, den, suffix) {
-  const n = Number(num), d = Number(den);
-  if (!Number.isFinite(n) || !Number.isFinite(d) || d === 0) return '—';
-  return (n / d * 100).toFixed(1) + '% ' + (suffix || '').trim();
-}
-function fmtWallet(w) {
-  if (!w) return '—';
-  return w.length > 12 ? w.slice(0, 6) + '…' + w.slice(-4) : w;
-}
-function fmtSchedule(s) {
-  if (s === 'daily')  return 'Daily at 00:00 UTC';
-  if (s === 'weekly') return 'Weekly · Mon 00:00 UTC';
-  if (s === 'manual') return 'Manual claim only';
-  return s || '—';
+/* Referral tracking is account-backed. Payouts and commissions stay disabled. */
+function gwUi(key, fallback) {
+  try { return (typeof window.t === 'function' ? window.t(key) : null) || fallback || key; }
+  catch (_) { return fallback || key; }
 }
 function setText(id, text) {
   const el = document.getElementById(id);
   if (el && text != null) el.textContent = text;
 }
-
-function gwInviteCodeFromSeed(seed) {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const s = String(seed || '').toLowerCase();
-  if (!s) return null;
-  // FNV-1a 32-bit — stable, dependency-free, matches product feel of GROM-XXXXXX
-  let h = 0x811c9dc5;
-  const key = 'grom-invite:' + s;
-  for (let i = 0; i < key.length; i++) {
-    h ^= key.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  let code = '';
-  let x = h >>> 0;
-  for (let i = 0; i < 6; i++) {
-    code += alphabet[x % alphabet.length];
-    x = Math.imul(x ^ (x >>> 13), 0x5bd1e995) >>> 0;
-  }
-  return 'GROM-' + code;
+function gwSetReferralEmpty() {
+  setText('refCode', gwUi('ref_connect_wallet_code', 'Connect wallet to generate'));
+  setText('refLink', gwUi('ref_connect_wallet_link', 'Connect wallet to reveal your link'));
+  setText('refKpiTotalReferred', '—');
+  setText('refKpiSignups30d', '—');
+  setText('refKpiActive30d', '—');
+  const qrEl = document.getElementById('refQr');
+  if (qrEl) { qrEl.replaceChildren(); delete qrEl.dataset.gwQrUrl; }
 }
-function gwReferralWalletSeed() {
-  try {
-    const a = window.gromWallet?.state?.()?.account
-      || window.ethereum?.selectedAddress
-      || localStorage.getItem('gw_addr')
-      || (window.GROM_CONN && window.GROM_CONN.label);
-    if (!a) return null;
-    const m = String(a).match(/0x[a-fA-F0-9]{40}/);
-    return (m ? m[0] : String(a)).toLowerCase();
-  } catch (_) { return null; }
-}
-function gwApplyLocalInviteIdentity(codeEl, linkEl) {
-  const seed = gwReferralWalletSeed();
-  const code = gwInviteCodeFromSeed(seed);
-  if (!code) return false;
-  const short = code.replace(/^GROM-/, '');
-  const link = 'https://grom.exchange/r/' + short;
-  if (codeEl) codeEl.textContent = code;
-  if (linkEl) linkEl.textContent = link;
-  try { localStorage.setItem('grom_ref_code', short); } catch (_) {}
-  return true;
-}
-
-function gwUi(key, fallback) {
-  try { return (typeof window.t === 'function' ? window.t(key) : null) || fallback || key; }
-  catch (_) { return fallback || key; }
-}
-
 async function hydrateReferralSlice(force) {
+  const codeEl = document.getElementById('refCode');
+  const linkEl = document.getElementById('refLink');
+  if (!codeEl && !linkEl) return;
   try {
-    const codeEl = document.getElementById('refCode');
-    const linkEl = document.getElementById('refLink');
-    if (!codeEl && !linkEl) return; // not on referral page
     const jwt = localStorage.getItem('grom_jwt');
-    if (!jwt) {
-      gwApplyLocalInviteIdentity(codeEl, linkEl);
-      return;
-    }
-    const r = await fetch('/api/referral/summary', {
+    if (!jwt) { gwSetReferralEmpty(); return; }
+    const response = await fetch('/api/referral/summary', {
       headers: { Authorization: `Bearer ${jwt}` },
       cache: force ? 'no-store' : 'default',
     });
-    if (!r.ok) {
-      gwApplyLocalInviteIdentity(codeEl, linkEl);
-      return;
+    if (!response.ok) { gwSetReferralEmpty(); return; }
+    const data = await response.json();
+    const code = String(data.code || '').trim().toUpperCase();
+    const raw = code.replace(/^GROM-/, '');
+    if (!/^GROM-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)) {
+      throw new Error('Invalid referral identity');
     }
-    const data = await r.json();
-
-    // Identity
-    if (codeEl && data.code) codeEl.textContent = data.code;
-    if (linkEl && data.link) linkEl.textContent = data.link;
-    else gwApplyLocalInviteIdentity(codeEl, linkEl);
-
-    const t = data.totals || {};
-    const f = data.funnel || {};
-    const p = data.payout || {};
-
-    // KPI cards — totals + funnel-derived counts
-    setText('refKpiTotalReferred', fmtInt(f.signups_30d));
-    setText('refKpiActive30d',     fmtInt(f.first_trade_30d));
-    setText('refKpiActivationRate', fmtPct(f.first_trade_30d, f.signups_30d, 'activation'));
-    setText('refKpiTotalEarned',   fmtUsd(t.total_accrued));
-    setText('refKpiPendingPayout', fmtUsd(t.total_pending));
-    setText('refTodayAccrual',     fmtUsd(t.today_accrued != null ? t.today_accrued : t.total_accrued));
-    setText('refPendingMini',      fmtUsd(t.total_pending));
-    const nextBatch = document.getElementById('refNextBatch');
-    if (nextBatch) {
-      const earned = Number(t.total_accrued || t.today_accrued || 0);
-      nextBatch.textContent = earned > 0 ? gwUi('ref_onchain_rebate', 'On-chain rebate · USDT') : gwUi('ref_awaiting', 'Awaiting first commission');
-    }
-
-    // Funnel
-    setText('refFunnelClicks',          fmtInt(f.clicks_30d));
-    setText('refFunnelSignups',         fmtInt(f.signups_30d));
-    setText('refFunnelSignupsCvr',      fmtPct(f.signups_30d, f.clicks_30d, 'CVR'));
-    setText('refFunnelFirstTrade',      fmtInt(f.first_trade_30d));
-    setText('refFunnelFirstTradeRate',  fmtPct(f.first_trade_30d, f.signups_30d, ''));
-
-    // Payout settings
-    setText('refPayoutAsset',    p.asset || 'USDT');
-    setText('refDestWallet',     fmtWallet(p.payout_wallet));
-    setText('refPayoutSchedule', fmtSchedule(p.schedule));
-
-    // *Delta fields (week-over-week) — backend doesn't return them yet,
-    // so we clear any hard-coded "+42 this week" / "+$1,240 this week"
-    // / "+12.4%" placeholders that Cursor left in index.html.
-    setText('refKpiTotalReferredDelta', '');
-    setText('refKpiActive30dDelta', '');
-    setText('refKpiTotalEarnedDelta', '');
-    setText('refFunnelClicksDelta', '');
-    setText('refFunnelSignupsCvr', fmtPct(f.signups_30d, f.clicks_30d, 'CVR'));
-  } catch (e) {
-    console.warn('[grom-referral] hydrate failed:', e);
+    const link = new URL(`/r/${raw}`, window.location.origin).toString();
+    if (codeEl) codeEl.textContent = code;
+    if (linkEl) linkEl.textContent = link;
+    const count = (value) => {
+      const n = Number(value);
+      return Number.isSafeInteger(n) && n >= 0 ? n.toLocaleString() : '0';
+    };
+    setText('refKpiTotalReferred', count(data.totals?.total_referred));
+    setText('refKpiSignups30d', count(data.funnel?.signups_30d));
+    setText('refKpiActive30d', count(data.funnel?.active_30d));
+    gwFixReferralQR();
+  } catch (err) {
+    gwSetReferralEmpty();
+    console.warn('[grom-referral] hydrate failed:', err?.message || err);
   }
 }
 window.hydrateReferralSlice = hydrateReferralSlice;
-
-/**
- * Wipe every hardcoded demo number Cursor left in the Referral page markup
- * BEFORE hydrate returns. Otherwise anonymous or slow-hydrating users see
- * "1,284 referred / $18,473.20 earned / 18,420 clicks" which look real.
- */
-function gwZeroRefStatsPlaceholders() {
-  const ids = [
-    'refKpiTotalReferred', 'refKpiActive30d', 'refKpiActivationRate',
-    'refKpiTotalEarned',   'refKpiPendingPayout',
-    'refTodayAccrual', 'refPendingMini',
-    'refFunnelClicks', 'refFunnelSignups', 'refFunnelFirstTrade',
-    'refFunnelSignupsCvr', 'refFunnelFirstTradeRate',
-    'refKpiTotalReferredDelta', 'refKpiActive30dDelta', 'refKpiTotalEarnedDelta',
-    'refFunnelClicksDelta',
-  ];
-  const val = '—';
-  let touched = 0;
-  for (const id of ids) {
-    const el = document.getElementById(id);
-    if (el && el.textContent && el.textContent.trim() !== val && !el.dataset.gwZeroed) {
-      el.textContent = val;
-      el.dataset.gwZeroed = '1';
-      touched++;
-    }
-  }
-  const nextBatch = document.getElementById('refNextBatch');
-  if (nextBatch) nextBatch.textContent = gwUi('ref_awaiting', 'Awaiting first commission');
-  const page = document.getElementById('page-referral');
-  if (page && !page.dataset.gwRefRowsCleared) {
-    const rows = page.querySelectorAll('.ref-row');
-    const fake = Array.from(rows).filter((r) => /@crypto_sam|@jane\.eth|@flowtrader|@mila_22|@degenhq/i.test(r.textContent || ''));
-    if (fake.length) {
-      fake.forEach((r) => r.remove());
-      touched += fake.length;
-    }
-    const list = document.getElementById('refReferralsList');
-    if (list && !list.querySelector('.ref-row')) {
-      const emptyMsg = gwUi('ref_empty_list', 'No referrals yet — share your link');
-      list.innerHTML = '<div class="ref-row" style="opacity:.65;grid-column:1/-1"><div data-i18n="ref_empty_list">' + emptyMsg + '</div><div></div><div></div><div></div><div></div></div>';
-    }
-    page.dataset.gwRefRowsCleared = '1';
-  }
-  return touched;
-}
+function gwZeroRefStatsPlaceholders() { gwSetReferralEmpty(); }
 window.gwZeroRefStatsPlaceholders = gwZeroRefStatsPlaceholders;
 
-// Fire on page load + every time wallet slice hydrates (login/logout/connect)
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => { gwZeroRefStatsPlaceholders(); hydrateReferralSlice(false); });
 } else {
@@ -28357,77 +28210,21 @@ function gwRenderDexSettings() {
   });
 }
 
-/** Replaces Cursor's static fake-QR SVG on the Referral page with a real
- *  QR code generated by api.qrserver.com (dependency-free, public API).
- *  Also wipes the demo KPI numbers so anonymous users don't see fake stats. */
+/** Render the account-backed invite URL as a QR code, never a placeholder. */
 function gwFixReferralQR() {
-  const page = document.getElementById('page-referral'); if (!page) return;
-  const linkEl = page.querySelector('#refLink');
-  if (!linkEl) return;
-  const link = (linkEl.textContent || 'https://grom.exchange').trim();
-  if (!link) return;
-  // Find the fake QR SVG inside .ref-qr and swap it for a real image.
-  const qrBox = page.querySelector('.ref-qr');
-  if (qrBox && !qrBox.dataset.gwQrFixed) {
-    qrBox.dataset.gwQrFixed = '1';
-    const svg = qrBox.querySelector('svg');
-    if (svg) {
-      const img = document.createElement('img');
-      img.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(link)}`;
-      img.alt = 'Scan to join GROM';
-      img.width = 120; img.height = 120;
-      img.style.cssText = 'display:block;margin:6px auto 0;background:#fff;border-radius:10px;padding:6px;box-sizing:content-box';
-      svg.replaceWith(img);
-    }
+  const page = document.getElementById('page-referral');
+  const qr = document.getElementById('refQr');
+  const linkEl = document.getElementById('refLink');
+  if (!page || !qr || !linkEl || typeof window.gwRenderQr !== 'function') return;
+  const link = String(linkEl.textContent || '').trim();
+  if (!/^https?:\/\/[^/]+\/r\/[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(link)) {
+    qr.replaceChildren(); delete qr.dataset.gwQrUrl; return;
   }
-  // Always wipe hardcoded demo accrual ($182.44 / Next batch…) — even when authed.
-  // Real numbers come from hydrateReferralSlice (#refTodayAccrual / #refPendingMini).
-  page.querySelectorAll('.ref-mini-card .v.mono').forEach((el) => {
-    if (el.id === 'refTodayAccrual' || el.id === 'refPendingMini') return;
-    const txt = (el.textContent || '').trim();
-    if (/^\+?\$?182\.44/.test(txt) || /^\+?\$?\d[\d,]*\.?\d*$/.test(txt)) el.textContent = '—';
+  if (qr.dataset.gwQrUrl === link) return;
+  qr.dataset.gwQrUrl = link;
+  window.gwRenderQr(qr, link, { width: 120 }).catch(() => {
+    if (qr.dataset.gwQrUrl === link) delete qr.dataset.gwQrUrl;
   });
-  page.querySelectorAll('.ref-mini-card .s').forEach((el) => {
-    if (el.id === 'refNextBatch') return;
-    const txt = (el.textContent || '').trim();
-    if (/^Next batch in\s+\d/i.test(txt) || /^Ready to settle$/i.test(txt)) {
-      el.textContent = gwUi('ref_awaiting', 'Awaiting first commission');
-    }
-  });
-  const accrual = document.getElementById('refTodayAccrual');
-  if (accrual && /182\.44/.test(accrual.textContent || '')) accrual.textContent = '—';
-  const nextBatch = document.getElementById('refNextBatch');
-  if (nextBatch && /Next batch in/i.test(nextBatch.textContent || '')) {
-    nextBatch.textContent = gwUi('ref_awaiting', 'Awaiting first commission');
-  }
-
-  // Reset demo KPI numbers to '—' for anonymous users. Real numbers come
-  // from hydrateReferralSlice once authed.
-  const isAuth = !!localStorage.getItem('grom_jwt') || !!localStorage.getItem('gw_addr');
-  if (!isAuth) {
-    const dashed = ['refKpiTotalReferred', 'refKpiActive30d', 'refKpiTotalEarned', 'refKpiPendingPayout', 'refTodayAccrual', 'refPendingMini'];
-    dashed.forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
-    ['refKpiTotalReferredDelta', 'refKpiActivationRate', 'refKpiTotalEarnedDelta',
-     'refFunnelClicks', 'refFunnelSignups', 'refFunnelFirstTrade'].forEach((id) => {
-      const el = document.getElementById(id); if (el) el.textContent = '—';
-    });
-    // Blank out the hero's placeholder code + link before user signs in —
-    // shows '—' instead of a nonexistent GROM-G7K3Q9 code.
-    const refCode = document.getElementById('refCode');
-    const refLinkEl = document.getElementById('refLink');
-    if (gwReferralWalletSeed()) {
-      gwApplyLocalInviteIdentity(refCode, refLinkEl);
-    } else {
-      if (refCode && /^GROM-[A-Z0-9]+$/.test((refCode.textContent || '').trim())) {
-        refCode.textContent = gwUi('ref_connect_wallet_code', 'Connect wallet to generate');
-      }
-      if (refLinkEl && (refLinkEl.textContent || '').includes('grom.exchange/r/G7K3Q9')) {
-        refLinkEl.textContent = gwUi('ref_connect_wallet_link', 'Connect wallet to reveal your link');
-      }
-    }
-  } else if (typeof gwApplyLocalInviteIdentity === 'function') {
-    gwApplyLocalInviteIdentity(document.getElementById('refCode'), document.getElementById('refLink'));
-  }
 }
 
 function gwSetupDexPages() {

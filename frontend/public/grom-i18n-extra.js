@@ -947,6 +947,62 @@
     if (EXTRA[lng] && HIST_REF_UI[lng]) Object.assign(EXTRA[lng], HIST_REF_UI[lng]);
   });
 
+  const REFERRAL_TRACKING = {
+    es: {
+      ref_title: 'Seguimiento de referidos', ref_tag: 'Solo seguimiento',
+      ref_tracking_disclosure: 'Invita a tus amigos con tu enlace. Las nuevas billeteras se cuentan una vez; las recompensas y los pagos no están habilitados.',
+      ref_how_title: 'Cómo funciona el seguimiento',
+      ref_how_sub: 'Una billetera nueva se atribuye una sola vez al iniciar sesión desde tu enlace. Las cuentas existentes no se reasignan.',
+      ref_step_1: 'Comparte tu enlace único.', ref_step_2: 'El primer registro de una billetera nueva se atribuye una vez.',
+      ref_step_3: 'Se rechazan las autorreferencias. Las recompensas y los pagos no están habilitados.', ref_rewards_inactive: 'Recompensas inactivas',
+      ref_total_invited_note: 'Cuentas atribuidas a tu código', ref_signups_30d: 'Nuevos registros (30d)',
+      ref_signups_note: 'Creadas en los últimos 30 días', ref_active_30d: 'Vistas (30d)', ref_active_note: 'Última visita en los últimos 30 días'
+    },
+    ar: {
+      ref_title: 'تتبع الإحالات', ref_tag: 'تتبع فقط',
+      ref_tracking_disclosure: 'ادعُ أصدقاءك عبر رابطك. تُحتسب المحافظ الجديدة مرة واحدة؛ المكافآت والمدفوعات غير مفعّلة.',
+      ref_how_title: 'كيف يعمل تتبع الدعوات',
+      ref_how_sub: 'تُنسب المحفظة الجديدة مرة واحدة عند تسجيل الدخول عبر رابطك. لا يُعاد إسناد الحسابات الموجودة.',
+      ref_step_1: 'شارك رابط الدعوة الخاص بك.', ref_step_2: 'يُنسب تسجيل المحفظة الجديدة مرة واحدة.',
+      ref_step_3: 'يُرفض الإحالة الذاتية. المكافآت والمدفوعات غير مفعّلة.', ref_rewards_inactive: 'المكافآت غير مفعّلة',
+      ref_total_invited_note: 'الحسابات المرتبطة برمزك', ref_signups_30d: 'تسجيلات جديدة (30 يومًا)',
+      ref_signups_note: 'أُنشئت خلال آخر 30 يومًا', ref_active_30d: 'ظهرت (30 يومًا)', ref_active_note: 'آخر ظهور خلال آخر 30 يومًا'
+    },
+    zh: {
+      ref_title: '邀请跟踪', ref_tag: '仅跟踪',
+      ref_tracking_disclosure: '通过邀请链接邀请朋友。新钱包注册只计一次；奖励和付款尚未启用。',
+      ref_how_title: '邀请跟踪方式',
+      ref_how_sub: '新钱包首次通过链接登录时只归属一次，现有账户不会重新归属。',
+      ref_step_1: '分享你的专属邀请链接。', ref_step_2: '新钱包首次注册时计入一次。',
+      ref_step_3: '拒绝自我邀请。奖励和付款尚未启用。', ref_rewards_inactive: '奖励未启用',
+      ref_total_invited_note: '归属于此邀请码的账户', ref_signups_30d: '近30天新增',
+      ref_signups_note: '过去30天创建', ref_active_30d: '近30天出现', ref_active_note: '过去30天内最后登录'
+    },
+    hi: {
+      ref_title: 'रेफ़रल ट्रैकिंग', ref_tag: 'केवल ट्रैकिंग',
+      ref_tracking_disclosure: 'अपने लिंक से दोस्तों को आमंत्रित करें। नए वॉलेट एक बार गिने जाते हैं; पुरस्कार और भुगतान चालू नहीं हैं।',
+      ref_how_title: 'आमंत्रण ट्रैकिंग कैसे काम करती है',
+      ref_how_sub: 'नया वॉलेट पहली बार आपके लिंक से साइन इन करने पर एक बार जोड़ा जाता है। मौजूदा खाते दोबारा नहीं जोड़े जाते।',
+      ref_step_1: 'अपना अनोखा लिंक साझा करें।', ref_step_2: 'नए वॉलेट का पहला साइनअप एक बार जोड़ा जाता है।',
+      ref_step_3: 'सेल्फ-रेफ़रल अस्वीकार होते हैं। पुरस्कार और भुगतान चालू नहीं हैं।', ref_rewards_inactive: 'पुरस्कार निष्क्रिय',
+      ref_total_invited_note: 'आपके कोड से जुड़े खाते', ref_signups_30d: 'नए साइनअप (30d)',
+      ref_signups_note: 'पिछले 30 दिनों में बनाए गए', ref_active_30d: 'देखे गए (30d)', ref_active_note: 'पिछले 30 दिनों में अंतिम बार देखे गए'
+    },
+    tr: {
+      ref_title: 'Davet takibi', ref_tag: 'Yalnızca takip',
+      ref_tracking_disclosure: 'Bağlantınızla arkadaşlarınızı davet edin. Yeni cüzdan kayıtları bir kez sayılır; ödüller ve ödemeler etkin değildir.',
+      ref_how_title: 'Davet takibi nasıl çalışır',
+      ref_how_sub: 'Yeni bir cüzdan bağlantınızdan ilk kez giriş yaptığında bir kez ilişkilendirilir. Mevcut hesaplar yeniden atanmaz.',
+      ref_step_1: 'Benzersiz davet bağlantınızı paylaşın.', ref_step_2: 'Yeni cüzdanın ilk kaydı bir kez ilişkilendirilir.',
+      ref_step_3: 'Kendi kendine davet reddedilir. Ödüller ve ödemeler etkin değildir.', ref_rewards_inactive: 'Ödüller etkin değil',
+      ref_total_invited_note: 'Kodunuza bağlanan hesaplar', ref_signups_30d: 'Yeni kayıt (30g)',
+      ref_signups_note: 'Son 30 günde oluşturuldu', ref_active_30d: 'Görülen (30g)', ref_active_note: 'Son 30 gündeki son etkinlik'
+    }
+  };
+  Object.keys(REFERRAL_TRACKING).forEach(function (lng) {
+    if (EXTRA[lng]) Object.assign(EXTRA[lng], REFERRAL_TRACKING[lng]);
+  });
+
   function syncSettingsLangSeg(lng) {
     var seg = document.getElementById('setLangSeg');
     if (!seg) return;

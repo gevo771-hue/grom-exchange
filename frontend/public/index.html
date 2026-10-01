@@ -14584,6 +14584,7 @@ var GROM_XSTOCKS = [
       tokenSym: s.tokenSym,
       solMint: solMint,
       solDecimals: Number(s.solDecimals) || 8,
+      solMultiplier: Number(s.solMultiplier) || null,
     };
   }
   var GWX_CACHE_KEY = 'gwx_xstocks_catalog_v8';
@@ -14835,8 +14836,54 @@ var GROM_XSTOCKS = [
     // Patch visible rows only — full re-render drops mobile "Load more" window and janks scroll.
     try { refreshStockPrices(); } catch (_) { renderXstocksRows(); }
   }
+  var gwxFairRefInFlight = Object.create(null);
+  var GWX_FAIR_REF_TTL = 60000;
+  async function gwxGetFairReference(item) {
+    if (!item || !item.tokenSym) return { price: 0, solMultiplier: null };
+    var now = Date.now();
+    var hasPrice = Number(item.fairPrice) > 0 && Number.isFinite(Number(item.fairPrice));
+    var hasMultiplier = !item.solMint || (Number(item.solMultiplier) > 0 && Number.isFinite(Number(item.solMultiplier)));
+    var refAt = Number(item.referenceAt) || 0;
+    if (hasPrice && hasMultiplier && refAt > 0 && now - refAt < GWX_FAIR_REF_TTL) {
+      return { price: Number(item.fairPrice), solMultiplier: Number(item.solMultiplier) || null };
+    }
+    if (refAt > 0 && now - refAt < GWX_FAIR_REF_TTL) {
+      return { price: hasPrice ? Number(item.fairPrice) : 0, solMultiplier: Number(item.solMultiplier) || null };
+    }
+    if (!gwxFairRefInFlight[item.sym]) {
+      gwxFairRefInFlight[item.sym] = (async function () {
+        try {
+          var url = '/api/market/xstocks/reference-price?symbol=' + encodeURIComponent(item.tokenSym);
+          var r = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+          if (!r.ok) throw new Error('reference price unavailable');
+          var d = await r.json();
+          var price = Number(d && d.fairPrice);
+          var multiplier = Number(d && d.solMultiplier);
+          item.fairPrice = price > 0 && Number.isFinite(price) ? price : 0;
+          item.fairPriceSource = d && d.fairPriceSource || null;
+          item.fairPriceAt = Number(d && d.fetchedAt) || Date.now();
+          item.solMultiplier = multiplier > 0 && Number.isFinite(multiplier) ? multiplier : null;
+          item.referenceAt = Date.now();
+        } catch (_) {
+          // Never reuse a stale catalog price after the independent reference
+          // endpoint fails; trades must remain disabled until it recovers.
+          item.fairPrice = 0;
+          item.fairPriceSource = null;
+          item.solMultiplier = null;
+          item.referenceAt = Date.now();
+        } finally {
+          delete gwxFairRefInFlight[item.sym];
+        }
+      })();
+    }
+    await gwxFairRefInFlight[item.sym];
+    return {
+      price: Number(item.fairPrice) > 0 ? Number(item.fairPrice) : 0,
+      solMultiplier: Number(item.solMultiplier) > 0 ? Number(item.solMultiplier) : null,
+    };
+  }
   // List prices use the same live buy-quote engine as the trade dialog. We
-  // quote a $100 USDT purchase so the displayed per-share price includes the
+  // quote a fixed notional so the displayed per-share price includes the
   // selected route and GROM fee; the dialog refreshes at the amount entered.
   var GWX_BUY_QUOTE_AMOUNT = 100;
   var GWX_BUY_QUOTE_TTL = 30000;
@@ -14877,7 +14924,7 @@ var GROM_XSTOCKS = [
     var price = Number(stock.buyQuotePrice);
     cell.textContent = gwxFormatBuyPrice(price);
     cell.title = price > 0
-      ? tx('px_buy_quote_help', 'Average buy-route price from a $100 USDT quote. The trade dialog recalculates for your amount; network gas is separate.')
+      ? tx('px_buy_quote_help', 'Average purchase price from the available route. The trade dialog recalculates for your amount; network gas is separate.')
       : (stock.buyQuoteStatus === 'loading'
         ? tx('px_quoting', 'Fetching route…')
         : tx('px_buy_quote_unavailable', 'No executable buy quote is available right now.'));
@@ -14898,12 +14945,16 @@ var GROM_XSTOCKS = [
       gwxBuyQuoteWorkers++;
       (async function (item, route) {
         try {
+          var reference = await gwxGetFairReference(item);
+          route.solMultiplier = reference.solMultiplier;
+          if (!(reference.price > 0)) throw new Error('Independent share price unavailable');
           var q = await window.gwXstocksQuote({
             fromSym: 'USDT', toSym: route.tokenSym, amtNum: GWX_BUY_QUOTE_AMOUNT,
             chainId: route.chainId, address: route.address, decimals: route.decimals,
             name: item.name, logo: item.logo, solMint: route.solMint,
-            solDecimals: route.solDecimals, addrsByChain: item.addrs || null,
-            refPrice: Number(item.price) || 0,
+            solDecimals: route.solDecimals, solMultiplier: reference.solMultiplier,
+            addrsByChain: item.addrs || null,
+            refPrice: reference.price,
             probeLite: !!route.solMint,
           });
           var tokens = gwxQuoteOutputTokens(q, route);
@@ -15973,7 +16024,7 @@ var GROM_XSTOCKS = [
     return '<div class="gwx-row" data-sym="' + s.sym + '">'
       + '<div class="gwx-row-sym">' + logoHtml(s.sym, ini)
       + '<div class="nm"><div class="gwx-tick">' + tickLbl + '</div><div class="gwx-name">' + esc(s.name) + '</div></div></div>'
-      + '<div class="gwx-price" title="' + escA(tx('px_buy_quote_help', 'Average buy-route price from a $100 USDT quote. The trade dialog recalculates for your amount; network gas is separate.')) + '">' + (px ? gwxFormatBuyPrice(px) : '—') + '</div>'
+      + '<div class="gwx-price" title="' + escA(tx('px_buy_quote_help', 'Average purchase price from the available route. The trade dialog recalculates for your amount; network gas is separate.')) + '">' + (px ? gwxFormatBuyPrice(px) : '—') + '</div>'
       + '<div class="gwx-chg ' + (hasChg ? cls : '') + '">' + (hasChg ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—') + '</div>'
       + '<div class="gwx-col-vol">' + (s.vol24 || '—') + '</div>'
       + '<div class="gwx-col-mc">' + (s.mc || '—') + '</div>'
@@ -16039,7 +16090,7 @@ var GROM_XSTOCKS = [
       + '<div class="gwx-toolbar"><div class="gwx-cats">' + catTabsHtml(GROM_SCATS, gwxState.sCat, false) + '</div>'
       + '<div class="gwx-search"><input type="text" placeholder="' + esc(tx('px_search_stocks', 'Search ticker…')) + '" /></div></div>'
       + '<div class="gwx-seo"><p>' + esc((window.GROM_SEO_I18N && window.GROM_SEO_I18N.pageBlurb) ? window.GROM_SEO_I18N.pageBlurb('xstocks', (window.GROM_SEO_I18N.curLang ? window.GROM_SEO_I18N.curLang() : 'en')) : 'Tokenized stocks and xStocks on GROM.') + '</p><div class="gwx-seo-nav"><button type="button" onclick="show(\'markets\')">Crypto markets</button><button type="button" onclick="show(\'futures\')">Futures</button><button type="button" onclick="show(\'predict\')">Predictions</button><button type="button" onclick="show(\'help\')">Help</button></div></div>'
-      + '<div class="gwx-table"><div class="gwx-thead"><div>' + tx('px_col_ticker', 'Ticker') + '</div><div title="' + escA(tx('px_buy_quote_help', 'Average buy-route price from a $100 USDT quote. The trade dialog recalculates for your amount; network gas is separate.')) + '">' + tx('px_col_price', 'Price') + '</div><div>' + tx('px_col_chg', '24h %') + '</div><div class="gwx-col-vol">' + tx('px_col_vol', '24h vol') + '</div><div class="gwx-col-mc">' + tx('px_col_mc', 'Market cap') + '</div><div></div></div><div class="gwx-rows"></div></div>'
+      + '<div class="gwx-table"><div class="gwx-thead"><div>' + tx('px_col_ticker', 'Ticker') + '</div><div title="' + escA(tx('px_buy_quote_help', 'Average purchase price from the available route. The trade dialog recalculates for your amount; network gas is separate.')) + '">' + tx('px_col_price', 'Price') + '</div><div>' + tx('px_col_chg', '24h %') + '</div><div class="gwx-col-vol">' + tx('px_col_vol', '24h vol') + '</div><div class="gwx-col-mc">' + tx('px_col_mc', 'Market cap') + '</div><div></div></div><div class="gwx-rows"></div></div>'
       + '<div class="gxp" id="gromStockPos"><div class="gxp-h">' + tx('px_my_positions', 'My positions') + '</div><div class="gxp-list"></div></div>'
       + '<div class="gwx-foot">' + tx('px_foot_xstocks', 'Powered by Backed xStocks · fee 0.20% · non-custodial via LiFi') + '</div></div>';
   }
@@ -17278,7 +17329,7 @@ var GROM_XSTOCKS = [
       var label = (window.GWX_ID_TO_LABEL && window.GWX_ID_TO_LABEL[trade.chainId]) || ('chain ' + trade.chainId);
       notify(tx('px_switch_chain', 'Switch to') + ' ' + label + ' ' + tx('px_to_buy', 'to buy') + ' ' + (s.tokenSym || sym), 'info');
     }
-    var px = curPx(sym) || s.price || 0;
+    var px = Number(s.fairPrice) || 0;
     refreshUsdtBalChip();
     var pos = (gwxPositions || []).find(function (p) { return p.sym === sym; });
     var maxTok = pos ? pos.qty : 0;
@@ -17296,6 +17347,12 @@ var GROM_XSTOCKS = [
       solMint: trade.solMint || '',
       refPrice: px,
       infoAsync: async function (v) {
+        var reference = await gwxGetFairReference(s);
+        px = reference.price;
+        trade.solMultiplier = reference.solMultiplier;
+        if (!(px > 0)) {
+          return { html: tx('px_reference_price_missing', 'Independent share price unavailable — trade disabled.'), blocked: true };
+        }
         if (typeof window.gwXstocksQuote !== 'function') {
           return { html: px ? ('≈ ' + (side === 'buy' ? (v / px) : (v * px)).toFixed(4) + (side === 'buy' ? (' ' + (s.tokenSym || sym)) : ' USDT') + ' · fee 0.20%') : tx('px_quoting', 'Fetching route…') };
         }
@@ -17306,7 +17363,8 @@ var GROM_XSTOCKS = [
         var q = await window.gwXstocksQuote({
           fromSym: fromSym, toSym: toSym, amtNum: v, chainId: trade.chainId,
           address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
-          solMint: trade.solMint, solDecimals: trade.solDecimals, addrsByChain: s.addrs || null,
+          solMint: trade.solMint, solDecimals: trade.solDecimals, solMultiplier: trade.solMultiplier,
+          addrsByChain: s.addrs || null,
           refPrice: px,
           probeLite: !!trade.solMint,
         });
@@ -17314,7 +17372,8 @@ var GROM_XSTOCKS = [
           q = await window.gwXstocksQuote({
             fromSym: fromSym, toSym: toSym, amtNum: v, chainId: trade.chainId,
             address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
-            solMint: trade.solMint, solDecimals: trade.solDecimals, addrsByChain: s.addrs || null,
+            solMint: trade.solMint, solDecimals: trade.solDecimals, solMultiplier: trade.solMultiplier,
+            addrsByChain: s.addrs || null,
             refPrice: px,
           });
         }
@@ -17344,12 +17403,14 @@ var GROM_XSTOCKS = [
         }
         var outDec = q.outDecimals != null ? Number(q.outDecimals)
           : (side === 'buy' ? ((q.venue === 'solana' ? trade.solDecimals : trade.decimals) || 18) : 6);
-        var outAmt = Number(q.toAmount) / Math.pow(10, outDec);
+        var outAmt = Number(q.outTokens) > 0
+          ? Number(q.outTokens)
+          : (Number(q.toAmount) / Math.pow(10, outDec));
         var gas = (q.gasUsd != null) ? (' · gas ≈ $' + Number(q.gasUsd).toFixed(2)) : '';
         var route = (q.aggregator || q.tool || 'DEX')
           + (q.venue === 'solana' ? ' · Solana' : (q.venue === 'bridge-sol' ? ' · LiFi→Sol' : ''));
         return {
-          html: q.impactBlockReason === 'missing_fair_value'
+          html: q.impactBlockReason === 'missing_fair_value' || q.impactBlockReason === 'missing_share_multiplier'
             ? tx('px_reference_price_missing', 'Independent share price unavailable — trade disabled.')
             : ('≈ <b>' + outAmt.toFixed(4) + '</b> ' + toSym
               + ' · route: ' + esc(route)
@@ -17360,11 +17421,16 @@ var GROM_XSTOCKS = [
         };
       },
       onConfirm: async function (v) {
+        var reference = await gwxGetFairReference(s);
+        px = reference.price;
+        trade.solMultiplier = reference.solMultiplier;
+        if (!(px > 0)) throw new Error(tx('px_reference_price_missing', 'Independent share price unavailable — trade disabled.'));
         if (side === 'buy') {
           await window.gwXstocksBuy({
             tokenSym: trade.tokenSym, usdtAmount: v, chainId: trade.chainId,
             address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
-            solMint: trade.solMint, solDecimals: trade.solDecimals, addrsByChain: s.addrs || null,
+            solMint: trade.solMint, solDecimals: trade.solDecimals, solMultiplier: trade.solMultiplier,
+            addrsByChain: s.addrs || null,
             refPrice: px,
           });
           notify(tx('px_bought', 'Bought') + ' ' + sym + ' · ' + money(v), 'success');
@@ -17372,7 +17438,8 @@ var GROM_XSTOCKS = [
           await window.gwXstocksSell({
             tokenSym: trade.tokenSym, tokenAmount: v, chainId: trade.chainId,
             address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
-            solMint: trade.solMint, solDecimals: trade.solDecimals, addrsByChain: s.addrs || null,
+            solMint: trade.solMint, solDecimals: trade.solDecimals, solMultiplier: trade.solMultiplier,
+            addrsByChain: s.addrs || null,
             refPrice: px,
           });
           notify(tx('px_sold', 'Sold') + ' ' + v.toFixed(4) + ' ' + (s.tokenSym || sym), 'success');

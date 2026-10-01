@@ -18889,7 +18889,7 @@ function gwXstocksQuoteScore(q, opts) {
 }
 
 /** Attach amountInUsd / amountOutUsd / priceImpact; prefer provider USD fields (Kyber). */
-function gwXstocksEnrichUsd(q, { amtNum, buy, refPrice } = {}) {
+function gwXstocksEnrichUsd(q, { amtNum, buy, refPrice, solMultiplier } = {}) {
   if (!q) return null;
   let inUsd = Number(q.amountInUsd ?? q._inUsd);
   let outUsd = Number(q.amountOutUsd ?? q._outUsd ?? q.outUsd);
@@ -18905,10 +18905,13 @@ function gwXstocksEnrichUsd(q, { amtNum, buy, refPrice } = {}) {
   if (!(inUsd > 0) && amt > 0) {
     inUsd = buy ? amt : (px > 0 ? amt * px : 0);
   }
+  const solOutput = buy && (q.venue === 'solana' || q.venue === 'bridge-sol');
+  const multiplier = solOutput ? Number(solMultiplier) : 1;
+  const shareTokens = tokens * multiplier;
   /* Equity fair value of received tokens (UI stock price) — NOT Kyber pool USD.
    * Pool USD can look "fair" while user loses 50–90% vs the listed share price. */
   let equityOutUsd = 0;
-  if (buy && px > 0 && tokens > 0) equityOutUsd = tokens * px;
+  if (buy && px > 0 && shareTokens > 0) equityOutUsd = shareTokens * px;
   if (!(outUsd > 0)) {
     if (buy && equityOutUsd > 0) outUsd = equityOutUsd;
     else if (!buy && tokens > 0) outUsd = tokens; // stable out ≈ USD
@@ -18923,9 +18926,11 @@ function gwXstocksEnrichUsd(q, { amtNum, buy, refPrice } = {}) {
         amountInUsd: inUsd,
         amountOutTokens: tokens,
         referencePriceUsd: px,
+        outputMultiplier: multiplier,
+        requireMultiplier: solOutput,
         maxImpact: GW_XSTOCKS_MAX_IMPACT,
       })
-      : { impact: NaN, blocked: true, reason: 'missing_fair_value', inUsd, outUsd: 0 })
+      : { impact: NaN, blocked: true, reason: solOutput && !(multiplier > 0) ? 'missing_share_multiplier' : 'missing_fair_value', inUsd, outUsd: 0 })
     : (window.GromSwapCore?.quoteUsdImpact
       ? window.GromSwapCore.quoteUsdImpact({
         amountInUsd: inUsd,
@@ -18936,7 +18941,9 @@ function gwXstocksEnrichUsd(q, { amtNum, buy, refPrice } = {}) {
   q.priceImpact = imp.impact;
   q.impactBlocked = !!imp.blocked;
   if (imp.reason) q.impactBlockReason = imp.reason;
-  q.outTokens = tokens;
+  q.rawOutTokens = tokens;
+  q.outTokens = solOutput ? shareTokens : tokens;
+  if (solOutput && multiplier > 0) q.shareMultiplier = multiplier;
   return q;
 }
 
@@ -19026,7 +19033,7 @@ async function gwXstocksQuoteEvmBest({ fromSym, toSym, amtNum, chainId, address,
   return pickBest(all);
 }
 
-window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, decimals, name, logo, solMint, solDecimals, addrsByChain, refPrice }) {
+window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, decimals, name, logo, solMint, solDecimals, solMultiplier, addrsByChain, refPrice }) {
   const sym = String(tokenSym || '').toUpperCase();
   const amt = Number(usdtAmount);
   if (!sym || !(amt > 0)) throw new Error('Invalid buy amount');
@@ -19041,7 +19048,7 @@ window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, 
   // Live quote: Jupiter Solana ∥ EVM mega-agg ∥ LiFi bridge — pick best USD out
   const q = await window.gwXstocksQuote({
     fromSym: 'USDT', toSym: sym, amtNum: amt, chainId, address, decimals, name, logo,
-    solMint, solDecimals, addrsByChain, refPrice,
+    solMint, solDecimals, solMultiplier, addrsByChain, refPrice,
   });
   if (!q) {
     if (solMint) {
@@ -19049,7 +19056,7 @@ window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, 
         let solPk = gwSolPubkey() || await gwSolConnect();
         if (solPk) window.__gwSolAddr = solPk;
         const sq = await window.gwXstocksQuote({
-          fromSym: 'USDT', toSym: sym, amtNum: amt, solMint, solDecimals, refPrice,
+          fromSym: 'USDT', toSym: sym, amtNum: amt, solMint, solDecimals, solMultiplier, refPrice,
           probeLite: true,
         });
         if (sq && !sq.impactBlocked) {
@@ -19072,7 +19079,7 @@ window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, 
         let solPk = gwSolPubkey() || await gwSolConnect();
         if (solPk) window.__gwSolAddr = solPk;
         const sq = await window.gwXstocksQuote({
-          fromSym: 'USDT', toSym: sym, amtNum: amt, solMint, solDecimals, refPrice,
+          fromSym: 'USDT', toSym: sym, amtNum: amt, solMint, solDecimals, solMultiplier, refPrice,
           probeLite: true,
         });
         if (sq && !sq.impactBlocked) {
@@ -19102,7 +19109,7 @@ window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, 
   return await gwOnChainSwapExec(fromStable, sym, amt);
 };
 
-window.gwXstocksSell = async function ({ tokenSym, tokenAmount, chainId, address, decimals, name, logo, solMint, solDecimals, addrsByChain, refPrice }) {
+window.gwXstocksSell = async function ({ tokenSym, tokenAmount, chainId, address, decimals, name, logo, solMint, solDecimals, solMultiplier, addrsByChain, refPrice }) {
   const sym = String(tokenSym || '').toUpperCase();
   const amt = Number(tokenAmount);
   if (!sym || !(amt > 0)) throw new Error('Invalid sell amount');
@@ -19114,7 +19121,7 @@ window.gwXstocksSell = async function ({ tokenSym, tokenAmount, chainId, address
   if (address && chainId) window.gwXstocksRegisterToken({ chainId, sym, address, decimals, name, logo });
   const q = await window.gwXstocksQuote({
     fromSym: sym, toSym: 'USDT', amtNum: amt, chainId, address, decimals, name, logo,
-    solMint, solDecimals, addrsByChain, refPrice,
+    solMint, solDecimals, solMultiplier, addrsByChain, refPrice,
   });
   if (!q) {
     throw new Error(
@@ -19147,7 +19154,7 @@ window.gwXstocksSell = async function ({ tokenSym, tokenAmount, chainId, address
   return await gwOnChainSwapExec(sym, toStable, amt);
 };
 
-window.gwXstocksQuote = async function ({ fromSym, toSym, amtNum, chainId, address, decimals, name, logo, solMint, solDecimals, addrsByChain, refPrice, probeLite }) {
+window.gwXstocksQuote = async function ({ fromSym, toSym, amtNum, chainId, address, decimals, name, logo, solMint, solDecimals, solMultiplier, addrsByChain, refPrice, probeLite }) {
   const from = String(fromSym || '').toUpperCase();
   const to = String(toSym || '').toUpperCase();
   const amt = Number(amtNum);
@@ -19157,7 +19164,7 @@ window.gwXstocksQuote = async function ({ fromSym, toSym, amtNum, chainId, addre
   const account = gwReadOnlyAddress() || '0x0000000000000000000000000000000000000001';
   const buy = from === 'USDT' || from === 'USDC';
   const px = Number(refPrice) || 0;
-  const enrich = (q) => gwXstocksEnrichUsd(q, { amtNum: amt, buy, refPrice: px });
+  const enrich = (q) => gwXstocksEnrichUsd(q, { amtNum: amt, buy, refPrice: px, solMultiplier });
 
   /* Probe path: Solana only — skip the 280ms retry sleep when first attempt works. */
   if (probeLite && solMint && buy) {

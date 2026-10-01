@@ -10,6 +10,9 @@ const here=path.dirname(fileURLToPath(import.meta.url));
 const walletSrc=fs.readFileSync(path.join(here,'../../frontend/public/grom-wallet.js'),'utf8');
 const landingHtml=fs.readFileSync(path.join(here,'../../frontend/public/index.html'),'utf8');
 const landingCss=fs.readFileSync(path.join(here,'../../frontend/public/landing-v2.css'),'utf8');
+const landingV2=fs.readFileSync(path.join(here,'../../frontend/public/landing-v2.js'),'utf8');
+const i18n=fs.readFileSync(path.join(here,'../../frontend/public/grom-i18n.js'),'utf8');
+const i18nExtra=fs.readFileSync(path.join(here,'../../frontend/public/grom-i18n-extra.js'),'utf8');
 const ctx={amount:'1',connected:true,ready:true,pairValid:true};
 test('CTA gives an action for empty, disconnected, loading, stale and ready states',()=>{
  assert.equal(c.swapCtaModel({...ctx,amount:'',ready:false}).key,'amount');
@@ -65,4 +68,18 @@ test('landing removes the retired explainer sections and keeps active landing co
  for(const marker of ['class="lp-hero"','id="lpPredictSec"','class="lp-security"','class="lp-final-cta"','id="lpSeoPrimaryWrap"','id="lpSeoMultilangWrap"'])assert.match(landingHtml,new RegExp(marker));
  assert.doesNotMatch(landingCss,/\.lp-products\s*\{\s*display:\s*none/);
  assert.doesNotMatch(landingCss,/\.lp-(?:why|how)\s*\{\s*display:\s*none/);
+});
+
+test('landing never fabricates recent trading activity',()=>{
+ assert.doesNotMatch(landingV2,/function buildTickerItems|function mountTicker/);
+ assert.doesNotMatch(landingV2,/0,5 ETH →|BTC-PERP .* ×3|USDT → USDC · Arbitrum|Live activity/);
+ assert.doesNotMatch(landingV2,/mountTicker\(_live\)/);
+ assert.match(landingV2,/function removePreview\(\)[\s\S]*?#landing-v2-ticker, \.lv2-ticker-wrap/);
+});
+
+test('referral UI does not promise inactive payouts or commission rates',()=>{
+ const copy=[landingHtml,i18n,i18nExtra].join('\n');
+ for(const claim of ['Up to 50%','До 50%','Hasta 50%','最高 50%','50% तक','%50\\\'ye kadar','You automatically receive 50% of our 0.20% fee — forever','50% от нашей 0.20% комиссии автоматически идёт тебе — навсегда','paid daily 00:00 UTC','Share your link — when friends swap on-chain, you earn a share of fees. Payouts are on-chain weekly.'])assert.equal(copy.includes(claim),false,claim);
+ assert.doesNotMatch(copy,/50\/50|ref_tag:[^\n]*(?:50\s*%|%\s*50)|automatically receive.*fee|автоматически идёт тебе/i);
+ assert.match(landingHtml,/Referral tracking and payouts will be announced after launch/);
 });

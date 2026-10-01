@@ -1165,7 +1165,7 @@ var GROM_XSTOCKS = [
       : '';
     var und = GWX_UND[m.id] ? ' data-und="' + GWX_UND[m.id] + '"' : '';
     var live = predictIsLive(m) ? ('<div class="gwx-live"><i></i> ' + tx('px_live', 'LIVE') + '</div>') : '';
-    return '<div class="gwx-card" data-pm-id="' + escA(m.id || m.q) + '" data-pm-slug="' + escA(m.slug || '') + '" data-q="' + escA(m.q) + '"' + und + '>'
+    return '<div class="gwx-card" data-pm-id="' + escA(m.id || m.q) + '" data-pm-slug="' + escA(m.slug || '') + '" data-q="' + escA(m.q) + '" data-ends-at="' + escA(m.endsAt || '') + '"' + und + '>'
       + live
       + '<div class="gwx-card-head">' + imgHtml
       + '<div class="gwx-card-title">' + esc(m.q) + '</div>'
@@ -1588,16 +1588,13 @@ var GROM_XSTOCKS = [
     return new Date(m.endsAt).getTime();
   }
   function predictIsLive(m) {
-    if (!m || m.live === false) return false;
-    var end = predictEndMs(m);
-    if (Number.isFinite(end) && end < Date.now() - 3 * 3600_000) return false;
-    return true;
+    return !!m && m.live !== false && predictIsFresh(m);
   }
   function predictIsFresh(m) {
     if (!m) return false;
+    if (!m.endsAt) return true;
     var end = predictEndMs(m);
-    if (Number.isFinite(end) && end < Date.now() - 3 * 3600_000) return false;
-    return true;
+    return Number.isFinite(end) && end > Date.now();
   }
   function localDayIso(d) {
     var y = d.getFullYear(), mo = d.getMonth() + 1, da = d.getDate();
@@ -1684,7 +1681,7 @@ var GROM_XSTOCKS = [
           + '<span title="' + escA(r.n) + '">' + esc(label) + '</span><em>' + pmCents(r.p) + '</em></button>';
       }).join('') + '</div>';
     }
-    return '<div class="gwx-cal-row" data-pm-id="' + escA(m.id || m.q) + '" data-pm-slug="' + escA(m.slug || '') + '" data-q="' + qAttr + '">'
+    return '<div class="gwx-cal-row" data-pm-id="' + escA(m.id || m.q) + '" data-pm-slug="' + escA(m.slug || '') + '" data-q="' + qAttr + '" data-ends-at="' + escA(m.endsAt || '') + '">'
       + '<div class="gwx-cal-main">'
       + '<div class="gwx-cal-top">'
       + '<span class="gwx-cal-crumb">' + liveBadgeHtml(m) + '<span>' + pcatIco(m.cat, 12) + ' ' + esc(pcatLabel(m.cat)) + '</span></span>'
@@ -2399,6 +2396,12 @@ var GROM_XSTOCKS = [
   }
   async function onBet(btn) {
     var card = btn.closest('.gwx-card') || btn.closest('.gwx-cal-row');
+    var endsAt = card && card.getAttribute('data-ends-at');
+    if (endsAt && !predictIsFresh({ endsAt: endsAt })) {
+      notify(tx('px_market_closed', 'Market closed — betting is no longer available.'), 'error');
+      try { await loadPredictLive(true, { force: true }); } catch (_) {}
+      return;
+    }
     var oc = btn.closest('.gwx-oc') || btn.closest('.gwx-yn') || btn.closest('.gwx-cal-actions') || card;
     var q = card ? (card.getAttribute('data-q') || '') : '';
     var name = btn.dataset.name || 'Outcome';

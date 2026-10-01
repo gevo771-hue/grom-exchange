@@ -17349,9 +17349,11 @@ var GROM_XSTOCKS = [
         var route = (q.aggregator || q.tool || 'DEX')
           + (q.venue === 'solana' ? ' · Solana' : (q.venue === 'bridge-sol' ? ' · LiFi→Sol' : ''));
         return {
-          html: '≈ <b>' + outAmt.toFixed(4) + '</b> ' + toSym
-            + ' · route: ' + esc(route)
-            + ' · fee 0.20%' + gas,
+          html: q.impactBlockReason === 'missing_fair_value'
+            ? tx('px_reference_price_missing', 'Independent share price unavailable — trade disabled.')
+            : ('≈ <b>' + outAmt.toFixed(4) + '</b> ' + toSym
+              + ' · route: ' + esc(route)
+              + ' · fee 0.20%' + gas),
           quote: q, outAmt: outAmt,
           blocked: !!q.impactBlocked,
           showSolForm: q.venue === 'bridge-sol' || q.venue === 'solana',
@@ -17363,6 +17365,7 @@ var GROM_XSTOCKS = [
             tokenSym: trade.tokenSym, usdtAmount: v, chainId: trade.chainId,
             address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
             solMint: trade.solMint, solDecimals: trade.solDecimals, addrsByChain: s.addrs || null,
+            refPrice: px,
           });
           notify(tx('px_bought', 'Bought') + ' ' + sym + ' · ' + money(v), 'success');
         } else {
@@ -17370,6 +17373,7 @@ var GROM_XSTOCKS = [
             tokenSym: trade.tokenSym, tokenAmount: v, chainId: trade.chainId,
             address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
             solMint: trade.solMint, solDecimals: trade.solDecimals, addrsByChain: s.addrs || null,
+            refPrice: px,
           });
           notify(tx('px_sold', 'Sold') + ' ' + v.toFixed(4) + ' ' + (s.tokenSym || sym), 'success');
         }

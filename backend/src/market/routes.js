@@ -2,6 +2,7 @@ import express from 'express';
 import axios from 'axios';
 import fs from 'fs';
 import config from '../config/index.js';
+import { isCurrentPmEnd } from './predict-freshness.js';
 
 const CG_IDS = {
   BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin', XRP: 'ripple',
@@ -555,10 +556,7 @@ function pickPmTitle(ev, markets, topOutcomeName) {
 function pmEventIsLive(ev) {
   if (!ev || ev.closed === true || ev.archived === true) return false;
   if (ev.active === false) return false;
-  const endMs = ev.endDate ? new Date(ev.endDate).getTime() : 0;
-  // Polymarket sometimes keeps esports events "active" days after match end.
-  if (endMs && endMs < Date.now() - 3 * 3600_000) return false;
-  return true;
+  return isCurrentPmEnd(ev.endDate);
 }
 /** Unsettled prop markets stuck at exactly 50/50 after the event ended. */
 function isPmZombieMarket(m, eventEnded) {
@@ -578,7 +576,7 @@ function normalizePolymarket(events, { maxEvents = PREDICT_MAX_EVENTS, maxOutcom
     const eid = String(ev.id || ev.slug || '');
     if (eid && seen.has(eid)) continue;
     const mk = Array.isArray(ev.markets) ? ev.markets : [];
-    const eventEnded = !!(ev.endDate && new Date(ev.endDate).getTime() < Date.now() - 3 * 3600_000);
+    const eventEnded = !!(ev.endDate && !isCurrentPmEnd(ev.endDate));
     let rows = [];
     for (const m of mk) {
       if (m.closed || m.archived) continue;
@@ -811,12 +809,7 @@ async function fetchPolymarketSearch(q, page = 1, limitPerType = 40, locale = 'e
 }
 
 function filterStalePredictMarkets(markets) {
-  const cutoff = Date.now() - 3 * 3600_000;
-  return (markets || []).filter((m) => {
-    if (!m?.endsAt) return true;
-    const t = new Date(m.endsAt).getTime();
-    return !Number.isFinite(t) || t > cutoff;
-  });
+  return (markets || []).filter((m) => isCurrentPmEnd(m?.endsAt));
 }
 function mergePredictEvents(loc, events, { partial = true } = {}) {
   const hit = _predictCacheByLocale.get(loc);

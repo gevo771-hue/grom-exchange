@@ -3,6 +3,7 @@ import axios from 'axios';
 import fs from 'fs';
 import config from '../config/index.js';
 import { isCurrentPmEnd } from './predict-freshness.js';
+import { registerXstocksChartRoute } from './xstocks-chart.js';
 
 const CG_IDS = {
   BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin', XRP: 'ripple',
@@ -1020,55 +1021,20 @@ function slicePredictPage(markets, offset, limit) {
 export function createMarketRouter() {
   const r = express.Router();
 
-  // Equity / xStock sparkline for trade modal (Yahoo underlying).
-  const _xChartCache = new Map(); // key -> { ts, payload }
-  r.get('/xstocks/chart', async (req, res) => {
-    try {
-      const sym = String(req.query.symbol || req.query.sym || '').toUpperCase().trim();
-      let yahoo = String(req.query.yahoo || '').toUpperCase().trim();
-      if (!yahoo && sym) yahoo = toYahooSymbol(sym);
-      if (!yahoo) return res.status(400).json({ points: [], error: 'symbol required' });
-      const range = String(req.query.range || '5d');
-      const interval = String(req.query.interval || (range === '1d' ? '5m' : range === '1mo' ? '1d' : '15m'));
-      const cacheKey = `${yahoo}|${range}|${interval}`;
-      const hit = _xChartCache.get(cacheKey);
-      if (hit && Date.now() - hit.ts < 60_000) {
-        return res.json(hit.payload);
-      }
-      let session = null;
-      try { session = await ensureYahooSession(); } catch (_) {}
+  // Public chart proxy is restricted to the canonical xStock catalog and fixed chart presets.
+  registerXstocksChartRoute(r, {
+    getCatalog: () => _xstocksCache.data || [],
+    getSession: () => ensureYahooSession(),
+    fetchChartData: ({ yahoo, range, interval, session }) => {
       const headers = { 'User-Agent': YF_UA, Accept: 'application/json' };
       if (session?.cookie) headers.Cookie = session.cookie;
       const params = { interval, range, includePrePost: 'false' };
       if (session?.crumb) params.crumb = session.crumb;
-      const { data } = await axios.get(
+      return axios.get(
         `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahoo)}`,
         { timeout: 12000, params, headers },
-      );
-      const result = data?.chart?.result?.[0];
-      const ts = result?.timestamp || [];
-      const closes = result?.indicators?.quote?.[0]?.close || [];
-      const points = [];
-      for (let i = 0; i < ts.length; i++) {
-        const c = Number(closes[i]);
-        if (!Number.isFinite(c) || !(c > 0)) continue;
-        points.push({ t: Number(ts[i]) * 1000, c });
-      }
-      const meta = result?.meta || {};
-      const payload = {
-        symbol: sym || yahoo,
-        yahoo,
-        range,
-        interval,
-        currency: meta.currency || 'USD',
-        points,
-        last: points.length ? points[points.length - 1].c : (Number(meta.regularMarketPrice) || 0),
-      };
-      if (points.length) _xChartCache.set(cacheKey, { ts: Date.now(), payload });
-      return res.json(payload);
-    } catch (e) {
-      return res.status(502).json({ points: [], error: String(e?.message || e) });
-    }
+      ).then(({ data }) => data);
+    },
   });
 
   // Backed xStocks catalog (server-side to bypass CORS on api.backed.fi).

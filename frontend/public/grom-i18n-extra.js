@@ -21,7 +21,7 @@
       px_scat_all: 'Все', px_scat_tech: 'Технологии', px_scat_finance: 'Финансы', px_scat_etf: 'ETF',
       px_scat_auto: 'Авто', px_scat_consumer: 'Потребительские', px_scat_crypto: 'Крипто-сектор',
       px_scat_energy: 'Энергетика', px_scat_health: 'Здоровье',
-      px_col_ticker: 'Тикер', px_col_price: 'Цена', px_col_chg: '24ч %', px_col_vol: 'Объём 24ч', px_col_mc: 'Капитализация',
+      px_col_ticker: 'Тикер', px_col_price: 'Прайс', px_col_chg: '24ч %', px_col_vol: 'Объём 24ч', px_col_mc: 'Капитализация',
       px_buy_quote_help: 'Средняя цена по живому маршруту покупки на $100 USDT. В окне сделки маршрут пересчитывается под введённую сумму; газ оплачивается отдельно.',
       px_buy_quote_unavailable: 'Сейчас нет доступной котировки покупки.',
       px_none: 'Ничего не найдено по этому фильтру 🔍', px_none_stocks: 'Ничего не найдено 🔍',
@@ -852,7 +852,8 @@
       ref_your_referrals: 'Tus referidos', ref_last_10: 'últimos 10',
       ref_tbl_user: 'Usuario', ref_tbl_joined: 'Registro', ref_tbl_volume_30d: 'Volumen 30d', ref_tbl_tier: 'Nivel', ref_tbl_earnings: 'Tus ganancias',
       ref_empty_list: 'Aún no hay referidos — comparte tu enlace',
-      ref_connect_wallet_code: 'Conecta la billetera para generar', ref_connect_wallet_link: 'Conecta la billetera para ver tu enlace'
+      ref_connect_wallet_code: 'Conecta la billetera para generar', ref_connect_wallet_link: 'Conecta la billetera para ver tu enlace',
+      ref_sign_for_code: 'Firma un mensaje para generar tu código', ref_sign_for_link: 'Firma un mensaje para ver tu enlace', ref_sign_to_load: 'Inicia sesión con tu billetera'
     },
     ar: {
       pg_history_sub: 'المبادلات والسبوت والعقود والتنبؤات والأسهم على GROM.',
@@ -874,7 +875,8 @@
       ref_your_referrals: 'إحالاتك', ref_last_10: 'آخر 10',
       ref_tbl_user: 'المستخدم', ref_tbl_joined: 'الانضمام', ref_tbl_volume_30d: 'الحجم 30ي', ref_tbl_tier: 'المستوى', ref_tbl_earnings: 'أرباحك',
       ref_empty_list: 'لا إحالات بعد — شارك رابطك',
-      ref_connect_wallet_code: 'اربط المحفظة لإنشاء الرمز', ref_connect_wallet_link: 'اربط المحفظة لإظهار الرابط'
+      ref_connect_wallet_code: 'اربط المحفظة لإنشاء الرمز', ref_connect_wallet_link: 'اربط المحفظة لإظهار الرابط',
+      ref_sign_for_code: 'وقّع رسالة لإنشاء رمزك', ref_sign_for_link: 'وقّع رسالة لإظهار رابطك', ref_sign_to_load: 'سجّل الدخول بالمحفظة'
     },
     zh: {
       pg_history_sub: 'GROM 上的兑换、现货、永续、预测与代币化股票。',
@@ -896,7 +898,8 @@
       ref_your_referrals: '你的推荐', ref_last_10: '最近 10',
       ref_tbl_user: '用户', ref_tbl_joined: '加入', ref_tbl_volume_30d: '30天成交量', ref_tbl_tier: '等级', ref_tbl_earnings: '你的收益',
       ref_empty_list: '暂无推荐 — 分享你的链接',
-      ref_connect_wallet_code: '连接钱包以生成', ref_connect_wallet_link: '连接钱包以显示链接'
+      ref_connect_wallet_code: '连接钱包以生成', ref_connect_wallet_link: '连接钱包以显示链接',
+      ref_sign_for_code: '签署消息以生成邀请码', ref_sign_for_link: '签署消息以显示邀请链接', ref_sign_to_load: '使用钱包签名登录'
     },
     hi: {
       pg_history_sub: 'GROM पर स्वैप, स्पॉट, फ्यूचर्स, प्रेडिक्शन्स और स्टॉक्स।',
@@ -918,7 +921,8 @@
       ref_your_referrals: 'आपके रेफ़रल', ref_last_10: 'अंतिम 10',
       ref_tbl_user: 'उपयोगकर्ता', ref_tbl_joined: 'शामिल', ref_tbl_volume_30d: 'वॉल्यूम 30d', ref_tbl_tier: 'स्तर', ref_tbl_earnings: 'आपकी कमाई',
       ref_empty_list: 'अभी कोई रेफ़रल नहीं — लिंक साझा करें',
-      ref_connect_wallet_code: 'कोड के लिए वॉलेट कनेक्ट करें', ref_connect_wallet_link: 'लिंक के लिए वॉलेट कनेक्ट करें'
+      ref_connect_wallet_code: 'कोड के लिए वॉलेट कनेक्ट करें', ref_connect_wallet_link: 'लिंक के लिए वॉलेट कनेक्ट करें',
+      ref_sign_for_code: 'कोड बनाने के लिए संदेश पर हस्ताक्षर करें', ref_sign_for_link: 'लिंक देखने के लिए संदेश पर हस्ताक्षर करें', ref_sign_to_load: 'वॉलेट से साइन इन करें'
     },
     tr: {
       pg_history_sub: "GROM'da swap, spot, vadeli, tahminler ve tokenleştirilmiş hisseler.",
@@ -940,7 +944,8 @@
       ref_your_referrals: 'Referansların', ref_last_10: 'son 10',
       ref_tbl_user: 'Kullanıcı', ref_tbl_joined: 'Katılım', ref_tbl_volume_30d: 'Hacim 30g', ref_tbl_tier: 'Seviye', ref_tbl_earnings: 'Kazancın',
       ref_empty_list: 'Henüz referans yok — linkini paylaş',
-      ref_connect_wallet_code: 'Kod için cüzdan bağla', ref_connect_wallet_link: 'Link için cüzdan bağla'
+      ref_connect_wallet_code: 'Kod için cüzdan bağla', ref_connect_wallet_link: 'Link için cüzdan bağla',
+      ref_sign_for_code: 'Kod oluşturmak için mesajı imzala', ref_sign_for_link: 'Bağlantıyı görmek için mesajı imzala', ref_sign_to_load: 'Cüzdanla giriş yap'
     }
     };
   ['es', 'ar', 'zh', 'hi', 'tr'].forEach(function (lng) {

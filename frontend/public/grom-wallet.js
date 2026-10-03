@@ -9766,7 +9766,7 @@ function gwDsSimBuild() {
     <div class="gw-ds-sim-amt">
       <div>
         <p class="lbl">Amount</p>
-        <input id="gwDsSimAmt" type="number" step="any" placeholder="0.0" />
+        <input id="gwDsSimAmt" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0.0" />
       </div>
       <button class="max" id="gwDsSimMax">MAX</button>
     </div>
@@ -9795,15 +9795,9 @@ function gwDsSimBuild() {
   const dsAmt = document.getElementById('gwDsAmt');
   if (simAmt && dsAmt) {
     simAmt.addEventListener('input', () => {
-      const n = gwDsParseAmt(simAmt.value);
-      // If user typed a comma decimal, normalize the field so subsequent
-      // Number()/quotes never see NaN.
-      if (simAmt.value && /[,\s]/.test(simAmt.value) && n > 0) {
-        const cur = simAmt.selectionStart;
-        simAmt.value = String(n);
-        try { simAmt.setSelectionRange(String(n).length, String(n).length); } catch (_) {}
-      }
-      dsAmt.value = n > 0 ? String(n) : '';
+      // Preserve the draft exactly, including trailing zeros, comma and wei
+      // precision. Quote/signing readers canonicalize a copy, never the input.
+      dsAmt.value = simAmt.value;
       try { if (typeof gwDsSimUpdatePreview === 'function') gwDsSimUpdatePreview(); } catch (_) {}
       try {
         if (gwDsQuoteTimer) clearTimeout(gwDsQuoteTimer);
@@ -15525,7 +15519,7 @@ function gwDsBuildPanel() {
               </button>
             </div>
             <div class="gw-ds-amt">
-              <input id="gwDsAmt" type="number" min="0" step="any" inputmode="decimal" placeholder="0.00" />
+              <input id="gwDsAmt" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0.00" />
             </div>
           </div>
           <div class="gw-ds-usd" id="gwDsAmtUsd"></div>
@@ -16331,11 +16325,9 @@ function gwDsParseAmt(raw) {
 
 function gwDsReadSwapAmtStr() {
   try {
-    const ds = document.getElementById('gwDsAmt');
-    const raw = ds?.value || '';
-    const canon = gwDsCanonicalAmtStr(raw);
-    if (ds && canon && ds.value !== canon) ds.value = canon;
-    return canon;
+    // This reader runs during typing, quoting and CTA updates. Rewriting
+    // "0.0" to "0" here removes the decimal point before the next digit.
+    return gwDsCanonicalAmtStr(document.getElementById('gwDsAmt')?.value);
   } catch (_) {
     return gwDsCanonicalAmtStr(document.getElementById('gwDsAmt')?.value);
   }

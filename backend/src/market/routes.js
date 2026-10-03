@@ -1,10 +1,12 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import axios from 'axios';
 import fs from 'fs';
 import config from '../config/index.js';
 import { isCurrentPmEnd } from './predict-freshness.js';
 import { registerXstocksChartRoute } from './xstocks-chart.js';
 import { registerXstocksReferenceRoute } from './xstocks-reference.js';
+import { fetchAxelarGmpStatus } from './axelar-gmp.js';
 
 const CG_IDS = {
   BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin', XRP: 'ripple',
@@ -66,6 +68,13 @@ const PREDICT_TAG_SLUGS = [
 const PREDICT_DEFAULT_LIMIT = 60;
 const PREDICT_MAX_LIMIT = 120;
 const PM_UA = { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' };
+
+const axelarStatusLimiter = rateLimit({
+  windowMs: 60_000, max: 60,
+  standardHeaders: true, legacyHeaders: false,
+  validate: { trustProxy: false },
+  message: { error: 'rate_limited' },
+});
 
 // ---- Backed xStocks catalog proxy (public, cached) — browser can't call api.backed.fi (no CORS) ----
 let _xstocksCache = { ts: 0, data: null };
@@ -1032,6 +1041,21 @@ function slicePredictPage(markets, offset, limit) {
 
 export function createMarketRouter() {
   const r = express.Router();
+
+  // Read-only fixed-host recovery when Squid has not indexed an older route.
+  r.get('/bridge/axelar/status', axelarStatusLimiter, async (req, res) => {
+    res.set('cache-control', 'no-store');
+    const txHash = typeof req.query.txHash === 'string' ? req.query.txHash.trim() : '';
+    if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+      return res.status(400).json({ error: 'invalid_transaction_hash' });
+    }
+    try {
+      return res.json(await fetchAxelarGmpStatus(txHash));
+    } catch (_) {
+      return res.status(502).json({ error: 'axelar_status_unavailable' });
+    }
+  });
+
 
   // Public xStock indicative-price + multiplier proxy. Symbols are resolved
   // only against the canonical Backed catalog before upstream requests.

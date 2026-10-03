@@ -107,7 +107,26 @@
       bridge: String(tool || '').replace(/^LiFi$/i, '') || String(q.toolDetails?.key || q.tool || 'across'),
       fromChainId: Number(q._fromChainId || q._gromFromChainId || top?.fromChainId || 0) || null,
       toChainId: Number(q._toChainId || q._gromToChainId || top?.toChainId || 0) || null,
+      quoteId: String(q._squidQuoteId || q.raw?.route?.quoteId || q.raw?.quoteId || ''),
+      requestId: String(q._squidRequestId || q.raw?.requestId || ''),
       crossChain: !!(q._crossChain || (q._toChainId && q._fromChainId && Number(q._toChainId) !== Number(q._fromChainId))),
+    };
+  }
+
+  /** Build a consistent submitted result for same-chain and bridge sends. */
+  function buildSubmittedExecResult({ hash, quote, namespace = 'evm', crossChain } = {}) {
+    const bridgeMeta = pickExecBridgeMeta(quote, null);
+    const isCrossChain = crossChain == null ? bridgeMeta.crossChain : !!crossChain;
+    const txHash = String(hash || '');
+    return {
+      hash: txHash,
+      ...(namespace === 'solana' ? { signature: txHash } : {}),
+      status: isCrossChain ? 'bridging' : 'submitted',
+      namespace,
+      confirmed: false,
+      quote: quote || null,
+      ...bridgeMeta,
+      crossChain: isCrossChain,
     };
   }
 
@@ -204,6 +223,7 @@
       return unk;
     };
     try {
+      try { deps.onRequest?.({ attempt: 1 }); } catch (_) {}
       const res = await provider.signAndSendTransaction(payload);
       const sig = res && (res.signature || res);
       if (sig) return sig;
@@ -214,6 +234,7 @@
       if (!mayRetryFn(e)) throw asUnknown(e, /empty signature/i.test(String(e && (e.message || e))));
       // Format-only retry — second attempt errors are also ambiguous if not reject
       try {
+        try { deps.onRequest?.({ attempt: 2 }); } catch (_) {}
         const res2 = await provider.signAndSendTransaction({ transaction: payload });
         const sig2 = res2 && (res2.signature || res2);
         if (sig2) return sig2;
@@ -480,6 +501,44 @@
     return null;
   }
 
+  /**
+   * Resolve the source chain for a submitted swap. WalletConnect can report a
+   * different active chain after returning from the wallet, so prefer the
+   * executed route and the chain captured when the operation began.
+   */
+  function resolveSubmittedChainId({ execResult, executedQuote, opChainId, uiChainId, walletChainId } = {}) {
+    const result = execResult && typeof execResult === 'object' ? execResult : {};
+    const resultQuote = result.quote && typeof result.quote === 'object' ? result.quote : {};
+    const asChainId = (value) => {
+      if (value == null || value === '') return null;
+      const raw = typeof value === 'string' ? value.trim() : value;
+      const parsed = typeof raw === 'string' && /^0x[0-9a-f]+$/i.test(raw)
+        ? parseInt(raw, 16)
+        : Number(raw);
+      return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+    };
+    const candidates = [
+      result.fromChainId,
+      result.sourceChainId,
+      resultQuote._fromChainId,
+      resultQuote._gromFromChainId,
+      resultQuote.fromChainId,
+      executedQuote?._fromChainId,
+      executedQuote?._gromFromChainId,
+      executedQuote?.fromChainId,
+      result._fromChainId,
+      result.chainId,
+      opChainId,
+      uiChainId,
+      walletChainId,
+    ];
+    for (const candidate of candidates) {
+      const chainId = asChainId(candidate);
+      if (chainId) return chainId;
+    }
+    return null;
+  }
+
   /** Exact amount-string equality for quote cache (C05) — no Number float compare. */
   function amountsEqualExact(a, b) {
     const ca = canonicalAmountString(a);
@@ -489,14 +548,51 @@
   }
 
   function swapCtaModel(s) {
-    if (s.busy || s.active) return { key: s.stage === 'unknown' ? 'unknown' : 'pending', enabled: false };
     if (!s.connected) return { key: 'connect', enabled: true, action: 'connect' };
     if (!(Number(s.amount) > 0)) return { key: 'amount', enabled: false };
     if (!s.pairValid) return { key: 'pair', enabled: false };
+    if (s.stage === 'preparing') return { key: 'preparing', enabled: false };
+    if (s.busy || s.active) {
+      const hasSubmittedTx = !!(s.hash || s.signature || s.boc);
+      const key = s.stage === 'unknown'
+        ? (hasSubmittedTx ? 'unresolved' : 'unknown')
+        : 'pending';
+      return { key, enabled: false };
+    }
     if (s.ready) return { key: s.restored ? 'reconnect' : 'swap', enabled: true, action: 'swap' };
     if (/insufficient|not enough|не хватает|balance|gas/i.test(s.error || '')) return { key: 'balance', enabled: false };
     if (s.error) return { key: 'retry', enabled: true, action: 'refresh' };
     return { key: 'loading', enabled: false };
+  }
+
+  /** A preflight delay is not a wallet timeout. Start that clock only when
+   * the app has actually invoked a signing request in the wallet. */
+  function swapWalletActionPending(op) {
+    if (!op) return false;
+    // A swap transaction/signature is evidence that the wallet answered. An
+    // approval hash is tracked separately because it must not masquerade as
+    // the swap's transaction hash.
+    if (op.hash || op.signature || op.boc) return false;
+    if (op.walletRequestPending === true || op.approvalPending === true || op.walletResultUnknown === true) return true;
+    // Older persisted operations only have the sticky dispatch bit. Keep them
+    // conservative until they are explicitly resolved or replaced.
+    if (typeof op.walletRequestPending !== 'boolean' && typeof op.approvalPending !== 'boolean'
+        && !op.walletRequestSettledAt && op.requestDispatched) return true;
+    return false;
+  }
+  function swapWalletWatchdogState(op, now = Date.now(), timeoutMs = 20_000) {
+    if (!op || op.hash || op.signature || op.boc) return 'settled';
+    if (op.approvalHash && op.approvalPending) return 'settled';
+    if (op.walletResultUnknown) return 'unknown';
+    if (typeof op.walletRequestPending === 'boolean') {
+      if (!op.walletRequestPending) return op.walletRequestSettledAt ? 'settled' : 'preparing';
+      const dispatchedAt = Number(op.walletRequestAt || op.requestDispatchedAt || 0);
+      if (!dispatchedAt) return 'unknown';
+      return Number(now) - dispatchedAt >= Number(timeoutMs) ? 'unknown' : 'wallet_pending';
+    }
+    const dispatchedAt = Number(op.walletRequestAt || op.requestDispatchedAt || 0);
+    if (!dispatchedAt) return 'preparing';
+    return Number(now) - dispatchedAt >= Number(timeoutMs) ? 'unknown' : 'wallet_pending';
   }
   function orderTransition(order, op, now) {
     if (!order || !op || order.id !== op.orderId || (order.opId && order.opId !== op.id)) return order;
@@ -537,7 +633,7 @@
   }
 
   return {
-    swapCtaModel, orderTransition, boundOrderMatches, orderQuoteMeetsLimit,
+    swapCtaModel, swapWalletActionPending, swapWalletWatchdogState, orderTransition, boundOrderMatches, orderQuoteMeetsLimit,
     normalizeRpcTxCalldata,
     normalizeRpcTxValue,
     canonicalAmountString,
@@ -549,6 +645,7 @@
     slippageToOdosPercent,
     slippageToSquidPercent,
     pickExecBridgeMeta,
+    buildSubmittedExecResult,
     normalizeExecResult,
     findMatchingOutboundTx,
     requiresMandatoryPreSignRefresh,
@@ -566,6 +663,7 @@
     resolveSwapUiNamespace,
     pickResumeMonitorKind,
     pickExecutedQuote,
+    resolveSubmittedChainId,
     amountsEqualExact,
   };
 });

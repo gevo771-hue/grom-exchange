@@ -930,7 +930,10 @@ function openWalletAppShell(walletKey) {
 }
 
 function gwWakeWalletForSigning(opts) {
-  try { gwSwapOpUpdate({ requestDispatched: true, signStep: opts?.action === 'approve' ? 'approve' : 'swap', approvalRequested: opts?.action === 'approve' || !!gwSwapOpGet()?.approvalRequested }); } catch (_) {}
+  // Waking/deep-linking a wallet is not proof a signing request was sent.
+  // Keep this metadata separate so slow route preparation cannot become a
+  // false wallet timeout or leave a phantom pending operation.
+  try { gwSwapOpUpdate({ walletWakeAt: Date.now(), signStep: opts?.action === 'approve' ? 'approve' : 'swap', approvalRequested: opts?.action === 'approve' || !!gwSwapOpGet()?.approvalRequested }); } catch (_) {}
   try {
     const key = gwConnectedWcWalletKey() || 'trust';
     if (isInsideWalletBrowser(key)) return;
@@ -949,6 +952,66 @@ function gwWakeWalletForSigning(opts) {
       step: opts && opts.step,
     });
   } catch (_) {}
+}
+
+function gwMarkSwapWalletRequestDispatched(args) {
+  const method = String(args?.method || '').toLowerCase();
+  if (!/^(eth_sendtransaction|eth_signtransaction|personal_sign|eth_sign|eth_signtypeddata(?:_v\d+)?|solana_signtransaction|solana_signandsendtransaction|tron_signtransaction|tron_signmessage(?:v\d+)?)$/.test(method)) return null;
+  const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : null;
+  if (!op || !['preparing', 'awaiting_signature'].includes(String(op.stage || ''))) return null;
+  const walletRequestAt = Date.now();
+  const hintedAction = String(args?.action || '').toLowerCase();
+  const signStep = hintedAction
+    ? (/approve/.test(hintedAction) ? 'approve' : 'swap')
+    : (op.signStep || 'swap');
+  const next = gwSwapOpUpdate({
+    stage: 'awaiting_signature',
+    requestDispatched: true,
+    walletRequestPending: true,
+    walletRequestSettledAt: null,
+    walletResultUnknown: false,
+    walletRequestAt,
+    signStep,
+    approvalRequested: signStep === 'approve' || !!op.approvalRequested,
+  }) || op;
+  try { gromSwapMarkAwaitingWallet({ from: next.from, to: next.to, amt: next.amt, stage: 'awaiting_signature' }); } catch (_) {}
+  try { gwDsSubmit?._armWalletWatchdog?.(); } catch (_) {}
+  return next;
+}
+
+function gwMarkSwapWalletRequestSettled(args, result, error, context) {
+  try {
+    const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : null;
+    if (!op || !context || op.id !== context.id || Number(op.walletRequestAt) !== Number(context.walletRequestAt)) return null;
+    const now = Date.now();
+    const method = String(args?.method || '').toLowerCase();
+    const isSendTx = method === 'eth_sendtransaction';
+    const hash = !error && typeof result === 'string' && /^0x[a-f0-9]{64}$/i.test(result) ? result : '';
+    const rejected = !!error && (Number(error?.code ?? error?.error?.code) === 4001
+      || /user rejected|rejected the request|declined/i.test(String(error?.message || error?.error?.message || error)));
+    const uncertainSend = isSendTx && !!error && !rejected
+      && /timeout|timed out|network|disconnect|lost|unknown|response|activity/i.test(String(error?.message || error?.error?.message || error));
+    const patch = {
+      walletRequestPending: false,
+      walletRequestSettledAt: now,
+      walletResultUnknown: uncertainSend || (isSendTx && !error && !hash),
+      walletRequestError: error ? String(error?.message || error?.error?.message || error).slice(0, 180) : null,
+    };
+    if (isSendTx && hash) {
+      if (context.signStep === 'approve') {
+        Object.assign(patch, {
+          stage: 'preparing',
+          signStep: 'approve_receipt',
+          approvalHash: hash,
+          approvalPending: true,
+          approvalSubmittedAt: now,
+        });
+      } else {
+        Object.assign(patch, { stage: 'submitted', hash, submittedAt: now });
+      }
+    }
+    return gwSwapOpUpdate(patch);
+  } catch (_) { return null; }
 }
 
 /** Persistent coach while a WalletConnect request waits on the phone / desktop app. */
@@ -1215,7 +1278,28 @@ try { window.gwConnectedWalletLabel = gwConnectedWalletLabel; } catch (_) {}
 function gwProviderRequestWithWake(provider, args, wakeOpts) {
   /* iOS: never let WC navigate to bare trust:// during signTypedData. */
   try { gwClearIosWcDeepLinkIfNeeded(); } catch (_) {}
-  const p = Promise.resolve(provider.request(args));
+  // Mark only at the actual provider invocation. Quotes, allowance reads,
+  // simulation, and opening the wallet app are still preparation.
+  let dispatched = null;
+  try { dispatched = gwMarkSwapWalletRequestDispatched(args); } catch (_) {}
+  const context = dispatched ? {
+    id: dispatched.id,
+    walletRequestAt: dispatched.walletRequestAt,
+    signStep: dispatched.signStep || 'swap',
+  } : null;
+  let request;
+  try { request = provider.request(args); }
+  catch (error) {
+    try { gwMarkSwapWalletRequestSettled(args, null, error, context); } catch (_) {}
+    throw error;
+  }
+  const p = Promise.resolve(request).then((result) => {
+    try { gwMarkSwapWalletRequestSettled(args, result, null, context); } catch (_) {}
+    return result;
+  }, (error) => {
+    try { gwMarkSwapWalletRequestSettled(args, null, error, context); } catch (_) {}
+    throw error;
+  });
   try {
     if (gwIsRemoteWcSigner(provider)) {
       const method = String(args && args.method || '');
@@ -1596,6 +1680,9 @@ function legacyProviders() {
   const eth = window.ethereum;
   if (Array.isArray(eth?.providers)) list.push(...eth.providers);
   else if (eth) list.push(eth);
+  // Trust Wallet's dApp browser exposes its EIP-1193 provider here on some
+  // versions. The root `trustwallet` object is not always itself a provider.
+  if (window.trustwallet?.ethereum) list.push(window.trustwallet.ethereum);
   if (window.trustwallet) list.push(window.trustwallet);
   if (window.okxwallet) list.push(window.okxwallet);
   if (window.BinanceChain) list.push(window.BinanceChain);
@@ -1617,12 +1704,18 @@ function isTrustProvider(p) {
 }
 function resolveTrustProvider() {
   const picks = [];
+  const namespaced = window.trustwallet?.ethereum;
+  const trustRoot = window.trustwallet;
   const rdns = rdnsProvider('com.trustwallet.app');
   if (rdns && isTrustProvider(rdns)) picks.push(rdns);
+  if (namespaced?.request) picks.push(namespaced);
   const leg = findLegacy(isTrustProvider);
   if (leg) picks.push(leg);
-  if (window.trustwallet?.request) picks.push(window.trustwallet);
-  return picks.find((p) => isTrustProvider(p) && !isMetaMaskProvider(p)) || null;
+  if (trustRoot?.request) picks.push(trustRoot);
+  // A provider under Trust's own namespace is a strong wallet identity even
+  // when that Trust version does not expose an `isTrustWallet` flag.
+  return picks.find((p) => p === namespaced || p === trustRoot
+    || (isTrustProvider(p) && !isMetaMaskProvider(p))) || null;
 }
 function gwSetWcFlowActive(on) {
   document.documentElement.classList.toggle('gw-wc-flow', !!on);
@@ -2985,6 +3078,11 @@ function gwHasInjectedEthAddress() {
     const t = window.trustwallet?.selectedAddress;
     if (t && /^0x[a-fA-F0-9]{40}$/i.test(t)) return true;
   } catch (_) {}
+  try {
+    const t = window.trustwallet?.ethereum?.selectedAddress
+      || window.trustwallet?.ethereum?.accounts?.[0];
+    if (t && /^0x[a-fA-F0-9]{40}$/i.test(t)) return true;
+  } catch (_) {}
   return false;
 }
 
@@ -2999,6 +3097,7 @@ function gwAllInjectedProviders() {
     out.push(p);
   };
   try { add(resolveTrustProvider()); } catch (_) {}
+  try { add(window.trustwallet?.ethereum); } catch (_) {}
   try { add(window.trustwallet); } catch (_) {}
   try {
     for (const p of legacyProviders()) add(p);
@@ -9154,13 +9253,35 @@ function gwSwapOpUpdate(patch) {
   try { gwUxOpChanged(op); } catch (_) {}
   return op;
 }
+function gwSwapWalletActionPending(op) {
+  if (!op) return false;
+  if (window.GromSwapCore?.swapWalletActionPending) return window.GromSwapCore.swapWalletActionPending(op);
+  if (op.hash || op.signature || op.boc) return false;
+  if (op.walletRequestPending === true || op.approvalPending === true || op.walletResultUnknown === true) return true;
+  if (typeof op.walletRequestPending !== 'boolean' && typeof op.approvalPending !== 'boolean'
+      && !op.walletRequestSettledAt && op.requestDispatched) return true;
+  return false;
+}
 function gwSwapOpClear(finalStage) {
   const op = gwSwapOpGet();
   const hasTx = !!(op && (op.hash || op.signature || op.boc));
   if (op && finalStage) op.stage = finalStage;
+  // Keep the wallet's local activity log in sync with the transaction monitor.
+  // The initial row is recorded as "bridging" and otherwise stayed that way
+  // forever, even after the destination chain confirmed delivery.
+  try {
+    if (op && hasTx && /^(completed|failed|cancelled|refunded|partial)$/i.test(String(op.stage || ''))
+        && typeof gwTxLogUpdateStatus === 'function') {
+      gwTxLogUpdateStatus({
+        hash: op.hash || op.signature || op.boc,
+        status: op.stage,
+        destTxHash: op.destTxHash || '',
+      });
+    }
+  } catch (_) {}
   try { gwUxOpChanged(op); } catch (_) {}
   try {
-    if (op && /completed|failed|cancelled|refunded/i.test(String(op.stage || ''))) {
+    if (op && /^(completed|failed|cancelled|refunded|partial)$/i.test(String(op.stage || ''))) {
       if (hasTx) localStorage.setItem('gw_swap_op_last', JSON.stringify(op));
       else localStorage.removeItem('gw_swap_op_last');
     }
@@ -9175,10 +9296,10 @@ function gwSwapOpClear(finalStage) {
 function gwSwapOpIsActive() {
   const op = gwSwapOpGet();
   if (!op) return false;
-  if (/completed|failed|cancelled|refunded/i.test(String(op.stage || ''))) return false;
+  if (/^(completed|failed|cancelled|refunded|partial)$/i.test(String(op.stage || ''))) return false;
   /* No on-chain proof = never lock Start. Tron QR / Trust silence left users stuck
    * on "already in progress" with zero wallet activity. */
-  if (!op.hash && !op.signature && !op.boc && !op.requestDispatched && !['unknown','awaiting_signature'].includes(op.stage)) return false;
+  if (!op.hash && !op.signature && !op.boc && !gwSwapWalletActionPending(op) && !['unknown','awaiting_signature'].includes(op.stage)) return false;
   return true;
 }
 /** Drop executable quote caches — required on account/network change (F01). */
@@ -10942,6 +11063,7 @@ function gwTronWcWrap(client, session, address) {
     async signTransaction(transaction) {
       try { await gwTronRestartRelay(client); } catch (_) {}
       const unsigned = (transaction && typeof transaction === 'object') ? { ...transaction } : transaction;
+      try { gwMarkSwapWalletRequestDispatched({ method: 'tron_signTransaction' }); } catch (_) {}
       const req = client.request({
         chainId: GW_TRON_WC_CHAIN,
         topic: session.topic,
@@ -11876,6 +11998,7 @@ async function gwTronSwapExec({ fromSym, toSym, amtHuman, skipGasCheck }) {
       ? gwAmtToBaseUnits(amtHuman, q.inDec)
       : gwParseAmountToUnits(amtHuman, q.inDec, { truncate: true })).toString();
     if (fromSym === 'TRX') {
+      try { gwMarkSwapWalletRequestDispatched({ method: 'tron_signTransaction', action: 'swap' }); } catch (_) {}
       const tx = await router
         .swapExactETHForTokens(minOut.toString(), path, user, deadline)
         .send({ callValue: amountIn, feeLimit: 300_000_000 });
@@ -11886,6 +12009,7 @@ async function gwTronSwapExec({ fromSym, toSym, amtHuman, skipGasCheck }) {
     const allow = await tokC.allowance(user, GW_TRON_ROUTER).call();
     if (BigInt(allow.toString()) < BigInt(amountIn)) {
       /* Coach wakes inside tron_signTransaction after WC request is queued. */
+      try { gwMarkSwapWalletRequestDispatched({ method: 'tron_signTransaction', action: 'approve' }); } catch (_) {}
       await tokC.approve(GW_TRON_ROUTER, (BigInt(2) ** 256n - 1n).toString()).send({ feeLimit: 100_000_000 });
       try {
         gwToast(
@@ -11897,12 +12021,14 @@ async function gwTronSwapExec({ fromSym, toSym, amtHuman, skipGasCheck }) {
       } catch (_) {}
     }
     if (toSym === 'TRX') {
+      try { gwMarkSwapWalletRequestDispatched({ method: 'tron_signTransaction', action: 'swap' }); } catch (_) {}
       const tx = await router
         .swapExactTokensForETH(amountIn, minOut.toString(), path, user, deadline)
         .send({ feeLimit: 300_000_000 });
       try { window.__gwLastExecNamespace = 'tron'; window.__gwLastExecWasBridge = false; } catch (_) {}
       return { hash: String(tx || ''), status: 'submitted', namespace: 'tron', confirmed: false };
     }
+    try { gwMarkSwapWalletRequestDispatched({ method: 'tron_signTransaction', action: 'swap' }); } catch (_) {}
     const tx = await router
       .swapExactTokensForTokens(amountIn, minOut.toString(), path, user, deadline)
       .send({ feeLimit: 300_000_000 });
@@ -12535,6 +12661,153 @@ function gwNormalizeLifiBridgeStatus(payload) {
   return { outcome: 'unknown', success: false, message: msg || status, assetHint };
 }
 
+/** Normalize Squid's cross-chain status. A source-chain receipt alone is not completion. */
+function gwNormalizeSquidBridgeStatus(payload) {
+  const status = String(payload?.squidTransactionStatus || payload?.status || '').toUpperCase();
+  if (status === 'SUCCESS') return { outcome: 'completed', success: true, message: 'Destination confirmed' };
+  if (status === 'ONGOING' || status === 'NEEDS_GAS') {
+    return { outcome: 'bridging', success: false, message: status === 'NEEDS_GAS' ? 'Destination gas is required; review AxelarScan' : 'Waiting for destination delivery' };
+  }
+  if (status === 'PARTIAL_SUCCESS') return { outcome: 'partial', success: false, message: 'Cross-chain route partially completed' };
+  if (status === 'REFUND' || status === 'REFUND_STATUS') return { outcome: 'refunded', success: false, message: 'Source-chain refund reported' };
+  if (status === 'NOT_FOUND') return { outcome: 'unknown', success: false, message: 'Squid has not indexed this transaction yet' };
+  return { outcome: 'unknown', success: false, message: 'Squid route status is not yet conclusive' };
+}
+
+/** Bind the indexer's evidence to the saved operation before reading the destination. */
+function gwNormalizeAxelarGmpStatus(payload, op) {
+  const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+  const hash = (v) => typeof v === 'string' && /^0x[a-fA-F0-9]{64}$/.test(v);
+  const sourceChain = Number(op?.fromChainId || op?.chainId);
+  const destinationChain = Number(op?.toChainId);
+  if (payload?.found === true && payload.outcome === 'destination_check' && payload.bridgeExecuted === true
+      && payload.status === 'executed' && payload.simplifiedStatus === 'received'
+      && hash(op?.hash) && same(payload.sourceTxHash, op.hash)
+      && /^0x[a-fA-F0-9]{40}$/.test(op?.account || '') && same(payload.sourceAccount, op.account)
+      && Number.isSafeInteger(sourceChain) && sourceChain > 0 && payload.sourceChainId === sourceChain
+      && Number.isSafeInteger(destinationChain) && destinationChain > 0 && payload.destinationChainId === destinationChain
+      && hash(payload.destinationTxHash) && hash(payload.payloadHash)
+      && same(payload.routerAddress, '0xce16f69375520ab01377ce7b88f5ba8c48f8d666')) {
+    return { outcome: 'destination_check', success: false };
+  }
+  return { outcome: 'unknown', success: false };
+}
+
+/** GMP execution can still contain a caught swap failure. Verify Squid's own event on-chain. */
+function gwClassifySquidDestinationReceipt(receipt, evidence) {
+  const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+  const unknown = { outcome: 'unknown', success: false };
+  if (!receipt || !same(receipt.transactionHash, evidence.destinationTxHash)
+      || !same(receipt.to, evidence.routerAddress) || ![1, '0x1'].includes(receipt.status)
+      || !Array.isArray(receipt.logs)) return unknown;
+  const logs = receipt.logs.filter(log => log?.removed !== true && same(log?.address, evidence.routerAddress)
+    && same(log?.topics?.[1], evidence.payloadHash));
+  // Verified SquidRouter events: CrossMulticallExecuted(bytes32), CrossMulticallFailed(bytes32,bytes,address).
+  const completed = logs.some(log => log.topics.length === 2 && log.data === '0x'
+    && same(log.topics[0], '0x7c3aa10c5d96985be6de7d2e6fa79bdef95a95a9cb272f4113b3fe1ca89fedae'));
+  const partial = logs.some(log => log.topics.length === 3
+    && same(log.topics[0], '0xdd7b1484db8d21f4fbda2407f2920037dc379dd66e18b0851aa9d6c14ef493b9'));
+  if (completed && !partial) return { outcome: 'completed', success: true, message: 'Squid destination swap confirmed on-chain' };
+  if (partial && !completed) return { outcome: 'partial', success: false, message: 'Destination swap failed; review the bridged token returned to your wallet' };
+  return unknown;
+}
+
+/** Poll Squid's own status API; LI.FI status cannot resolve Squid/Axelar routes. */
+async function gwSquidBridgeMonitor({ txHash, bridge, fromChainId, toChainId, quoteId, requestId, opId }) {
+  if (!txHash) return;
+  const started = Date.now();
+  const myOpId = opId || null;
+  const myHash = String(txHash).toLowerCase();
+  const gen = (window.__gwBridgeMonGen = (window.__gwBridgeMonGen || 0) + 1);
+  const stillMine = () => {
+    if (window.__gwBridgeMonGen !== gen) return false;
+    const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : window.__gwSwapOp;
+    return !!op && (!myOpId || !op.id || String(op.id) === String(myOpId))
+      && (!op.hash || String(op.hash).toLowerCase() === myHash);
+  };
+  const tick = async () => {
+    if (!stillMine()) return;
+    if (Date.now() - started > 2 * 60 * 60_000) {
+      try { gwSwapOpUpdate({ stage: 'unknown', message: 'Squid destination status timed out' }); } catch (_) {}
+      return;
+    }
+    let squidNorm = null;
+    try {
+      const qs = new URLSearchParams({ transactionId: String(txHash) });
+      if (fromChainId) qs.set('fromChainId', String(fromChainId));
+      if (toChainId) qs.set('toChainId', String(toChainId));
+      if (quoteId) qs.set('quoteId', String(quoteId));
+      if (requestId) qs.set('requestId', String(requestId));
+      const headers = { accept: 'application/json' };
+      try { headers['x-integrator-id'] = gwSquidIntegratorId(); } catch (_) {}
+      let requestTimer = null;
+      let controller = null;
+      try {
+        if (typeof AbortController === 'function') {
+          controller = new AbortController();
+          requestTimer = setTimeout(() => controller.abort(), 6000);
+        }
+        const r = await fetch(`https://v2.api.squidrouter.com/v2/status?${qs}`, { headers, ...(controller ? { signal: controller.signal } : {}) });
+        if (!r.ok) throw new Error(`Squid status HTTP ${r.status}`);
+        const payload = await r.json();
+        if (!stillMine()) return;
+        squidNorm = gwNormalizeSquidBridgeStatus(payload);
+        gwSwapOpUpdate({
+          stage: squidNorm.outcome,
+          squidStatus: payload?.squidTransactionStatus || payload?.status || null,
+          destTxHash: payload?.toChain?.transactionId || null,
+          message: squidNorm.message,
+        });
+        if (squidNorm.outcome === 'completed' && squidNorm.success) {
+          try { gwToast('Cross-chain swap delivered to the destination network', 'success'); } catch (_) {}
+          try { gwSwapOpClear('completed'); } catch (_) {}
+          return;
+        }
+        if (squidNorm.outcome === 'partial' || squidNorm.outcome === 'refunded') {
+          try { gwToast(squidNorm.message, 'warn'); } catch (_) {}
+          try { gwSwapOpClear(squidNorm.outcome); } catch (_) {}
+          return;
+        }
+      } finally {
+        if (requestTimer) clearTimeout(requestTimer);
+      }
+    } catch (_) {}
+    // Squid may be blocked in the user's browser or miss an older route. Ask
+    // our same-origin, fixed-host Axelar proxy before leaving the swap locked.
+    if (stillMine() && (!squidNorm || squidNorm.outcome === 'unknown' || squidNorm.outcome === 'bridging')) {
+      try {
+        const qs = new URLSearchParams({ txHash: String(txHash) });
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), 10000) : null;
+        let payload;
+        try {
+          const r = await fetch(`/api/market/bridge/axelar/status?${qs}`, { headers: { accept: 'application/json' }, ...(controller ? { signal: controller.signal } : {}) });
+          if (!r.ok) throw new Error('Bridge status unavailable');
+          payload = await r.json();
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+        if (!stillMine()) return;
+        const op = gwSwapOpGet();
+        const check = gwNormalizeAxelarGmpStatus(payload, op);
+        if (check.outcome === 'destination_check') {
+          const receipt = await gwRpcTry(payload.destinationChainId, 'eth_getTransactionReceipt', [payload.destinationTxHash]);
+          if (!stillMine()) return;
+          const norm = gwClassifySquidDestinationReceipt(receipt, payload);
+          if (norm.outcome === 'completed' || norm.outcome === 'partial') {
+            gwSwapOpUpdate({ stage: norm.outcome, axelarStatus: payload.status, axelarSimplifiedStatus: payload.simplifiedStatus, destTxHash: payload.destinationTxHash, message: norm.message });
+            try { gwToast(norm.message, norm.success ? 'success' : 'warn'); } catch (_) {}
+            try { gwSwapOpClear(norm.outcome); } catch (_) {}
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+    if (stillMine()) setTimeout(tick, 15_000);
+  };
+  tick();
+}
+
 async function gwLifiBridgeMonitor({ txHash, bridge, fromChainId, toChainId, opId }) {
   if (!txHash) return;
   const started = Date.now();
@@ -12569,8 +12842,18 @@ async function gwLifiBridgeMonitor({ txHash, bridge, fromChainId, toChainId, opI
       if (bridgeName) qs.set('bridge', String(bridgeName));
       if (fromChainId) qs.set('fromChain', String(fromChainId));
       if (toChainId) qs.set('toChain', String(toChainId));
-      const r = await fetch(`${GW_LIFI_ENDPOINT}/status?${qs}`);
-      const j = await r.json();
+      // A hung status request must not stop the monitor forever. Keep the
+      // operation unresolved and retry; a timeout is not a failed transaction.
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 10000) : null;
+      let j;
+      try {
+        const r = await fetch(`${GW_LIFI_ENDPOINT}/status?${qs}`, controller ? { signal: controller.signal } : {});
+        if (!r.ok) throw new Error(`LI.FI status HTTP ${r.status}`);
+        j = await r.json();
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
       if (!stillMine()) return;
       const norm = gwNormalizeLifiBridgeStatus(j);
       try {
@@ -12608,28 +12891,39 @@ function gwResumeSwapOpFromStorage() {
       ? window.GromSwapCore.shouldRestoreSwapOp(op)
       : (op && !/completed|failed|cancelled|refunded/i.test(String(op.stage || '')));
     if (!allow) return;
-    if (!op.hash && !op.signature && !op.boc && !op.requestDispatched && op.stage !== 'unknown') {
+    if (!op.hash && !op.signature && !op.boc && !gwSwapWalletActionPending(op) && op.stage !== 'unknown') {
       try { localStorage.removeItem('gw_swap_op'); } catch (_) {}
       return;
     }
     window.__gwSwapOp = op;
-    try { gwDsSubmit._busy = true; } catch (_) {}
-    try {
-      const cta = document.getElementById('gwDsCta');
-      if (cta) cta.classList.add('busy');
-    } catch (_) {}
+    const hasSubmittedTx = !!(op.hash || op.signature || op.boc);
+    try { gwDsSubmit._busy = !hasSubmittedTx && gwSwapWalletActionPending(op); } catch (_) {}
+    op.restoredFromStorage = true;
+    // Restored submitted operations are monitored in the background. They are
+    // not an active wallet prompt, so don't animate the CTA as if the form itself
+    // were busy; gwUxCta still blocks a second send once an amount is entered.
+    try { document.getElementById('gwDsCta')?.classList.remove('busy'); } catch (_) {}
+    try { gwDsSyncCtaState(); } catch (_) {}
+    if (op.approvalPending && op.approvalHash) {
+      gwResumePendingApproval(op);
+      return;
+    }
     const kind = window.GromSwapCore?.pickResumeMonitorKind
       ? window.GromSwapCore.pickResumeMonitorKind(op)
       : 'lock_only';
     // Never feed a Solana signature into LI.FI
     if (kind === 'lifi_bridge' && (op.hash || op.signature)) {
-      gwLifiBridgeMonitor({
+      const bridgeArgs = {
         txHash: op.hash || op.signature,
         bridge: op.bridge,
         fromChainId: op.fromChainId || op.chainId,
         toChainId: op.toChainId,
+        quoteId: op.quoteId,
+        requestId: op.requestId,
         opId: op.id,
-      });
+      };
+      if (/squid/i.test(String(op.bridge || ''))) gwSquidBridgeMonitor(bridgeArgs);
+      else gwLifiBridgeMonitor(bridgeArgs);
     } else if (kind === 'solana' && (op.hash || op.signature)) {
       try { gwSolConfirmMonitor({ signature: op.hash || op.signature, opId: op.id }); } catch (_) {}
     } else if (kind === 'tron' && op.hash) {
@@ -12650,6 +12944,40 @@ function gwResumeSwapOpFromStorage() {
   } catch (_) {}
 }
 try { setTimeout(gwResumeSwapOpFromStorage, 1500); } catch (_) {}
+
+async function gwResumePendingApproval(op) {
+  const stillCurrent = () => {
+    const current = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : window.__gwSwapOp;
+    return !!(current && current.id === op.id && current.approvalPending && current.approvalHash === op.approvalHash);
+  };
+  const chainId = Number(op.chainId || op.fromChainId) || 42161;
+  const startedAt = Date.now();
+  try {
+    while (stillCurrent() && Date.now() - startedAt < 60000) {
+      let receipt = null;
+      try { receipt = await gwRpcTry(chainId, 'eth_getTransactionReceipt', [op.approvalHash]); } catch (_) {}
+      if (receipt && (receipt.status === '0x1' || receipt.status === 1 || receipt.status === true)) {
+        gwSwapOpUpdate({ approvalPending: false, approvalConfirmedAt: Date.now(), approvalReceiptBlock: receipt.blockNumber || null, stage: 'preparing', walletResultUnknown: false });
+        gwSwapOpClear('cancelled');
+        try { gwDsSubmit._busy = false; gwDsResetSubmitState(); } catch (_) {}
+        try { gwToast('Token approval confirmed. The swap was not sent; review the quote and tap Swap again.', 'success'); } catch (_) {}
+        return;
+      }
+      if (receipt && (receipt.status === '0x0' || receipt.status === 0)) {
+        gwSwapOpUpdate({ approvalPending: false, approvalFailedAt: Date.now(), stage: 'preparing' });
+        gwSwapOpClear('failed');
+        try { gwDsSubmit._busy = false; gwDsResetSubmitState(); } catch (_) {}
+        try { gwToast('Token approval reverted. The swap was not sent; check gas and try again.', 'error'); } catch (_) {}
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+    }
+  } catch (_) {}
+  if (stillCurrent()) {
+    gwSwapOpUpdate({ stage: 'unknown' });
+    try { setTimeout(() => gwResumePendingApproval(op), 15000); } catch (_) {}
+  }
+}
 
 function gwMonitorTerminal(opId, stage, toastMsg, toastKind) {
   try {
@@ -13353,7 +13681,10 @@ async function gwSolSignAndSendBase64(provider, txB64) {
 
   try {
     if (window.GromSwapCore?.solSignAndSendWithPolicy) {
-      return await window.GromSwapCore.solSignAndSendWithPolicy(p, payload, { isReject });
+      return await window.GromSwapCore.solSignAndSendWithPolicy(p, payload, {
+        isReject,
+        onRequest: () => gwMarkSwapWalletRequestDispatched({ method: 'solana_signAndSendTransaction', action: 'swap' }),
+      });
     }
   } catch (e) {
     // Policy helper throws — do not fall through to legacy dual-call path
@@ -13362,6 +13693,7 @@ async function gwSolSignAndSendBase64(provider, txB64) {
 
   // Fallback if core missing (should not happen in production)
   try {
+    try { gwMarkSwapWalletRequestDispatched({ method: 'solana_signAndSendTransaction', action: 'swap' }); } catch (_) {}
     const res = await p.signAndSendTransaction(payload);
     const sig = res?.signature || res;
     if (sig) return sig;
@@ -16134,9 +16466,10 @@ function gwUxCta() {
   const op = gwSwapOpGet();
   const m = window.GromSwapCore.swapCtaModel({ amount:gwDsReadSwapAmt(), connected:!!gwUxAccount(),
     busy:!!gwDsSubmit._busy, active:gwSwapOpIsActive(), stage:op?.stage,
+    hash:op?.hash, signature:op?.signature, boc:op?.boc,
     pairValid:!!from && !!to && (from !== to || gwDsSameAssetBridgeAllowed(from,to)),
     ready:!!window.__gwDsQuoteExecReady, restored:!gwHasSigningProvider(), error:window.__gwDsQuoteExecReason });
-  const labels={connect:['Подключить кошелёк','Connect wallet'],amount:['Введите сумму','Enter amount'],pair:['Выберите другой токен','Choose another token'],swap:['Обменять','Swap'],reconnect:['Подключить и обменять','Reconnect and swap'],loading:['Ищем маршрут…','Finding route…'],retry:['Обновить маршрут','Refresh route'],balance:['Проверьте баланс и газ','Check balance and gas'],pending:['Обмен в процессе…','Swap in progress…'],unknown:['Проверяем статус…','Checking status…']};
+  const labels={connect:['Подключить кошелёк','Connect wallet'],amount:['Введите сумму','Enter amount'],pair:['Выберите другой токен','Choose another token'],swap:['Обменять','Swap'],reconnect:['Подключить и обменять','Reconnect and swap'],loading:['Ищем маршрут…','Finding route…'],retry:['Обновить маршрут','Refresh route'],balance:['Проверьте баланс и газ','Check balance and gas'],preparing:['Подготавливаем обмен…','Preparing swap…'],pending:['Обмен в процессе…','Swap in progress…'],unknown:['Проверяем запрос кошелька…','Checking wallet request…'],unresolved:['Проверяем предыдущий своп…','Checking previous swap…']};
   cta.textContent=gwUxText(...labels[m.key]); cta.disabled=!m.enabled; cta.dataset.uxAction=m.action || '';
   cta.classList.toggle('not-ready',!m.enabled); cta.title=window.__gwDsQuoteExecReason || '';
   gwUxProgress(); return true;
@@ -16166,9 +16499,13 @@ function gwUxProgress(op) {
   let el=document.getElementById('gwSwapProgress');if(!el){el=document.createElement('section');el.id='gwSwapProgress';el.setAttribute('aria-live','polite');card.appendChild(el);}
   const completed=op.stage==='completed';const step=completed?3:op.hash?2:op.signStep==='approve'?0:1;
   const labels=[gwUxText('Разрешение токена','Token approval'),gwUxText('Подпись обмена','Swap signature'),gwUxText('Отправлено','Submitted'),gwUxText('Получено','Received')];
-  const state={unknown:gwUxText('Результат пока неизвестен. Проверьте активность кошелька; повторная отправка заблокирована.','Result unknown. Check wallet activity; duplicate submission is blocked.'),failed:gwUxText('Обмен не выполнен. Проверьте детали ошибки.','Swap failed. Review error details.'),cancelled:gwUxText('Подтверждение отклонено.','Confirmation rejected.'),bridging:gwUxText('Мост выполняет перевод в сеть получения.','Bridge is delivering to the destination network.'),partial:gwUxText('Маршрут выполнен частично. Проверьте полученные активы.','Route partially completed. Check received assets.'),refunded:gwUxText('Маршрут вернул средства.','Route refunded funds.'),completed:gwUxText('Получение подтверждено сетью.','Receipt confirmed by the network.')};
-  const url=op.hash ? (op.namespace==='solana'?'https://solscan.io/tx/'+encodeURIComponent(op.hash):op.namespace==='tron'?'https://tronscan.org/#/transaction/'+encodeURIComponent(op.hash):gwDsExplorerUrl(op.chainId || op.fromChainId,op.hash)) : '';
-  el.innerHTML=`<strong>${gwUxEsc(op.from)} → ${gwUxEsc(op.to)}</strong><ol>${labels.map((l,i)=>`<li class="${completed || i<step?'done':i===step?'current':''}">${i+1}. ${l}${i===0 && !op.approvalRequested && step>0?' · '+gwUxText('при необходимости','if needed'):''}</li>`).join('')}</ol><div>${gwUxEsc(state[op.stage] || gwUxText('Подтвердите запрос в кошельке.','Confirm the request in your wallet.'))}</div>${url?`<a href="${gwUxEsc(url)}" target="_blank" rel="noopener">${gwUxText('Открыть транзакцию','View transaction')} ↗</a>`:''}${!op.hash && !['completed','failed','cancelled'].includes(op.stage)?`<button type="button" id="gwUxOpenWallet">${gwUxText('Открыть кошелёк','Open wallet')}</button>`:''}`;
+  const state={preparing:gwUxText('Подготавливаем маршрут и проверяем баланс. Запрос в кошелёк ещё не отправлен.','Preparing route and checking balance. No request has been sent to the wallet yet.'),unknown:gwUxText('Результат пока неизвестен. Проверьте активность кошелька; повторная отправка заблокирована.','Result unknown. Check wallet activity; duplicate submission is blocked.'),failed:gwUxText('Обмен не выполнен. Проверьте детали ошибки.','Swap failed. Review error details.'),cancelled:gwUxText('Подтверждение отклонено.','Confirmation rejected.'),bridging:gwUxText('Мост выполняет перевод в сеть получения.','Bridge is delivering to the destination network.'),partial:gwUxText('Маршрут выполнен частично. Проверьте полученные активы.','Route partially completed.'),refunded:gwUxText('Маршрут вернул средства.','Route refunded funds.'),completed:gwUxText('Получение подтверждено сетью.','Receipt confirmed by the network.')};
+  const trackedHash=op.hash || op.approvalHash || '';
+  const url=trackedHash ? (op.namespace==='solana'?'https://solscan.io/tx/'+encodeURIComponent(trackedHash):op.namespace==='tron'?'https://tronscan.org/#/transaction/'+encodeURIComponent(trackedHash):gwDsExplorerUrl(op.chainId || op.fromChainId,trackedHash)) : '';
+  const progressState = op.approvalPending
+    ? gwUxText('Разрешение токена отправлено; ждём подтверждение сети. Сам обмен ещё не отправлен.','Token approval submitted; waiting for network confirmation. The swap has not been sent yet.')
+    : (state[op.stage] || gwUxText('Подтвердите запрос в кошельке.','Confirm the request in your wallet.'));
+  el.innerHTML=`${op.restoredFromStorage?`<small>${gwUxText('Предыдущий обмен','Previous swap')}</small><br>`:''}<strong>${gwUxEsc(op.from)} → ${gwUxEsc(op.to)}</strong><ol>${labels.map((l,i)=>`<li class="${completed || i<step?'done':i===step?'current':''}">${i+1}. ${l}${i===0 && !op.approvalRequested && step>0?' · '+gwUxText('при необходимости','if needed'):''}</li>`).join('')}</ol><div>${gwUxEsc(progressState)}</div>${url?`<a href="${gwUxEsc(url)}" target="_blank" rel="noopener">${gwUxText('Открыть транзакцию','View transaction')} ↗</a>`:''}${gwSwapWalletActionPending(op) && !op.approvalPending && !op.hash && !['completed','failed','cancelled'].includes(op.stage)?`<button type="button" id="gwUxOpenWallet">${gwUxText('Открыть кошелёк','Open wallet')}</button>`:''}`;
   el.querySelector('#gwUxOpenWallet')?.addEventListener('click',()=>{const key=gwConnectedWcWalletKey();if(key)openWalletAppShell(key);else gwShowRemoteSignCoach({action:'tx'});});
 }
 function gwUxOpChanged(op) {
@@ -16542,7 +16879,16 @@ async function gwProviderSendTx(provider, txParams, timeoutMs = 180000, chainIdH
   })();
 
   try {
-    return await Promise.race([wcP, chainP]);
+    const hash = await Promise.race([wcP, chainP]);
+    try {
+      const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : null;
+      if (op?.walletRequestPending) {
+        gwMarkSwapWalletRequestSettled({ method: 'eth_sendTransaction' }, hash, null, {
+          id: op.id, walletRequestAt: op.walletRequestAt, signStep: op.signStep || 'swap',
+        });
+      }
+    } catch (_) {}
+    return hash;
   } catch (e) {
     if (nonceBefore != null && to && expect.data) {
       try {
@@ -16551,6 +16897,12 @@ async function gwProviderSendTx(provider, txParams, timeoutMs = 180000, chainIdH
           const hash = await gwFindRecentOutboundTx(chainId, from, to, nonceBefore, 24, expect);
           if (hash) {
             try { gwHideRemoteSignCoach(); } catch (_) {}
+            try {
+              const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : null;
+              if (op) gwMarkSwapWalletRequestSettled({ method: 'eth_sendTransaction' }, hash, null, {
+                id: op.id, walletRequestAt: op.walletRequestAt, signStep: op.signStep || 'swap',
+              });
+            } catch (_) {}
             return hash;
           }
         }
@@ -16647,6 +16999,9 @@ async function gwAggRefreshExecQuote(quote, { chainId, fromSym, toSym, amtNum, a
         chainId, fromSym, toSym, amtNum, account,
         toChainId: quote._toChainId || chainId, slippage: slip,
       });
+      if (fresh?._gromStale || fresh?.raw?._gromStale) {
+        throw new Error('LI.FI returned a stale fallback quote');
+      }
       if (fresh?.toAmount) {
         Object.assign(quote, fresh);
         quote._gromSlippage = slip;
@@ -17883,6 +18238,27 @@ async function gwErc20Allowance(provider, token, owner, spender, chainId) {
   return BigInt(raw || '0x0');
 }
 
+async function gwWaitSwapApproval(provider, hash, chainId) {
+  const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : null;
+  if (op) gwSwapOpUpdate({ stage: 'approval_pending', approvalHash: hash, approvalPending: true, approvalSubmittedAt: op.approvalSubmittedAt || Date.now() });
+  try {
+    const receipt = await gwWaitReceipt(provider, hash, 90000, true, chainId);
+    const current = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : null;
+    if (current && (!op || current.id === op.id)) {
+      gwSwapOpUpdate({ approvalPending: false, approvalConfirmedAt: Date.now(), approvalReceiptBlock: receipt?.blockNumber || null, walletResultUnknown: false, stage: 'preparing' });
+    }
+    return receipt;
+  } catch (error) {
+    if (/reverted on-chain/i.test(String(error?.message || error))) {
+      const current = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : null;
+      if (current && (!op || current.id === op.id)) {
+        gwSwapOpUpdate({ approvalPending: false, approvalFailedAt: Date.now(), stage: 'preparing' });
+      }
+    }
+    throw error;
+  }
+}
+
 /* Send: ERC-20 approve(spender, MaxUint256). Waits for receipt.
  * Skip entirely when allowance already covers `needed` (fewer Trust prompts).
  * USDT mainnet reset-to-0 only when existing allowance is positive but too low. */
@@ -17903,7 +18279,7 @@ async function gwErc20ApproveMax(provider, token, spender, from, chainId, needed
     } catch (_) {}
     const data0 = '0x095ea7b3' + gwAddr(spender) + '0'.repeat(64);
     const hash0 = await gwProviderSendTx(provider, { from, to: token, data: data0, value: '0x0' }, 180000, chainId);
-    await gwWaitReceipt(provider, hash0, 90000, true, chainId);
+    await gwWaitSwapApproval(provider, hash0, chainId);
   }
   try {
     gwWakeWalletForSigning({ action: 'approve', step: USDT_RESET.has(tokenLc) && allow > 0n ? '2/2' : '' });
@@ -17911,7 +18287,7 @@ async function gwErc20ApproveMax(provider, token, spender, from, chainId, needed
   const MAX = 'f'.repeat(64);
   const data = '0x095ea7b3' + gwAddr(spender) + MAX;
   const hash = await gwProviderSendTx(provider, { from, to: token, data, value: '0x0' }, 180000, chainId);
-  await gwWaitReceipt(provider, hash, 90000, true, chainId);
+  await gwWaitSwapApproval(provider, hash, chainId);
   return hash;
 }
 /* Other modules (Hyperliquid deposit) need these — without the export they
@@ -19803,9 +20179,18 @@ async function gwTryBackendLifiQuote({
           return null;
         }
       } catch (_) {}
-      window.__gwOcQuoteMem = {
-        key: memKey, lifi: j.lifi, at: Date.now(), cached: !!j.cached, account: acctKey,
-      };
+      /* Preserve proxy staleness for swap execution. Stale fallback data may
+       * be displayed as a hint, but cannot count as a successful refresh. */
+      try {
+        j.lifi._gromStale = !!j.stale;
+        j.lifi._gromCached = !!j.cached;
+        j.lifi._gromQuoteExpiresAt = Number(j.expiresAt) || null;
+      } catch (_) {}
+      if (!j.stale) {
+        window.__gwOcQuoteMem = {
+          key: memKey, lifi: j.lifi, at: Date.now(), cached: !!j.cached, account: acctKey,
+        };
+      }
       return j.lifi;
     }
   } catch (err) {
@@ -20123,11 +20508,13 @@ async function gwLifiAdvancedQuote({
  * tx returned by LiFi's transactionRequest. User signs in their wallet.
  * Returns the hash. Throws so caller can fall back to inline.
  */
-async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, provider, account }) {
+async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, provider, account, deferReceipt = false }) {
   const execChain = Number(quote._fromChainId || chainId);
+  const destChain = Number(quote._toChainId || quote._gromToChainId || chainId);
   await gwEnsureChain(provider, execChain);
   currentChainId = execChain;
   const cfg = GW_OC_SWAP[execChain];
+  if (!cfg) throw new Error(`unsupported chain ${execChain}`);
   const inn = typeof gwResolveEvmToken === 'function' ? gwResolveEvmToken(execChain, fromSym, 'from') : null;
   const isNative = !!inn?.isNative || fromSym === cfg.native;
   const inAddr = isNative ? cfg.wrapped : (inn?.address || cfg.tokens[fromSym]);
@@ -20136,21 +20523,31 @@ async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, p
   const amountIn = (typeof gwAmtToBaseUnits === 'function')
     ? gwAmtToBaseUnits(amtNum, inDec)
     : gwParseAmountToUnits(amtNum, inDec, { truncate: true });
-  let tx = quote.transactionRequest || quote.raw?.transactionRequest || null;
-  if (!tx?.to || !tx?.data) {
-    try {
-      const fresh = await gwLifiQuote({
-        chainId: execChain, fromSym, toSym, amtNum, account,
-        toChainId: Number(quote._toChainId || quote._gromToChainId || chainId),
-        slippage: String(typeof gwSwapSlippageFraction === 'function' ? gwSwapSlippageFraction() : 0.005),
-      });
-      if (fresh?.transactionRequest) {
-        tx = fresh.transactionRequest;
-        if (fresh.estimate) quote.estimate = fresh.estimate;
-      }
-    } catch (_) {}
+  /* Always refresh before approval or signature: preliminary route calldata
+   * may have expired while its indicative estimate still looks executable. */
+  let fresh;
+  try {
+    fresh = await gwLifiQuote({
+      chainId: execChain, fromSym, toSym, amtNum, account,
+      toChainId: destChain,
+      slippage: String(typeof gwSwapSlippageFraction === 'function' ? gwSwapSlippageFraction() : 0.005),
+    });
+  } catch (_) {
+    throw new Error('LiFi bridge quote refresh failed — will not sign stale calldata');
   }
-  if (!tx?.to || !tx?.data) throw new Error('LiFi returned no transactionRequest');
+  if (fresh?._gromStale) {
+    throw new Error('LiFi bridge quote is stale — refresh the route before signing');
+  }
+  if (!fresh?.transactionRequest?.to || !fresh.transactionRequest?.data) {
+    throw new Error('LiFi bridge quote refresh returned no executable transaction — refresh the route');
+  }
+  const freshFromChain = Number(fresh._fromChainId || fresh._gromFromChainId || execChain);
+  const freshToChain = Number(fresh._toChainId || fresh._gromToChainId || destChain);
+  if (freshFromChain !== execChain || freshToChain !== destChain) {
+    throw new Error('LiFi route network changed during refresh — refresh the route before signing');
+  }
+  quote = fresh;
+  const tx = fresh.transactionRequest;
   const dexLabel = quote.tool || quote.toolDetails?.name || 'LiFi';
   // If from is an ERC-20 (not native), approve LiFi's router first.
   if (!isNative) {
@@ -20190,8 +20587,33 @@ async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, p
     data:  tx.data,
     value: tx.value || '0x0',
   }, 180000, execChain);
-  gwToast('Submitted · waiting for confirmation…', 'info');
-  await gwWaitReceipt(provider, hash, 60000, false, execChain);
+  const toChainId = Number(quote._toChainId || quote._gromToChainId || execChain);
+  const bridgeMeta = window.GromSwapCore?.pickExecBridgeMeta
+    ? window.GromSwapCore.pickExecBridgeMeta(quote, null)
+    : {
+      bridge: quote.tool || quote.bridge || 'LiFi',
+      fromChainId: Number(quote._fromChainId || execChain),
+      toChainId,
+      crossChain: false,
+    };
+  const crossChain = !!quote._crossChain
+    || !!(bridgeMeta.fromChainId && bridgeMeta.toChainId && bridgeMeta.fromChainId !== bridgeMeta.toChainId);
+  try {
+    window.__gwLastExecWasBridge = crossChain;
+    window.__gwLastExecQuote = quote;
+    window.__gwLastExecNamespace = 'evm';
+    window.__gwLastExecConfirmed = false;
+  } catch (_) {}
+  gwToast(crossChain
+    ? 'Bridge submitted on source chain · destination delivery is pending (not complete yet)'
+    : 'Submitted · waiting for confirmation…', 'info');
+  if (deferReceipt) {
+    if (window.GromSwapCore?.buildSubmittedExecResult) {
+      return window.GromSwapCore.buildSubmittedExecResult({ hash, quote, namespace: 'evm', crossChain });
+    }
+    return { hash, status: crossChain ? 'bridging' : 'submitted', namespace: 'evm', confirmed: false, quote, ...bridgeMeta, crossChain };
+  }
+  if (!crossChain) await gwWaitReceipt(provider, hash, 60000, false, execChain);
   return hash;
 }
 
@@ -20423,6 +20845,9 @@ async function gwAggQuoteLifi({ chainId, fromSym, toSym, amtNum, account, toChai
     _toChainId: toCid,
     _fromChainId: Number(chainId),
     _crossChain: cross,
+    _gromStale: !!q._gromStale,
+    _gromCached: !!q._gromCached,
+    _gromQuoteExpiresAt: Number(q._gromQuoteExpiresAt) || null,
     raw: q,
   };
 }
@@ -20723,6 +21148,7 @@ async function gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account, toCha
       _toChainId: toCid,
       _fromChainId: fromCid,
       _crossChain: cross,
+      _squidQuoteId: String(j?.route?.quoteId || j?.quoteId || ''),
       _gromFromAmount: amount,
       _gromFeeContext: {
         provider: 'squid',
@@ -21396,7 +21822,7 @@ async function gwSimulateSwapTx(chainId, txParams) {
  * Trust shows BOTH approve and swap as "0 BNB" smart-contract calls —
  * never cascade to another aggregator after the first wallet prompt.
  */
-async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, provider, account }) {
+async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, provider, account, deferReceipt = false }) {
   let liveProvider = provider;
   let execQuote = quote;
   const execChain = Number(quote._fromChainId || chainId);
@@ -21681,7 +22107,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
       toChainId: execQuote._toChainId || null,
       crossChain: !!execQuote._crossChain,
     };
-  if (!execQuote._crossChain) {
+  if (!execQuote._crossChain && !deferReceipt) {
     try {
       await gwWaitReceipt(liveProvider, hash, 90000, false, execChain);
       try { window.__gwLastExecConfirmed = true; } catch (_) {}
@@ -21696,7 +22122,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
             gwToast('Previous tx reverted — retrying with LiFi…', 'warn');
             return gwOnChainSwapExecMeta({
               chainId: execChain, fromSym, toSym, amtNum: useAmtStr,
-              quote: backup, provider: liveProvider, account,
+              quote: backup, provider: liveProvider, account, deferReceipt,
             });
           }
         }
@@ -21711,6 +22137,22 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
       quote: execQuote,
       ...bridgeMeta,
     };
+  }
+  if (!execQuote._crossChain && deferReceipt) {
+    if (window.GromSwapCore?.buildSubmittedExecResult) {
+      return window.GromSwapCore.buildSubmittedExecResult({ hash, quote: execQuote, namespace: 'evm', crossChain: false });
+    }
+    return {
+      hash,
+      status: 'submitted',
+      namespace: 'evm',
+      confirmed: false,
+      quote: execQuote,
+      ...bridgeMeta,
+    };
+  }
+  if (window.GromSwapCore?.buildSubmittedExecResult) {
+    return window.GromSwapCore.buildSubmittedExecResult({ hash, quote: execQuote, namespace: 'evm', crossChain: true });
   }
   return {
     hash,
@@ -21875,7 +22317,34 @@ function gwTxLogPush(entry) {
     }).catch(function () {});
   } catch (_) {}
 }
+
+/** Update the existing local history row when an on-chain monitor reaches a terminal state. */
+function gwTxLogUpdateStatus({ hash, status, destTxHash = '' } = {}) {
+  const target = String(hash || '').trim().toLowerCase();
+  const nextStatus = String(status || '').trim().toLowerCase();
+  if (!target || !/^(completed|failed|cancelled|refunded|partial)$/.test(nextStatus)) return 0;
+  try {
+    const list = JSON.parse(localStorage.getItem('gw_tx_log_v1') || '[]');
+    if (!Array.isArray(list)) return 0;
+    let changed = 0;
+    for (const row of list) {
+      if (!row || String(row.hash || row.tx_hash || '').trim().toLowerCase() !== target) continue;
+      // Terminal history must not be downgraded by a stale or duplicate monitor.
+      if (/^(completed|failed|cancelled|refunded|partial)$/.test(String(row.status || '').toLowerCase())) continue;
+      row.status = nextStatus;
+      if (destTxHash) row.destTxHash = String(destTxHash);
+      row.statusUpdatedAt = Date.now();
+      changed++;
+    }
+    if (changed) {
+      localStorage.setItem('gw_tx_log_v1', JSON.stringify(list.slice(0, 200)));
+      try { if (typeof window.hydrateHistoryPage === 'function') window.hydrateHistoryPage(true); } catch (_) {}
+    }
+    return changed;
+  } catch (_) { return 0; }
+}
 window.gwTxLogPush = gwTxLogPush;
+window.gwTxLogUpdateStatus = gwTxLogUpdateStatus;
 
 /**
  * Shared client context for AI monitor — every product gets wallet / chain / device.
@@ -22685,9 +23154,28 @@ async function gwLifiExecSolana({ quote, fromSym, toSym, amtNum }) {
     throw new Error('Unexpected EVM payload for Solana bridge — refresh quote');
   }
   const signature = await gwSolSignAndSendBase64(p, data);
-  try { window.__gwLastExecNamespace = 'solana'; window.__gwLastExecWasBridge = true; } catch (_) {}
+  try {
+    window.__gwLastExecNamespace = 'solana';
+    window.__gwLastExecWasBridge = true;
+    window.__gwLastExecQuote = quote;
+    window.__gwLastExecConfirmed = false;
+  } catch (_) {}
   gwToast('Submitted on Solana · bridge in progress…', 'info');
-  return { hash: signature, signature, status: 'submitted', namespace: 'solana', confirmed: false };
+  if (window.GromSwapCore?.buildSubmittedExecResult) {
+    return window.GromSwapCore.buildSubmittedExecResult({ hash: signature, quote, namespace: 'solana', crossChain: true });
+  }
+  const bridgeMeta = window.GromSwapCore?.pickExecBridgeMeta
+    ? window.GromSwapCore.pickExecBridgeMeta(quote, null)
+    : {
+      bridge: quote?.tool || quote?.raw?.tool || 'LiFi',
+      fromChainId: Number(quote?._fromChainId || quote?._gromFromChainId || GW_LIFI_SOL_CHAIN),
+      toChainId: Number(quote?._toChainId || quote?._gromToChainId || 0) || null,
+      crossChain: true,
+    };
+  return {
+    hash: signature, signature, status: 'bridging', namespace: 'solana', confirmed: false,
+    quote, ...bridgeMeta, crossChain: true,
+  };
 }
 
 /** Sign+send LiFi Tron bridge tx (customData.tronTransaction). */
@@ -22719,6 +23207,7 @@ async function gwLifiExecTron({ quote, fromSym, toSym, amtNum }) {
     gwToast(`Confirm in wallet · ${tool} · Tron bridge`, 'info');
     let signed;
     if (typeof tw.trx?.sign === 'function') {
+      try { gwMarkSwapWalletRequestDispatched({ method: 'tron_signTransaction', action: 'swap' }); } catch (_) {}
       signed = await tw.trx.sign(tronTx);
     } else {
       throw new Error('Tron wallet cannot sign bridge tx');
@@ -22732,9 +23221,28 @@ async function gwLifiExecTron({ quote, fromSym, toSym, amtNum }) {
       throw new Error('Tron wallet cannot broadcast');
     }
     const hash = String(result?.txid || result?.transaction?.txID || signed?.txID || '');
-    try { window.__gwLastExecNamespace = 'tron'; window.__gwLastExecWasBridge = true; } catch (_) {}
+    try {
+      window.__gwLastExecNamespace = 'tron';
+      window.__gwLastExecWasBridge = true;
+      window.__gwLastExecQuote = quote;
+      window.__gwLastExecConfirmed = false;
+    } catch (_) {}
     gwToast('Submitted on Tron · bridge in progress…', 'info');
-    return { hash, status: 'submitted', namespace: 'tron', confirmed: false };
+    if (window.GromSwapCore?.buildSubmittedExecResult) {
+      return window.GromSwapCore.buildSubmittedExecResult({ hash, quote: quote || raw, namespace: 'tron', crossChain: true });
+    }
+    const bridgeMeta = window.GromSwapCore?.pickExecBridgeMeta
+      ? window.GromSwapCore.pickExecBridgeMeta(quote || raw, null)
+      : {
+        bridge: quote?.tool || raw?.tool || 'LiFi',
+        fromChainId: Number(quote?._fromChainId || quote?._gromFromChainId || GW_TRON_CHAIN_ID),
+        toChainId: Number(quote?._toChainId || quote?._gromToChainId || 0) || null,
+        crossChain: true,
+      };
+    return {
+      hash, status: 'bridging', namespace: 'tron', confirmed: false,
+      quote, ...bridgeMeta, crossChain: true,
+    };
   } finally {
     try { restore?.(); } catch (_) {}
   }
@@ -22745,6 +23253,14 @@ try {
 } catch (_) {}
 
 async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
+  /* Keep executor metadata scoped to this attempt; a prior bridge must not
+   * turn a later same-chain hash into a bridge monitor (or vice versa). */
+  try {
+    window.__gwLastExecWasBridge = false;
+    window.__gwLastExecQuote = null;
+    window.__gwLastExecNamespace = null;
+    window.__gwLastExecConfirmed = false;
+  } catch (_) {}
   /* Pin expected native wei early — provider-level guard compares against this. */
   try {
     window.__gwExpectedNativeWei = null;
@@ -22806,7 +23322,7 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
           chainId: fromCid,
           fromSym, toSym, amtNum,
           quote: q0.raw || q0,
-          provider, account,
+          provider, account, deferReceipt: true,
         });
       }
     }
@@ -23021,7 +23537,7 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
         const toLbl = (typeof gwChainLabel === 'function') ? gwChainLabel(winner._toChainId) : String(winner._toChainId);
         gwToast(`Bridge route · you receive ${toSym} on ${toLbl}`, 'info');
       }
-      return await gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote: winner, provider, account });
+      return await gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote: winner, provider, account, deferReceipt: true });
     } catch (e) {
       const em = String(e?.message || e || '');
       console.warn(`[GROM] ${winner.aggregator} exec failed:`, em);
@@ -23031,7 +23547,7 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
       const alt = tryQuotes.slice(1).find((q) => q.transactionRequest?.to && q.transactionRequest?.data);
       if (alt && !window.__gwSwapSigPrompted) {
         try {
-          return await gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote: alt, provider, account });
+          return await gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote: alt, provider, account, deferReceipt: true });
         } catch (e2) {
           const em2 = String(e2?.message || e2 || '');
           if (gwSwapAbortAfterWallet(em2)) throw e2;
@@ -23076,6 +23592,14 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
         const winner = window.GromSwapCore?.pickExecutedQuote
           ? window.GromSwapCore.pickExecutedQuote(result, { lastExecQuote: window.__gwLastExecQuote })
           : ((result && typeof result === 'object' && result.quote) || window.__gwLastExecQuote || null);
+        if (ns === 'evm' && window.GromSwapCore?.resolveSubmittedChainId) {
+          chainId = window.GromSwapCore.resolveSubmittedChainId({
+            execResult: result,
+            executedQuote: winner,
+            opChainId: gwSwapOpGet()?.chainId,
+            uiChainId: chainId,
+          });
+        }
         gwTxLogPush({
           kind: 'spot',
           fromSym,
@@ -23115,7 +23639,7 @@ async function gwDsSubmit() {
   try {
     const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : window.__gwSwapOp;
     const hasTx = !!(op && (op.hash || op.signature || op.boc));
-    if (!hasTx && !op?.requestDispatched && op?.stage !== 'unknown' && !gwDsSubmit._busy) {
+    if (!hasTx && !gwSwapWalletActionPending(op) && op?.stage !== 'unknown' && !gwDsSubmit._busy) {
       if (op) { try { gwSwapOpClear('cancelled'); } catch (_) {} }
       gwDsSubmit._busy = false;
       try {
@@ -23132,9 +23656,9 @@ async function gwDsSubmit() {
       } catch (_) {}
     }
   } catch (_) {}
-  if (gwDsSubmit._busy || (typeof gwSwapOpIsActive === 'function' && gwSwapOpIsActive())) {
+    if (gwDsSubmit._busy || (typeof gwSwapOpIsActive === 'function' && gwSwapOpIsActive())) {
     const op2 = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : window.__gwSwapOp;
-    if (gwDsSubmit._busy || op2 && (op2.hash || op2.signature || op2.boc || op2.requestDispatched || op2.stage === 'unknown')) {
+    if (gwDsSubmit._busy || op2 && (op2.hash || op2.signature || op2.boc || gwSwapWalletActionPending(op2) || op2.stage === 'unknown')) {
       try {
         gwToast(
           (typeof gwTx === 'function'
@@ -23306,55 +23830,63 @@ async function gwDsSubmit() {
     if (cta) {
       cta.classList.add('busy');
       try {
-        const w = (typeof gwConnectedWalletLabel === 'function' && gwConnectedWalletLabel()) || 'Trust';
-        cta.textContent = typeof gwTx === 'function'
-          ? gwTx('coach_cta_waiting', { wallet: w }, 'Waiting for {wallet}…')
-          : ('Waiting for ' + w + '…');
+        cta.textContent = gwUxText('Подготавливаем обмен…', 'Preparing swap…');
       } catch (_) {}
     }
     let orderId;
     try { orderId = typeof gwOrdReviewId === 'function' ? gwOrdReviewId() : null; } catch (e) { gwDsSubmit._busy = false; cta?.classList.remove('busy'); gwToast(e.message, 'warn'); return; }
     const op = gwSwapOpBegin({
       orderId, chainId: Number(window.__gwDsUserPickedFrom?.chainId || (typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : 0)),
-      stage: 'awaiting_signature',
+      stage: 'preparing',
       from, to, amt: amtStr,
       account: orderId ? gwUxAccount() : ((typeof gwDsResolveQuoteAccount === 'function') ? gwDsResolveQuoteAccount() : ''),
     });
-    try {
-      gromSwapMarkAwaitingWallet({ from, to, amt, stage: 'awaiting_signature' });
-    } catch (_) {}
-    // Soft UI nudge only — does NOT clear operation lock or allow a second send (F04)
-    const watchdog = setTimeout(() => {
+    // Preflight can include slow balances, quote refresh, allowance reads and
+    // simulation. It must never be classified as a wallet timeout until a
+    // signing request is actually dispatched by the provider.
+    let watchdog = null;
+    const armWalletWatchdog = () => {
+      clearTimeout(watchdog);
+      watchdog = setTimeout(() => {
       try {
-        const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : window.__gwSwapOp;
-        if (!op || op.hash || op.signature || op.boc) {
-          if (gwSwapOpIsActive()) {
-            gwToast('Still waiting on wallet — do not tap Swap again until this finishes', 'warn');
-            gwSwapOpUpdate({ stage: 'unknown' });
+        const current = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : window.__gwSwapOp;
+        if (!current || current.id !== op.id) return;
+        const state = window.GromSwapCore?.swapWalletWatchdogState
+          ? window.GromSwapCore.swapWalletWatchdogState(current, Date.now(), 20000)
+          : (current.walletRequestAt ? (Date.now() - current.walletRequestAt >= 20000 ? 'unknown' : 'wallet_pending') : 'preparing');
+        if (state === 'settled') return;
+        if (state === 'preparing') {
+          if (!current.preparationSlowNotified) {
+            gwSwapOpUpdate({ preparationSlowNotified: true });
+            gwToast('Still preparing the route — no request has been sent to your wallet yet', 'info');
           }
           return;
         }
+        if (state === 'wallet_pending') {
+          armWalletWatchdog();
+          return;
+        }
+        gwSwapOpUpdate({ stage: 'unknown', walletNoConfirmAt: Date.now() });
         try {
           gromReportIssue({
             product: 'swap',
             action: 'wallet_no_confirm',
-            message: 'Nothing reached the wallet within 20s after Start',
+            message: 'Wallet signing request was dispatched; no transaction result arrived within 20s',
             detail: {
-              kind: 'no_confirm', abandoned: true, waitMs: 20000, from, to, amt,
-              admin_brief: 'Start → за 20с запрос в кошелёк не ушёл / не ответил',
+              kind: 'no_confirm', abandoned: true,
+              waitMs: Math.max(0, Date.now() - Number(current.walletRequestAt || Date.now())),
+              from, to, amt, walletRequestAt: current.walletRequestAt,
+              admin_brief: 'Запрос подписи реально отправлен в кошелёк → результат не получен за 20с',
             },
           });
         } catch (_) {}
-        if (op) { gwSwapOpUpdate({ stage: 'unknown' }); gwDsSubmit._busy = true; return; }
-        gwSwapOpClear('cancelled');
-        gwDsSubmit._busy = false;
-        const c = document.getElementById('gwDsCta');
-        if (c) c.classList.remove('busy');
-        try { gwDsResetSubmitState(); } catch (_) {}
         try { gromSwapClearAwaitingWallet(); } catch (_) {}
-        gwToast('Nothing reached the wallet — tap Start again and confirm Tron in Trust', 'warn');
+        gwToast('No wallet response yet — check wallet activity; do not retry until the result is clear', 'warn');
       } catch (_) {}
-    }, 20000);
+      }, 20000);
+    };
+    gwDsSubmit._armWalletWatchdog = armWalletWatchdog;
+    armWalletWatchdog();
     try {
       const execResult = await gwOnChainSwapExec(from, to, amtStr);
       try { gromSwapClearAwaitingWallet(); } catch (_) {}
@@ -23371,31 +23903,42 @@ async function gwDsSubmit() {
           confirmed: false,
           namespace: ns,
         };
-      let chainId = null;
-      try {
-        const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
-          ? window.gromWallet.wcProvider : window.ethereum;
-        if (provider && ns === 'evm') chainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
-      } catch (_) {}
       const hash = norm.hash;
       // C06: only the executed quote — never .find() from proposal array
       const winner = window.GromSwapCore?.pickExecutedQuote
         ? window.GromSwapCore.pickExecutedQuote(execResult, { lastExecQuote: window.__gwLastExecQuote })
         : ((execResult && typeof execResult === 'object' && execResult.quote) || window.__gwLastExecQuote || null);
-      const bridgeMeta = (execResult && typeof execResult === 'object' && (execResult.bridge || execResult.toChainId))
-        ? {
-          bridge: execResult.bridge || '',
-          fromChainId: execResult.fromChainId || chainId,
-          toChainId: execResult.toChainId || null,
-          crossChain: !!execResult.crossChain || cross,
-        }
-        : (window.GromSwapCore?.pickExecBridgeMeta
-          ? window.GromSwapCore.pickExecBridgeMeta(winner, null)
-          : {
-            bridge: winner?.tool || winner?.bridge || '',
-            fromChainId: winner?._fromChainId || chainId,
-            toChainId: winner?._toChainId || null,
-          });
+      let walletChainId = null;
+      try {
+        const provider = (window.gromWallet?.wcProvider && window.gromWallet.wcProvider.accounts?.[0])
+          ? window.gromWallet.wcProvider : window.ethereum;
+        if (provider && ns === 'evm') walletChainId = parseInt(await provider.request({ method: 'eth_chainId' }), 16);
+      } catch (_) {}
+      const uiChainId = Number(window.__gwDsUserPickedFrom?.chainId
+        || (typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : 0)) || null;
+      const chainId = window.GromSwapCore?.resolveSubmittedChainId
+        ? window.GromSwapCore.resolveSubmittedChainId({
+          execResult, executedQuote: winner, opChainId: op?.chainId, uiChainId, walletChainId,
+        })
+        : (Number(execResult?.fromChainId || winner?._fromChainId || op?.chainId || uiChainId || walletChainId) || null);
+      const quoteBridgeMeta = window.GromSwapCore?.pickExecBridgeMeta
+        ? window.GromSwapCore.pickExecBridgeMeta(winner, null)
+        : {
+          bridge: winner?.tool || winner?.bridge || '',
+          fromChainId: winner?._fromChainId || chainId,
+          toChainId: winner?._toChainId || null,
+          quoteId: winner?._squidQuoteId || winner?.raw?.route?.quoteId || '',
+          requestId: winner?._squidRequestId || winner?.raw?.requestId || '',
+        };
+      const bridgeMeta = {
+        ...quoteBridgeMeta,
+        bridge: execResult?.bridge || quoteBridgeMeta.bridge || '',
+        fromChainId: execResult?.fromChainId || quoteBridgeMeta.fromChainId || chainId,
+        toChainId: execResult?.toChainId || quoteBridgeMeta.toChainId || null,
+        quoteId: execResult?.quoteId || quoteBridgeMeta.quoteId || '',
+        requestId: execResult?.requestId || quoteBridgeMeta.requestId || '',
+        crossChain: !!execResult?.crossChain || cross || !!quoteBridgeMeta.crossChain,
+      };
       gwDsPushRecent({
         from, to, amt, out: '≈ market', mode: 'onchain', hash, chainId,
         status: norm.status,
@@ -23413,15 +23956,21 @@ async function gwDsSubmit() {
           fromChainId: bridgeMeta.fromChainId || chainId,
           toChainId: bridgeMeta.toChainId,
           bridge: bridgeMeta.bridge,
+          quoteId: bridgeMeta.quoteId || undefined,
+          requestId: bridgeMeta.requestId || undefined,
         });
         try {
-          gwLifiBridgeMonitor({
+          const monitorArgs = {
             txHash: hash,
             bridge: bridgeMeta.bridge,
             fromChainId: bridgeMeta.fromChainId || chainId,
             toChainId: bridgeMeta.toChainId,
+            quoteId: bridgeMeta.quoteId,
+            requestId: bridgeMeta.requestId,
             opId: gwSwapOpGet()?.id,
-          });
+          };
+          if (/squid/i.test(String(bridgeMeta.bridge || ''))) gwSquidBridgeMonitor(monitorArgs);
+          else gwLifiBridgeMonitor(monitorArgs);
         } catch (_) {}
         try { gwToast(`Bridge submitted ${amt} ${from} → ${to}. Waiting for destination — not complete yet.`, 'info'); } catch (_) {}
         gwDsFlashSuccess(`Submitted (bridging): ${amt} ${from} → ${to}`);
@@ -23466,7 +24015,7 @@ async function gwDsSubmit() {
       // Stay in-site: DEX should never redirect users to external web apps.
       try { gwHideRemoteSignCoach(); } catch (_) {}
       const reason = String(e?.message || e || '').slice(0, 250);
-      const classified = window.GromSwapCore?.classifySwapExecError
+      let classified = window.GromSwapCore?.classifySwapExecError
         ? window.GromSwapCore.classifySwapExecError(e)
         : (() => {
           const rejected = /user rejected|rejected the request|declined/i.test(reason);
@@ -23477,12 +24026,31 @@ async function gwDsSubmit() {
             stage: rejected ? 'cancelled' : (timedOut ? 'unknown' : 'failed'),
           };
         })();
+      const failedOp = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : window.__gwSwapOp;
+      const walletRequestMayBePending = !!(failedOp && (gwSwapWalletActionPending(failedOp)
+        || failedOp.hash || failedOp.signature || failedOp.boc));
+      const hasSubmittedSwap = !!(failedOp && (failedOp.hash || failedOp.signature || failedOp.boc));
+      if (walletRequestMayBePending && classified.kind === 'failed'
+          && !/user rejected|declined|insufficient funds|insufficient balance|exceeds balance|reverted on-chain|execution reverted|invalid params|unsupported method|wrong chain|chain mismatch/i.test(reason)) {
+        classified = { kind: 'unknown', keepLock: true, stage: 'unknown' };
+      }
+      if (hasSubmittedSwap && classified.kind === 'failed'
+          && !/reverted on-chain|execution reverted|user rejected|declined/i.test(reason)) {
+        classified = { kind: 'unknown', keepLock: true, stage: 'unknown' };
+      }
+      const preflightUnknown = classified.kind === 'unknown' && !walletRequestMayBePending;
+      if (preflightUnknown) classified = { kind: 'failed', keepLock: false, stage: 'failed' };
       const rejected = classified.kind === 'cancelled';
       const timedOut = classified.kind === 'unknown';
       const gasTopUpOk = e?.code === 'GAS_TOPUP_PENDING' || /^Gas top-up submitted/i.test(reason);
       let msg;
       if (gasTopUpOk) {
         msg = reason;
+      } else if (preflightUnknown) {
+        msg = gwUxText(
+          'Не удалось подготовить маршрут; запрос в кошелёк не отправлялся. Обновите котировку и попробуйте ещё раз.',
+          'Route preparation timed out before a wallet request was sent. Refresh the quote and try again.',
+        );
       } else if (timedOut) {
         msg = `Result unknown — check wallet Activity. Do not tap Swap again until confirmed.`;
       } else if (/session lost|reconnect|not connected|no provider/i.test(reason)) {
@@ -23510,7 +24078,7 @@ async function gwDsSubmit() {
       try { gwToast(msg, gasTopUpOk ? 'info' : (timedOut ? 'warn' : 'error')); } catch (_) {}
       if (!gasTopUpOk) {
       try {
-        const kind = rejected ? 'cancelled' : (timedOut ? 'no_confirm' : 'failed');
+        const kind = rejected ? 'cancelled' : (timedOut ? 'no_confirm' : (preflightUnknown ? 'preflight_failed' : 'failed'));
         gromReportIssue({
           product: 'swap',
           action: rejected ? 'tx_rejected' : (timedOut ? 'wallet_no_confirm' : 'swap_failed'),
@@ -23522,11 +24090,14 @@ async function gwDsSubmit() {
             mode: 'onchain',
             kind,
             stage: classified.stage || kind,
+            requestDispatched: walletRequestMayBePending,
             admin_brief: rejected
               ? 'Отменил в кошельке'
               : (timedOut
                 ? 'Не подтвердил / таймаут кошелька'
-                : 'Своп упал после Start'),
+                : (preflightUnknown
+                  ? 'Маршрут не подготовился до запроса в кошелёк'
+                  : 'Своп упал после Start')),
           },
         });
       } catch (_) {}
@@ -23543,6 +24114,7 @@ async function gwDsSubmit() {
       } catch (_) {}
     } finally {
       clearTimeout(watchdog);
+      if (gwDsSubmit._armWalletWatchdog === armWalletWatchdog) gwDsSubmit._armWalletWatchdog = null;
       try { gwHideRemoteSignCoach(); } catch (_) {}
       try {
         const op = gwSwapOpGet();
@@ -23562,7 +24134,7 @@ async function gwDsSubmit() {
           if (c) c.classList.remove('busy');
         } else if (op && /submitted|unknown|source_confirmed|awaiting_result|awaiting_signature/i.test(stage)) {
           const hasTx = !!(op.hash || op.signature || op.boc);
-          if (!hasTx && !op.requestDispatched && stage !== 'unknown') {
+          if (!hasTx && !gwSwapWalletActionPending(op) && stage !== 'unknown') {
             gwSwapOpClear('cancelled');
             gwDsSubmit._busy = false;
             try { gwDsResetSubmitState(); } catch (_) {}

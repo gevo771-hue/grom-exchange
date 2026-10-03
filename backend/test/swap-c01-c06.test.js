@@ -248,4 +248,73 @@ describe('C06 executed quote wins over proposal array', () => {
       null,
     );
   });
+
+  it('preserves Squid quote identifiers for destination-status monitoring', () => {
+    const quote = {
+      tool: 'squid', _crossChain: true, _fromChainId: 1, _toChainId: 42161,
+      _squidQuoteId: 'quote-123', raw: { requestId: 'request-456' },
+    };
+    const meta = GromSwapCore.pickExecBridgeMeta(quote, null);
+    assert.equal(meta.bridge, 'squid');
+    assert.equal(meta.quoteId, 'quote-123');
+    assert.equal(meta.requestId, 'request-456');
+  });
+});
+
+describe('submitted swap chain resolution', () => {
+  it('uses the executed source chain instead of a stale WalletConnect chain', () => {
+    assert.equal(GromSwapCore.resolveSubmittedChainId({
+      execResult: { hash: '0x1', quote: { _fromChainId: 42161, _toChainId: 42161 } },
+      opChainId: 42161,
+      walletChainId: 1,
+    }), 42161);
+  });
+
+  it('prefers bridge source chain and understands hex chain ids', () => {
+    assert.equal(GromSwapCore.resolveSubmittedChainId({
+      execResult: { fromChainId: '0x2105', toChainId: 42161 },
+      opChainId: 1,
+      walletChainId: 1,
+    }), 8453);
+  });
+
+  it('falls back to the chain captured at operation start before the wallet report', () => {
+    assert.equal(GromSwapCore.resolveSubmittedChainId({
+      opChainId: 10,
+      uiChainId: 42161,
+      walletChainId: 1,
+    }), 10);
+    assert.equal(GromSwapCore.resolveSubmittedChainId({ walletChainId: '0xa4b1' }), 42161);
+    assert.equal(GromSwapCore.resolveSubmittedChainId({ walletChainId: 'nope' }), null);
+  });
+});
+
+describe('submitted execution status and bridge metadata', () => {
+  it('keeps an EVM swap submitted until the receipt monitor confirms it', () => {
+    const submitted = GromSwapCore.buildSubmittedExecResult({
+      hash: '0xabc',
+      namespace: 'evm',
+      crossChain: false,
+      quote: { _fromChainId: 42161, _toChainId: 42161, tool: 'Paraswap' },
+    });
+    assert.equal(submitted.status, 'submitted');
+    assert.equal(submitted.confirmed, false);
+    assert.equal(submitted.fromChainId, 42161);
+    assert.equal(GromSwapCore.normalizeExecResult(submitted).confirmed, false);
+  });
+
+  it('carries source, destination, and signature into a non-EVM bridge monitor', () => {
+    const bridge = GromSwapCore.buildSubmittedExecResult({
+      hash: 'sol-signature',
+      namespace: 'solana',
+      crossChain: true,
+      quote: { _fromChainId: 1151111081099710, _toChainId: 42161, tool: 'Mayan' },
+    });
+    assert.equal(bridge.status, 'bridging');
+    assert.equal(bridge.namespace, 'solana');
+    assert.equal(bridge.signature, 'sol-signature');
+    assert.equal(bridge.fromChainId, 1151111081099710);
+    assert.equal(bridge.toChainId, 42161);
+    assert.match(bridge.bridge, /Mayan/i);
+  });
 });

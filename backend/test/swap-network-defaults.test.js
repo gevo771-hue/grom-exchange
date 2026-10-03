@@ -102,3 +102,48 @@ test('late balance response cannot paint previous token or MAX after a selection
  assert.equal(els.gwDsBalFrom.dataset.maxCid,'1');
  assert.equal(els.gwDsBalTo.textContent.includes('TRX'),false);
 });
+
+function walletChainHarness() {
+ const {c,els}=harness();
+ els.gwDsFrom.value='USDC';
+ const chips=[1,42161].map(cid=>({dataset:{cid:String(cid)},on:false,classList:{toggle(_name,on){this.owner.on=on;}}}));
+ for(const chip of chips) chip.classList.owner=chip;
+ c.document.querySelectorAll=()=>chips;
+ c.gwTkSyncButton=which=>{if(which==='from') c.visibleSourceChain=c.window.__gwDsUserPickedFrom.chainId;};
+ vm.runInContext(block('gwDsSetActiveChain','/** Pick swap chain:'),c);
+ return {c,els,chips};
+}
+test('late initial wallet chain preserves restored source and matches visible network to quote chain',async()=>{
+ const {c,chips}=walletChainHarness();
+ let answer;
+ const response=new Promise(resolve=>{answer=resolve;});
+ const initialize=response.then(cid=>c.gwDsInitializeWalletChain(cid));
+ c.window.__gwDsUserPickedFrom={sym:'USDC',chainId:42161,address:'arb-usdc'};
+ answer(1);await initialize;
+ assert.equal(c.window.__gwDsUserPickedFrom.chainId,42161);
+ assert.equal(c.visibleSourceChain,42161);
+ assert.equal(chips.find(chip=>chip.on).dataset.cid,'42161');
+ c.gwGetActiveUiChainId=()=>Number(chips.find(chip=>chip.on).dataset.cid);
+ vm.runInContext('async '+block('gwDsResolveSwapChainFor','/**\n * Auto-pick'),c);
+ assert.equal(await c.gwDsResolveSwapChainFor('USDC',1),42161);
+});
+test('initial wallet network supplies default only before a source selection exists',()=>{
+ const {c}=walletChainHarness();
+ c.gwDsInitializeWalletChain(1);
+ assert.equal(c.window.__gwDsUserPickedFrom.chainId,1);
+ assert.equal(c.visibleSourceChain,1);
+});
+test('wallet startup does not overwrite a manual source or auto-selected account',()=>{
+ for(const flag of ['__gwDsManualSelection','__gwDsAutoSelectedAccount']) {
+  const {c}=walletChainHarness();c.window[flag]=true;
+  c.gwDsInitializeWalletChain(1);
+  assert.equal(c.window.__gwDsUserPickedFrom,undefined);
+ }
+});
+test('source chain change refreshes its visible token network',()=>{
+ const {c,chips}=walletChainHarness();
+ c.gwDsSetActiveChain(42161);
+ c.gwDsSetActiveChain(1);
+ assert.equal(c.visibleSourceChain,1);
+ assert.equal(chips.find(chip=>chip.on).dataset.cid,'1');
+});

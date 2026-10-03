@@ -15909,6 +15909,23 @@ function gwDsSetActiveChain(chainId) {
       delete window.__gwDsUserPickedFrom.nonevm;
     }
   } catch (_) {}
+  // Keep the token's visible network in step with the chain used for quotes.
+  try { gwTkSyncButton('from'); } catch (_) {}
+}
+
+function gwDsInitializeWalletChain(walletChainId) {
+  // Read selection AFTER the wallet response: restoration or a user pick may
+  // have finished while eth_chainId was still pending.
+  const pick = window.__gwDsUserPickedFrom;
+  const fromSym = String(document.getElementById('gwDsFrom')?.value || '').toUpperCase();
+  const pickSym = String(pick?.sym || '').toUpperCase();
+  const pickedChainId = Number(pick?.chainId) || 0;
+  if (pickedChainId && (!pickSym || pickSym === fromSym)) {
+    gwDsSetActiveChain(pickedChainId);
+    return;
+  }
+  if (window.__gwDsManualSelection || window.__gwDsAutoSelectedAccount) return;
+  gwDsSetActiveChain(walletChainId);
 }
 
 /** Pick swap chain: UI/wallet default unless FROM token lives elsewhere (BSC USDC → BNB gas). */
@@ -24211,11 +24228,7 @@ function gwInjectDashSwapPanel() {
       const hex = await provider.request({ method: 'eth_chainId' }).catch(() => null);
       if (!hex) return;
       const cid = parseInt(hex, 16);
-      if (!window.__gwDsManualSelection && !window.__gwDsAutoSelectedAccount) {
-        try { gwDsSetActiveChain(cid); } catch (_) {
-          panel.querySelectorAll('.gw-ds-chain').forEach((b) => b.classList.toggle('on', Number(b.dataset.cid) === cid));
-        }
-      }
+      gwDsInitializeWalletChain(cid);
       // Also react to future chain switches inside the wallet.
       if (provider.on && !provider.__gwDsChainWired) {
         provider.__gwDsChainWired = true;

@@ -12707,7 +12707,7 @@ function gwClassifySquidDestinationReceipt(receipt, evidence) {
 }
 
 /** Poll Squid's own status API; LI.FI status cannot resolve Squid/Axelar routes. */
-async function gwSquidBridgeMonitor({ txHash, bridge, fromChainId, toChainId, quoteId, requestId, opId }) {
+async function gwSquidBridgeMonitor({ txHash, bridge, fromChainId, toChainId, quoteId, requestId, opId, onTerminal }) {
   if (!txHash) return;
   const started = Date.now();
   const myOpId = opId || null;
@@ -12746,6 +12746,10 @@ async function gwSquidBridgeMonitor({ txHash, bridge, fromChainId, toChainId, qu
         const payload = await r.json();
         if (!stillMine()) return;
         squidNorm = gwNormalizeSquidBridgeStatus(payload);
+        if (onTerminal && /^(completed|partial|refunded|failed)$/.test(squidNorm.outcome)) {
+          onTerminal({ ...squidNorm, destTxHash: payload?.toChain?.transactionId || null });
+          return;
+        }
         gwSwapOpUpdate({
           stage: squidNorm.outcome,
           squidStatus: payload?.squidTransactionStatus || payload?.status || null,
@@ -12789,6 +12793,7 @@ async function gwSquidBridgeMonitor({ txHash, bridge, fromChainId, toChainId, qu
           if (!stillMine()) return;
           const norm = gwClassifySquidDestinationReceipt(receipt, payload);
           if (norm.outcome === 'completed' || norm.outcome === 'partial') {
+            if (onTerminal) { onTerminal({ ...norm, destTxHash: payload.destinationTxHash }); return; }
             gwSwapOpUpdate({ stage: norm.outcome, axelarStatus: payload.status, axelarSimplifiedStatus: payload.simplifiedStatus, destTxHash: payload.destinationTxHash, message: norm.message });
             try { gwToast(norm.message, norm.success ? 'success' : 'warn'); } catch (_) {}
             try { gwSwapOpClear(norm.outcome); } catch (_) {}
@@ -12802,7 +12807,7 @@ async function gwSquidBridgeMonitor({ txHash, bridge, fromChainId, toChainId, qu
   tick();
 }
 
-async function gwLifiBridgeMonitor({ txHash, bridge, fromChainId, toChainId, opId }) {
+async function gwLifiBridgeMonitor({ txHash, bridge, fromChainId, toChainId, opId, onTerminal }) {
   if (!txHash) return;
   const started = Date.now();
   const bridgeName = bridge || 'across';
@@ -12850,6 +12855,10 @@ async function gwLifiBridgeMonitor({ txHash, bridge, fromChainId, toChainId, opI
       }
       if (!stillMine()) return;
       const norm = gwNormalizeLifiBridgeStatus(j);
+      if (onTerminal && /^(completed|partial|refunded|failed)$/.test(norm.outcome)) {
+        onTerminal({ ...norm, destTxHash: j?.receiving?.txHash || null });
+        return;
+      }
       try {
         gwSwapOpUpdate({
           stage: norm.outcome,
@@ -16479,7 +16488,7 @@ function gwUxCta() {
     pairValid:!!from && !!to && (from !== to || gwDsSameAssetBridgeAllowed(from,to)),
     ready:!!window.__gwDsQuoteExecReady, restored:!gwHasSigningProvider(), error:window.__gwDsQuoteExecReason });
   const labels={connect:['Подключить кошелёк','Connect wallet'],amount:['Введите сумму','Enter amount'],pair:['Выберите другой токен','Choose another token'],swap:['Обменять','Swap'],reconnect:['Подключить и обменять','Reconnect and swap'],loading:['Ищем маршрут…','Finding route…'],retry:['Обновить маршрут','Refresh route'],balance:['Проверьте баланс и газ','Check balance and gas'],preparing:['Подготавливаем обмен…','Preparing swap…'],pending:['Обмен в процессе…','Swap in progress…'],unknown:['Проверяем запрос кошелька…','Checking wallet request…'],unresolved:['Проверяем предыдущий своп…','Checking previous swap…']};
-  cta.textContent=gwUxText(...labels[m.key]); cta.disabled=!m.enabled; cta.dataset.uxAction=m.action || '';
+  cta.textContent=op?.purpose==='gas_topup' && op.hash ? gwUxText('Пополняем газ…','Funding gas…') : gwUxText(...labels[m.key]); cta.disabled=!m.enabled; cta.dataset.uxAction=m.action || '';
   cta.classList.toggle('not-ready',!m.enabled); cta.title=window.__gwDsQuoteExecReason || '';
   gwUxProgress(); return true;
 }
@@ -16513,8 +16522,10 @@ function gwUxProgress(op) {
   const url=trackedHash ? (op.namespace==='solana'?'https://solscan.io/tx/'+encodeURIComponent(trackedHash):op.namespace==='tron'?'https://tronscan.org/#/transaction/'+encodeURIComponent(trackedHash):gwDsExplorerUrl(op.chainId || op.fromChainId,trackedHash)) : '';
   const progressState = op.approvalPending
     ? gwUxText('Разрешение токена отправлено; ждём подтверждение сети. Сам обмен ещё не отправлен.','Token approval submitted; waiting for network confirmation. The swap has not been sent yet.')
-    : (state[op.stage] || gwUxText('Подтвердите запрос в кошельке.','Confirm the request in your wallet.'));
-  el.innerHTML=`${op.restoredFromStorage?`<small>${gwUxText('Предыдущий обмен','Previous swap')}</small><br>`:''}<strong>${gwUxEsc(op.from)} → ${gwUxEsc(op.to)}</strong><ol>${labels.map((l,i)=>`<li class="${completed || i<step?'done':i===step?'current':''}">${i+1}. ${l}${i===0 && !op.approvalRequested && step>0?' · '+gwUxText('при необходимости','if needed'):''}</li>`).join('')}</ol><div>${gwUxEsc(progressState)}</div>${url?`<a href="${gwUxEsc(url)}" target="_blank" rel="noopener">${gwUxText('Открыть транзакцию','View transaction')} ↗</a>`:''}${gwSwapWalletActionPending(op) && !op.approvalPending && !op.hash && !['completed','failed','cancelled'].includes(op.stage)?`<button type="button" id="gwUxOpenWallet">${gwUxText('Открыть кошелёк','Open wallet')}</button>`:''}`;
+    : op.purpose==='gas_topup' && op.hash
+      ? gwUxText('Ждём газ в исходной сети. Основной обмен ещё не отправлен.','Waiting for source-chain gas. The main swap has not been sent.')
+      : (state[op.stage] || gwUxText('Подтвердите запрос в кошельке.','Confirm the request in your wallet.'));
+  el.innerHTML=`${op.restoredFromStorage?`<small>${op.purpose==='gas_topup'?gwUxText('Предыдущее пополнение газа','Previous gas funding'):gwUxText('Предыдущий обмен','Previous swap')}</small><br>`:''}<strong>${op.purpose==='gas_topup'?gwUxText('Пополнение газа · ','Gas funding · '):''}${gwUxEsc(op.from)}${op.purpose==='gas_topup'?' · '+gwUxEsc(gwChainLabel(op.fromChainId || op.chainId)):''} → ${gwUxEsc(op.to)}${op.purpose==='gas_topup'?' · '+gwUxEsc(gwChainLabel(op.toChainId)):''}</strong><ol>${labels.map((l,i)=>`<li class="${completed || i<step?'done':i===step?'current':''}">${i+1}. ${l}${i===0 && !op.approvalRequested && step>0?' · '+gwUxText('при необходимости','if needed'):''}</li>`).join('')}</ol><div>${gwUxEsc(progressState)}</div>${url?`<a href="${gwUxEsc(url)}" target="_blank" rel="noopener">${gwUxText('Открыть транзакцию','View transaction')} ↗</a>`:''}${gwSwapWalletActionPending(op) && !op.approvalPending && !op.hash && !['completed','failed','cancelled'].includes(op.stage)?`<button type="button" id="gwUxOpenWallet">${gwUxText('Открыть кошелёк','Open wallet')}</button>`:''}`;
   el.querySelector('#gwUxOpenWallet')?.addEventListener('click',()=>{const key=gwConnectedWcWalletKey();if(key)openWalletAppShell(key);else gwShowRemoteSignCoach({action:'tx'});});
 }
 function gwUxOpChanged(op) {
@@ -17016,6 +17027,9 @@ async function gwAggRefreshExecQuote(quote, { chainId, fromSym, toSym, amtNum, a
         quote._gromSlippage = slip;
         refreshed = true;
       }
+    } else if (/Squid/i.test(name) && typeof gwAggQuoteSquid === 'function') {
+      const fresh = await gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account, toChainId: quote._toChainId || chainId });
+      if (fresh?.toAmount) { Object.assign(quote, fresh); refreshed = true; }
     } else {
       // Aggregators that do not need refresh — keep going
       refreshed = true;
@@ -18404,7 +18418,7 @@ function gwChainGasSymbol(chainId) {
 const GW_GAS_MIN_USD = 0.20;
 /** Target native top-up size when source gas is empty (~covers several txs). */
 const GW_GAS_TOPUP_USD = 1.25;
-/** Absolute USD ceiling — never ask Trust for more than this as a "gas top-up". */
+/** Ceiling for funding input plus quoted fees; the wallet shows the final network fee. */
 const GW_GAS_TOPUP_MAX_USD = 2.00;
 /** Donor must keep at least this much USD of native after top-up (own gas). */
 const GW_GAS_DONOR_KEEP_USD = 0.80;
@@ -18445,55 +18459,211 @@ async function gwGasNativeUsdPrice(sym) {
   return px;
 }
 
-async function gwGasNativeBal(chainId) {
-  const gas = gwChainGasSymbol(chainId);
-  try {
-    if (typeof gwDsTokenBalanceOnChain === 'function') {
-      return Number(await gwDsTokenBalanceOnChain(gas, chainId)) || 0;
-    }
-  } catch (_) {}
+async function gwGasNativeBal(chainId, account) {
+  // Funding decisions must use the signer's fresh balance, not the 30s portfolio cache.
+  if (account) {
+    let timer;
+    try {
+      const raw = await Promise.race([gwRpcTry(Number(chainId), 'eth_getBalance', [account, 'latest']),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Gas balance timeout')), 6000); })]);
+      if (!/^0x[0-9a-f]+$/i.test(String(raw))) throw new Error('Invalid native balance');
+      return Number(BigInt(raw)) / 1e18;
+    } catch (_) {
+      const error = new Error(gwGasUiRu() ? 'Не удалось проверить газ в исходной сети. Попробуйте ещё раз.' : 'Could not check source-chain gas. Try again.');
+      error.code = 'GAS_BALANCE_UNAVAILABLE';
+      throw error;
+    } finally { clearTimeout(timer); }
+  }
+  return Number(await gwDsTokenBalanceOnChain(gwChainGasSymbol(chainId), chainId)) || 0;
+}
+
+/** Native donors can use any supported gas asset: BNB→ETH is a real bridge/swap. */
+async function gwGasFindDonors(destChainId, account) {
+  const candidates = await Promise.all(GW_GAS_ALL_HUBS.filter(c => c !== Number(destChainId) && GW_OC_SWAP[c]).map(async chainId => {
+    try {
+      const sym = gwChainGasSymbol(chainId);
+      const [bal, px] = await Promise.all([gwGasNativeBal(chainId, account), gwGasNativeUsdPrice(sym)]);
+      const amtNum = Math.min(GW_GAS_TOPUP_USD / px, GW_GAS_TOPUP_MAX_NATIVE[sym] || 0);
+      if (!(amtNum > 0) || (bal - amtNum) * px < GW_GAS_DONOR_KEEP_USD) return null;
+      return { chainId, sym, bal, px, amtNum };
+    } catch (_) { return null; }
+  }));
+  // Quote cheap L2 donors first; never choose a source merely by largest balance.
+  return candidates.filter(Boolean).sort((a, b) => (a.chainId === 1 ? 1 : 0) - (b.chainId === 1 ? 1 : 0));
+}
+
+function gwGasNativeAddress(address) {
+  return /^0x(?:0{40}|e{40})$/i.test(String(address || ''));
+}
+
+function gwGasSelectionKey() {
+  return JSON.stringify([window.__gwDsUserPickedFrom, window.__gwDsUserPickedTo, window.__gwDsForceBridgeTo,
+    document.getElementById?.('gwDsFrom')?.value, document.getElementById?.('gwDsTo')?.value,
+    typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : null]);
+}
+
+function gwGasAssertIntent(intent, account) {
+  if (!intent) throw Object.assign(new Error('Missing swap context'), { code: 'GAS_SWAP_CONTEXT_CHANGED' });
+  const op = gwSwapOpGet();
+  const edited = !op || op.id !== intent.id
+    || String(op.account || '').toLowerCase() !== String(account).toLowerCase()
+    || intent.selection !== gwGasSelectionKey()
+    || (typeof gwDsReadSwapAmtStr === 'function' && gwDsReadSwapAmtStr() !== intent.amt);
+  if (edited) throw Object.assign(new Error(gwGasUiRu()
+    ? 'Пара, сумма или кошелёк изменились. Проверьте обмен и нажмите «Обменять».'
+    : 'The pair, amount or wallet changed. Review the swap and tap Swap.'), { code: 'GAS_SWAP_CONTEXT_CHANGED' });
+}
+
+function gwGasMinOutputNative(quote) {
+  const estimate = quote?.raw?.route?.estimate || quote?.raw?.estimate;
+  if (estimate?.toAmountMin) return Number(estimate.toAmountMin) / 1e18;
+  // Same-chain price/build adapters expose the quoted output and configured slippage.
+  if (!quote?._crossChain && quote?.toAmount) return Number(quote.toAmount) / 1e18 * (1 - gwSwapSlippageFraction());
   return 0;
 }
 
-/**
- * Find another EVM hub with enough of the same gas token to fund a top-up.
- * ETH on Base is topped up from ETH on Ethereum/Arb/OP — never from BNB.
- */
-async function gwGasFindDonor(destChainId, gasSym) {
-  const dest = Number(destChainId);
-  const sym = String(gasSym || 'ETH').toUpperCase();
-  const hubs = (sym === 'ETH' ? GW_GAS_ETH_HUBS : GW_GAS_ALL_HUBS)
-    .filter((c) => c && c !== dest && GW_OC_SWAP[c]);
-  const px = await gwGasNativeUsdPrice(sym);
-  const need = (GW_GAS_TOPUP_USD + GW_GAS_DONOR_KEEP_USD) / (px > 0 ? px : 1);
-  let best = null;
-  for (const c of hubs) {
-    if (gwChainGasSymbol(c) !== sym) continue;
-    const bal = await gwGasNativeBal(c);
-    if (!(bal >= need)) continue;
-    if (!best || bal > best.bal) best = { chainId: c, bal, sym, px };
+/** Recheck funding identity and budget after every mandatory quote refresh. */
+function gwGasValidateFundingQuote(quote, plan) {
+  const fromCid = Number(quote?._fromChainId);
+  const toCid = Number(quote?._toChainId || fromCid);
+  const inn = gwResolveEvmToken(plan.fromChainId, plan.fromSym, 'from');
+  const out = gwResolveEvmToken(plan.toChainId, plan.toSym, 'to');
+  const action = quote?.raw?.action;
+  const params = quote?.raw?.route?.params;
+  const estimate = quote?.raw?.route?.estimate || quote?.raw?.estimate;
+  const input = action?.fromToken?.address || params?.fromToken || estimate?.fromToken?.address;
+  const output = action?.toToken?.address || params?.toToken || estimate?.toToken?.address;
+  const gasUsd = Number(quote?.gasUsd) * (plan.gasMultiplier || 1);
+  const actualSpendUsd = Math.max(plan.spendUsd, Number(quote?.amountInUsd) || 0);
+  const recipient = action?.toAddress || params?.toAddress;
+  const sender = action?.fromAddress || params?.fromAddress;
+  const matchInput = plan.nativeInput ? inn?.isNative && (!input || gwGasNativeAddress(input))
+    : inn?.address?.toLowerCase() === plan.fromAddress?.toLowerCase()
+      && (!input || String(input).toLowerCase() === plan.fromAddress.toLowerCase());
+  if (fromCid !== plan.fromChainId || toCid !== plan.toChainId || !matchInput || !out?.isNative
+      || (output && !gwGasNativeAddress(output)) || !Number.isFinite(gasUsd) || gasUsd < 0
+      || actualSpendUsd + gasUsd > GW_GAS_TOPUP_MAX_USD || (plan.maxGasUsd != null && gasUsd > plan.maxGasUsd)
+      || (recipient && String(recipient).toLowerCase() !== plan.account.toLowerCase())
+      || (sender && String(sender).toLowerCase() !== plan.account.toLowerCase())) {
+    throw Object.assign(new Error('Gas funding quote changed or exceeds the funding budget'), { code: 'GAS_TOPUP_BAD_QUOTE' });
   }
-  return best;
+  if (plan.minOutputNative > 0) {
+    const minimum = gwGasMinOutputNative(quote);
+    if (!(minimum >= plan.minOutputNative)) throw Object.assign(new Error('Gas funding route delivers too little native gas'), { code: 'GAS_TOPUP_BAD_QUOTE' });
+  }
 }
 
-async function gwGasQuoteNativeBridge({ fromChainId, toChainId, sym, amtNum, account }) {
+function gwGasMonitorFunding(op) {
+  if (!op?.hash || op.purpose !== 'gas_topup') return;
+  const key = op.id + ':' + op.hash;
+  if (window.__gwGasFundingMonitorKey === key) return;
+  window.__gwGasFundingMonitorKey = key;
+  const args = { txHash: op.hash, bridge: op.bridge, fromChainId: op.fromChainId || op.chainId,
+    toChainId: op.toChainId, quoteId: op.quoteId, requestId: op.requestId, opId: op.id };
+  if (op.crossChain) {
+    if (/squid/i.test(String(op.bridge || ''))) gwSquidBridgeMonitor(args);
+    else gwLifiBridgeMonitor(args);
+  } else gwEvmConfirmMonitor({ hash: op.hash, chainId: op.chainId, opId: op.id });
+}
+
+function gwGasLogFunding(result, intent, fromSym, toSym, amount, fromChainId, toChainId) {
+  if (typeof gwTxLogPush !== 'function' || !result?.hash) return;
+  gwTxLogPush({ product: 'swap', action: 'gas_topup', kind: 'spot', fromSym, toSym,
+    amt: amount, hash: result.hash, status: result.confirmed ? 'completed' : result.status || 'bridging',
+    namespace: 'evm', chain: String(fromChainId), fromChainId, toChainId, bridge: result.bridge || '',
+    purpose: 'gas_topup', swapIntent: intent });
+}
+
+async function gwGasQuoteNativeBridge({ fromChainId, toChainId, sym, toSym = sym, amtNum, account, maxGasUsd = Infinity, minOutputNative = 0 }) {
+  if (!gwResolveEvmToken(fromChainId, sym, 'from')?.isNative || !gwResolveEvmToken(toChainId, toSym, 'to')?.isNative) return null;
+  const args = { chainId: fromChainId, fromSym: sym, toSym, amtNum, account, toChainId };
   const jobs = [];
-  if (typeof gwAggQuoteLifi === 'function') {
-    jobs.push(gwAggQuoteLifi({
-      chainId: fromChainId, fromSym: sym, toSym: sym, amtNum, account, toChainId,
-      slippage: String(typeof gwSwapSlippageFraction === 'function' ? gwSwapSlippageFraction() : 0.005),
-    }).catch(() => null));
+  if (typeof gwAggQuoteLifi === 'function') jobs.push(gwAggQuoteLifi({ ...args, slippage: String(gwSwapSlippageFraction()) }).catch(() => null));
+  if (typeof gwAggQuoteSquid === 'function') jobs.push(gwAggQuoteSquid(args).catch(() => null));
+  const quotes = (await Promise.all(jobs)).filter(q => q && gwAggCanExec(q)
+    && Number(q._fromChainId) === Number(fromChainId) && Number(q._toChainId) === Number(toChainId)
+    && Number.isFinite(Number(q.gasUsd)) && Number(q.gasUsd) >= 0 && Number(q.gasUsd) <= maxGasUsd
+    && (!minOutputNative || Number(q.raw?.estimate?.toAmountMin || q.raw?.route?.estimate?.toAmountMin || 0) / 1e18 >= minOutputNative));
+  quotes.sort((a, b) => Number(a.gasUsd) - Number(b.gasUsd));
+  return quotes[0] || null;
+}
+
+function gwGasStopAfterWalletAction(error) {
+  const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : null;
+  return Number(error?.code) === 4001
+    || /rejected|declined|timeout|timed out|activity|result unknown|reverted/i.test(String(error?.message || error))
+    || !!(op && (op.hash || op.approvalPending || gwSwapWalletActionPending(op)));
+}
+
+function gwGasCaptureIntent() {
+  const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : null;
+  return op ? { id: op.id, from: op.from, to: op.to, amt: op.amt,
+    chainId: op.chainId, fromChainId: op.fromChainId, toChainId: op.toChainId, account: op.account,
+    selection: gwGasSelectionKey() } : null;
+}
+
+function gwGasRestoreIntent(intent, funding) {
+  if (!intent) return;
+  const op = gwSwapOpGet();
+  if (!op || op.id !== intent.id || op.purpose !== 'gas_topup' || String(op.hash || '').toLowerCase() !== String(funding.hash || '').toLowerCase()) throw Object.assign(new Error('Gas funding submitted; swap context changed.'), { code: 'GAS_TOPUP_PENDING' });
+  const edited = intent.selection !== gwGasSelectionKey()
+    || (typeof gwDsReadSwapAmtStr === 'function' && gwDsReadSwapAmtStr() !== intent.amt);
+  const { selection, id, ...original } = intent;
+  try { if (typeof gwTxLogUpdateStatus === 'function') gwTxLogUpdateStatus({ hash: funding.hash, status: 'completed' }); } catch (_) {}
+  gwSwapOpUpdate({ ...original, purpose: null, gasFunding: funding, stage: 'preparing', hash: null,
+    bridge: null, crossChain: false, submittedAt: null, requestDispatched: false, walletRequestSettledAt: null,
+    walletRequestId: null, walletRequestStartedAt: null, walletRequestAt: null, nonce: null, walletNoConfirmAt: null,
+    walletRequestPending: false, walletResultUnknown: false, approvalPending: false,
+    signStep: null, approvalHash: null, approvalRequested: false, gasSwapIntent: null,
+    requestId: null, quoteId: null, destTxHash: null, gasFundingOutcome: null });
+  window.__gwLastAggQuotes = null;
+  window.__gwOcBalCache = {};
+  if (edited) throw Object.assign(new Error(gwGasUiRu() ? 'Газ получен. Пара изменилась — проверьте новый обмен и нажмите «Обменять».' : 'Gas received. The pair changed — review the new swap and tap Swap.'), { code: 'GAS_TOPUP_READY' });
+}
+
+/** Continue only after real funds arrive, while preserving the submitted funding hash. */
+async function gwGasWaitForFunding({ result, destChainId, account, requiredNative, provider, intent }) {
+  const hash = result?.hash;
+  if (!/^0x[0-9a-f]{64}$/i.test(String(hash))) throw Object.assign(new Error('Invalid gas funding transaction hash'), { code: 'GAS_TOPUP_BAD_QUOTE' });
+  const funding = { hash, fromChainId: result.fromChainId, toChainId: destChainId, bridge: result.bridge, at: Date.now() };
+  if (intent) gwSwapOpUpdate({ purpose: 'gas_topup', gasSwapIntent: intent,
+    stage: 'bridging', hash, namespace: 'evm', chainId: result.fromChainId,
+    fromChainId: result.fromChainId, toChainId: destChainId, crossChain: true, bridge: result.bridge, quoteId: result.quoteId, requestId: result.requestId });
+  gwToast(gwGasUiRu() ? 'Пополняем газ. После поступления основной обмен продолжится — подтвердите следующий запрос в кошельке.' : 'Funding gas. The swap will continue after arrival — confirm the next wallet request.', 'info');
+  let delivery = null;
+  const args = { txHash: hash, bridge: result.bridge, fromChainId: result.fromChainId, toChainId: destChainId,
+    quoteId: result.quoteId, requestId: result.requestId, opId: intent?.id,
+    onTerminal: status => {
+      const op = gwSwapOpGet();
+      if (!intent || op?.id !== intent.id || op?.hash !== hash) return;
+      delivery = status;
+      gwSwapOpUpdate({ gasFundingOutcome: status.outcome, destTxHash: status.destTxHash, message: status.message });
+    } };
+  if (/squid/i.test(String(result.bridge || ''))) gwSquidBridgeMonitor(args);
+  else gwLifiBridgeMonitor(args);
+  const deadline = Date.now() + 180000;
+  while (Date.now() < deadline) {
+    if (intent && gwSwapOpGet()?.id !== intent.id) break;
+    if (delivery && !(delivery.outcome === 'completed' && delivery.success)) {
+      const error = new Error(delivery.message || 'Gas funding was not delivered. The main swap was not submitted.');
+      error.code = 'GAS_TOPUP_NOT_DELIVERED';
+      throw error;
+    }
+    let bal = 0;
+    try { bal = await gwGasNativeBal(destChainId, account); } catch (_) {}
+    if (delivery?.outcome === 'completed' && delivery.success && bal >= requiredNative) {
+      const accounts = await provider.request({ method: 'eth_accounts' });
+      if (String(accounts?.[0] || '').toLowerCase() !== String(account).toLowerCase()) break;
+      gwGasRestoreIntent(intent, { ...funding, destTxHash: delivery.destTxHash });
+      await gwEnsureChain(provider, destChainId);
+      return { ok: true, toppedUp: 'bridge', funding };
+    }
+    await new Promise(resolve => setTimeout(resolve, 2500));
   }
-  if (typeof gwAggQuoteSquid === 'function') {
-    jobs.push(gwAggQuoteSquid({
-      chainId: fromChainId, fromSym: sym, toSym: sym, amtNum, account, toChainId,
-    }).catch(() => null));
-  }
-  if (!jobs.length) return null;
-  const settled = await Promise.all(jobs);
-  const ok = settled.filter((q) => q && typeof q.toAmount === 'bigint' && q.toAmount > 0n);
-  ok.sort((a, b) => (b.toAmount > a.toAmount ? 1 : b.toAmount < a.toAmount ? -1 : 0));
-  return ok[0] || null;
+  const error = new Error(gwGasUiRu() ? 'Газ ещё в пути. Проверяем отправленный перевод; повторно отправлять его не нужно.' : 'Gas funding is still pending. Checking the submitted transfer; do not send it again.');
+  error.code = 'GAS_TOPUP_PENDING';
+  gwGasMonitorFunding(gwSwapOpGet());
+  throw error;
 }
 
 async function gwGasTokenUsdPrice(sym) {
@@ -18532,17 +18702,23 @@ async function gwGasComputeSpendAmt(fromSym, topUpUsd) {
  * Same-chain: swap a slice of fromSym → native gas (extra Trust Confirm),
  * then the main swap continues in the same Start click.
  */
-async function gwGasExecSameChainTokenTopUp({ chainId, fromSym, gasSym, account, provider }) {
+async function gwGasExecSameChainTokenTopUp({ chainId, fromSym, gasSym, account, provider, swapAmount = 0, requiredNative = 0, intent = gwGasCaptureIntent() }) {
   const dest = Number(chainId);
   const from = String(fromSym || '').toUpperCase();
   const gas = String(gasSym || '').toUpperCase();
-  if (!dest || !from || !gas || from === gas) return null;
+  if (!dest || !from || !gas || from === gas || !gwResolveEvmToken(dest, gas, 'to')?.isNative) return null;
   let spend = await gwGasComputeSpendAmt(from, GW_GAS_TOPUP_USD);
   let bal = 0;
-  try { bal = Number(await gwDsTokenBalanceOnChain(from, dest)) || 0; } catch (_) {}
+  try {
+    const token = gwResolveEvmToken(dest, from, 'from');
+    if (!token?.address || token.isNative) return null;
+    const raw = await gwRpcTry(dest, 'eth_call', [{ to: token.address, data: padAddressData(account) }, 'latest']);
+    bal = Number(BigInt(raw)) / 10 ** token.decimals;
+  } catch (_) { return null; }
   if (!(bal > 0)) return null;
   if (spend > bal * 0.45) spend = Math.max(bal * 0.2, Math.min(spend, bal * 0.35));
-  if (!(spend > 0) || spend > bal * 0.95) return null;
+  // Never consume tokens reserved for the exact amount the user selected.
+  if (!(spend > 0) || spend > bal * 0.95 || Number(swapAmount) + spend > bal) return null;
 
   const ru = gwGasUiRu();
   try {
@@ -18551,14 +18727,17 @@ async function gwGasExecSameChainTokenTopUp({ chainId, fromSym, gasSym, account,
       : ('Need gas — Confirm in Trust: small ' + from + '→' + gas + ' top-up, then main swap'), 'info');
   } catch (_) {}
 
-  const quoteFn = (typeof gwMetaAggQuoteBest === 'function') ? gwMetaAggQuoteBest : gwMetaAggQuoteAll;
+  const quoteFn = gwMetaAggQuoteAll;
   if (typeof quoteFn !== 'function') return null;
   const quotes = await quoteFn({
-    chainId: dest, fromSym: from, toSym: gas, amtNum: spend, account,
+    chainId: dest, fromSym: from, toSym: gas, amtNum: spend, account, toChainId: dest,
   });
   const list = Array.isArray(quotes) ? quotes : [];
-  const winner = list.find((q) => q && (q.transactionRequest || q.raw?.transactionRequest || q.aggregator))
-    || list[0];
+  const nativeUsd = await gwGasNativeBal(dest, account) * await gwGasNativeUsdPrice(gas);
+  const tokenPrice = await gwGasTokenUsdPrice(from);
+  const gasPrice = await gwGasNativeUsdPrice(gas);
+  const minOutputNative = Math.max(GW_GAS_MIN_USD / gasPrice, requiredNative - nativeUsd / gasPrice);
+  const winner = list.find(q => gwAggCanExec(q) && Number.isFinite(Number(q.gasUsd)) && Number(q.gasUsd) * 2.5 < nativeUsd * 0.8 && spend * tokenPrice + Number(q.gasUsd) * 2.5 <= GW_GAS_TOPUP_MAX_USD && Number(q._toChainId || dest) === dest && gwGasMinOutputNative(q) >= minOutputNative + Number(q.gasUsd) * 2.5 / gasPrice);
   if (!winner) {
     const err = new Error(ru
       ? ('Нет маршрута ' + from + ' → ' + gas + ' для догрузки газа')
@@ -18566,144 +18745,125 @@ async function gwGasExecSameChainTokenTopUp({ chainId, fromSym, gasSym, account,
     err.code = 'GAS_TOPUP_NO_ROUTE';
     throw err;
   }
-  const isLifi = /lifi/i.test(String(winner.aggregator || winner.tool || ''));
-  if (isLifi && typeof gwOnChainSwapExecLifi === 'function') {
-    await gwOnChainSwapExecLifi({
-      chainId: dest, fromSym: from, toSym: gas, amtNum: spend,
-      quote: winner, provider, account,
-    });
-  } else if (typeof gwOnChainSwapExecMeta === 'function') {
-    await gwOnChainSwapExecMeta({
-      chainId: dest, fromSym: from, toSym: gas, amtNum: spend,
-      quote: winner, provider, account,
-    });
-  } else {
-    return null;
-  }
+  gwGasAssertIntent(intent, account);
+  const fundingPlan = { fromChainId: dest, toChainId: dest, fromSym: from, toSym: gas, account,
+    nativeInput: false, fromAddress: gwResolveEvmToken(dest, from, 'from')?.address, spendUsd: spend * tokenPrice, gasMultiplier: 2.5, maxGasUsd: nativeUsd * 0.8,
+    minOutputNative: minOutputNative + Number(winner.gasUsd) * 2.5 / gasPrice, intent };
+  gwGasValidateFundingQuote(winner, fundingPlan);
+  if (intent) gwSwapOpUpdate({ purpose: 'gas_topup', gasSwapIntent: intent, from, to: gas, amt: String(spend),
+    crossChain: false, chainId: dest, fromChainId: dest, toChainId: dest });
+  const result = await gwOnChainSwapExecMeta({ chainId: dest, fromSym: from, toSym: gas,
+    amtNum: spend, quote: winner, provider, account, gasFundingPlan: fundingPlan });
+  if (!result?.confirmed) throw Object.assign(new Error('Gas top-up result unknown — check wallet Activity'), { code: 'GAS_TOPUP_PENDING' });
+  gwGasLogFunding(result, intent, from, gas, spend, dest, dest);
+  const accounts = await provider.request({ method: 'eth_accounts' });
+  if (String(accounts?.[0] || '').toLowerCase() !== account.toLowerCase()) throw Object.assign(new Error('Gas received; wallet changed'), { code: 'GAS_TOPUP_PENDING' });
+  gwGasRestoreIntent(intent, { hash: result.hash, fromChainId: dest, toChainId: dest, at: Date.now() });
   return { ok: true, spend, gas };
 }
 
-/** Bridge same native from another EVM hub (1–2 min) — then user taps Start again. */
-async function gwGasExecDonorBridgeTopUp({ destChainId, gasSym, account, provider }) {
+/** Quote native gas from other funded networks, then continue the original swap. */
+async function gwGasExecDonorBridgeTopUp({ destChainId, gasSym, account, provider, requiredNative, sourceBalance = 0, intent = gwGasCaptureIntent() }) {
   const dest = Number(destChainId);
   const gas = String(gasSym || '').toUpperCase();
-  const donor = await gwGasFindDonor(dest, gas);
-  if (!donor) return null;
-  const px = donor.px || await gwGasNativeUsdPrice(gas);
-  let amtNum = GW_GAS_TOPUP_USD / (px > 0 ? px : 1);
-  const maxN = GW_GAS_TOPUP_MAX_NATIVE[gas];
-  if (maxN && amtNum > maxN) amtNum = maxN;
-  if (!(amtNum > 0) || amtNum > Number(donor.bal || 0) * 0.5) return null;
-
-  const quote = await gwGasQuoteNativeBridge({
-    fromChainId: donor.chainId,
-    toChainId: dest,
-    sym: gas,
-    amtNum,
-    account,
-  });
-  if (!quote) return null;
-
-  const ru = gwGasUiRu();
-  const fromLbl = (typeof gwChainLabel === 'function') ? gwChainLabel(donor.chainId) : String(donor.chainId);
-  const toLbl = (typeof gwChainLabel === 'function') ? gwChainLabel(dest) : String(dest);
-  try {
-    gwToast(ru
-      ? ('Догружаем ' + gas + ' мостом ' + fromLbl + ' → ' + toLbl + ' — Confirm в Trust')
-      : ('Topping up ' + gas + ' via bridge ' + fromLbl + ' → ' + toLbl + ' — Confirm in Trust'), 'info');
-  } catch (_) {}
-
-  if (typeof gwOnChainSwapExecLifi === 'function') {
-    await gwOnChainSwapExecLifi({
-      chainId: donor.chainId,
-      fromSym: gas,
-      toSym: gas,
-      amtNum,
-      quote,
-      provider,
-      account,
-    });
-  } else {
-    return null;
+  const donors = await gwGasFindDonors(dest, account);
+  const gasPx = await gwGasNativeUsdPrice(gas);
+  let winner = null;
+  for (let offset = 0; offset < donors.length && !winner; offset += 3) {
+    const quoted = await Promise.all(donors.slice(offset, offset + 3).map(async donor => {
+      const quote = await gwGasQuoteNativeBridge({ fromChainId: donor.chainId,
+        toChainId: dest, sym: donor.sym, toSym: gas, amtNum: donor.amtNum, account,
+        maxGasUsd: Math.min(GW_GAS_TOPUP_MAX_USD - donor.amtNum * donor.px, (donor.bal - donor.amtNum) * donor.px - GW_GAS_DONOR_KEEP_USD),
+        minOutputNative: Math.max(GW_GAS_MIN_USD / gasPx, requiredNative - sourceBalance) });
+      if (!quote) return null;
+      const feeUsd = Number(quote.gasUsd);
+      const minOut = Number(quote.raw?.estimate?.toAmountMin || quote.raw?.route?.estimate?.toAmountMin || 0) / 1e18;
+      if (!Number.isFinite(feeUsd) || feeUsd < 0 || donor.amtNum * donor.px + feeUsd > GW_GAS_TOPUP_MAX_USD
+          || donor.bal * donor.px < donor.amtNum * donor.px + feeUsd + GW_GAS_DONOR_KEEP_USD
+          || !(minOut >= Math.max(GW_GAS_MIN_USD / gasPx, requiredNative - sourceBalance))) return null;
+      return { donor, quote, feeUsd };
+    }));
+    winner = quoted.filter(Boolean).sort((a, b) => a.feeUsd - b.feeUsd)[0] || null;
   }
-  const err = new Error(ru
-    ? ('Газ отправлен мостом — подожди 1–2 мин и нажми «Начать» снова')
-    : ('Gas top-up submitted — wait 1–2 min, then tap Start again'));
-  err.code = 'GAS_TOPUP_PENDING';
-  throw err;
+  if (!winner) return null;
+  const { donor, quote } = winner;
+  gwGasAssertIntent(intent, account);
+  const fundingPlan = { fromChainId: donor.chainId, toChainId: dest, fromSym: donor.sym, toSym: gas, account,
+    nativeInput: true, spendUsd: donor.amtNum * donor.px, minOutputNative: Math.max(GW_GAS_MIN_USD / gasPx, requiredNative - sourceBalance), intent };
+  gwGasValidateFundingQuote(quote, fundingPlan);
+  const fromLabel = gwChainLabel(donor.chainId);
+  const toLabel = gwChainLabel(dest);
+  gwToast(gwGasUiRu()
+    ? ('Газ: ' + donor.amtNum.toPrecision(5) + ' ' + donor.sym + ' на ' + fromLabel + ' → ' + gas + ' на ' + toLabel + '. Комиссии ≈ $' + winner.feeUsd.toFixed(2) + '. Подтвердите пополнение в кошельке.')
+    : ('Gas: ' + donor.amtNum.toPrecision(5) + ' ' + donor.sym + ' on ' + fromLabel + ' → ' + gas + ' on ' + toLabel + '. Fees ≈ $' + winner.feeUsd.toFixed(2) + '. Confirm funding in your wallet.'), 'info');
+  if (intent) gwSwapOpUpdate({ purpose: 'gas_topup', gasSwapIntent: intent, from: donor.sym, to: gas, amt: String(donor.amtNum),
+    chainId: donor.chainId, fromChainId: donor.chainId, toChainId: dest, crossChain: true });
+  const result = await gwOnChainSwapExecMeta({ chainId: donor.chainId, fromSym: donor.sym,
+    toSym: gas, amtNum: donor.amtNum, quote, provider, account, deferReceipt: true, gasFundingPlan: fundingPlan });
+  gwGasLogFunding(result, intent, donor.sym, gas, donor.amtNum, donor.chainId, dest);
+  return gwGasWaitForFunding({ result, destChainId: dest, account, requiredNative, provider, intent });
 }
 
-/**
- * If the swap source chain has near-zero native gas:
- *  1) same-chain swap fromSym → gas (extra Confirm), then continue main swap
- *  2) else bridge native from another hub (Confirm), then tap Start again
- */
-async function gwEnsureGasTopUpBeforeSwap({ chainId, fromSym, account, provider }) {
-  if (window.__gwGasTopUpInFlight) return { ok: true, skipped: 'inflight' };
+function gwGasSwapReserveUsd({ chainId, fromSym, toSym, amtNum, account, nativeInput }) {
+  const cache = window.__gwLastAggQuotes;
+  if (!cache || Number(cache.chainId) !== Number(chainId) || cache.fromSym !== fromSym || cache.toSym !== toSym
+      || String(cache.account || '').toLowerCase() !== String(account || '').toLowerCase()
+      || Number(cache.amtNum) !== Number(amtNum) || Date.now() - cache.at > 20000) return GW_GAS_MIN_USD;
+  const costs = (cache.quotes || []).filter(gwAggCanExec).filter(q => !q._fromChainId || Number(q._fromChainId) === Number(chainId)).map(q => {
+    const estimate = q.raw?.route?.estimate || q.raw?.estimate;
+    const items = estimate?.gasCosts;
+    if (Array.isArray(items) && items.length) {
+      return items.filter(c => !c.token?.chainId || Number(c.token.chainId) === Number(chainId))
+        .reduce((sum, c) => sum + Number(c.amountUSD ?? c.amountUsd ?? 0), 0);
+    }
+    return Number(q.raw?.priceRoute?.gasCostUSD ?? q.raw?.data?.routeSummary?.gasUsd ?? q.gasUsd);
+  }).filter(n => Number.isFinite(n) && n > 0);
+  // ERC-20 reserve also covers a possible approval; keep the native swap value separate.
+  return Math.max(GW_GAS_MIN_USD, costs.length ? Math.min(...costs) * (nativeInput ? 1.5 : 2.5) : 0);
+}
+
+/** Check source gas before asking the wallet; do not retry after a wallet action. */
+async function gwEnsureGasTopUpBeforeSwap({ chainId, fromSym, toSym, amtNum, account, provider }) {
+  if (window.__gwGasTopUpInFlight) throw Object.assign(new Error('Gas funding already in progress'), { code: 'GAS_TOPUP_PENDING' });
   const dest = Number(chainId);
   if (!dest || !GW_OC_SWAP[dest]) return { ok: true };
+  const intent = gwGasCaptureIntent();
   const gasSym = gwChainGasSymbol(dest);
   const from = String(fromSym || '').toUpperCase();
-  if (from === gasSym || from === 'W' + gasSym) return { ok: true, skipped: 'native-pay' };
-
-  const bal = await gwGasNativeBal(dest);
+  const resolved = typeof gwResolveEvmToken === 'function' ? gwResolveEvmToken(dest, from, 'from') : null;
+  const nativeInput = from === gasSym && resolved?.isNative !== false;
+  const bal = await gwGasNativeBal(dest, account);
   const px = await gwGasNativeUsdPrice(gasSym);
-  const balUsd = bal * (px > 0 ? px : 0);
-  if (balUsd >= GW_GAS_MIN_USD) return { ok: true, bal, balUsd };
-
-  const ru = gwGasUiRu();
-  const lbl = (typeof gwChainLabel === 'function') ? gwChainLabel(dest) : String(dest);
+  const swapNative = nativeInput ? Number(amtNum) || 0 : 0;
+  if (swapNative > bal) throw Object.assign(new Error(gwGasUiRu()
+    ? ('Не хватает ' + gasSym + ' для суммы обмена в сети ' + gwChainLabel(dest) + '. Выберите токен и сеть, где есть баланс.')
+    : ('Not enough ' + gasSym + ' for the swap amount on ' + gwChainLabel(dest) + '. Choose a funded token and network.')), { code: 'GAS_SWAP_BALANCE' });
+  const reserveUsd = gwGasSwapReserveUsd({ chainId: dest, fromSym, toSym, amtNum, account, nativeInput });
+  const requiredNative = swapNative + reserveUsd / px;
+  if (bal >= requiredNative) return { ok: true, bal };
   window.__gwGasTopUpInFlight = true;
   try {
-    /* Dust left (≥~$0.05): can pay 1–2 top-up txs — buy gas from fromSym first. */
-    if (balUsd >= 0.05 && account && provider?.request) {
+    // Same-chain refuel is possible only when there is enough dust to pay for it.
+    if (!nativeInput && bal * px >= 0.05 && account && provider?.request) {
       try {
-        const done = await gwGasExecSameChainTokenTopUp({
-          chainId: dest, fromSym: from, gasSym, account, provider,
-        });
-        if (done?.ok) {
-          const bal2 = await gwGasNativeBal(dest);
-          const balUsd2 = bal2 * (px > 0 ? px : 0);
-          if (balUsd2 >= GW_GAS_MIN_USD * 0.85) return { ok: true, toppedUp: 'same-chain', bal: bal2 };
-        }
-      } catch (e) {
-        if (e?.code === 'GAS_TOPUP_PENDING') throw e;
-        console.warn('[GROM] same-chain gas top-up', e?.message || e);
+        const done = await gwGasExecSameChainTokenTopUp({ chainId: dest, fromSym: from,
+          gasSym, account, provider, swapAmount: amtNum, requiredNative, intent });
+        if (done?.ok && await gwGasNativeBal(dest, account) >= requiredNative) return done;
+      } catch (error) {
+        if (gwGasStopAfterWalletAction(error) || /^(GAS_TOPUP_(PENDING|READY)|GAS_SWAP_CONTEXT_CHANGED)$/.test(String(error?.code))) throw error;
+        console.warn('[GROM] gas top-up preparation', error?.message || error);
       }
     }
-
-    /* Near-zero gas: bridge native from another hub the user already holds. */
     if (account && provider?.request) {
-      try {
-        await gwGasExecDonorBridgeTopUp({
-          destChainId: dest, gasSym, account, provider,
-        });
-      } catch (e) {
-        if (e?.code === 'GAS_TOPUP_PENDING') throw e;
-        console.warn('[GROM] donor gas bridge', e?.message || e);
-      }
+      const funded = await gwGasExecDonorBridgeTopUp({ destChainId: dest, gasSym,
+        account, provider, requiredNative, sourceBalance: bal, intent });
+      if (funded?.ok) return funded;
     }
-
-    /* Last try: same-chain even with tiny dust (may still fail in wallet). */
-    if (account && provider?.request && from) {
-      try {
-        const done = await gwGasExecSameChainTokenTopUp({
-          chainId: dest, fromSym: from, gasSym, account, provider,
-        });
-        if (done?.ok) return { ok: true, toppedUp: 'same-chain-retry' };
-      } catch (e) {
-        if (e?.code === 'GAS_TOPUP_PENDING') throw e;
-      }
-    }
-
-    const err = new Error(ru
-      ? ('Нужен ' + gasSym + ' на ' + lbl + ' для комиссии — догрузи газ или держи ' + gasSym + ' на другой EVM-сети')
-      : ('Need ' + gasSym + ' on ' + lbl + ' for fees — add gas, or hold ' + gasSym + ' on another EVM hub'));
-    err.code = 'GAS_TOPUP_NO_DONOR';
-    throw err;
-  } finally {
-    try { window.__gwGasTopUpInFlight = false; } catch (_) {}
-  }
+    // Zero gas cannot fund a normal ERC-20 transaction. No futile signing fallback.
+    throw Object.assign(new Error(gwGasUiRu()
+      ? ('Не хватает ' + gasSym + ' для комиссии в сети ' + gwChainLabel(dest) + '. Доступного маршрута пополнения нет; оплата из токена пока недоступна.')
+      : ('Not enough ' + gasSym + ' for fees on ' + gwChainLabel(dest) + '. No affordable gas funding route; token-paid gas is not available yet.')), { code: 'GAS_TOPUP_NO_DONOR' });
+  } finally { window.__gwGasTopUpInFlight = false; }
 }
 try { window.gwEnsureGasTopUpBeforeSwap = gwEnsureGasTopUpBeforeSwap; } catch (_) {}
 
@@ -21395,7 +21555,7 @@ function gwAggCanExec(q) {
   return false;
 }
 
-async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account, onPartial, firstMs, totalMs }) {
+async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account, onPartial, firstMs, totalMs, toChainId }) {
   // Warm catalog only when tokens aren't already resolvable (curated / cached).
   try {
     const haveFrom = typeof gwResolveEvmToken === 'function' && gwResolveEvmToken(chainId, fromSym, 'from');
@@ -21453,12 +21613,12 @@ async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account, onP
     if (window.__gromMetaQuoteErrors.length > 50) window.__gromMetaQuoteErrors.shift();
   });
   const jobs = [
-    wrap(withTimeout(gwAggQuoteLifi({ chainId, fromSym, toSym, amtNum, account }), 'LiFi', 8000), 'LiFi'),
+    wrap(withTimeout(gwAggQuoteLifi({ chainId, fromSym, toSym, amtNum, account, toChainId }), 'LiFi', 8000), 'LiFi'),
     wrap(withTimeout(gwAggQuoteParaswap({ chainId, fromSym, toSym, amtNum, account }), 'Paraswap', 6000), 'Paraswap'),
     wrap(withTimeout(gwAggQuoteKyber({ chainId, fromSym, toSym, amtNum, account }), 'KyberSwap', 3800), 'KyberSwap'),
     wrap(withTimeout(gwAggQuoteOdos({ chainId, fromSym, toSym, amtNum, account }), 'Odos', 5500), 'Odos'),
     wrap(withTimeout(gwAggQuoteCow({ chainId, fromSym, toSym, amtNum, account }), 'CoWSwap', 2500), 'CoWSwap'),
-    wrap(withTimeout(gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account }), 'Squid', 3500), 'Squid'),
+    wrap(withTimeout(gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account, toChainId }), 'Squid', 3500), 'Squid'),
   ];
   try { window.__gromMetaQuoteTried = jobs.length; } catch (_) {}
   const started = Date.now();
@@ -21831,7 +21991,7 @@ async function gwSimulateSwapTx(chainId, txParams) {
  * Trust shows BOTH approve and swap as "0 BNB" smart-contract calls —
  * never cascade to another aggregator after the first wallet prompt.
  */
-async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, provider, account, deferReceipt = false }) {
+async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, provider, account, deferReceipt = false, gasFundingPlan = null }) {
   let liveProvider = provider;
   let execQuote = quote;
   const execChain = Number(quote._fromChainId || chainId);
@@ -21846,7 +22006,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
       ? gwTokenChainHint(fromSym, execChain)
       : `${fromSym} not available on this chain`);
   }
-  const isNative = !!inn.isNative || fromSym === cfg.native;
+  const isNative = !!inn.isNative;
   const inAddr = isNative
     ? cfg.wrapped
     : (inn.address === GW_META_NATIVE ? cfg.wrapped : inn.address);
@@ -21879,6 +22039,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
     throw new Error(`No ${fromSym} on this network — switch chain chip to where your tokens are`);
   }
   const useAmtNumApprox = Number(useAmtStr); // display/compare only
+  if (gasFundingPlan && useAmtNumApprox > balOnChain * 0.9995) throw Object.assign(new Error('Gas funding balance changed'), { code: 'GAS_TOPUP_BAD_AMT' });
   if (!isNative && useAmtNumApprox > balOnChain * 0.9995) {
     // Trim MAX in base units (integer), then back to decimal string
     let trimmedStr = useAmtStr;
@@ -21923,6 +22084,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
 
   const buildReady = async (q) => {
     await gwAggBuildTxIfNeeded(q, { chainId: execChain, account });
+    if (gasFundingPlan) gwGasValidateFundingQuote(q, gasFundingPlan);
     if (!q.transactionRequest?.to || !q.transactionRequest?.data) {
       throw new Error(`${q.aggregator}: no tx`);
     }
@@ -21941,6 +22103,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
     }
     console.log('[GROM] meta-exec allowance', { token: inAddr, spender: spender0, allow: allow.toString(), need: amountIn.toString() });
     if (allow < amountIn) {
+      if (gasFundingPlan) gwGasAssertIntent(gasFundingPlan.intent, account);
       try { gwWakeWalletForSigning({ action: 'approve' }); } catch (_) {}
       liveProvider = await gwEnsureLiveSigningProvider(liveProvider);
       await gwErc20ApproveMax(liveProvider, inAddr, spender0, account, execChain, amountIn);
@@ -21959,7 +22122,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
     const needRefresh = window.GromSwapCore?.requiresMandatoryPreSignRefresh
       ? window.GromSwapCore.requiresMandatoryPreSignRefresh(execQuote.aggregator)
       : /Kyber|Paraswap|Odos|LiFi/i.test(String(execQuote.aggregator || ''));
-    if (needRefresh) {
+    if (needRefresh || gasFundingPlan) {
       await gwAggRefreshExecQuote(execQuote, {
         chainId: execChain, fromSym, toSym, amtNum: useAmtStr, account,
       });
@@ -22017,6 +22180,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
     from: account, to: tx.to, data: tx.data, value: tx.value || '0x0',
   });
   if (!sim.ok) {
+    if (gasFundingPlan) throw Object.assign(new Error('Gas funding route would revert'), { code: 'GAS_TOPUP_BAD_QUOTE' });
     console.warn('[GROM] simulate failed', execQuote.aggregator, sim.err);
     const backups = [];
     const lifi = await pickLifiBackup();
@@ -22093,6 +22257,10 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
       decimals: inDec,
     });
   }
+  if (gasFundingPlan) {
+    gwGasAssertIntent(gasFundingPlan.intent, account);
+    gwGasValidateFundingQuote(execQuote, gasFundingPlan);
+  }
   const hash = await gwProviderSendTx(liveProvider, {
     from: account,
     to:   tx.to,
@@ -22125,7 +22293,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
       const em = String(e?.message || e || '');
       if (/reverted/i.test(em)) {
         // One automatic LiFi retry if Kyber landed but reverted.
-        if (!/LiFi/i.test(String(execQuote.aggregator || ''))) {
+        if (!gasFundingPlan && !/LiFi/i.test(String(execQuote.aggregator || ''))) {
           const backup = await pickLifiBackup();
           if (backup) {
             gwToast('Previous tx reverted — retrying with LiFi…', 'warn');
@@ -23417,11 +23585,10 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
     console.warn('[GROM] swap chain: UI', uiChainId, '≠ wallet', walletChainId, '— using', chainId, 'for quotes/exec');
   }
 
-  /* Gas top-up MVP: ERC-20 / cross-chain swap with empty native on source →
-   * bridge a little gas from another hub, then user retries main swap. */
-  if (typeof gwEnsureGasTopUpBeforeSwap === 'function' && !window.__gwGasTopUpInFlight) {
+  /* Refuel source gas when possible, preserving the original swap amount and session. */
+  if (typeof gwEnsureGasTopUpBeforeSwap === 'function') {
     await gwEnsureGasTopUpBeforeSwap({
-      chainId, fromSym, account, provider,
+      chainId, fromSym, toSym, amtNum, account, provider,
     });
   }
 
@@ -24052,6 +24219,14 @@ async function gwDsSubmit() {
       const rejected = classified.kind === 'cancelled';
       const timedOut = classified.kind === 'unknown';
       const gasTopUpOk = e?.code === 'GAS_TOPUP_PENDING' || /^Gas top-up submitted/i.test(reason);
+      if (gasTopUpOk && failedOp?.purpose === 'gas_topup' && failedOp.hash) {
+        classified = { kind: 'unknown', keepLock: true, stage: failedOp.crossChain ? 'bridging' : 'submitted' };
+        gwGasMonitorFunding(failedOp);
+      }
+      if (e?.code === 'GAS_TOPUP_NOT_DELIVERED' && /^(failed|refunded|partial)$/.test(String(failedOp?.gasFundingOutcome))) {
+        classified = { kind: 'failed', keepLock: false, stage: failedOp.gasFundingOutcome };
+        try { gwTxLogUpdateStatus({ hash: failedOp.hash, status: classified.stage, destTxHash: failedOp.destTxHash }); } catch (_) {}
+      }
       let msg;
       if (gasTopUpOk) {
         msg = reason;
@@ -24070,7 +24245,7 @@ async function gwDsSubmit() {
         msg = `Not enough ${from} to cover swap + gas`;
       } else if (e?.code === 'GAS_TOPUP_PENDING' || /Gas top-up/i.test(reason)) {
         msg = reason;
-      } else if (e?.code === 'GAS_TOPUP_NO_DONOR' || e?.code === 'GAS_TOPUP_NO_ROUTE'
+      } else if (/^GAS_(BALANCE_UNAVAILABLE|SWAP_BALANCE|SWAP_CONTEXT_CHANGED|TOPUP_READY)$/.test(String(e?.code)) || e?.code === 'GAS_TOPUP_NOT_DELIVERED' || e?.code === 'GAS_TOPUP_NO_DONOR' || e?.code === 'GAS_TOPUP_NO_ROUTE'
         || e?.code === 'GAS_TOPUP_BAD_QUOTE' || e?.code === 'GAS_TOPUP_BAD_AMT'
         || e?.code === 'TX_VALUE_MISMATCH' || e?.code === 'TX_VALUE_BAD' || e?.code === 'TX_VALUE_CAP') {
         msg = reason;

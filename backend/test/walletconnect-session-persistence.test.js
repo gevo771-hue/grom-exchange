@@ -132,11 +132,12 @@ test('reload restores the matching wallet topic and swap uses it without a new p
     namespaces: { eip155: { accounts: ['eip155:42161:' + account] } } });
   const matching = session('existing-topic', address, now + 300);
   const requests = [];
+  const handlers = new Map();
   const client = {
     session: { getAll: () => [session('expired', address, now - 1),
       session('other-wallet', '0x2222222222222222222222222222222222222222', now + 900), matching] },
     request: async (request) => { requests.push(request); return 'fake-hash'; },
-    on() {},
+    on(event, handler) { handlers.set(event, handler); },
   };
   const ctx = vm.createContext({ window: { GROM_CONN: {} }, currentAccount: null, currentChainId: 1,
     wcProvider: null, _wcClient: null, _wcClientPromise: null,
@@ -148,7 +149,7 @@ test('reload restores the matching wallet topic and swap uses it without a new p
     chainIdFromWcSession: () => 42161, wcChainRefForRequest: () => 'eip155:42161',
     gwPatchProviderRequestAccounts: (p) => p,
   });
-  vm.runInContext([fn('buildSignClientEip1193'), fn('gwRestoreSignClientSession'),
+  vm.runInContext([fn('gwSignClientRequest'), fn('buildSignClientEip1193'), fn('gwRestoreSignClientSession'),
     fn('gwRestorePersistedWcSession'), fn('gwEnsureSigningForSwap'),
     'function gwActiveSigningProvider(){ return wcProvider; }'].join('\n'), ctx);
   const restored = await ctx.gwRestorePersistedWcSession();
@@ -160,6 +161,12 @@ test('reload restores the matching wallet topic and swap uses it without a new p
   assert.equal(requests.length, 1);
   assert.equal(requests[0].topic, 'existing-topic');
   assert.equal(requests[0].request.method, 'eth_sendTransaction');
+  handlers.get('session_delete')({ topic: 'another-tab' });
+  assert.equal(ctx.wcProvider, restored, 'deletion of a sibling must not disconnect this provider');
+  const replacement = { session: { topic: 'new-connection' } };
+  ctx.wcProvider = replacement;
+  handlers.get('session_delete')({ topic: matching.topic });
+  assert.equal(ctx.wcProvider, replacement, 'a late event for the previous provider must not clear its replacement');
 });
 
 test('an expired session is not presented as a live signer', async () => {

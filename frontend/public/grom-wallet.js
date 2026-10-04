@@ -1516,7 +1516,7 @@ function gromReferralPayload() {
   try {
     const code = String(localStorage.getItem('grom_ref') || '').trim().toUpperCase();
     const capturedAt = Number(localStorage.getItem('grom_ref_at') || 0);
-    if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)
+    if (!/^(?:[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}|[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6})$/.test(code)
       || !Number.isFinite(capturedAt) || capturedAt <= 0
       || Date.now() - capturedAt > 30 * 24 * 60 * 60 * 1000) {
       localStorage.removeItem('grom_ref');
@@ -5091,6 +5091,7 @@ function setText(id, text) {
 }
 let gwReferralLoadId = 0;
 let gwReferralSigning = false;
+const gwReferralLinks = new Map();
 function gwReferralAddress() {
   try { return String(gwDisplayAddress() || gwReadOnlyAddress() || '').trim().toLowerCase(); }
   catch (_) { return ''; }
@@ -5103,76 +5104,108 @@ function gwReferralActions(ready) {
 }
 function gwSetReferralEmpty(message) {
   const connected = !!gwReferralAddress();
-  const code = document.getElementById('refCode');
-  const link = document.getElementById('refLink');
-  // Account values must not be overwritten by a later language repaint.
-  for (const el of [code, link]) el?.removeAttribute('data-i18n');
-  code?.classList.add('ref-placeholder');
+  for (const id of ['refCode', 'refLink']) document.getElementById(id)?.removeAttribute('data-i18n');
+  document.getElementById('refCode')?.classList.add('ref-placeholder');
   setText('refCode', '—');
-  setText('refLink', gwUxText('Ссылка появится после входа', 'Your link will appear after sign-in'));
+  setText('refLink', connected ? gwUxText('Загружаем ссылку…', 'Loading invite link…') : gwUxText('Подключите кошелёк', 'Connect wallet'));
   const sign = document.getElementById('refSignInBtn');
   if (sign) {
-    sign.hidden = false;
+    sign.hidden = connected;
     sign.disabled = gwReferralSigning;
     sign.removeAttribute('data-i18n');
-    sign.textContent = gwReferralSigning
-      ? gwUxText('Подтвердите вход в кошельке…', 'Confirm sign-in in your wallet…')
-      : connected ? gwUxText('Получить ссылку', 'Get invite link') : gwUxText('Подключить кошелёк', 'Connect wallet');
+    sign.textContent = gwUxText('Подключить кошелёк', 'Connect wallet');
   }
-  setText('refStatus', message || gwUxText(
-    'Подтвердите владение кошельком одной подписью. Это вход, без комиссии и отправки средств.',
-    'Verify wallet ownership with one signature. This signs you in without gas or sending funds.'));
+  setText('refStatus', message || '');
+  setText('refStatsStatus', '');
   gwReferralActions(false);
   for (const id of ['refKpiTotalReferred', 'refKpiSignups30d', 'refKpiActive30d']) setText(id, '—');
   const qr = document.getElementById('refQr');
   if (qr) { qr.replaceChildren(); delete qr.dataset.gwQrUrl; }
 }
+function gwRenderReferralIdentity(data) {
+  const code = String(data.code || '').trim().toUpperCase();
+  if (!/^GROM-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)) throw new Error('Invalid referral identity');
+  const link = new URL('/r/' + code.slice(5), window.location.origin).toString();
+  for (const id of ['refCode', 'refLink']) document.getElementById(id)?.removeAttribute('data-i18n');
+  document.getElementById('refCode')?.classList.remove('ref-placeholder');
+  setText('refCode', code); setText('refLink', link);
+  setText('refStatus', gwUxText('Ссылка готова — поделитесь ей с друзьями.', 'Your invite link is ready to share.'));
+  gwReferralActions(true);
+  gwFixReferralQR();
+}
+function gwReferralStatsSignIn(message) {
+  const sign = document.getElementById('refSignInBtn');
+  if (sign) {
+    sign.hidden = false; sign.disabled = gwReferralSigning;
+    sign.removeAttribute('data-i18n');
+    sign.textContent = gwReferralSigning ? gwUxText('Подтвердите вход в кошельке…', 'Confirm sign-in in your wallet…')
+      : gwUxText('Открыть статистику', 'View invite statistics');
+  }
+  setText('refStatsStatus', message || gwUxText('Для личной статистики подтвердите вход. Ссылкой уже можно делиться.',
+    'Sign in to view private statistics. Your invite link is already ready to share.'));
+}
 async function hydrateReferralSlice(force) {
   if (!document.getElementById('refCode')) return;
   const loadId = ++gwReferralLoadId;
   const address = gwReferralAddress();
-  const jwt = localStorage.getItem('grom_jwt') || '';
-  const stillCurrent = () => loadId === gwReferralLoadId && address === gwReferralAddress()
-    && jwt === (localStorage.getItem('grom_jwt') || '');
-  const payload = typeof gwJwtPayload === 'function' ? gwJwtPayload(jwt) : null;
-  const owner = String(payload?.addr || payload?.address || '').toLowerCase();
-  if (!jwt || !gwJwtValid() || (owner && address && owner !== address)) { gwSetReferralEmpty(); return; }
+  const stillCurrent = () => loadId === gwReferralLoadId && address === gwReferralAddress();
+  gwSetReferralEmpty();
+  if (!address) return;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    const response = await fetch('/api/referral/summary', {
-      headers: { Authorization: `Bearer ${jwt}` }, cache: 'no-store', signal: controller.signal,
-    });
-    if (!stillCurrent()) return;
-    if (response.status === 401 || response.status === 403) {
-      localStorage.removeItem('grom_jwt');
-      gwSetReferralEmpty(gwUxText('Войдите подписью кошелька, чтобы получить ссылку.', 'Sign in with your wallet to get your link.'));
-      return;
+    const cached = gwReferralLinks.get(address);
+    let data = cached?.data;
+    if (!cached || Date.now() - cached.at > 60000) {
+      const response = await fetch('/api/referral/link?wallet=' + encodeURIComponent(address), {
+        cache: 'no-store', signal: controller.signal,
+      });
+      if (!response.ok) throw new Error('Referral link unavailable');
+      data = await response.json();
     }
-    if (!response.ok) throw new Error('Referral service unavailable');
-    const data = await response.json();
     if (!stillCurrent()) return;
-    const code = String(data.code || '').trim().toUpperCase();
-    if (!/^GROM-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)) throw new Error('Invalid referral identity');
-    const link = new URL('/r/' + code.slice(5), window.location.origin).toString();
-    const codeEl = document.getElementById('refCode');
-    const linkEl = document.getElementById('refLink');
-    for (const el of [codeEl, linkEl]) el?.removeAttribute('data-i18n');
-    codeEl?.classList.remove('ref-placeholder');
-    setText('refCode', code); setText('refLink', link);
-    const sign = document.getElementById('refSignInBtn');
-    if (sign) sign.hidden = true;
-    setText('refStatus', gwUxText('Ссылка готова — поделитесь ей с друзьями.', 'Your invite link is ready to share.'));
-    const count = value => Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? Number(value).toLocaleString() : '0';
+    gwRenderReferralIdentity(data);
+    gwReferralLinks.set(address, { data, at: cached && Date.now() - cached.at <= 60000 ? cached.at : Date.now() });
+  } catch (error) {
+    if (stillCurrent()) {
+      gwSetReferralEmpty(gwUxText('Не удалось загрузить ссылку. Повторите загрузку.', 'Could not load invite link. Try again.'));
+      const retry = document.getElementById('refLinkRetry');
+      if (retry) retry.hidden = false;
+    }
+    console.warn('[grom-referral] link failed:', error?.message || error);
+    return;
+  } finally { clearTimeout(timeout); }
+  if (!stillCurrent()) return;
+  const retry = document.getElementById('refLinkRetry');
+  if (retry) retry.hidden = true;
+  const jwt = localStorage.getItem('grom_jwt') || '';
+  const payload = typeof gwJwtPayload === 'function' ? gwJwtPayload(jwt) : null;
+  const owner = String(payload?.addr || payload?.address || '').toLowerCase();
+  // A public link never implies authentication or permits another wallet's counts.
+  if (!jwt || !gwJwtValid() || owner !== address) { gwReferralStatsSignIn(); return; }
+  const statsController = new AbortController();
+  const statsTimeout = setTimeout(() => statsController.abort(), 12000);
+  try {
+    const response = await fetch('/api/referral/summary', {
+      headers: { Authorization: `Bearer ${jwt}` }, cache: 'no-store', signal: statsController.signal,
+    });
+    if (!stillCurrent() || jwt !== (localStorage.getItem('grom_jwt') || '')) return;
+    if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem('grom_jwt'); gwReferralStatsSignIn(); return;
+    }
+    if (!response.ok) throw new Error('Referral statistics unavailable');
+    const data = await response.json();
+    if (!stillCurrent() || jwt !== (localStorage.getItem('grom_jwt') || '')) return;
+    const count = value => Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? Number(value).toLocaleString() : '—';
     setText('refKpiTotalReferred', count(data.totals?.total_referred));
     setText('refKpiSignups30d', count(data.funnel?.signups_30d));
     setText('refKpiActive30d', count(data.funnel?.active_30d));
-    gwReferralActions(true);
-    gwFixReferralQR();
+    const sign = document.getElementById('refSignInBtn');
+    if (sign) sign.hidden = true;
+    setText('refStatsStatus', '');
   } catch (error) {
-    if (stillCurrent()) gwSetReferralEmpty(gwUxText('Не удалось загрузить рефералку. Нажмите «Получить ссылку», чтобы повторить.', 'Could not load referrals. Select Get invite link to retry.'));
-    console.warn('[grom-referral] hydrate failed:', error?.message || error);
-  } finally { clearTimeout(timeout); }
+    if (stillCurrent()) gwReferralStatsSignIn(gwUxText('Статистика временно недоступна. Ссылка работает.', 'Statistics are temporarily unavailable. Your invite link still works.'));
+  } finally { clearTimeout(statsTimeout); }
 }
 window.hydrateReferralSlice = hydrateReferralSlice;
 window.addEventListener('grom:wallet-connected', () => {
@@ -5180,6 +5213,7 @@ window.addEventListener('grom:wallet-connected', () => {
 });
 window.addEventListener('grom:wallet-disconnected', () => {
   ++gwReferralLoadId;
+  gwReferralLinks.clear();
   if (document.getElementById('page-referral')) gwSetReferralEmpty();
 });
 window.addEventListener('grom:lang-change', () => {
@@ -5189,7 +5223,7 @@ window.addEventListener('grom:lang-change', () => {
 window.gwReferralSignIn = async function gwReferralSignIn() {
   if (gwReferralSigning) return false;
   gwReferralSigning = true;
-  gwSetReferralEmpty();
+  gwReferralStatsSignIn();
   try {
     const payload = gwJwtPayload();
     const owner = String(payload?.addr || payload?.address || '').toLowerCase();
@@ -5211,7 +5245,7 @@ window.gwReferralSignIn = async function gwReferralSignIn() {
   } finally {
     gwReferralSigning = false;
     const sign = document.getElementById('refSignInBtn');
-    if (sign && !sign.hidden) { sign.disabled = false; sign.textContent = gwUxText('Получить ссылку', 'Get invite link'); }
+    if (sign && !sign.hidden) { sign.disabled = false; sign.textContent = gwUxText('Открыть статистику', 'View invite statistics'); }
   }
 };
 function gwZeroRefStatsPlaceholders() { gwSetReferralEmpty(); }

@@ -11,12 +11,12 @@ function fn(name) {
 const a = '0x' + '1'.repeat(40), b = '0x' + '2'.repeat(40);
 function setup() {
   const elements = new Map();
-  const ids = ['refCode','refLink','refStatus','refSignInBtn','refCopyBtn','refCopyLinkBtn','refShareXBtn','refShareTelegramBtn','refQr','refKpiTotalReferred','refKpiSignups30d','refKpiActive30d'];
+  const ids = ['refCode','refLink','refStatus','refSignInBtn','refCopyBtn','refCopyLinkBtn','refShareXBtn','refShareTelegramBtn','refQr','refKpiTotalReferred','refKpiSignups30d','refKpiActive30d','refStatsStatus','refLinkRetry'];
   for (const id of ids) elements.set(id, { textContent: '', hidden: false, disabled: false, attrs: new Set(['data-i18n']), dataset: {}, classList: { add(){}, remove(){} }, removeAttribute(attr){ this.attrs.delete(attr); }, replaceChildren(){} });
   const storage = new Map([['grom_jwt', 'test-token']]);
   const calls = [];
   const ctx = vm.createContext({ window: { location: { origin: 'https://grom.exchange' } }, console, AbortController, URL, setTimeout, clearTimeout,
-    address: a, owner: a, valid: true, gwReferralLoadId: 0, gwReferralSigning: false,
+    address: a, owner: a, valid: true, gwReferralLoadId: 0, gwReferralSigning: false, gwReferralLinks: new Map(),
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key,value) => storage.set(key,value), removeItem: key => storage.delete(key) },
     document: { getElementById: id => elements.get(id) || null },
     gwDisplayAddress: () => ctx.address, gwReadOnlyAddress: () => '', gwUxText: (ru) => ru,
@@ -29,19 +29,19 @@ function setup() {
     gwEnsureSignedIn: async opts => { calls.push(opts); storage.set('grom_jwt','new-token'); ctx.owner = ctx.address; return true; },
     gwToast() {},
   });
-  vm.runInContext(['gwReferralAddress','gwReferralActions','gwSetReferralEmpty','hydrateReferralSlice'].map(fn).join('\n'),ctx);
+  vm.runInContext(['gwReferralAddress','gwReferralActions','gwSetReferralEmpty','gwRenderReferralIdentity','gwReferralStatsSignIn','hydrateReferralSlice'].map(fn).join('\n'),ctx);
   const start = source.indexOf('window.gwReferralSignIn = async function');
   vm.runInContext(source.slice(start,source.indexOf('\n};',start)+3),ctx);
   return { ctx, elements, storage, calls };
 }
-test('referrals show one sign-in action and disable sharing until issued identity exists', () => {
-  const h=setup(); h.ctx.gwSetReferralEmpty();
+test('referrals show a connect action only when disconnected and disable sharing until issued identity exists', () => {
+  const h=setup(); h.ctx.address=''; h.ctx.gwSetReferralEmpty();
   assert.equal(h.elements.get('refCode').textContent,'—');
   assert.equal(h.elements.get('refSignInBtn').hidden,false);
   for(const id of ['refCopyBtn','refCopyLinkBtn','refShareXBtn','refShareTelegramBtn']) assert.equal(h.elements.get(id).disabled,true);
   assert.equal(h.elements.get('refCode').attrs.has('data-i18n'),false);
 });
-test('account-backed identity enables sharing, renders QR and survives language repaint', async () => {
+test('public identity enables sharing, renders QR and survives language repaint', async () => {
   const h=setup(); await h.ctx.hydrateReferralSlice(true);
   assert.equal(h.elements.get('refCode').textContent,'GROM-ABCDEFGHJK');
   assert.equal(h.elements.get('refLink').textContent,'https://grom.exchange/r/ABCDEFGHJK');
@@ -51,10 +51,22 @@ test('account-backed identity enables sharing, renders QR and survives language 
   assert.equal(h.elements.get('refLink').attrs.has('data-i18n'),false);
   assert.deepEqual(h.calls,['qr']);
 });
-test('another wallet JWT cannot expose referral identity or counts', async () => {
-  const h=setup(); h.ctx.owner=b; let requests=0; h.ctx.fetch=()=>{requests++;};
+test('another wallet JWT never authenticates counts but public link still works', async () => {
+  const h=setup(); h.ctx.owner=b; const requests=[];
+  h.ctx.fetch=async(url,opts)=>{requests.push({url,opts});return {ok:true,json:async()=>({code:'GROM-ABCDEFGHJK'})};};
   await h.ctx.hydrateReferralSlice(true);
-  assert.equal(requests,0); assert.equal(h.elements.get('refCode').textContent,'—');
+  assert.equal(requests.length,1); assert.match(requests[0].url,/referral\/link/);
+  assert.equal(requests[0].opts.headers,undefined);
+  assert.equal(h.elements.get('refCode').textContent,'GROM-ABCDEFGHJK');
+  assert.equal(h.elements.get('refKpiTotalReferred').textContent,'—');
+});
+test('connected wallet without JWT gets link and QR without any wallet request',async()=>{
+  const h=setup();h.storage.clear();h.ctx.valid=false;
+  await h.ctx.hydrateReferralSlice(true);
+  assert.equal(h.elements.get('refCode').textContent,'GROM-ABCDEFGHJK');
+  assert.equal(h.elements.get('refCopyLinkBtn').disabled,false);
+  assert.deepEqual(h.calls,['qr']);
+  assert.equal(h.elements.get('refSignInBtn').textContent,'Открыть статистику');
 });
 test('late response cannot repaint referrals after wallet changes', async () => {
   const h=setup(); let resolve;
@@ -63,14 +75,23 @@ test('late response cannot repaint referrals after wallet changes', async () => 
   resolve({ok:true,status:200,json:async()=>({code:'GROM-ABCDEFGHJK'})}); await pending;
   assert.equal(h.elements.get('refCode').textContent,'—'); assert.equal(h.calls.length,0);
 });
-test('expired auth offers sign-in; server errors offer retry instead of pretending no referrals', async () => {
+test('expired auth and failed statistics preserve shareable public link', async () => {
   for(const status of [401,503]) {
-    const h=setup(); h.ctx.fetch=async()=>({ok:false,status}); await h.ctx.hydrateReferralSlice(true);
+    const h=setup(); h.ctx.fetch=async url=>url.includes('/link?')?{ok:true,json:async()=>({code:'GROM-ABCDEFGHJK'})}:{ok:false,status};
+    await h.ctx.hydrateReferralSlice(true);
     assert.equal(h.elements.get('refSignInBtn').hidden,false);
-    assert.equal(h.elements.get('refCopyBtn').disabled,true);
+    assert.equal(h.elements.get('refCopyBtn').disabled,false);
     assert.equal(h.storage.has('grom_jwt'),status!==401);
-    assert.match(h.elements.get('refStatus').textContent,status===401?/Войдите/:/Не удалось/);
+    assert.equal(h.elements.get('refKpiTotalReferred').textContent,'—');
   }
+});
+test('public link failure offers retry and never asks for signature',async()=>{
+  const h=setup();h.storage.clear();h.ctx.fetch=async()=>({ok:false,status:503});
+  await h.ctx.hydrateReferralSlice(true);
+  assert.equal(h.elements.get('refLinkRetry').hidden,false);
+  assert.equal(h.elements.get('refSignInBtn').hidden,true);
+  assert.equal(h.elements.get('refCopyBtn').disabled,true);
+  assert.deepEqual(h.calls,[]);
 });
 test('referral sign-in reuses live signer and requests remote SIWE without admin login', async () => {
   const h=setup(); await h.ctx.window.gwReferralSignIn();
@@ -109,4 +130,15 @@ test('remote referral login sends only SIWE through existing session, verifies s
  assert.match(wake[0].request.params[0],/grom.exchange wants you to sign in/);assert.equal(JSON.parse(requests[1].opts.body).signature,'0xsignature');assert.equal(storage.get('grom_jwt'),'verified-jwt');
  storage.clear();ctx.gwProviderRequestWithWake=async()=>{owner=b;return '0xsignature';};
  await assert.rejects(ctx.authenticateWithSIWE(a,provider,{allowRemoteSignature:true}),/Wallet changed/);assert.equal(storage.has('grom_jwt'),false);
+});
+
+
+test('returning to referrals reuses only the wallet-scoped public link cache',async()=>{
+ const h=setup();h.storage.clear();let requests=0;
+ h.ctx.fetch=async()=>{requests++;return {ok:true,json:async()=>({code:requests===1?'GROM-ABCDEFGHJK':'GROM-KJHGFEDCBA'})};};
+ await h.ctx.hydrateReferralSlice(true);await h.ctx.hydrateReferralSlice(true);
+ assert.equal(requests,1);assert.equal(h.elements.get('refCode').textContent,'GROM-ABCDEFGHJK');
+ h.ctx.address=b;await h.ctx.hydrateReferralSlice(true);
+ assert.equal(requests,2);assert.equal(h.elements.get('refCode').textContent,'GROM-KJHGFEDCBA');
+ assert.equal(h.elements.get('refKpiTotalReferred').textContent,'—');
 });

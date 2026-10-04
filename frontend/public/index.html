@@ -299,7 +299,7 @@
 (function () {
   function rememberReferral(raw) {
     var code = String(raw || '').trim().toUpperCase().replace(/^GROM-/, '');
-    if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)) return false;
+    if (!/^(?:[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}|[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6})$/.test(code)) return false;
     try {
       localStorage.setItem('grom_ref', code);
       localStorage.setItem('grom_ref_at', String(Date.now()));
@@ -738,7 +738,7 @@
 <meta name="application-name" content="GROM" />
 <meta name="mobile-web-app-capable" content="yes" />
 <style>
-#refSignInBtn[hidden]{display:none!important}
+#refSignInBtn[hidden],#refLinkRetry[hidden]{display:none!important}
 
   /* =========================================================
      GROM — UI palette (sRGB / IEC 61966-2.1; CSS hex & rgb() are sRGB in browsers)
@@ -6885,7 +6885,7 @@
           <div class="ref-val mono" id="refCode" data-i18n="ref_connect_wallet_code">Connect wallet to generate</div>
           <button class="btn-primary" onclick="copyRef()" id="refCopyBtn" disabled data-i18n="common_copy">Copy</button>
           <p id="refStatus" role="status" class="ref-status"></p>
-          <button class="btn-ghost" id="refSignInBtn" type="button" hidden onclick="gwReferralSignIn()" data-i18n="ref_sign_to_load">Sign in with wallet</button>
+          <button class="btn-ghost" id="refLinkRetry" type="button" hidden onclick="hydrateReferralSlice(true)" aria-label="Retry invite link">↻</button>
         </div>
         <div class="ref-link">
           <div class="ref-lbl" data-i18n="ref_invite_link">Invite link</div>
@@ -6902,7 +6902,8 @@
         </div>
       </div>
 
-      <div class="ref-kpis" data-authed-only="1">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0"><p id="refStatsStatus" role="status" class="ref-status"></p><button class="btn-ghost" id="refSignInBtn" type="button" hidden onclick="gwReferralSignIn()" >Sign in with wallet</button></div>
+      <div class="ref-kpis">
         <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_referred">Wallets invited</div><div class="kpi-val mono" id="refKpiTotalReferred">—</div><div class="kpi-sub" data-i18n="ref_total_invited_note">Accounts attributed to your code</div></div>
         <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_signups_30d">New signups (30d)</div><div class="kpi-val mono" id="refKpiSignups30d">—</div><div class="kpi-sub" data-i18n="ref_signups_note">Created in the last 30 days</div></div>
         <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_active_30d">Seen (30d)</div><div class="kpi-val mono" id="refKpiActive30d">—</div><div class="kpi-sub" data-i18n="ref_active_note">Last seen in the last 30 days</div></div>

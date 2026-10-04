@@ -5,6 +5,7 @@ import { generateReferralCode, normalizeReferralCode, ensureReferralCode, attach
 import createReferralRouter from '../src/referral/routes.js';
 import { pool } from '../src/db/pool.js';
 import express from 'express';
+import {readFileSync} from 'node:fs';
 
 const pgEnabled = process.env.GROM_REQUIRE_PG === '1';
 
@@ -127,4 +128,21 @@ test('an invite remains attributed before its inviter signs in', {skip:!pgEnable
     await pool.query('DELETE FROM users WHERE wallet_address=ANY($1::text[])',[[inviter,invitee]]);
     await pool.query('DELETE FROM wallet_referral_links WHERE wallet_address=ANY($1::text[])',[[inviter,invitee]]);
   }
+});
+
+
+test('migration preserves canonical links and backfills the original six-character algorithm', {skip:!pgEnabled},async()=>{
+ const wallet='0x'+randomBytes(20).toString('hex'), code=generateReferralCode();
+ try {
+   await pool.query('INSERT INTO users(wallet_address,chain_id,referral_code)VALUES($1,1,$2)',[wallet,code]);
+   const migration=readFileSync(new URL('../src/db/migrations/034_public_referral_links.sql',import.meta.url),'utf8');
+   await pool.query(migration);
+   const {rows}=await pool.query('SELECT code,legacy_code FROM wallet_referral_links WHERE wallet_address=$1',[wallet]);
+   assert.equal(rows[0].code,code);assert.equal(rows[0].legacy_code,legacyReferralCode(wallet));
+   await pool.query(migration);
+   assert.equal(await ensurePublicReferralCode(wallet),code);
+ } finally {
+   await pool.query('DELETE FROM users WHERE wallet_address=$1',[wallet]);
+   await pool.query('DELETE FROM wallet_referral_links WHERE wallet_address=$1',[wallet]);
+ }
 });

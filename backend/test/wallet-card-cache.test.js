@@ -64,3 +64,9 @@ test('empty successful Tron balance is cached; concurrent requests do not repeat
  await Promise.all([h.ctx.gwTronFetchAllBalances('Ttest'),h.ctx.gwTronFetchAllBalances('Ttest')]);const first=requests;
  await h.ctx.gwTronFetchAllBalances('Ttest');assert.equal(requests,first);assert.equal(first,2);
 });
+test('partial RPC result retains missing token fields while accepting confirmed zero',async()=>{
+ const h=setup();await h.ctx.gwOcCardRead(addr,'',false).done;
+ h.ctx.gwOcFetchAllChains=async(a,publish)=>{publish({...chain,data:{nativeEth:0,tokens:{},incomplete:true}});return [];};
+ const read=h.ctx.gwOcCardRead(addr,'',true);await read.done;
+ assert.equal(read.entry.chains[0].data.tokens.USDC,20);assert.equal(read.entry.chains[0].data.nativeEth,0);assert.equal(read.entry.incomplete,true);
+});

@@ -6030,10 +6030,25 @@ function gwOcCardRead(addr, tronAddr, force, onUpdate) {
   if (!entry.pending && (force || !entry.at || Date.now() - entry.at >= 20000)) {
     entry.loading = true;
     entry.incomplete = false;
+    if (force) {
+      try {
+        for (const cacheKey of Object.keys(window.__gwOcBalCache || {})) {
+          if (cacheKey.endsWith(':' + String(addr).toLowerCase())) delete window.__gwOcBalCache[cacheKey];
+        }
+        if (tronAddr) __gwTronBalCache.delete(tronAddr);
+      } catch (_) {}
+    }
     const updateChain = (result) => {
       // A timeout is unavailable data, never a confirmed zero balance.
       if (!result.data) { entry.incomplete = true; return; }
       const at = entry.chains.findIndex(c => c.chainId === result.chainId);
+      if (result.data.incomplete) {
+        entry.incomplete = true;
+        const previous = at >= 0 ? entry.chains[at].data : null;
+        result = { ...result, data: { ...result.data,
+          nativeEth: result.data.nativeEth ?? previous?.nativeEth ?? null,
+          tokens: { ...(previous?.tokens || {}), ...(result.data.tokens || {}) } } };
+      }
       if (at < 0) entry.chains.push(result); else entry.chains[at] = result;
       entry.known = true;
       publish();

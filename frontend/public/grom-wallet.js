@@ -3013,24 +3013,38 @@ function gwWipeWcIndexedDb() {
 }
 try { window.gwWipeWcIndexedDb = gwWipeWcIndexedDb; } catch (_) {}
 
-/**
- * Pure Map KV for WalletConnect Core.
- * Stock SignClient always migrates to IndexedDB (idb-keyval "keyval-store") even when
- * storageOptions.database is ":memory:" — and MetaMask locks that DB in Chrome, so
- * SignClient.init hangs until our timeout ("Creating QR…" forever).
- */
-function gwMakeMemoryKvStorage() {
-  const map = new Map();
+/** Durable WalletConnect KV without IndexedDB (which can be locked by extensions).
+ * Persist the whole Core store, including the session's encryption keys, so a
+ * reload can restore the same signing topic rather than merely its address. */
+function gwMakePersistentWcStorage() {
+  const prefix = 'wc@2:grom:kv:';
+  const keyFor = (key) => prefix + encodeURIComponent(key);
+  const getKeys = async () => {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const stored = localStorage.key(i);
+      if (!stored?.startsWith(prefix)) continue;
+      try { keys.push(decodeURIComponent(stored.slice(prefix.length))); } catch (_) {}
+    }
+    return keys;
+  };
+  const getItem = async (key) => {
+    const value = localStorage.getItem(keyFor(key));
+    return value === null ? undefined : JSON.parse(value);
+  };
   return {
-    getKeys: async () => Array.from(map.keys()),
-    getEntries: async () => Array.from(map.entries()),
-    getItem: async (key) => (map.has(key) ? map.get(key) : undefined),
-    setItem: async (key, value) => { map.set(key, value); },
-    removeItem: async (key) => { map.delete(key); },
+    getKeys,
+    getEntries: async () => Promise.all((await getKeys()).map(async (key) => [key, await getItem(key)])),
+    getItem,
+    setItem: async (key, value) => {
+      const serialized = JSON.stringify(value);
+      if (serialized === undefined) throw new Error('WalletConnect storage value is missing');
+      // Fail visibly if storage is denied/full; never pretend a memory-only session is saved.
+      localStorage.setItem(keyFor(key), serialized);
+    },
+    removeItem: async (key) => { localStorage.removeItem(keyFor(key)); },
   };
 }
-try { window.gwMakeMemoryKvStorage = gwMakeMemoryKvStorage; } catch (_) {}
-
 /** Drop in-memory SignClient so the next connect can init a fresh Core. */
 function gwResetWcClientSingleton(reason) {
   try {
@@ -3395,6 +3409,7 @@ async function gwEnsureSigningForSwap(opts) {
       }
     } catch (e) {
       console.log('[GROM] swap WC restore failed:', e?.message || e);
+      throw e;
     }
   }
 
@@ -3789,11 +3804,14 @@ async function gwRestoreSignClientSession() {
     const client = await gwWcClient();
     const all = client.session.getAll() || [];
     const nowSec = Math.floor(Date.now() / 1000);
+    const expected = String(currentAccount || localStorage.getItem('grom_wallet_label') || '').toLowerCase();
     const sessions = all.filter((s) => {
       if (!s) return false;
       if (s.active === false) return false;
-      if (Number(s.expiry) && Number(s.expiry) < nowSec - 5) return false;
-      return !!(gwWcSessionAddress(s) || s?.namespaces?.eip155?.accounts?.length);
+      if (!Number(s.expiry) || Number(s.expiry) <= nowSec) return false;
+      const address = gwWcSessionAddress(s);
+      if (gwAddrOk(expected) && String(address).toLowerCase() !== expected) return false;
+      return !!address;
     });
     if (!sessions.length) {
       console.log('[GROM] SignClient restore: no usable session (' + all.length + ' stored)');
@@ -3849,6 +3867,7 @@ async function gwRestoreSignClientSession() {
     }
   } catch (e) {
     console.log('[GROM] SignClient restore skipped:', e?.message || e);
+    throw e;
   }
   return null;
 }
@@ -4088,14 +4107,7 @@ async function gwWcClient() {
   /* Use the backend's configured public Reown id before SignClient initialization. */
   try { await gwEnsureFeeConfig(); } catch (_) {}
   if (_wcClient) return _wcClient;
-  if (_wcClientPromise) {
-    /* Stuck init from a prior restore/tab — drop and start clean (multi-tab WC deadlock). */
-    if (!_wcClient && _wcClientPromiseAt && (Date.now() - _wcClientPromiseAt > 3500)) {
-      gwResetWcClientSingleton('stuck-init>' + (Date.now() - _wcClientPromiseAt) + 'ms');
-    } else {
-      return _wcClientPromise;
-    }
-  }
+  if (_wcClientPromise) return gwWcWaitForClient(_wcClientPromise);
   if (!WC_PROJECT_ID || WC_PROJECT_ID === 'YOUR_WC_PROJECT_ID_HERE') {
     throw new Error('Set WC_PROJECT_ID в grom-wallet.js');
   }
@@ -4106,34 +4118,13 @@ async function gwWcClient() {
     try { gwWarmVerifyIframe(); } catch (_) {}
     const { default: SignClient } = await gwLoadSignClient();
     const meta = walletMetadata();
-    const initTimeout = window.GROM_SAFARI ? 12000 : (gwIsChromeFamily() ? 5000 : 8000);
-    /* MUST pass `storage` (not storageOptions) — WC's default ao() always opens
-     * IndexedDB and MetaMask can lock it forever in Chrome. */
     const initOpts = {
       projectId: WC_PROJECT_ID,
       metadata: meta,
-      storage: gwMakeMemoryKvStorage(),
+      storage: gwMakePersistentWcStorage(),
     };
-    async function tryInit(label) {
-      return Promise.race([
-        SignClient.init(initOpts),
-        new Promise((_, rej) => setTimeout(
-          () => rej(new Error('WalletConnect init timeout — try again')),
-          initTimeout,
-        )),
-      ]);
-    }
-    let client;
-    try {
-      client = await tryInit('primary');
-    } catch (e1) {
-      /* One hard retry after wiping IDB — covers a poisoned prefetch promise. */
-      try { console.warn('[GROM] WC init retry', e1 && e1.message); } catch (_) {}
-      try { await gwWipeWcIndexedDb(); } catch (_) {}
-      try { gwPurgeWcSessionKeys(); } catch (_) {}
-      initOpts.storage = gwMakeMemoryKvStorage();
-      client = await tryInit('retry');
-    }
+    // No destructive reset/retry: a slow relay is not an invalid saved session.
+    const client = await SignClient.init(initOpts);
     _wcClient = client;
     _wcCore = client.core || null;
     try { _wcCore?.relayer?.events?.setMaxListeners?.(32); } catch (_) {}
@@ -4153,16 +4144,28 @@ async function gwWcClient() {
     gwPatchWcVerify(client);
     return client;
   })();
-  try {
-    return await _wcClientPromise;
-  } catch (err) {
+  _wcClientPromise = _wcClientPromise.catch((err) => {
     _wcClientPromise = null;
     _wcClientPromiseAt = 0;
-    _wcClient = null;
-    _wcCore = null;
     throw err;
+  });
+  return gwWcWaitForClient(_wcClientPromise);
+}
+
+async function gwWcWaitForClient(pending) {
+  let timer;
+  try {
+    return await Promise.race([
+      pending,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('WalletConnect is still connecting — try again shortly')), 20000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
   }
 }
+
 async function gwGetSignClient() {
   return gwWcClient();
 }
@@ -4214,22 +4217,8 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
     try { gwWcModalSetStatus(walletKey, 'Connecting to WalletConnect…'); } catch (_) {}
   } catch (_) {}
 
-  /* Chrome: wipe MetaMask-locked WC IndexedDB once per tab — never reset a warm client
-   * on every click (that forced cold SignClient.init + multi-second "Creating QR…"). */
-  try {
-    if (gwIsChromeFamily() && !opts?.keepSession && !window.__gromWcChromeWiped) {
-      window.__gromWcChromeWiped = true;
-      gwPurgeWcSessionKeys();
-      try { gwWipeWcIndexedDb(); } catch (_) {}
-    }
-  } catch (_) {}
-
   const flowAbort = gwArmWcFlowAbort();
   const raceAbort = (p) => Promise.race([p, flowAbort]);
-  const withTimeout = (p, ms, msg) => Promise.race([
-    p,
-    new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms)),
-  ]);
   var __qrProg = 0;
   __qrProgTimer = setInterval(function () {
     try {
@@ -4266,22 +4255,11 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
       }
     }
 
-    /* Restore ONLY when an EVM signing session is already live (soft chip after F5).
-     * Connect Wallet button → always mint a fresh QR (stale wc@2 + restore froze UI). */
-    var uiConnected = false;
-    try {
-      const evm = (typeof gwDisplayAddress === 'function' && gwDisplayAddress()) || '';
-      uiConnected = !!(typeof gwAddrOk === 'function' && gwAddrOk(evm)
-        && typeof gwHasSigningProvider === 'function' && gwHasSigningProvider());
-    } catch (_) {}
-    if (!opts?.forceNew && !opts?.skipRestore && uiConnected) {
+    /* Always finish silent restore before proposing a new connection. */
+    if (!opts?.forceNew && !opts?.skipRestore && gwHasPersistedWcSession()) {
       try {
         try { gwWcModalSetStatus(walletKey, 'Checking saved session…'); } catch (_) {}
-        const restored = await raceAbort(withTimeout(
-          gwRestorePersistedWcSession(),
-          2500,
-          'restore-skip',
-        ));
+        const restored = await raceAbort(gwRestorePersistedWcSession());
         const acc = restored?.accounts?.[0] || gwWcSessionAddress(restored?.session);
         if (gwAddrOk(acc) && (restored?.request || (typeof gwHasSigningProvider === 'function' && gwHasSigningProvider()))) {
           gwHideWcModalOnly();
@@ -4296,7 +4274,7 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
         if (!/restore-skip|superseded|^reset$/i.test(String(e?.message || e))) {
           try { console.warn('[GROM] WC restore skipped', e?.message || e); } catch (_) {}
         }
-        try { gwResetWcClientSingleton('restore-failed'); } catch (_) {}
+        throw e;
       }
     }
 
@@ -4312,20 +4290,7 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
     let client;
     let uri;
     let approval;
-    try {
-      ({ client, uri, approval } = await mintWcUri());
-    } catch (mintErr) {
-      const mm = String(mintErr?.message || mintErr || '');
-      if (/timeout|init timeout|propose failed|Could not start/i.test(mm)) {
-        try { gwWcModalSetStatus(walletKey, 'Retrying WalletConnect…'); } catch (_) {}
-        try { gwPurgeWcSessionKeys(); } catch (_) {}
-        try { gwResetWcClientSingleton('mint-retry'); } catch (_) {}
-        wcProvider = null;
-        ({ client, uri, approval } = await mintWcUri());
-      } else {
-        throw mintErr;
-      }
-    }
+    ({ client, uri, approval } = await mintWcUri());
     if (!uri || typeof approval !== 'function') throw new Error('Could not start ' + cfg.label + ' session');
 
     _gwMobileWcState = { walletKey, client, uri, startedAt: Date.now() };
@@ -4435,18 +4400,11 @@ async function connectWalletWC(walletKey, opts) {
         return liveAcc;
       }
     } catch (_) {}
-    /* Soft chip after F5: try silent SignClient restore BEFORE any QR modal.
-     * Skip entirely when chip says Connect Wallet — restore vs stale wc@2 freezes QR. */
+    /* Complete silent restore before any new pairing QR. */
     try {
-      var softUi = (typeof gwIsWalletUiConnected === 'function' && gwIsWalletUiConnected())
-        || !!(window.GROM_CONN && GROM_CONN.connected && GROM_CONN.label);
-      if (softUi
-        && typeof gwHasPersistedWcSession === 'function' && gwHasPersistedWcSession()
+      if (typeof gwHasPersistedWcSession === 'function' && gwHasPersistedWcSession()
         && typeof gwRestorePersistedWcSession === 'function') {
-        await Promise.race([
-          gwRestorePersistedWcSession(),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('restore-skip')), 2500)),
-        ]);
+        await gwRestorePersistedWcSession();
       }
       const restAcc = wcProvider?.accounts?.[0] || gwWcSessionAddress(wcProvider?.session);
       if (typeof gwHasSigningProvider === 'function' && gwHasSigningProvider() && gwAddrOk(restAcc)) {
@@ -4455,8 +4413,7 @@ async function connectWalletWC(walletKey, opts) {
         try { await gwFanOutSideChains({ toast: false }); } catch (_) {}
         return restAcc;
       }
-    } catch (_) {}
-    try { gwResetWcClientSingleton('pre-qr'); } catch (_) {}
+    } catch (e) { throw e; }
   }
 
   if (walletKey !== 'generic') {

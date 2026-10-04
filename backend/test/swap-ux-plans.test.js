@@ -75,7 +75,7 @@ test('futures funding controls are not hijacked by a fake spot-success handler',
 test('referral access explains and explicitly starts wallet-message sign-in',()=>{
  assert.match(landingHtml,/id="refSignInBtn"[^>]*onclick="gwReferralSignIn\(\)"/);
  assert.match(walletSrc,/window\.addEventListener\('grom:wallet-connected',[\s\S]{0,150}hydrateReferralSlice\(true\)/);
- assert.match(walletSrc,/window\.gwReferralSignIn = async function[\s\S]{0,600}gwEnsureSignedIn\(/);
+ assert.match(walletSrc,/window\.gwReferralSignIn = async function[\s\S]{0,1800}gwEnsureSignedIn\(/);
  assert.match(walletSrc,/No transaction will be sent/);
 });
 test('landing removes the retired explainer sections and keeps active landing content',()=>{

@@ -1284,7 +1284,7 @@ function gwProviderRequestWithWake(provider, args, wakeOpts) {
   let context = null;
   let settled = false;
   let wakeTimer;
-  const operationId = typeof gwSwapOpGet === 'function' ? gwSwapOpGet()?.id : null;
+  const operationId = !wakeOpts?.authOnly && typeof gwSwapOpGet === 'function' ? gwSwapOpGet()?.id : null;
   const onDispatched = () => {
     if (settled || context) return;
     if (operationId && gwSwapOpGet()?.id !== operationId) return;
@@ -1321,13 +1321,13 @@ function gwProviderRequestWithWake(provider, args, wakeOpts) {
   const p = Promise.resolve(request).then((result) => {
     settled = true;
     clearTimeout(wakeTimer);
-    try { if (context) gwHideRemoteSignCoach(); } catch (_) {}
+    try { if (context || wakeOpts?.authOnly) gwHideRemoteSignCoach(); } catch (_) {}
     try { gwMarkSwapWalletRequestSettled(args, result, null, context); } catch (_) {}
     return result;
   }, (error) => {
     settled = true;
     clearTimeout(wakeTimer);
-    try { if (context) gwHideRemoteSignCoach(); } catch (_) {}
+    try { if (context || wakeOpts?.authOnly) gwHideRemoteSignCoach(); } catch (_) {}
     try { gwMarkSwapWalletRequestSettled(args, null, error, context); } catch (_) {}
     throw error;
   });
@@ -1563,7 +1563,7 @@ async function authenticateWithSIWE(address, provider, opts) {
   if (!force && window.__gwSiweCooldownUntil && Date.now() < window.__gwSiweCooldownUntil) {
     return null;
   }
-  if (gwIsRemoteWcSigner(provider)) {
+  if (gwIsRemoteWcSigner(provider) && !opts?.allowRemoteSignature) {
     throw new Error('WalletConnect с телефона не возвращает подпись в браузер. Используйте «Войти через Trust (QR)» в админке.');
   }
   const __siweWork = (async () => {
@@ -1617,14 +1617,24 @@ Issued At: ${issuedAt}`;
   const signPromise = gwProviderRequestWithWake(provider, {
     method: 'personal_sign',
     params: [message, siweAddr]
-  });
+  }, { action: 'sign', authOnly: true });
   const timeoutMs = (opts && opts.timeoutMs) || (gwIsRemoteWcSigner(provider) ? 120000 : 60000);
-  const signature = await Promise.race([
-    signPromise,
-    new Promise((_, rej) => setTimeout(() => rej(new Error(
-      'Подпись не пришла из кошелька. Откройте grom.exchange внутри Trust (DApp Browser) и нажмите «Подписать» там.'
-    )), timeoutMs)),
-  ]);
+  let signTimer;
+  let signature;
+  try {
+    signature = await Promise.race([
+      signPromise,
+      new Promise((_, rej) => { signTimer = setTimeout(() => rej(new Error(
+        'Подпись не пришла из кошелька. Откройте Trust Wallet и повторите вход.'
+      )), timeoutMs); }),
+    ]);
+  } finally { clearTimeout(signTimer); }
+  const ensureSameWallet = () => {
+    if (!opts?.allowRemoteSignature) return;
+    const current = typeof gwDisplayAddress === 'function' ? String(gwDisplayAddress() || '').toLowerCase() : __addr;
+    if (current !== __addr) throw new Error('Wallet changed during sign-in. Please sign in again.');
+  };
+  ensureSameWallet();
   if (!signature || (typeof signature !== 'string' && typeof signature !== 'object')) {
     throw new Error('Пустая подпись от кошелька');
   }
@@ -1640,6 +1650,7 @@ Issued At: ${issuedAt}`;
     throw new Error(verifyJson.error || 'Signature verification failed');
   }
 
+  ensureSameWallet();
   try {
     localStorage.setItem('grom_jwt', verifyJson.token);
     localStorage.setItem('grom_wallet_label', address);
@@ -3376,6 +3387,7 @@ window.gwNotifyWalletConnected = gwNotifyWalletConnected;
 function gwHasSigningProvider() {
   return !!gwActiveSigningProvider();
 }
+try { window.gwHasSigningProvider = gwHasSigningProvider; } catch (_) {}
 
 /** True only when a wallet can sign — persisted wc@2 keys alone do NOT count. */
 function gwHasLiveWalletSession() {
@@ -5077,86 +5089,130 @@ function setText(id, text) {
   const el = document.getElementById(id);
   if (el && text != null) el.textContent = text;
 }
-function gwSetReferralEmpty() {
-  let walletConnected = false;
-  try {
-    walletConnected = !!(
-      (typeof gwDisplayAddress === 'function' && gwDisplayAddress())
-      || (typeof gwReadOnlyAddress === 'function' && gwReadOnlyAddress())
-      || (window.GROM_CONN && window.GROM_CONN.connected && window.GROM_CONN.label)
-    );
-  } catch (_) {}
-  setText('refCode', gwUi(
-    walletConnected ? 'ref_sign_for_code' : 'ref_connect_wallet_code',
-    walletConnected ? 'Sign a message to generate your code' : 'Connect wallet to generate',
-  ));
-  setText('refLink', gwUi(
-    walletConnected ? 'ref_sign_for_link' : 'ref_connect_wallet_link',
-    walletConnected ? 'Sign a message to reveal your link' : 'Connect wallet to reveal your link',
-  ));
-  const signButton = document.getElementById('refSignInBtn');
-  if (signButton) signButton.hidden = !walletConnected;
-  setText('refKpiTotalReferred', '—');
-  setText('refKpiSignups30d', '—');
-  setText('refKpiActive30d', '—');
-  const qrEl = document.getElementById('refQr');
-  if (qrEl) { qrEl.replaceChildren(); delete qrEl.dataset.gwQrUrl; }
+let gwReferralLoadId = 0;
+let gwReferralSigning = false;
+function gwReferralAddress() {
+  try { return String(gwDisplayAddress() || gwReadOnlyAddress() || '').trim().toLowerCase(); }
+  catch (_) { return ''; }
+}
+function gwReferralActions(ready) {
+  ['refCopyBtn', 'refCopyLinkBtn', 'refShareXBtn', 'refShareTelegramBtn'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !ready;
+  });
+}
+function gwSetReferralEmpty(message) {
+  const connected = !!gwReferralAddress();
+  const code = document.getElementById('refCode');
+  const link = document.getElementById('refLink');
+  // Account values must not be overwritten by a later language repaint.
+  for (const el of [code, link]) el?.removeAttribute('data-i18n');
+  code?.classList.add('ref-placeholder');
+  setText('refCode', '—');
+  setText('refLink', gwUxText('Ссылка появится после входа', 'Your link will appear after sign-in'));
+  const sign = document.getElementById('refSignInBtn');
+  if (sign) {
+    sign.hidden = false;
+    sign.disabled = gwReferralSigning;
+    sign.removeAttribute('data-i18n');
+    sign.textContent = gwReferralSigning
+      ? gwUxText('Подтвердите вход в кошельке…', 'Confirm sign-in in your wallet…')
+      : connected ? gwUxText('Получить ссылку', 'Get invite link') : gwUxText('Подключить кошелёк', 'Connect wallet');
+  }
+  setText('refStatus', message || gwUxText(
+    'Подтвердите владение кошельком одной подписью. Это вход, без комиссии и отправки средств.',
+    'Verify wallet ownership with one signature. This signs you in without gas or sending funds.'));
+  gwReferralActions(false);
+  for (const id of ['refKpiTotalReferred', 'refKpiSignups30d', 'refKpiActive30d']) setText(id, '—');
+  const qr = document.getElementById('refQr');
+  if (qr) { qr.replaceChildren(); delete qr.dataset.gwQrUrl; }
 }
 async function hydrateReferralSlice(force) {
-  const codeEl = document.getElementById('refCode');
-  const linkEl = document.getElementById('refLink');
-  if (!codeEl && !linkEl) return;
+  if (!document.getElementById('refCode')) return;
+  const loadId = ++gwReferralLoadId;
+  const address = gwReferralAddress();
+  const jwt = localStorage.getItem('grom_jwt') || '';
+  const stillCurrent = () => loadId === gwReferralLoadId && address === gwReferralAddress()
+    && jwt === (localStorage.getItem('grom_jwt') || '');
+  const payload = typeof gwJwtPayload === 'function' ? gwJwtPayload(jwt) : null;
+  const owner = String(payload?.addr || payload?.address || '').toLowerCase();
+  if (!jwt || !gwJwtValid() || (owner && address && owner !== address)) { gwSetReferralEmpty(); return; }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    const jwt = localStorage.getItem('grom_jwt');
-    if (!jwt) { gwSetReferralEmpty(); return; }
     const response = await fetch('/api/referral/summary', {
-      headers: { Authorization: `Bearer ${jwt}` },
-      cache: force ? 'no-store' : 'default',
+      headers: { Authorization: `Bearer ${jwt}` }, cache: 'no-store', signal: controller.signal,
     });
-    if (!response.ok) { gwSetReferralEmpty(); return; }
-    const data = await response.json();
-    const code = String(data.code || '').trim().toUpperCase();
-    const raw = code.replace(/^GROM-/, '');
-    if (!/^GROM-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)) {
-      throw new Error('Invalid referral identity');
+    if (!stillCurrent()) return;
+    if (response.status === 401 || response.status === 403) {
+      localStorage.removeItem('grom_jwt');
+      gwSetReferralEmpty(gwUxText('Войдите подписью кошелька, чтобы получить ссылку.', 'Sign in with your wallet to get your link.'));
+      return;
     }
-    const link = new URL(`/r/${raw}`, window.location.origin).toString();
-    if (codeEl) codeEl.textContent = code;
-    if (linkEl) linkEl.textContent = link;
-    const signButton = document.getElementById('refSignInBtn');
-    if (signButton) signButton.hidden = true;
-    const count = (value) => {
-      const n = Number(value);
-      return Number.isSafeInteger(n) && n >= 0 ? n.toLocaleString() : '0';
-    };
+    if (!response.ok) throw new Error('Referral service unavailable');
+    const data = await response.json();
+    if (!stillCurrent()) return;
+    const code = String(data.code || '').trim().toUpperCase();
+    if (!/^GROM-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)) throw new Error('Invalid referral identity');
+    const link = new URL('/r/' + code.slice(5), window.location.origin).toString();
+    const codeEl = document.getElementById('refCode');
+    const linkEl = document.getElementById('refLink');
+    for (const el of [codeEl, linkEl]) el?.removeAttribute('data-i18n');
+    codeEl?.classList.remove('ref-placeholder');
+    setText('refCode', code); setText('refLink', link);
+    const sign = document.getElementById('refSignInBtn');
+    if (sign) sign.hidden = true;
+    setText('refStatus', gwUxText('Ссылка готова — поделитесь ей с друзьями.', 'Your invite link is ready to share.'));
+    const count = value => Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? Number(value).toLocaleString() : '0';
     setText('refKpiTotalReferred', count(data.totals?.total_referred));
     setText('refKpiSignups30d', count(data.funnel?.signups_30d));
     setText('refKpiActive30d', count(data.funnel?.active_30d));
+    gwReferralActions(true);
     gwFixReferralQR();
-  } catch (err) {
-    gwSetReferralEmpty();
-    console.warn('[grom-referral] hydrate failed:', err?.message || err);
-  }
+  } catch (error) {
+    if (stillCurrent()) gwSetReferralEmpty(gwUxText('Не удалось загрузить рефералку. Нажмите «Получить ссылку», чтобы повторить.', 'Could not load referrals. Select Get invite link to retry.'));
+    console.warn('[grom-referral] hydrate failed:', error?.message || error);
+  } finally { clearTimeout(timeout); }
 }
 window.hydrateReferralSlice = hydrateReferralSlice;
 window.addEventListener('grom:wallet-connected', () => {
   if (document.getElementById('page-referral')) hydrateReferralSlice(true);
 });
 window.addEventListener('grom:wallet-disconnected', () => {
+  ++gwReferralLoadId;
   if (document.getElementById('page-referral')) gwSetReferralEmpty();
 });
+window.addEventListener('grom:lang-change', () => {
+  const code = document.getElementById('refCode')?.textContent || '';
+  if (!/^GROM-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)) gwSetReferralEmpty();
+});
 window.gwReferralSignIn = async function gwReferralSignIn() {
-  const provider = (typeof gwActiveSigningProvider === 'function' && gwActiveSigningProvider())
-    || window.gromWallet?.wcProvider || window.ethereum || null;
-  if (!provider?.request) {
-    try { gwToast('Reconnect your wallet to sign in and load referral details.', 'info'); } catch (_) {}
+  if (gwReferralSigning) return false;
+  gwReferralSigning = true;
+  gwSetReferralEmpty();
+  try {
+    const payload = gwJwtPayload();
+    const owner = String(payload?.addr || payload?.address || '').toLowerCase();
+    const address = gwReferralAddress();
+    if (owner && address && owner !== address) localStorage.removeItem('grom_jwt');
+    // Recover the existing signer; pair only if the session is actually absent.
+    if (!gwJwtValid() && !gwActiveSigningProvider()) {
+      await gwEnsureSigningForSwap({ silent: true });
+      if (!gwActiveSigningProvider()) return false;
+    }
+    const ok = await gwEnsureSignedIn({ allowRemoteSignature: true,
+      rejectToast: gwUxText('Подпись входа отклонена. Средства не отправлялись.', 'Sign-in declined. No transaction will be sent.'),
+    });
+    if (ok) await hydrateReferralSlice(true);
+    return ok;
+  } catch (error) {
+    try { gwToast(String(error?.message || error).slice(0, 160), 'error'); } catch (_) {}
     return false;
+  } finally {
+    gwReferralSigning = false;
+    const sign = document.getElementById('refSignInBtn');
+    if (sign && !sign.hidden) { sign.disabled = false; sign.textContent = gwUxText('Получить ссылку', 'Get invite link'); }
   }
-  const ok = await gwEnsureSignedIn({
-    rejectToast: 'Sign the wallet message to load referral details. No transaction will be sent.',
-  });
-  if (ok) await hydrateReferralSlice(true);
-  return ok;
 };
 function gwZeroRefStatsPlaceholders() { gwSetReferralEmpty(); }
 window.gwZeroRefStatsPlaceholders = gwZeroRefStatsPlaceholders;
@@ -5668,8 +5724,10 @@ async function gwFetchMarketQuotes(opts) {
   }
   if (__gwQuotesInflight) return __gwQuotesInflight;
   __gwQuotesInflight = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
     try {
-      const r = await fetch('/api/market/quotes', { headers: { accept: 'application/json' } });
+      const r = await fetch('/api/market/quotes', { headers: { accept: 'application/json' }, signal: controller.signal });
       if (!r.ok) return __gwQuotesMem.data || null;
       const j = await r.json();
       __gwQuotesMem = { at: Date.now(), data: j };
@@ -5677,6 +5735,7 @@ async function gwFetchMarketQuotes(opts) {
     } catch (_) {
       return __gwQuotesMem.data || null;
     } finally {
+      clearTimeout(timeout);
       __gwQuotesInflight = null;
     }
   })();
@@ -5952,59 +6011,90 @@ function gwOcIsDust(it) {
   return usd + 1e-9 < GW_OC_DUST_USD;
 }
 
-async function gwRenderOnchainCard() {
+// Keep account-scoped snapshots across route changes. Reads publish each network as
+// it arrives; slow Tron/RPC services must not erase or hold back known balances.
+const __gwOcCardSnapshots = new Map();
+let __gwOcCardRenderId = 0;
+function gwOcCardSnapshotKey(addr, tronAddr) {
+  return String(addr || '').toLowerCase() + '|' + String(tronAddr || '');
+}
+function gwOcCardRead(addr, tronAddr, force, onUpdate) {
+  const key = gwOcCardSnapshotKey(addr, tronAddr);
+  let entry = __gwOcCardSnapshots.get(key);
+  if (!entry) {
+    entry = { at: 0, prices: { USDT: 1, USDC: 1 }, chains: [], tRows: [], known: false, loading: false, incomplete: false, listeners: new Set(), pending: null };
+    __gwOcCardSnapshots.set(key, entry);
+  }
+  if (onUpdate) entry.listeners.add(onUpdate);
+  const publish = () => { for (const listener of entry.listeners) { try { listener(entry); } catch (_) {} } };
+  if (!entry.pending && (force || !entry.at || Date.now() - entry.at >= 20000)) {
+    entry.loading = true;
+    entry.incomplete = false;
+    const updateChain = (result) => {
+      // A timeout is unavailable data, never a confirmed zero balance.
+      if (!result.data) { entry.incomplete = true; return; }
+      const at = entry.chains.findIndex(c => c.chainId === result.chainId);
+      if (at < 0) entry.chains.push(result); else entry.chains[at] = result;
+      entry.known = true;
+      publish();
+    };
+    entry.pending = Promise.allSettled([
+      gwTkReadWithin(gwOcFetchPrices(), 2000).then(prices => { entry.prices = { ...entry.prices, ...prices }; publish(); }),
+      addr ? gwOcFetchAllChains(addr, updateChain, 8000) : Promise.resolve(),
+      tronAddr ? gwTkReadWithin(gwTronFetchAllBalances(tronAddr), 8000).then(rows => { if (rows.unavailable) throw new Error('Tron balances unavailable'); entry.tRows = rows; entry.known = true; publish(); }) : Promise.resolve(),
+    ]).then(results => {
+      if (results.some(result => result.status === 'rejected')) entry.incomplete = true;
+      entry.loading = false;
+      entry.at = entry.known ? Date.now() : 0;
+      entry.pending = null;
+      publish();
+      return entry;
+    });
+  }
+  publish();
+  return { entry, done: entry.pending || Promise.resolve(entry), unsubscribe: () => entry.listeners.delete(onUpdate) };
+}
+try { document.addEventListener('grom:wallet-disconnected', () => { __gwOcCardSnapshots.clear(); __gwOcCardRenderId++; }); } catch (_) {}
+
+async function gwRenderOnchainCard(opts = {}) {
+  const renderId = ++__gwOcCardRenderId;
   const page = document.getElementById('page-wallet');
   if (!page) return;
   gwInjectOnchainCardCss();
-
   let card = document.getElementById('gwOnchainCard');
   if (!card) {
     card = document.createElement('div');
     card.className = 'gw-oc-card';
     card.id = 'gwOnchainCard';
-    // Insert AFTER wallet-hero so it sits between hero and ops-grid.
     const hero = page.querySelector('.wallet-hero');
-    if (hero && hero.parentNode) hero.after(card);
-    else page.prepend(card);
+    if (hero && hero.parentNode) hero.after(card); else page.prepend(card);
   }
-
-  const addr = gwOcConnectedAddress();
-  const tronAddr = (typeof gwTronSavedAddr === 'function')
-    ? gwTronSavedAddr()
-    : (window.__gwTronAddr || (() => { try { return localStorage.getItem('grom_tron_addr') || ''; } catch (_) { return ''; } })());
-  const hasEvm = !!(addr && /^0x[a-fA-F0-9]{40}$/i.test(addr));
-  const hasTron = !!(tronAddr && /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(tronAddr));
+  const rawAddr = gwOcConnectedAddress();
+  const rawTron = typeof gwTronSavedAddr === 'function' ? gwTronSavedAddr() : '';
+  const addr = /^0x[a-fA-F0-9]{40}$/.test(rawAddr || '') ? rawAddr : '';
+  const tronAddr = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(rawTron || '') ? rawTron : '';
+  const hasEvm = !!addr, hasTron = !!tronAddr;
+  const key = gwOcCardSnapshotKey(addr, tronAddr);
   if (!hasEvm && !hasTron) {
-    card.innerHTML = `
-      <div class="gw-oc-head">
-        <div>
-          <p class="gw-oc-title">${gwOcT('title')}</p>
-          <p class="gw-oc-total">—</p>
-        </div>
-      </div>
-      <div class="gw-oc-empty">${gwOcT('empty')}</div>
-    `;
+    card.dataset.gwAccount = key;
+    card.innerHTML = `<div class="gw-oc-head"><div><p class="gw-oc-title">${gwOcT('title')}</p><p class="gw-oc-total">—</p></div></div><div class="gw-oc-empty">${gwOcT('empty')}</div>`;
     return;
   }
-
-  const labelAddr = hasEvm ? addr : tronAddr;
+  const labelAddr = addr || tronAddr;
   const short = labelAddr.slice(0, 6) + '…' + labelAddr.slice(-4);
-  card.innerHTML = `
-    <div class="gw-oc-head">
-      <div>
-        <p class="gw-oc-title">${gwOcT('title')}</p>
-        <p class="gw-oc-total" id="gwOcTotal">—</p>
-        <p class="gw-oc-addr">${short}${hasEvm && hasTron ? ' · +TRON' : (hasTron ? ' · TRON' : '')}</p>
-      </div>
-      <button type="button" class="gw-oc-refresh" id="gwOcRefresh">${gwOcT('refresh')}</button>
-    </div>
-    <div class="gw-oc-loading">${gwOcT('loading')}</div>
-  `;
-  document.getElementById('gwOcRefresh')?.addEventListener('click', gwRenderOnchainCard);
-
-  try {
-    const prices = await gwOcFetchPrices().catch(() => ({ USDT: 1, USDC: 1 }));
-    const chains = hasEvm ? await gwOcFetchAllChains(addr).catch(() => []) : [];
+  const paint = (snapshot) => {
+    if (renderId !== __gwOcCardRenderId || key !== gwOcCardSnapshotKey(gwOcConnectedAddress(), typeof gwTronSavedAddr === 'function' ? gwTronSavedAddr() : '')) return;
+    if (!snapshot.known) {
+      // Clear another account immediately; retain this account's existing display.
+      if (card.dataset.gwAccount !== key || !card.querySelector('.gw-oc-list')) {
+        card.dataset.gwAccount = key;
+        card.innerHTML = `<div class="gw-oc-head"><div><p class="gw-oc-title">${gwOcT('title')}</p><p class="gw-oc-total">—</p><p class="gw-oc-addr">${short}</p></div><button type="button" class="gw-oc-refresh" id="gwOcRefresh">${gwOcT('refresh')}</button></div><div class="gw-oc-empty">${gwOcT(snapshot.loading ? 'loading' : 'err')}</div>`;
+        document.getElementById('gwOcRefresh')?.addEventListener('click', () => gwRenderOnchainCard({ force: true }));
+      }
+      return;
+    }
+    const { prices, chains, tRows } = snapshot;
+    card.dataset.gwAccount = key;
     let totalUsd = 0;
     /* Collect structured groups first: the card sorts by USD and can fold dust,
      * which is impossible once rows are HTML strings. */
@@ -6051,7 +6141,6 @@ async function gwRenderOnchainCard() {
 
     if (hasTron && typeof gwTronFetchAllBalances === 'function') {
       try {
-        const tRows = await gwTronFetchAllBalances(tronAddr);
         const items = [];
         let chainUsd = 0;
         for (const tr of tRows) {
@@ -6127,19 +6216,22 @@ async function gwRenderOnchainCard() {
       </div>
       ${list}
     `;
-    document.getElementById('gwOcRefresh')?.addEventListener('click', gwRenderOnchainCard);
+    document.getElementById('gwOcRefresh')?.addEventListener('click', () => gwRenderOnchainCard({ force: true }));
     document.getElementById('gwOcDustToggle')?.addEventListener('click', () => {
       gwOcHideSmall(!hideSmall);
       gwRenderOnchainCard();
     });
-    gwRefreshCombinedPortfolioTotals().catch(() => {});
-  } catch (e) {
-    card.querySelector('.gw-oc-loading')?.classList.remove('gw-oc-loading');
-    const err = document.createElement('div');
-    err.className = 'gw-oc-empty';
-    err.textContent = gwOcT('err');
-    card.appendChild(err);
-  }
+
+    if (snapshot.loading || snapshot.incomplete) {
+      const hint = document.createElement('div');
+      hint.className = 'gw-oc-empty';
+      hint.textContent = snapshot.loading ? gwOcT('loading') : gwUxText('Часть сетей пока недоступна. Известные балансы сохранены.', 'Some networks are unavailable. Known balances are retained.');
+      card.appendChild(hint);
+    }
+  };
+  const read = gwOcCardRead(addr, tronAddr, opts.force === true, paint);
+  try { await read.done; } finally { read.unsubscribe(); }
+  if (renderId === __gwOcCardRenderId) gwRefreshCombinedPortfolioTotals().catch(() => {});
 }
 
 /* ─────────────── Trading balance hub: wallet ⇄ Perp ⇄ Spot ─────────────── */
@@ -7600,7 +7692,7 @@ async function gwEnsureSignedIn(opts) {
     return false;
   }
 
-  if (provider && gwIsRemoteWcSigner(provider)) {
+  if (provider && gwIsRemoteWcSigner(provider) && !opts.allowRemoteSignature) {
     try {
       if (typeof window.boffStartDeviceLogin === 'function') {
         await window.boffStartDeviceLogin();
@@ -7617,7 +7709,7 @@ async function gwEnsureSignedIn(opts) {
       return gwJwtValid();
     }
     const fn = window.gromWallet?.signSiweAndVerify || authenticateWithSIWE;
-    await fn(addr, provider);
+    await fn(addr, provider, { allowRemoteSignature: !!opts.allowRemoteSignature });
     try {
       window.dispatchEvent(new CustomEvent('grom:siwe-ok', { detail: { address: addr } }));
     } catch (_) {}
@@ -11627,16 +11719,28 @@ async function gwTronConnect() {
  */
 const __gwTronBalCache = new Map(); // addr → { at, rows }
 
+const __gwTronBalInflight = new Map();
 async function gwTronFetchAllBalances(addr) {
+  const key = String(addr || '').trim();
+  if (!key) return [];
+  if (__gwTronBalInflight.has(key)) return __gwTronBalInflight.get(key);
+  const pending = gwTronReadAllBalances(key).finally(() => __gwTronBalInflight.delete(key));
+  __gwTronBalInflight.set(key, pending);
+  return pending;
+}
+async function gwTronReadAllBalances(addr) {
   if (!addr) return [];
   const key = String(addr).trim();
   try {
     const hit = __gwTronBalCache.get(key);
-    if (hit && (Date.now() - hit.at) < 25000 && Array.isArray(hit.rows) && hit.rows.length > 1) {
+    if (hit && (Date.now() - hit.at) < 25000 && Array.isArray(hit.rows)) {
       return hit.rows.map((r) => ({ ...r }));
     }
   } catch (_) {}
   const out = [];
+  let validAccount = false;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 7500);
   const parseAcc = (acc) => {
     if (!acc) return;
     const sun = Number(acc.balance || 0);
@@ -11676,6 +11780,7 @@ async function gwTronFetchAllBalances(addr) {
         headers: { accept: 'application/json' },
         credentials: 'same-origin',
         cache: 'no-store',
+        signal: controller.signal,
       });
       if (pr.ok) {
         const pj = await pr.json();
@@ -11690,6 +11795,7 @@ async function gwTronFetchAllBalances(addr) {
       try {
         const r = await fetch('https://api.trongrid.io/v1/accounts/' + encodeURIComponent(addr), {
           headers: { accept: 'application/json' },
+          signal: controller.signal,
         });
         if (r.ok) {
           const j = await r.json();
@@ -11704,10 +11810,11 @@ async function gwTronFetchAllBalances(addr) {
         if (!acc) console.warn('[GROM] tron balances trongrid', e?.message || e);
       }
     }
+    validAccount = !!acc;
     parseAcc(acc);
   } catch (e) {
     console.warn('[GROM] tron balances', e);
-  }
+  } finally { clearTimeout(timeout); }
   // Keep last good multi-token snapshot so a TronGrid 429 doesn't flash $0 on Wallet.
   try {
     if (out.length > 1) {
@@ -11719,6 +11826,8 @@ async function gwTronFetchAllBalances(addr) {
       }
     }
   } catch (_) {}
+  if (validAccount) __gwTronBalCache.set(key, { at: Date.now(), rows: out.map(r => ({ ...r })) });
+  else out.unavailable = true;
   return out;
 }
 

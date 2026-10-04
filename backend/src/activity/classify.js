@@ -4,6 +4,8 @@
  */
 
 const RULES = [
+  { cause: 'runtime_error', re: /runtime_error|unhandled_rejection/i, summary: 'Необработанная ошибка JavaScript в приложении' },
+  { cause: 'health_api_slow', re: /health_api_slow/i, summary: 'Медленный ответ health API — это время запроса, не зависание UI' },
   {
     cause: 'user_rejected',
     re: /user rejected|denied|declined|4001|user cancelled|user canceled|connection cancelled|отклон|tx_rejected|siwe_rejected|you cancelled/i,
@@ -12,7 +14,7 @@ const RULES = [
   {
     cause: 'wallet_no_confirm',
     re: /no.?confirm|awaiting_signature|did.?not.?confirm|never.?confirmed|pending.?wallet|tx_unknown|result unknown|check Activity|wallet.?timeout|timed out.*wallet/i,
-    summary: 'Нажал Start / Swap, но не подтвердил в кошельке (таймаут / бросил запрос)',
+    summary: 'Ответ кошелька не получен в срок — результат неизвестен, отказ не установлен',
   },
   {
     cause: 'siwe_wc_remote',
@@ -92,7 +94,7 @@ const RULES = [
   {
     cause: 'ui_lag',
     re: /long.?task|ui.?lag|подтормаж|main.?thread/i,
-    summary: 'Клиентский UI лагает (long task) — тяжёлый рендер или сеть',
+    summary: 'Зафиксирована длительная задача UI — источник задержки требует проверки',
   },
   {
     cause: 'xstocks',
@@ -155,6 +157,9 @@ const PRODUCT_HINT = {
 };
 
 const ACTION_FORCE = {
+  runtime_error: 'runtime_error',
+  unhandled_rejection: 'runtime_error',
+  health_api_slow: 'health_api_slow',
   tx_rejected: 'user_rejected',
   siwe_rejected: 'user_rejected',
   swap_user_cancel: 'user_rejected',
@@ -234,7 +239,10 @@ export function classifyIssue(input = {}) {
 
   let hit = null;
 
-  if (ACTION_FORCE[action]) {
+  if (code === '4001' || detail.kind === 'cancelled') {
+    hit = RULES.find((r) => r.cause === 'user_rejected');
+  }
+  if (!hit && ACTION_FORCE[action]) {
     const cause = ACTION_FORCE[action];
     hit = RULES.find((r) => r.cause === cause) || { cause, summary: cause };
   }

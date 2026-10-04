@@ -16496,7 +16496,7 @@ function gwUxCta() {
     hash:op?.hash, signature:op?.signature, boc:op?.boc,
     pairValid:!!from && !!to && (from !== to || gwDsSameAssetBridgeAllowed(from,to)),
     ready:!!window.__gwDsQuoteExecReady, restored:!gwHasSigningProvider(), error:window.__gwDsQuoteExecReason });
-  const labels={connect:['Подключить кошелёк','Connect wallet'],amount:['Введите сумму','Enter amount'],pair:['Выберите другой токен','Choose another token'],swap:['Обменять','Swap'],reconnect:['Подключить и обменять','Reconnect and swap'],loading:['Ищем маршрут…','Finding route…'],retry:['Обновить маршрут','Refresh route'],balance:['Проверьте баланс и газ','Check balance and gas'],preparing:['Подготавливаем обмен…','Preparing swap…'],pending:['Обмен в процессе…','Swap in progress…'],unknown:['Проверяем запрос кошелька…','Checking wallet request…'],unresolved:['Проверяем предыдущий своп…','Checking previous swap…']};
+  const labels={connect:['Подключить кошелёк','Connect wallet'],amount:['Введите сумму','Enter amount'],pair:['Выберите другой токен','Choose another token'],swap:['Обменять','Swap'],reconnect:['Подключить и обменять','Reconnect and swap'],loading:['Ищем маршрут…','Finding route…'],retry:['Обновить маршрут','Refresh route'],balance:['Проверьте баланс и газ','Check balance and gas'],preparing:['Подготавливаем обмен…','Preparing swap…'],pending:['Обмен в процессе…','Swap in progress…'],unknown:['Проверьте запрос в кошельке','Check wallet request'],unresolved:['Предыдущий обмен не завершён','Previous swap unresolved']};
   cta.textContent=op?.purpose==='gas_topup' && op.hash ? gwUxText('Пополняем газ…','Funding gas…') : gwUxText(...labels[m.key]); cta.disabled=!m.enabled; cta.dataset.uxAction=m.action || '';
   cta.classList.toggle('not-ready',!m.enabled); cta.title=window.__gwDsQuoteExecReason || '';
   gwUxProgress(); return true;
@@ -16509,6 +16509,22 @@ function gwUxDetails(q, dec, gasUsd, extra = '') {
   const seconds=Number(raw.estimate?.executionDuration || raw.estimate?.estimatedRouteDuration || q.estimatedSeconds);
   const time=seconds>0 ? '~'+Math.ceil(seconds/60)+' '+gwUxText('мин','min') : gwUxText('Зависит от сети','Depends on network');
   return `<details class="gw-ux-details"><summary>${gwUxText('Детали обмена','Swap details')}</summary><div class="gw-ux-grid"><span>${gwUxText('Минимум получите','Minimum received')}</span><span>${gwUxEsc(minLabel)}</span><span>${gwUxText('Расходы сети / маршрута','Network / route costs')}</span><span>${gwUxEsc(gasUsd === null ? gwUxText('Уточняются','Pending') : '≈ $'+gasUsd)}</span><span>${gwUxText('Ориентировочное время','Estimated time')}</span><span>${gwUxEsc(time)}</span></div>${extra}</details>`;
+}
+function gwUxCanDismissWalletRequest(op) {
+  return !!(op && op.restoredFromStorage && op.stage==='unknown' && !op.hash && !op.signature && !op.boc && !op.approvalHash && !op.approvalPending);
+}
+function gwUxDismissWalletRequest(opId) {
+  const op=gwSwapOpGet();
+  if(!op || op.id!==opId || !gwUxCanDismissWalletRequest(op))return false;
+  // The user explicitly confirms cancellation in the wallet. Never release a
+  // submitted swap or approval, or a fresh request still running on this page.
+  if(!window.confirm(gwUxText('Вы отклонили или закрыли этот запрос в кошельке, и транзакция не отправлена?','Have you rejected or closed this wallet request, with no transaction sent?')))return false;
+  const current=gwSwapOpGet();
+  if(!current || current.id!==opId || !gwUxCanDismissWalletRequest(current))return false;
+  gwSwapOpClear('cancelled');
+  gwDsSubmit._busy=false;
+  gwDsResetSubmitState();
+  return true;
 }
 function gwUxProgress(op) {
   const card=document.getElementById('gwDsCard'); if(!card)return;
@@ -16539,7 +16555,8 @@ function gwUxProgress(op) {
   const title = op.purpose==='gas_topup'
     ? gwUxText('Газ · ','Gas · ')+gwChainLabel(op.fromChainId || op.chainId)+' → '+gwChainLabel(op.toChainId)
     : op.from+' → '+op.to;
-  el.innerHTML=`<div class="gw-ux-status-head"><strong>${gwUxEsc(title)}</strong><small>${gwUxEsc(statusLabel)}</small></div><p class="gw-ux-status-body">${gwUxEsc(progressState)}</p><div class="gw-ux-status-actions">${url?`<a href="${gwUxEsc(url)}" target="_blank" rel="noopener">${gwUxText('Транзакция','Transaction')} ↗</a>`:''}${gwSwapWalletActionPending(op) && !op.approvalPending && !op.hash?`<button type="button" id="gwUxOpenWallet">${gwUxText('Открыть кошелёк','Open wallet')}</button>`:''}</div>`;
+  el.innerHTML=`<div class="gw-ux-status-head"><strong>${gwUxEsc(title)}</strong><small>${gwUxEsc(statusLabel)}</small></div><p class="gw-ux-status-body">${gwUxEsc(progressState)}</p><div class="gw-ux-status-actions">${url?`<a href="${gwUxEsc(url)}" target="_blank" rel="noopener">${gwUxText('Транзакция','Transaction')} ↗</a>`:''}${gwSwapWalletActionPending(op) && !op.approvalPending && !op.hash?`<button type="button" id="gwUxOpenWallet">${gwUxText('Открыть кошелёк','Open wallet')}</button>`:''}${gwUxCanDismissWalletRequest(op)?`<button type="button" id="gwUxRequestDeclined">${gwUxText('Запрос отклонён','Request rejected')}</button>`:''}</div>`;
+  el.querySelector('#gwUxRequestDeclined')?.addEventListener('click',()=>gwUxDismissWalletRequest(op.id));
   el.querySelector('#gwUxOpenWallet')?.addEventListener('click',()=>{const key=gwConnectedWcWalletKey();if(key)openWalletAppShell(key);else gwShowRemoteSignCoach({action:'tx'});});
 }
 function gwUxOpChanged(op) {

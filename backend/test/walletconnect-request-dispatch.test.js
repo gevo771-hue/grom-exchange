@@ -133,3 +133,33 @@ test('restored form values repaint the exact quoted pair even without a change e
   assert.equal(labels.from.textContent, 'USDC');
   assert.equal(labels.to.textContent, 'USDT');
 });
+
+
+test('referral SIWE dispatch cannot change an existing preparing swap', async () => {
+  const h = harness();
+  const pending = h.context.gwProviderRequestWithWake(h.provider, h.args, { action: 'sign', authOnly: true });
+  h.sent();
+  assert.equal(h.context.op.stage, 'preparing');
+  assert.equal(h.timers.length, 1);
+  h.timers[0]();
+  assert.equal(h.wake[0].action, 'sign');
+  h.resolve('signature');
+  assert.equal(await pending, 'signature');
+  assert.equal(h.context.op.stage, 'preparing');
+  assert.equal(h.context.op.result, undefined);
+});
+
+
+test('classic header receives signer readiness from the wallet ES module', () => {
+  const at = source.indexOf('function gwHasSigningProvider(');
+  const end = source.indexOf('\n}', at) + 2;
+  const exportEnd = source.indexOf('\n', end + 1);
+  const script = source.slice(at, exportEnd);
+  const window = {};
+  let provider = null;
+  new Function('window', 'gwActiveSigningProvider', script)(window, () => provider);
+  assert.equal(typeof window.gwHasSigningProvider, 'function');
+  assert.equal(window.gwHasSigningProvider(), false);
+  provider = { request() {} };
+  assert.equal(window.gwHasSigningProvider(), true);
+});

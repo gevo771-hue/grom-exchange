@@ -4336,6 +4336,10 @@
   }
   .ref-lbl { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--silver5); }
   .ref-val { font-size: 22px; font-weight: 800; color: var(--silver1); margin: 6px 0 10px; letter-spacing: 0.03em; word-break: break-all; }
+  .ref-val.ref-placeholder { font-size: 22px; }
+  .ref-status { font-size: 13px; color: var(--silver4); line-height: 1.5; overflow-wrap: anywhere; }
+  .ref-link .ref-val { word-break: normal; overflow-wrap: anywhere; }
+  .ref-hero button:disabled { opacity: .45; cursor: default; }
   .ref-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
   @media (max-width: 800px) { .ref-kpis { grid-template-columns: repeat(2,1fr); } }
   .kpi-card {
@@ -6877,16 +6881,17 @@
         <div class="ref-code">
           <div class="ref-lbl" data-i18n="ref_invite_code">Your invite code</div>
           <div class="ref-val mono" id="refCode" data-i18n="ref_connect_wallet_code">Connect wallet to generate</div>
-          <button class="btn-primary" onclick="copyRef()" id="refCopyBtn" data-i18n="common_copy">Copy</button>
+          <button class="btn-primary" onclick="copyRef()" id="refCopyBtn" disabled data-i18n="common_copy">Copy</button>
+          <p id="refStatus" role="status" class="ref-status"></p>
           <button class="btn-ghost" id="refSignInBtn" type="button" hidden onclick="gwReferralSignIn()" data-i18n="ref_sign_to_load">Sign in with wallet</button>
         </div>
         <div class="ref-link">
           <div class="ref-lbl" data-i18n="ref_invite_link">Invite link</div>
           <div class="ref-val mono" id="refLink" style="font-size:13px" data-i18n="ref_connect_wallet_link">Connect wallet to reveal your link</div>
           <div style="display:flex;gap:6px;margin-top:6px">
-            <button class="btn-ghost" onclick="copyRefLink()" data-i18n="ref_copy_link">Copy link</button>
-            <button class="btn-ghost" onclick="refShareX()" data-i18n="ref_share_x">Share on X</button>
-            <button class="btn-ghost" onclick="refShareTelegram()">Telegram</button>
+            <button class="btn-ghost" id="refCopyLinkBtn" disabled onclick="copyRefLink()" data-i18n="ref_copy_link">Copy link</button>
+            <button class="btn-ghost" id="refShareXBtn" disabled onclick="refShareX()" data-i18n="ref_share_x">Share on X</button>
+            <button class="btn-ghost" id="refShareTelegramBtn" disabled onclick="refShareTelegram()">Telegram</button>
           </div>
         </div>
         <div class="ref-qr">

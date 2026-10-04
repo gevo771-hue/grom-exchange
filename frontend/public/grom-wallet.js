@@ -13054,6 +13054,8 @@ async function gwLifiBridgeMonitor({ txHash, bridge, fromChainId, toChainId, opI
 
 function gwResumeSwapOpFromStorage() {
   try {
+    // Startup recovery must not replace a request already started on this page.
+    if (window.__gwSwapOp) return;
     const raw = localStorage.getItem('gw_swap_op');
     if (!raw) return;
     const op = JSON.parse(raw);
@@ -13067,8 +13069,17 @@ function gwResumeSwapOpFromStorage() {
     }
     window.__gwSwapOp = op;
     const hasSubmittedTx = !!(op.hash || op.signature || op.boc);
-    try { gwDsSubmit._busy = !hasSubmittedTx && gwSwapWalletActionPending(op); } catch (_) {}
     op.restoredFromStorage = true;
+    if (!hasSubmittedTx && !op.approvalHash && !op.approvalPending
+        && (gwSwapWalletActionPending(op) || op.stage === 'unknown')) {
+      // The former page's request promise no longer exists. Its outcome remains
+      // unknown; never pretend that a new wallet prompt was just dispatched.
+      op.stage = 'unknown';
+      op.walletResultUnknown = true;
+      op.walletRequestPending = false;
+      try { localStorage.setItem('gw_swap_op', JSON.stringify(op)); } catch (_) {}
+    }
+    try { gwDsSubmit._busy = !hasSubmittedTx && gwSwapWalletActionPending(op); } catch (_) {}
     // Restored submitted operations are monitored in the background. They are
     // not an active wallet prompt, so don't animate the CTA as if the form itself
     // were busy; gwUxCta still blocks a second send once an amount is entered.
@@ -13106,11 +13117,10 @@ function gwResumeSwapOpFromStorage() {
           opId: op.id,
         });
       } catch (_) {}
-    } else {
-      try {
-        gwToast('Previous swap still unresolved — check wallet Activity before swapping again', 'warn');
-      } catch (_) {}
     }
+    // One inline status is sufficient. Repeated restoration toasts obscured
+    // the swap form on mobile without adding any new information.
+    try { gwUxProgress(op); } catch (_) {}
   } catch (_) {}
 }
 try { setTimeout(gwResumeSwapOpFromStorage, 1500); } catch (_) {}
@@ -16725,7 +16735,7 @@ function gwUxProgress(op) {
       || (op.hash ? gwUxText('Отправлено','Submitted') : gwUxText('Подтвердите в кошельке','Confirm in wallet'));
   const title = op.purpose==='gas_topup'
     ? gwUxText('Газ · ','Gas · ')+gwChainLabel(op.fromChainId || op.chainId)+' → '+gwChainLabel(op.toChainId)
-    : op.from+' → '+op.to;
+    : (op.restoredFromStorage && !trackedHash ? gwUxText('Предыдущий запрос · ','Previous request · ') : '')+op.from+' → '+op.to;
   el.innerHTML=`<div class="gw-ux-status-head"><strong>${gwUxEsc(title)}</strong><small>${gwUxEsc(statusLabel)}</small></div><p class="gw-ux-status-body">${gwUxEsc(progressState)}</p><div class="gw-ux-status-actions">${url?`<a href="${gwUxEsc(url)}" target="_blank" rel="noopener">${gwUxText('Транзакция','Transaction')} ↗</a>`:''}${gwSwapWalletActionPending(op) && !op.approvalPending && !op.hash?`<button type="button" id="gwUxOpenWallet">${gwUxText('Открыть кошелёк','Open wallet')}</button>`:''}${gwUxCanDismissWalletRequest(op)?`<button type="button" id="gwUxRequestDeclined">${gwUxText('Запрос отклонён','Request rejected')}</button>`:''}</div>`;
   el.querySelector('#gwUxRequestDeclined')?.addEventListener('click',()=>gwUxDismissWalletRequest(op.id));
   el.querySelector('#gwUxOpenWallet')?.addEventListener('click',()=>{const key=gwConnectedWcWalletKey();if(key)openWalletAppShell(key);else gwShowRemoteSignCoach({action:'tx'});});

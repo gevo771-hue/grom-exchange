@@ -4768,25 +4768,27 @@ window.gromFetchOnchainBalances = async function gromFetchOnchainBalances(addres
   if (window.__gwOcBalInflight[ck]) return window.__gwOcBalInflight[ck];
 
   window.__gwOcBalInflight[ck] = (async () => {
-    let nativeEth = 0;
-    try {
-      const nativeWei = await gwRpcTry(chainId, 'eth_getBalance', [address, 'latest']);
-      nativeEth = Number(BigInt(nativeWei || '0x0')) / 1e18;
-    } catch (_) { /* leave nativeEth = 0 */ }
-
+    let nativeEth = null;
+    let incomplete = false;
     const tokens = {};
     const tokenMap = ONCHAIN_TOKENS[chainId] || {};
-    await Promise.all(Object.entries(tokenMap).map(async ([sym, contract]) => {
+    const nativeJob = (async () => {
+      try {
+        const nativeWei = await gwRpcTry(chainId, 'eth_getBalance', [address, 'latest']);
+        if (!/^0x[0-9a-f]+$/i.test(String(nativeWei))) throw new Error('Invalid native balance');
+        nativeEth = Number(BigInt(nativeWei)) / 1e18;
+      } catch (_) { incomplete = true; }
+    })();
+    const tokenJobs = Object.entries(tokenMap).map(async ([sym, contract]) => {
       try {
         const raw = await gwRpcTry(chainId, 'eth_call', [{ to: contract, data: padAddressData(address) }, 'latest']);
-        const dec = gwTokenDecimals(chainId, sym);
-        tokens[sym] = Number(BigInt(raw || '0x0')) / (10 ** dec);
-      } catch (_) {
-        tokens[sym] = 0;
-      }
-    }));
-    const data = { chainId, nativeEth, tokens };
-    window.__gwOcBalCache[ck] = { at: Date.now(), data };
+        if (!/^0x[0-9a-f]+$/i.test(String(raw))) throw new Error('Invalid token balance');
+        tokens[sym] = Number(BigInt(raw)) / (10 ** gwTokenDecimals(chainId, sym));
+      } catch (_) { incomplete = true; }
+    });
+    await Promise.all([nativeJob, ...tokenJobs]);
+    const data = { chainId, nativeEth, tokens, incomplete };
+    if (!incomplete) window.__gwOcBalCache[ck] = { at: Date.now(), data };
     return data;
   })().finally(() => { try { delete window.__gwOcBalInflight[ck]; } catch (_) {} });
 
@@ -5692,20 +5694,19 @@ async function gwOcFetchPrices() {
   return out;
 }
 
-async function gwOcFetchAllChains(address) {
+async function gwOcFetchAllChains(address, onChain, timeoutMs) {
   if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) return [];
-  // Only real EVM chain ids — TRON (728126428) is not eth_getBalance.
   const chains = Object.keys(GW_OC_CHAIN_META).map(Number).filter((id) => id > 0 && id < 1e8);
-  const results = await Promise.all(chains.map((chainId) =>
-    (typeof window.gromFetchOnchainBalances === 'function'
-      ? window.gromFetchOnchainBalances(address, chainId)
-      : Promise.resolve(null)
-    ).catch(() => null)
-  ));
-  return chains.map((chainId, i) => ({
-    chainId,
-    meta: GW_OC_CHAIN_META[chainId],
-    data: results[i] || null,
+  return Promise.all(chains.map(async (chainId) => {
+    let data = null;
+    try {
+      const read = typeof window.gromFetchOnchainBalances === 'function'
+        ? window.gromFetchOnchainBalances(address, chainId) : Promise.resolve(null);
+      data = timeoutMs ? await gwTkReadWithin(read, timeoutMs) : await read;
+    } catch (_) {}
+    const result = { chainId, meta: GW_OC_CHAIN_META[chainId], data };
+    try { if (onChain) onChain(result); } catch (_) {}
+    return result;
   }));
 }
 
@@ -14155,101 +14156,101 @@ function gwTkHoldingsCacheHasTron(rows) {
   } catch (_) { return false; }
 }
 
-async function gwTkLoadHoldings(force) {
+/** A slow price service or RPC must not hold the entire asset picker open. */
+function gwTkReadWithin(read, timeoutMs) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(read),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Balance read timed out')), timeoutMs); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+function gwTkHoldingsOwner() {
+  let addr = '', tAddr = '', solAddr = '';
+  try { addr = gwDisplayAddress() || ''; } catch (_) {}
+  try { tAddr = gwTronSavedAddr() || localStorage.getItem('grom_tron_addr') || window.GROM_CONN?.tron || ''; } catch (_) {}
+  try { solAddr = gwSolPubkey() || ''; } catch (_) {}
+  return { addr, tAddr, solAddr, key: [addr.toLowerCase(), tAddr, solAddr].join('|') };
+}
+
+async function gwTkLoadHoldings(force, onUpdate) {
   const cache = window.__gwTkHoldingsCache;
-  let addr = null;
-  try { addr = (typeof gwDisplayAddress === 'function') ? gwDisplayAddress() : null; } catch (_) {}
-  let tAddr = '';
-  try {
-    tAddr = (typeof gwTronSavedAddr === 'function') ? gwTronSavedAddr() : (window.__gwTronAddr || '');
-    if (!tAddr) tAddr = localStorage.getItem('grom_tron_addr') || window.GROM_CONN?.tron || '';
-  } catch (_) {}
-
-  const solAddr = typeof gwSolPubkey === 'function' ? gwSolPubkey() : '';
-  const ownerKey = [addr || '', tAddr || '', solAddr || ''].join('|');
-  /* Cache is scoped to the connected addresses across namespaces. */
-  const cacheOk = !force
-    && cache.ownerKey === ownerKey
-    && cache.rows?.length
-    && (Date.now() - cache.at < 20000)
-    && !(tAddr && !gwTkHoldingsCacheHasTron(cache.rows));
-  if (cacheOk) return cache.rows;
-
-  if (!addr && !tAddr && !solAddr) {
-    cache.rows = [];
-    cache.at = Date.now();
+  const owner = gwTkHoldingsOwner();
+  const sameOwner = cache.ownerKey === owner.key;
+  if (!owner.addr && !owner.tAddr && !owner.solAddr) {
+    Object.assign(cache, { ownerKey: owner.key, rows: [], at: Date.now(), incomplete: false });
     return [];
   }
-  try {
-    if (!tAddr && typeof gwTronMaybeAutolink === 'function') {
-      try { tAddr = (await gwTronMaybeAutolink()) || tAddr; } catch (_) {}
-    }
-    const prices = typeof gwOcFetchPrices === 'function'
-      ? await gwOcFetchPrices().catch(() => ({ USDT: 1, USDC: 1 }))
-      : { USDT: 1, USDC: 1 };
-    const rows = [];
-
-    const evmJob = (addr && /^0x[a-fA-F0-9]{40}$/i.test(addr) && typeof gwOcFetchAllChains === 'function')
-      ? gwOcFetchAllChains(addr).catch(() => [])
-      : Promise.resolve([]);
-    const tronJob = (tAddr && typeof gwTronFetchAllBalances === 'function')
-      ? gwTronFetchAllBalances(tAddr).catch(() => [])
-      : Promise.resolve([]);
-
-    const solJob = solAddr ? Promise.all(['SOL', 'USDC', 'USDT'].map(async sym => ({
-      sym, amt: await gwSolAvailableAmount(sym).catch(() => 0),
-    }))) : Promise.resolve([]);
-    const [chains, tRows, sRows] = await Promise.all([evmJob, tronJob, solJob]);
-
-    for (const c of chains || []) {
-      if (!c?.data) continue;
-      const meta = c.meta || GW_OC_CHAIN_META[c.chainId] || {};
-      if (c.data.nativeEth > 0.0000001) {
-        const sym = meta.native || 'ETH';
-        const usd = c.data.nativeEth * (prices[sym] || 0);
-        rows.push({
-          sym, chainId: c.chainId, chain: meta.label || String(c.chainId),
-          amt: c.data.nativeEth, usd, name: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).name || sym,
-          logo: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).logo || '',
-        });
-      }
-      for (const [sym, amt] of Object.entries(c.data.tokens || {})) {
-        if (!(amt > 0.0001)) continue;
-        rows.push({
-          sym, chainId: c.chainId, chain: meta.label || String(c.chainId),
-          amt, usd: amt * (prices[sym] || (sym === 'USDT' || sym === 'USDC' || sym === 'BUSD' ? 1 : 0)),
-          name: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).name || sym,
-          logo: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).logo || '',
-        });
-      }
-    }
-
-    for (const tr of tRows || []) {
-      const px = prices[tr.sym]
-        || ((tr.sym === 'USDT' || tr.sym === 'USDC') ? 1 : 0)
-        || ((typeof gwDsPriceUsd === 'function') ? (await gwDsPriceUsd(tr.sym).catch(() => 0)) : 0);
-      rows.push({
-        sym: tr.sym, chainId: GW_TRON_CHAIN_ID, chain: 'TRON',
-        amt: tr.amt, usd: tr.amt * (px || 0),
-        name: (GW_DS_ASSETS.find((a) => a.sym === tr.sym) || {}).name || tr.sym,
-        logo: (GW_DS_ASSETS.find((a) => a.sym === tr.sym) || {}).logo || '',
-      });
-    }
-
-    for (const r of sRows) {
-      if (!(r.amt > 0)) continue;
-      const px = prices[r.sym] || (r.sym === 'SOL' ? await gwDsPriceUsd('SOL').catch(() => 0) : 1);
-      rows.push({ ...r, chainId: GW_LIFI_SOL_CHAIN, chain: 'Solana', usd: r.amt * px, name: r.sym });
-    }
-    rows.sort((a, b) => b.usd - a.usd);
-    cache.ownerKey = ownerKey;
-    cache.rows = rows;
-    cache.at = Date.now();
-    return rows;
-  } catch (e) {
-    console.warn('[GROM] tk holdings', e?.message || e);
+  if (!force && sameOwner && Date.now() - cache.at < 20000) {
+    try { onUpdate?.(cache.rows || [], { loading: false, incomplete: !!cache.incomplete }); } catch (_) {}
     return cache.rows || [];
   }
+  window.__gwTkHoldingsInflight = window.__gwTkHoldingsInflight || new Map();
+  const inflight = window.__gwTkHoldingsInflight;
+  let job = inflight.get(owner.key);
+  if (!job) {
+    job = { listeners: new Set(), rows: sameOwner ? cache.rows || [] : [], incomplete: false };
+    inflight.set(owner.key, job);
+    job.promise = (async () => {
+      let prices = { USDT: 1, USDC: 1, BUSD: 1 };
+      try {
+        Object.assign(prices, __gwQuotesMem.data?.crypto || {});
+        if (prices.MATIC == null && prices.POL != null) prices.MATIC = prices.POL;
+      } catch (_) {}
+      const chunks = new Map();
+      const publish = (loading) => {
+        if (gwTkHoldingsOwner().key !== owner.key || (loading && !chunks.size)) return;
+        const rows = [];
+        for (const assets of chunks.values()) for (const asset of assets) {
+          const px = Number(prices[asset.sym]) || 0;
+          const info = GW_DS_ASSETS.find(a => a.sym === asset.sym) || {};
+          rows.push({ ...asset, usd: asset.amt * px, pricePending: !(px > 0), name: info.name || asset.sym, logo: info.logo || '' });
+        }
+        rows.sort((a, b) => b.usd - a.usd);
+        job.rows = rows;
+        Object.assign(cache, { ownerKey: owner.key, rows, incomplete: job.incomplete, at: loading ? 0 : Date.now() });
+        for (const notify of job.listeners) try { notify(rows, { loading, incomplete: job.incomplete }); } catch (_) {}
+      };
+      // Start all balance reads immediately; prices are optional display data.
+      const evm = /^0x[a-fA-F0-9]{40}$/.test(owner.addr) ? gwOcFetchAllChains(owner.addr, c => {
+        if (!c.data) { job.incomplete = true; return; }
+        if (c.data.incomplete) job.incomplete = true;
+        const meta = c.meta || {};
+        const assets = [];
+        if (c.data.nativeEth > 0.0000001) assets.push({ sym: meta.native || 'ETH', amt: c.data.nativeEth });
+        for (const [sym, amt] of Object.entries(c.data.tokens || {})) if (amt > 0.0001) assets.push({ sym, amt });
+        chunks.set(c.chainId, assets.map(a => ({ ...a, chainId: c.chainId, chain: meta.label || String(c.chainId) })));
+        publish(true);
+      }, 8000) : Promise.resolve();
+      const tron = owner.tAddr && typeof gwTronFetchAllBalances === 'function'
+        ? gwTkReadWithin(gwTronFetchAllBalances(owner.tAddr), 8000).then(rows => {
+          chunks.set('tron', (rows || []).map(a => ({ ...a, chainId: GW_TRON_CHAIN_ID, chain: 'TRON' })));
+          publish(true);
+        }).catch(() => { job.incomplete = true; }) : Promise.resolve();
+      const sol = owner.solAddr ? Promise.all(['SOL', 'USDC', 'USDT'].map(async sym => {
+        try {
+          const amt = await gwTkReadWithin(gwSolAvailableAmount(sym), 8000);
+          if (amt > 0) chunks.set('sol-' + sym, [{ sym, amt, chainId: GW_LIFI_SOL_CHAIN, chain: 'Solana' }]);
+          publish(true);
+        } catch (_) { job.incomplete = true; }
+      })) : Promise.resolve();
+      const priceJob = typeof gwOcFetchPrices === 'function'
+        ? gwTkReadWithin(gwOcFetchPrices(), 2000).then(p => { prices = { ...prices, ...p }; publish(true); }).catch(() => {})
+        : Promise.resolve();
+      await Promise.all([evm, tron, sol, priceJob]);
+      publish(false);
+      return gwTkHoldingsOwner().key === owner.key ? job.rows : [];
+    })().catch(() => {
+      job.incomplete = true;
+      return gwTkHoldingsOwner().key === owner.key ? job.rows : [];
+    }).finally(() => { if (inflight.get(owner.key) === job) inflight.delete(owner.key); });
+  }
+  if (onUpdate) {
+    job.listeners.add(onUpdate);
+    try { onUpdate(job.rows, { loading: true, incomplete: job.incomplete }); } catch (_) {}
+  }
+  try { return await job.promise; }
+  finally { if (onUpdate) job.listeners.delete(onUpdate); }
 }
 
 function gwTkGetFromContext() {
@@ -15004,25 +15005,32 @@ async function gwTkRender(q) {
       list.innerHTML = `<div class="gw-tk-empty">${tx('tk_need_connect', 'Connect a wallet to see your tokens.')}</div>`;
       return;
     }
-    /* Force refresh when TRON addr exists but cache is EVM-only (close/reopen bug). */
-    const needForce = !!(tAddr && !gwTkHoldingsCacheHasTron(window.__gwTkHoldingsCache?.rows));
-    const rows = await gwTkLoadHoldings(needForce);
-    // Race: user may have switched to TO while loading
-    if (!stillLive() || overlay.dataset.which !== 'from') return;
-    const filtered = gwUxFilterRows(gwDsSpendablePayHoldings(rows)).filter((a) =>
-      !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query) || (a.chain || '').toUpperCase().includes(query)
-    );
-    if (!filtered.length) {
-      list.innerHTML = `<div class="gw-tk-empty">${query
-        ? `Nothing matches «${q}»`
+    const holdingsOwnerKey = gwTkHoldingsOwner().key;
+    const renderHoldings = (rows, status = {}) => {
+      if (!stillLive() || overlay.dataset.which !== 'from' || gwTkHoldingsOwner().key !== holdingsOwnerKey) return;
+      const known = gwDsSpendablePayHoldings(rows);
+      const unpriced = gwDsSpendablePayHoldings((rows || []).filter(a => a.pricePending), 0);
+      const filtered = gwUxFilterRows([...known, ...unpriced.filter(a => !known.includes(a))]).filter(a =>
+        !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query) || (a.chain || '').toUpperCase().includes(query));
+      const notice = status.loading
+        ? gwUxText('Обновляем балансы остальных сетей…', 'Updating other networks…')
+        : status.incomplete ? gwUxText('Не все сети ответили. Можно повторить загрузку.', 'Some networks did not respond. Retry loading.') : '';
+      list.innerHTML = filtered.map(a => rowHtml(a,
+        `<div class="gw-tk-bal"><div class="amt">${Number(a.amt).toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>`
+        + `<div class="usd">${a.pricePending ? gwUxText('Курс уточняется', 'Price pending') : '≈ $' + Number(a.usd || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div></div>`
+      )).join('') || `<div class="gw-tk-empty">${status.loading ? tx('tk_loading', 'Loading balances…')
+        : status.incomplete ? gwUxText('Балансы пока недоступны.', 'Balances are currently unavailable.')
+        : query ? gwUxEsc(gwUxText('Ничего не найдено: ', 'Nothing matches: ') + q)
         : tx('tk_empty_wallet', 'No tokens in your wallet yet — deposit first, then choose what to pay with.')}</div>`;
-      return;
-    }
-    list.innerHTML = filtered.map((a) => rowHtml(a,
-      `<div class="gw-tk-bal"><div class="amt">${Number(a.amt).toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>`
-      + `<div class="usd">≈ $${Number(a.usd || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div></div>`
-    )).join('');
-    wire();
+      if (notice) list.insertAdjacentHTML('beforeend', `<div class="gw-tk-empty" aria-live="polite">${notice}${status.incomplete && !status.loading ? `<button type="button" id="gwTkRetry">${gwUxText('Повторить', 'Retry')}</button>` : ''}</div>`);
+      wire();
+      list.querySelector('#gwTkRetry')?.addEventListener('click', () => {
+        window.__gwTkHoldingsCache.at = 0;
+        gwTkRender(document.getElementById('gwTkSearch')?.value || '');
+      });
+    };
+    const rows = await gwTkLoadHoldings(false, renderHoldings);
+    renderHoldings(rows, { loading: false, incomplete: !!window.__gwTkHoldingsCache?.incomplete });
     return;
   }
 
@@ -15433,7 +15441,7 @@ try { window.gwTkSyncButton = gwTkSyncButton; } catch (_) {}
 function gwDsRouteHopsHtml(winner) {
   try {
     if (winner.aggregator !== 'LiFi') {
-      return `<div class="gw-ds-hops"><span class="h">${winner.aggregator}</span><span class="via">optimal single-router path</span></div>`;
+      return '';
     }
     const steps = winner.raw?.includedSteps || [winner.raw];
     if (!steps.length) return '';
@@ -16460,9 +16468,10 @@ function gwUxCss() {
     .gw-ux-details{grid-column:1/-1;width:100%;font-size:13px;color:#b9c9d7}
     .gw-ux-details summary,.gw-ux-extra summary{cursor:pointer;padding:10px 0;color:#a6dae9}
     .gw-ux-grid{display:grid;grid-template-columns:1fr auto;gap:8px;padding:8px 0}.gw-ux-grid span:nth-child(even){text-align:right;overflow-wrap:anywhere}
-    #gwSwapProgress{margin-top:12px;padding:14px;border:1px solid #527482;border-radius:14px;font-size:13px;line-height:1.6}
-    #gwSwapProgress ol{display:flex;gap:10px;list-style:none;flex-wrap:wrap;padding:0;margin:8px 0}
-    #gwSwapProgress li{color:#7f93a8}#gwSwapProgress li.done{color:#91c8ad}#gwSwapProgress li.current{color:#9bdcea;font-weight:700}
+    #gwSwapProgress{margin-top:8px;padding:4px 2px;font-size:12px;line-height:1.45}
+    .gw-ux-status-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.gw-ux-status-head small{color:#9db1c5;font-size:11px}.gw-ux-status-body{margin:5px 0;color:#b9c9d7}.gw-ux-status-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    #gwDsCard .gw-ds-route{grid-template-columns:auto minmax(0,1fr);padding:10px 12px;gap:4px 12px}#gwDsCard .gw-ds-route .v{overflow-wrap:anywhere}
+    #gwDsCard .gw-ux-details summary{padding:5px 0}#gwDsCard .gw-ux-details>.agg-cmp{display:block;margin:6px 0}#gwDsCard .gw-ux-details{font-size:12px}
     #gwSwapProgress a,#gwSwapProgress button{color:#9bdcea}#gwSwapProgress button,.gw-ux-picker-tabs button,.gw-ux-star{background:transparent;border:1px solid #506174;border-radius:9px;padding:7px;cursor:pointer;color:inherit}
     .gw-ux-picker-tabs{display:flex;flex-wrap:nowrap;gap:4px;margin:0 14px 12px;padding:5px;overflow:visible!important;scrollbar-width:none!important;-ms-overflow-style:none!important;min-height:48px;border:1px solid rgba(151,178,199,.16);border-radius:15px;background:linear-gradient(145deg,rgba(20,30,43,.94),rgba(30,43,58,.86));box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 5px 14px -12px rgba(0,0,0,.9)}.gw-ux-picker-tabs::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}.gw-ux-picker-tabs button{position:relative;white-space:nowrap;flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:7px 5px!important;border:1px solid transparent!important;border-radius:10px!important;color:#b8c5d4!important;font-size:12px!important;line-height:1.2!important;font-weight:680!important;visibility:visible!important;opacity:1!important;background:transparent!important;box-shadow:none;transition:color .18s ease,background .18s ease,border-color .18s ease,box-shadow .18s ease}.gw-ux-picker-tabs button:hover{color:#edf6fb!important;border-color:rgba(164,205,221,.15)!important;background:rgba(145,180,197,.09)!important}.gw-ux-picker-tabs button.on{color:#edf5f9!important;border-color:rgba(174,207,222,.18)!important;background:linear-gradient(180deg,rgba(133,154,170,.28),rgba(83,103,122,.24))!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 3px 9px -7px rgba(0,0,0,.9)}.gw-ux-picker-tabs button.on:after{content:"";position:absolute;left:50%;bottom:3px;width:18px;height:2px;border-radius:2px;background:linear-gradient(90deg,#78c8d9,#a9dce5);transform:translateX(-50%);opacity:.9}.gw-ux-picker-tabs button:focus-visible{outline:2px solid rgba(120,200,217,.72);outline-offset:2px;z-index:1}
     .gw-ux-star{flex:0 0 auto!important;margin-left:6px;color:#a6cddd!important;min-width:32px}.gw-ux-star.on{color:#f3d381!important}
@@ -16472,7 +16481,7 @@ function gwUxCss() {
     .gw-swap-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:5px;border:1px solid rgba(151,178,199,.16);border-radius:15px;background:linear-gradient(145deg,rgba(20,30,43,.94),rgba(30,43,58,.86));box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 5px 14px -12px rgba(0,0,0,.9)}
     .gw-swap-modes button{position:relative;min-height:40px;border:1px solid transparent;border-radius:10px;padding:8px 10px;background:transparent;color:#b8c5d4;font-weight:680;letter-spacing:.01em;cursor:pointer;transition:color .18s ease,background .18s ease,border-color .18s ease,box-shadow .18s ease}.gw-swap-modes button:hover{color:#edf6fb;background:rgba(145,180,197,.09);border-color:rgba(164,205,221,.15)}.gw-swap-modes button.on{color:#edf5f9;border-color:rgba(174,207,222,.18);background:linear-gradient(180deg,rgba(133,154,170,.28),rgba(83,103,122,.24));box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 3px 9px -7px rgba(0,0,0,.9)}.gw-swap-modes button.on:after{content:"";position:absolute;left:50%;bottom:3px;width:18px;height:2px;border-radius:2px;background:linear-gradient(90deg,#78c8d9,#a9dce5);transform:translateX(-50%);opacity:.9}
     .gw-order-mode-panel{margin-top:2px;padding:14px 0 2px;border-top:1px solid rgba(136,192,208,.14)}.gw-order-mode-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.gw-order-mode-head p{margin:0}.gw-order-create{width:100%;margin-top:10px;background:#88c0d0;color:#162c36;border:0;border-radius:11px;padding:12px;font-weight:800;cursor:pointer}
-    @media(max-width:600px){#gwDsCard{padding:16px!important}#gwDsCard .gw-ds-row-mid{flex-wrap:wrap!important}#gwDsCard .gw-ds-tkbtn .net{max-width:100px}#gwDsCard .gw-ds-route{font-size:12px}#gwDsCard .gw-ds-cta{min-height:48px}#gwSwapProgress ol{display:grid;grid-template-columns:1fr 1fr}.gw-ux-picker-tabs{padding:8px}.gw-ux-picker-tabs button{padding:8px 6px;font-size:12px}.gw-ux-order-form{display:grid;grid-template-columns:1fr}.gw-ux-order-form label{min-width:0}.gw-swap-modes button{padding:9px 5px;font-size:12px}}
+    @media(max-width:600px){#gwDsCard{padding:16px!important}#gwDsCard .gw-ds-row-mid{flex-wrap:wrap!important}#gwDsCard .gw-ds-tkbtn .net{max-width:100px}#gwDsCard .gw-ds-route{font-size:12px}#gwDsCard .gw-ds-cta{min-height:48px}.gw-ux-picker-tabs{padding:8px}.gw-ux-picker-tabs button{padding:8px 6px;font-size:12px}.gw-ux-order-form{display:grid;grid-template-columns:1fr}.gw-ux-order-form label{min-width:0}.gw-swap-modes button{padding:9px 5px;font-size:12px}}
   `; document.head.appendChild(s);
 }
 function gwUxAccount() {
@@ -16492,14 +16501,14 @@ function gwUxCta() {
   cta.classList.toggle('not-ready',!m.enabled); cta.title=window.__gwDsQuoteExecReason || '';
   gwUxProgress(); return true;
 }
-function gwUxDetails(q, dec, gasUsd) {
+function gwUxDetails(q, dec, gasUsd, extra = '') {
   const raw = q.raw || {}; const min = q.toAmountMin ?? raw.estimate?.toAmountMin ?? raw.otherAmountThreshold;
   const n = min != null ? Number(min) / 10 ** dec : NaN;
   const token = document.getElementById('gwDsTo')?.value || '';
   const minLabel = Number.isFinite(n) ? n.toLocaleString(undefined,{maximumFractionDigits:Math.min(dec,10)})+' '+token : gwUxText('Уточняется маршрутом','Provided by route');
   const seconds=Number(raw.estimate?.executionDuration || raw.estimate?.estimatedRouteDuration || q.estimatedSeconds);
   const time=seconds>0 ? '~'+Math.ceil(seconds/60)+' '+gwUxText('мин','min') : gwUxText('Зависит от сети','Depends on network');
-  return `<details class="gw-ux-details"><summary>${gwUxText('Детали обмена','Swap details')}</summary><div class="gw-ux-grid"><span>${gwUxText('Минимум получите','Minimum received')}</span><span>${gwUxEsc(minLabel)}</span><span>${gwUxText('Расходы сети / маршрута','Network / route costs')}</span><span>${gwUxEsc(gasUsd === null ? gwUxText('Уточняются','Pending') : '≈ $'+gasUsd)}</span><span>${gwUxText('Ориентировочное время','Estimated time')}</span><span>${gwUxEsc(time)}</span></div></details>`;
+  return `<details class="gw-ux-details"><summary>${gwUxText('Детали обмена','Swap details')}</summary><div class="gw-ux-grid"><span>${gwUxText('Минимум получите','Minimum received')}</span><span>${gwUxEsc(minLabel)}</span><span>${gwUxText('Расходы сети / маршрута','Network / route costs')}</span><span>${gwUxEsc(gasUsd === null ? gwUxText('Уточняются','Pending') : '≈ $'+gasUsd)}</span><span>${gwUxText('Ориентировочное время','Estimated time')}</span><span>${gwUxEsc(time)}</span></div>${extra}</details>`;
 }
 function gwUxProgress(op) {
   const card=document.getElementById('gwDsCard'); if(!card)return;
@@ -16512,12 +16521,11 @@ function gwUxProgress(op) {
     window.__gwUxLastOp=null;
     return;
   }
+  if(['completed','failed','cancelled','refunded'].includes(op.stage)){document.getElementById('gwSwapProgress')?.remove();return;}
   if(op?.account && op.account.toLowerCase()!==gwUxAccount().toLowerCase())return;
   if(!op)return;
   let el=document.getElementById('gwSwapProgress');if(!el){el=document.createElement('section');el.id='gwSwapProgress';el.setAttribute('aria-live','polite');card.appendChild(el);}
-  const completed=op.stage==='completed';const step=completed?3:op.hash?2:op.signStep==='approve'?0:1;
-  const labels=[gwUxText('Разрешение токена','Token approval'),gwUxText('Подпись обмена','Swap signature'),gwUxText('Отправлено','Submitted'),gwUxText('Получено','Received')];
-  const state={preparing:gwUxText('Подготавливаем маршрут и проверяем баланс. Запрос в кошелёк ещё не отправлен.','Preparing route and checking balance. No request has been sent to the wallet yet.'),unknown:gwUxText('Результат пока неизвестен. Проверьте активность кошелька; повторная отправка заблокирована.','Result unknown. Check wallet activity; duplicate submission is blocked.'),failed:gwUxText('Обмен не выполнен. Проверьте детали ошибки.','Swap failed. Review error details.'),cancelled:gwUxText('Подтверждение отклонено.','Confirmation rejected.'),bridging:gwUxText('Мост выполняет перевод в сеть получения.','Bridge is delivering to the destination network.'),partial:gwUxText('Маршрут выполнен частично. Проверьте полученные активы.','Route partially completed.'),refunded:gwUxText('Маршрут вернул средства.','Route refunded funds.'),completed:gwUxText('Получение подтверждено сетью.','Receipt confirmed by the network.')};
+  const state={preparing:gwUxText('Подготавливаем маршрут и проверяем баланс. Запрос в кошелёк ещё не отправлен.','Preparing route and checking balance. No request has been sent to the wallet yet.'),unknown:gwUxText('Проверьте незавершённый запрос в кошельке. Пока его результат неизвестен, новый обмен недоступен.','Check the unresolved wallet request. A new swap is unavailable until its result is known.'),failed:gwUxText('Обмен не выполнен. Проверьте детали ошибки.','Swap failed. Review error details.'),cancelled:gwUxText('Подтверждение отклонено.','Confirmation rejected.'),bridging:gwUxText('Мост выполняет перевод в сеть получения.','Bridge is delivering to the destination network.'),partial:gwUxText('Маршрут выполнен частично. Проверьте полученные активы.','Route partially completed.'),refunded:gwUxText('Маршрут вернул средства.','Route refunded funds.'),completed:gwUxText('Получение подтверждено сетью.','Receipt confirmed by the network.')};
   const trackedHash=op.hash || op.approvalHash || '';
   const url=trackedHash ? (op.namespace==='solana'?'https://solscan.io/tx/'+encodeURIComponent(trackedHash):op.namespace==='tron'?'https://tronscan.org/#/transaction/'+encodeURIComponent(trackedHash):gwDsExplorerUrl(op.chainId || op.fromChainId,trackedHash)) : '';
   const progressState = op.approvalPending
@@ -16525,7 +16533,13 @@ function gwUxProgress(op) {
     : op.purpose==='gas_topup' && op.hash
       ? gwUxText('Ждём газ в исходной сети. Основной обмен ещё не отправлен.','Waiting for source-chain gas. The main swap has not been sent.')
       : (state[op.stage] || gwUxText('Подтвердите запрос в кошельке.','Confirm the request in your wallet.'));
-  el.innerHTML=`${op.restoredFromStorage?`<small>${op.purpose==='gas_topup'?gwUxText('Предыдущее пополнение газа','Previous gas funding'):gwUxText('Предыдущий обмен','Previous swap')}</small><br>`:''}<strong>${op.purpose==='gas_topup'?gwUxText('Пополнение газа · ','Gas funding · '):''}${gwUxEsc(op.from)}${op.purpose==='gas_topup'?' · '+gwUxEsc(gwChainLabel(op.fromChainId || op.chainId)):''} → ${gwUxEsc(op.to)}${op.purpose==='gas_topup'?' · '+gwUxEsc(gwChainLabel(op.toChainId)):''}</strong><ol>${labels.map((l,i)=>`<li class="${completed || i<step?'done':i===step?'current':''}">${i+1}. ${l}${i===0 && !op.approvalRequested && step>0?' · '+gwUxText('при необходимости','if needed'):''}</li>`).join('')}</ol><div>${gwUxEsc(progressState)}</div>${url?`<a href="${gwUxEsc(url)}" target="_blank" rel="noopener">${gwUxText('Открыть транзакцию','View transaction')} ↗</a>`:''}${gwSwapWalletActionPending(op) && !op.approvalPending && !op.hash && !['completed','failed','cancelled'].includes(op.stage)?`<button type="button" id="gwUxOpenWallet">${gwUxText('Открыть кошелёк','Open wallet')}</button>`:''}`;
+  const statusLabel = op.approvalPending ? gwUxText('Подтверждение сети','Network confirmation')
+    : ({preparing:gwUxText('Подготовка','Preparing'),unknown:gwUxText('Проверьте кошелёк','Check wallet'),bridging:gwUxText('Перевод в пути','Bridge in progress'),partial:gwUxText('Частично выполнен','Partially completed')})[op.stage]
+      || (op.hash ? gwUxText('Отправлено','Submitted') : gwUxText('Подтвердите в кошельке','Confirm in wallet'));
+  const title = op.purpose==='gas_topup'
+    ? gwUxText('Газ · ','Gas · ')+gwChainLabel(op.fromChainId || op.chainId)+' → '+gwChainLabel(op.toChainId)
+    : op.from+' → '+op.to;
+  el.innerHTML=`<div class="gw-ux-status-head"><strong>${gwUxEsc(title)}</strong><small>${gwUxEsc(statusLabel)}</small></div><p class="gw-ux-status-body">${gwUxEsc(progressState)}</p><div class="gw-ux-status-actions">${url?`<a href="${gwUxEsc(url)}" target="_blank" rel="noopener">${gwUxText('Транзакция','Transaction')} ↗</a>`:''}${gwSwapWalletActionPending(op) && !op.approvalPending && !op.hash?`<button type="button" id="gwUxOpenWallet">${gwUxText('Открыть кошелёк','Open wallet')}</button>`:''}</div>`;
   el.querySelector('#gwUxOpenWallet')?.addEventListener('click',()=>{const key=gwConnectedWcWalletKey();if(key)openWalletAppShell(key);else gwShowRemoteSignCoach({action:'tx'});});
 }
 function gwUxOpChanged(op) {
@@ -17577,10 +17591,8 @@ async function gwDsRefreshRate() {
           gwDsPublishSimpleQuote({ from, to, outAmt, rate });
         }
         const executable = !!tronQ?.executable;
-        const slipPct = ((typeof gwSwapSlippageFraction === 'function' ? gwSwapSlippageFraction() : 0.005) * 100).toFixed(1);
         routeEl.innerHTML = `
           <span class="k">${t.route}</span><span class="v">${executable ? 'SunSwap · TRON' : 'Indicative · not executable'}</span>
-          <span class="k">${t.slip}</span><span class="v">${slipPct}%</span>
           <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${(rate || 0).toFixed(6)} ${to}${executable ? '' : ' · preview only'}</span>
         `;
         // F22: ready only after real SunSwap amountsOut — never after a reference price
@@ -17606,10 +17618,8 @@ async function gwDsRefreshRate() {
       if (outAmt > 0) {
         const rate = amt > 0 ? outAmt / amt : null;
         applyOut(outAmt, { rate });
-        const slipPct = ((typeof gwSwapSlippageFraction === 'function' ? gwSwapSlippageFraction() : 0.005) * 100).toFixed(2);
         routeEl.innerHTML = `
           <span class="k">${t.route}</span><span class="v">Jupiter · Solana</span>
-          <span class="k">${t.slip}</span><span class="v">${slipPct}%</span>
           <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${(rate || 0).toFixed(6)} ${to}</span>
         `;
         try { gwDsSetQuoteExecReady(true, ''); } catch (_) {}
@@ -17670,11 +17680,9 @@ async function gwDsRefreshRate() {
         const tool = lifiQ.tool || 'LiFi';
         const fromLbl = (typeof gwTkChainShort === 'function') ? gwTkChainShort(fromCidBridge) : String(fromCidBridge);
         const toLbl = (typeof gwTkChainShort === 'function') ? gwTkChainShort(toCidBridge) : String(toCidBridge);
-        const slipPct = ((typeof gwSwapSlippageFraction === 'function' ? gwSwapSlippageFraction() : 0.005) * 100).toFixed(2);
         const canExec = !!lifiQ.transactionRequest || !!lifiQ.raw?.transactionRequest;
         routeEl.innerHTML = `
           <span class="k">${t.route}</span><span class="v">${tool} · ${fromLbl} → ${toLbl}</span>
-          <span class="k">${t.slip}</span><span class="v">${slipPct}%</span>
           <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${(rate || 0).toFixed(6)} ${to}${canExec ? '' : ' · quote only'}</span>
         `;
         try {
@@ -17812,16 +17820,9 @@ async function gwDsRefreshRate() {
           const srcLine = `${got} / ${tried} ${gwUxText('источников ответили','sources responded')}`;
           if (!stillMine()) return true;
           routeEl.innerHTML = `
-            <span class="k">${t.route}</span><span class="v">${routeTitle}</span>
-            ${gwUxDetails(winner, outDec, gasUsd)}
-            <span class="k">${t.slip}</span><span class="v">${((Number(winner._gromSlippage) > 0 ? Number(winner._gromSlippage) : gwSwapSlippageFraction()) * 100).toFixed(2)}%</span>
-
-            <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${rate} ${to}</span>
-            <span class="k full agg-cmp">${cmp} · ${srcLine}</span>
-            ${bridgeNote}
-            <span class="k full" id="gwDsPimpSlot"></span>
-            <span class="k full">${hopsHtml}</span>
-            <span class="k full" id="gwDsAiTipSlot"></span>
+            <span class="k">${t.route}</span><span class="v">${gwUxEsc(routeTitle)}</span>
+            <span class="k full" id="gwDsRateLine">1 ${gwUxEsc(from)} ≈ ${rate} ${gwUxEsc(to)}</span>
+            ${gwUxDetails(winner, outDec, gasUsd, `<span class="agg-cmp">${cmp} · ${srcLine}</span>${bridgeNote}<div id="gwDsPimpSlot"></div>${hopsHtml}<div id="gwDsAiTipSlot"></div>`)}
           `;
           gwDsSetQuoteExecReady(!!execQuotes.length, execQuotes.length
             ? ''

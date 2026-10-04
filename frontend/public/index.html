@@ -8936,7 +8936,9 @@ function gwEnsureChipMenu() {
     + 'style="display:block;width:100%;padding:0;border:0;background:transparent;'
     + 'color:#eceff4;font:inherit;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;'
     + 'cursor:pointer;text-align:left;letter-spacing:.02em;word-break:break-all;line-height:1.45"></button>'
+    + '<div class="gw-chip-session" style="font-size:12px;color:#a9bdd2;margin-top:8px;line-height:1.4"></div>'
     + '</div>'
+    + '<button type="button" data-chip-act="reconnect" role="menuitem" style="display:none;width:100%;padding:10px 12px;margin-bottom:6px;border:0;border-radius:10px;background:#88c0d0;color:#162536;font:inherit;font-size:13px;font-weight:700;cursor:pointer"></button>'
     + '<button type="button" data-chip-act="wallet" role="menuitem" '
     + 'style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:0;border-radius:10px;'
     + 'background:rgba(255,255,255,.04);color:#e5e9f0;font:inherit;font-size:13px;font-weight:600;'
@@ -8962,6 +8964,13 @@ function gwEnsureChipMenu() {
           if (typeof toast === 'function') toast(addr, 'info');
         });
       } else if (typeof toast === 'function') toast(addr || 'No address', 'info');
+    } else if (act === 'reconnect') {
+      // Restore/connect only. No swap, transaction or sign-in signature here.
+      if (typeof window.gwEnsureSigningForSwap === 'function') {
+        window.gwEnsureSigningForSwap({ silent: true }).then(function () {
+          if (typeof window.gwDsSyncCtaState === 'function') window.gwDsSyncCtaState();
+        }).catch(function (err) { if (typeof toast === 'function') toast(err.message || 'Connection failed', 'warn'); });
+      }
     } else if (act === 'wallet') {
       if (typeof show === 'function') show('wallet');
     } else if (act === 'logout') {
@@ -8992,6 +9001,18 @@ function gwPaintChipMenu() {
   var addrBtn = menu.querySelector('.gw-chip-addr');
   /* Full address in the panel — chip itself stays short. */
   if (addrBtn) addrBtn.textContent = addr || '—';
+  var evm = /^0x[a-fA-F0-9]{40}$/.test(addr);
+  var live = typeof window.gwHasSigningProvider === 'function' && window.gwHasSigningProvider();
+  var ru = typeof window.getGromLang === 'function' && window.getGromLang() === 'ru';
+  var status = menu.querySelector('.gw-chip-session');
+  if (status) status.textContent = !evm ? '' : live
+    ? (ru ? 'Подключение активно' : 'Connection active')
+    : (ru ? 'Адрес сохранён · подключение не активно' : 'Address saved · connection inactive');
+  var restore = menu.querySelector('[data-chip-act="reconnect"]');
+  if (restore) {
+    restore.style.display = evm && !live ? 'block' : 'none';
+    restore.textContent = ru ? 'Восстановить подключение' : 'Restore connection';
+  }
   return menu;
 }
 function gwWalletChipClick(ev) {
@@ -16076,7 +16097,7 @@ var GROM_XSTOCKS = [
       + '<button type="button" class="gwx-load-more" id="gwxPredictLoadMore">' + tx('px_load_more', 'Load more') + '</button></div>'
       + '<div class="gwx-cal" id="gwxPredictCal" hidden></div>'
       + '<div class="gxp" id="gromPredictPos"><div class="gxp-h">' + tx('px_my_bets', 'My bets') + '</div><div class="gxp-list"></div></div>'
-      + '<div class="gwx-foot">' + tx('px_foot_predict', '') + '</div></div>';
+      + '</div>';
   }
   function buildXstocks() {
     initPx();

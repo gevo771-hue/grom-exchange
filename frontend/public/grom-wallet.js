@@ -851,8 +851,9 @@ function gwWakeConnectedWalletDeepLink(walletKey) {
     /* Open Trust app only — WC request is already on the relay. */
     if (android) return 'intent://open#Intent;scheme=trust;package=com.wallet.crypto.trustapp;end';
     if (ios) {
-      /* Universal Link → Trust home. NOT open_url→grom.exchange. */
-      return 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent('https://trustwallet.com');
+      // open_url opens a website INSIDE Trust, not the pending WC request.
+      // The native app scheme keeps the existing pairing and opens the app.
+      return 'trust://';
     }
     return '';
   }
@@ -1267,7 +1268,7 @@ function gwIsRemoteWcSigner(provider) {
 
 /**
  * After a WC signing request is queued:
- *  - Mobile: set deep-link choice (+ Android Intent). Never bare trust:// on iOS.
+ *  - Mobile: open the installed wallet's native app, without a pairing URI.
  *  - Desktop WC→phone: show coach (browser cannot deep-link the phone)
  * Implementation: openWalletAppShell + first gwWakeWalletForSigning above.
  */
@@ -1278,41 +1279,58 @@ try { window.gwConnectedWalletLabel = gwConnectedWalletLabel; } catch (_) {}
 function gwProviderRequestWithWake(provider, args, wakeOpts) {
   /* iOS: never let WC navigate to bare trust:// during signTypedData. */
   try { gwClearIosWcDeepLinkIfNeeded(); } catch (_) {}
-  // Mark only at the actual provider invocation. Quotes, allowance reads,
-  // simulation, and opening the wallet app are still preparation.
-  let dispatched = null;
-  try { dispatched = gwMarkSwapWalletRequestDispatched(args); } catch (_) {}
-  const context = dispatched ? {
-    id: dispatched.id,
-    walletRequestAt: dispatched.walletRequestAt,
-    signStep: dispatched.signStep || 'swap',
-  } : null;
+  // SignClient invocation can still be waiting for the relay or fail validation.
+  // Its session_request_sent event is the boundary for the wallet coach.
+  let context = null;
+  let settled = false;
+  let wakeTimer;
+  const operationId = typeof gwSwapOpGet === 'function' ? gwSwapOpGet()?.id : null;
+  const onDispatched = () => {
+    if (settled || context) return;
+    if (operationId && gwSwapOpGet()?.id !== operationId) return;
+    let dispatched;
+    try {
+      if (operationId && gwSwapOpGet()?.id === operationId) dispatched = gwMarkSwapWalletRequestDispatched(args);
+    } catch (_) {}
+    if (dispatched) context = {
+      id: dispatched.id, walletRequestAt: dispatched.walletRequestAt,
+      signStep: dispatched.signStep || 'swap',
+    };
+    try {
+      if (gwIsRemoteWcSigner(provider)) {
+        const method = String(args?.method || '');
+        const inferred = /personal_sign|eth_sign|signTypedData/i.test(method)
+          ? 'sign' : /switchEthereumChain|addEthereumChain/i.test(method) ? 'switch' : 'tx';
+        wakeTimer = setTimeout(() => {
+          if (settled) return;
+          try { gwWakeWalletForSigning(Object.assign({ action: inferred }, wakeOpts || {})); } catch (_) {}
+        }, 280);
+      }
+    } catch (_) {}
+  };
   let request;
-  try { request = provider.request(args); }
+  try {
+    request = provider.request(Object.assign({}, args,
+      provider.signClient ? { __gromOnDispatched: onDispatched } : {}));
+    if (!provider.signClient) onDispatched();
+  }
   catch (error) {
     try { gwMarkSwapWalletRequestSettled(args, null, error, context); } catch (_) {}
     throw error;
   }
   const p = Promise.resolve(request).then((result) => {
+    settled = true;
+    clearTimeout(wakeTimer);
+    try { if (context) gwHideRemoteSignCoach(); } catch (_) {}
     try { gwMarkSwapWalletRequestSettled(args, result, null, context); } catch (_) {}
     return result;
   }, (error) => {
+    settled = true;
+    clearTimeout(wakeTimer);
+    try { if (context) gwHideRemoteSignCoach(); } catch (_) {}
     try { gwMarkSwapWalletRequestSettled(args, null, error, context); } catch (_) {}
     throw error;
   });
-  try {
-    if (gwIsRemoteWcSigner(provider)) {
-      const method = String(args && args.method || '');
-      const inferred = /personal_sign|eth_sign|signTypedData/i.test(method)
-        ? 'sign'
-        : /switchEthereumChain|addEthereumChain/i.test(method)
-          ? 'switch'
-          : 'tx';
-      setTimeout(() => {
-        try { gwWakeWalletForSigning(Object.assign({ action: inferred }, wakeOpts || {})); } catch (_) {}
-      }, 280);
-    }
-  } catch (_) {}
   return p;
 }
 try { window.gwProviderRequestWithWake = gwProviderRequestWithWake; } catch (_) {}
@@ -2191,15 +2209,17 @@ async function gwAlignWcProviderChain(provider) {
   }
 }
 /**
- * Keep exactly one live WC session per wallet. Every reconnect used to leave the
- * old session alive, so Trust kept a queue of requests from dead sessions and
- * surfaced those instead of the current one (e.g. a 2h-old oversized top-up).
+ * Clean up expired WC sessions after connection. Live sibling topics can still
+ * belong to other tabs and must not be disconnected merely because they differ.
  */
 function gwWcPruneStaleSessions(signClient, keepTopic) {
   if (!signClient?.session?.getAll) return;
   let all = [];
   try { all = signClient.session.getAll() || []; } catch (_) { return; }
-  const stale = all.filter((s) => s?.topic && s.topic !== keepTopic);
+  // A different topic may still be used by another GROM tab. Only expired
+  // sessions are stale; disconnecting every sibling invalidated live wallets.
+  const now = Math.floor(Date.now() / 1000);
+  const stale = all.filter((s) => s?.topic && s.topic !== keepTopic && Number(s.expiry) <= now);
   if (!stale.length) return;
   console.log('[GROM] pruning ' + stale.length + ' stale WC session(s)');
   for (const s of stale) {
@@ -2210,6 +2230,30 @@ function gwWcPruneStaleSessions(signClient, keepTopic) {
   }
 }
 try { window.gwWcPruneStaleSessions = gwWcPruneStaleSessions; } catch (_) {}
+
+async function gwSignClientRequest(signClient, session, args) {
+  const { method, params, __gromOnDispatched } = args;
+  const chainRef = wcChainRefForRequest(session, method);
+  const reqParams = method === 'eth_sendTransaction' && Array.isArray(params) && params[0]
+    ? [typeof gwNormalizeEvmTxForWallet === 'function' ? gwNormalizeEvmTxForWallet(params[0]) : params[0]] : params;
+  let settled = false;
+  let announced = false;
+  const onSent = (event) => {
+    if (settled || announced || event?.topic !== session.topic || event.chainId !== chainRef
+      || event.request?.method !== method
+      || JSON.stringify(event.request?.params) !== JSON.stringify(reqParams)) return;
+    announced = true;
+    if (typeof __gromOnDispatched === 'function') __gromOnDispatched();
+  };
+  if (typeof __gromOnDispatched === 'function') signClient.on('session_request_sent', onSent);
+  try {
+    return await signClient.request({ topic: session.topic, chainId: chainRef,
+      request: { method, params: reqParams } });
+  } finally {
+    settled = true;
+    if (typeof __gromOnDispatched === 'function') signClient.off('session_request_sent', onSent);
+  }
+}
 
 function buildSignClientEip1193(signClient, session) {
   const accounts = (session?.namespaces?.eip155?.accounts || [])
@@ -2225,7 +2269,8 @@ function buildSignClientEip1193(signClient, session) {
     accounts: uniqAccounts,
     session,
     signClient,
-    request: async ({ method, params }) => {
+    request: async (args) => {
+      const { method } = args;
       /* WC sessions rarely list eth_requestAccounts — Futures/Predict used to
        * throw "Missing or invalid. request() method: eth_requestAccounts"
        * while the chip still showed a connected address. */
@@ -2234,18 +2279,7 @@ function buildSignClientEip1193(signClient, session) {
         const active = Number(currentChainId) || chainIdFromWcSession(session);
         return '0x' + active.toString(16);
       }
-      const chainRef = wcChainRefForRequest(session, method);
-      let reqParams = params;
-      if (method === 'eth_sendTransaction' && Array.isArray(params) && params[0] && typeof params[0] === 'object') {
-        reqParams = [typeof gwNormalizeEvmTxForWallet === 'function'
-          ? gwNormalizeEvmTxForWallet(params[0])
-          : params[0]];
-      }
-      return signClient.request({
-        topic: session.topic,
-        chainId: chainRef,
-        request: { method, params: reqParams },
-      });
+      return gwSignClientRequest(signClient, session, args);
     },
     on: (ev, cb) => signClient.on(ev, cb),
     removeListener: (ev, cb) => signClient.off(ev, cb),
@@ -2938,7 +2972,7 @@ window.gwOpenMoreWalletsExplorer = gwOpenMoreWalletsExplorer;
  */
 async function ensureWC(forceNew, opts) {
   const walletKey = opts?.walletKey || null;
-  if (wcProvider?.accounts?.length && !forceNew) {
+  if (wcProvider?.accounts?.length && gwWcProviderUsable(wcProvider) && !forceNew) {
     if (walletKey) gwRememberWcWalletKey(walletKey);
     return wcProvider;
   }
@@ -3207,6 +3241,19 @@ function gwShortWalletLabel(addr) {
 }
 
 /** Live provider that can sign right now (WC with accounts or injected extension). */
+function gwWcProviderUsable(provider) {
+  if (!provider?.request) return false;
+  let session = provider.session;
+  if (session?.topic && typeof provider.signClient?.session?.get === 'function') {
+    try { session = provider.signClient.session.get(session.topic); }
+    catch (_) { return false; }
+    if (!session) return false;
+  }
+  if (session?.active === false) return false;
+  if (session?.expiry != null && Number(session.expiry) <= Math.floor(Date.now() / 1000)) return false;
+  return true;
+}
+
 function gwActiveSigningProvider() {
   try {
     let chip = '';
@@ -3228,14 +3275,14 @@ function gwActiveSigningProvider() {
         return gwPatchProviderRequestAccounts(inj);
       }
     }
-    if (wcProvider) {
+    if (wcProvider && gwWcProviderUsable(wcProvider)) {
       gwPatchProviderRequestAccounts(wcProvider);
       const wcAcc = String(
         wcProvider.accounts?.[0] || gwWcSessionAddress(wcProvider.session) || '',
       ).toLowerCase();
       if (gwAddrOk(wcAcc) && (!gwAddrOk(chip) || wcAcc === chip)) return wcProvider;
     }
-    if (window.gromWallet?.wcProvider?.accounts?.length) {
+    if (window.gromWallet?.wcProvider?.accounts?.length && gwWcProviderUsable(window.gromWallet.wcProvider)) {
       gwPatchProviderRequestAccounts(window.gromWallet.wcProvider);
       return window.gromWallet.wcProvider;
     }
@@ -3824,8 +3871,9 @@ async function gwRestoreSignClientSession() {
     const provider = gwPatchProviderRequestAccounts(buildSignClientEip1193(client, session));
     wcProvider = provider;
     if (!provider.__gromSessionDeleteBound) {
-      provider.on?.('session_delete', () => {
+      provider.on?.('session_delete', (event) => {
         try {
+          if (event?.topic !== provider.session?.topic || wcProvider !== provider) return;
           /* Trust/WC relay flaps must not wipe the chip after F5 soft-restore. */
           console.log('[GROM] WC session_delete — keep identity, drop provider only');
           wcProvider = null;
@@ -4237,7 +4285,7 @@ async function connectViaSignClientCustomQr(walletKey, opts) {
   try {
     if (wcProvider) {
       const acc = wcProvider.accounts?.[0] || gwWcSessionAddress(wcProvider.session);
-      const alive = !!(acc || wcProvider.session);
+      const alive = !!(acc || wcProvider.session) && gwWcProviderUsable(wcProvider);
       if (!opts?.forceNew && alive && gwAddrOk(acc)) {
         /* Keep existing Trust/WC session — disconnect()+new QR was wiping live signing. */
         gwHideWcModalOnly();
@@ -17357,6 +17405,9 @@ async function gwDsRefreshRate() {
       }
     }
   } catch (_) {}
+  // Browser form restoration can change the selects without a change event.
+  // Always repaint the pair before quoting, including an unchanged saved pick.
+  try { gwTkSyncButton('from'); gwTkSyncButton('to'); } catch (_) {}
   // Prefer simple-mode amount (fixes: UI shows 0.0062 but quote used stale gwDsAmt).
   let amtStr = (typeof gwDsReadSwapAmtStr === 'function')
     ? gwDsReadSwapAmtStr()

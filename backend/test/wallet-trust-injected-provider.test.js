@@ -81,7 +81,7 @@ test('Trust namespace EVM provider is discovered even without wallet marker flag
     gwMarkSwapWalletRequestSettled() {},
     gwClearIosWcDeepLinkIfNeeded() {},
     gwIsRemoteWcSigner: () => false,
-    setTimeout() {},
+    setTimeout() {}, clearTimeout() {},
     console: { log() {} },
   });
   vm.runInContext([
@@ -96,6 +96,7 @@ test('Trust namespace EVM provider is discovered even without wallet marker flag
     extractFunction('gwAllInjectedProviders'),
     extractFunction('gwPickBestInjectedProvider'),
     extractFunction('gwActiveSigningProvider'),
+    extractFunction('gwWcProviderUsable'),
     extractFunction('gwRestoreInjectedEthereum'),
     extractFunction('gwEnsureSigningForSwap'),
     extractFunction('gwProviderRequestWithWake'),

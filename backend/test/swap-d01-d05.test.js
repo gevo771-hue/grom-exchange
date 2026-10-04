@@ -1161,7 +1161,7 @@ describe('cross-chain swap handoff', () => {
         return '0x' + 'a'.repeat(64);
       },
     }, { method: 'eth_sendTransaction', params: [{}] });
-    assert.equal(stageSeenByWallet, 'awaiting_signature');
+    assert.equal(stageSeenByWallet, 'preparing');
     assert.equal(c.window.__gwSwapOp.requestDispatched, true);
     assert.ok(c.window.__gwSwapOp.walletRequestAt > 0);
     assert.equal(c.window.__gwSwapOp.walletRequestPending, false);

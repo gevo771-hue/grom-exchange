@@ -17405,6 +17405,9 @@ async function gwDsRefreshRate() {
       }
     }
   } catch (_) {}
+  // Browser form restoration can change the selects without a change event.
+  // Always repaint the pair before quoting, including an unchanged saved pick.
+  try { gwTkSyncButton('from'); gwTkSyncButton('to'); } catch (_) {}
   // Prefer simple-mode amount (fixes: UI shows 0.0062 but quote used stale gwDsAmt).
   let amtStr = (typeof gwDsReadSwapAmtStr === 'function')
     ? gwDsReadSwapAmtStr()

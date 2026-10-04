@@ -114,3 +114,22 @@ test('a cached address cannot turn a deleted or expired SDK session into a signe
   provider.signClient.session.get = () => ({ ...valid, expiry: 1 });
   assert.equal(ctx.gwWcProviderUsable(provider), false);
 });
+
+test('restored form values repaint the exact quoted pair even without a change event', () => {
+  const labels = { from: { textContent: 'USDC' }, to: { textContent: 'USDC' } };
+  const values = { gwDsFrom: { value: 'USDC' }, gwDsTo: { value: 'USDT' } };
+  for (const which of ['from', 'to']) values[which === 'from' ? 'gwDsFromBtn' : 'gwDsToBtn'] = {
+    querySelector: selector => selector === '.lbl' ? labels[which] : null,
+  };
+  const ctx = vm.createContext({ window: { __gwDsUserPickedFrom: { sym: 'USDC' }, __gwDsUserPickedTo: { sym: 'USDT' } },
+    document: { getElementById: id => values[id], querySelector: () => null },
+    gwDsNormSym: s => s.toUpperCase(), GW_DS_ASSETS: [], gwGetActiveUiChainId: () => 0,
+    GW_TRON_CHAIN_ID: 728126428, GW_LIFI_SOL_CHAIN: 1151111081099710, Date, console });
+  vm.runInContext(fn('gwTkSyncButton'), ctx);
+  const start = source.indexOf('  // Source of truth: Simple row');
+  const end = source.indexOf('  // Prefer simple-mode amount', start);
+  assert.ok(start > 0 && end > start);
+  vm.runInContext(source.slice(start, end), ctx);
+  assert.equal(labels.from.textContent, 'USDC');
+  assert.equal(labels.to.textContent, 'USDT');
+});

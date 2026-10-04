@@ -4768,25 +4768,27 @@ window.gromFetchOnchainBalances = async function gromFetchOnchainBalances(addres
   if (window.__gwOcBalInflight[ck]) return window.__gwOcBalInflight[ck];
 
   window.__gwOcBalInflight[ck] = (async () => {
-    let nativeEth = 0;
-    try {
-      const nativeWei = await gwRpcTry(chainId, 'eth_getBalance', [address, 'latest']);
-      nativeEth = Number(BigInt(nativeWei || '0x0')) / 1e18;
-    } catch (_) { /* leave nativeEth = 0 */ }
-
+    let nativeEth = null;
+    let incomplete = false;
     const tokens = {};
     const tokenMap = ONCHAIN_TOKENS[chainId] || {};
-    await Promise.all(Object.entries(tokenMap).map(async ([sym, contract]) => {
+    const nativeJob = (async () => {
+      try {
+        const nativeWei = await gwRpcTry(chainId, 'eth_getBalance', [address, 'latest']);
+        if (!/^0x[0-9a-f]+$/i.test(String(nativeWei))) throw new Error('Invalid native balance');
+        nativeEth = Number(BigInt(nativeWei)) / 1e18;
+      } catch (_) { incomplete = true; }
+    })();
+    const tokenJobs = Object.entries(tokenMap).map(async ([sym, contract]) => {
       try {
         const raw = await gwRpcTry(chainId, 'eth_call', [{ to: contract, data: padAddressData(address) }, 'latest']);
-        const dec = gwTokenDecimals(chainId, sym);
-        tokens[sym] = Number(BigInt(raw || '0x0')) / (10 ** dec);
-      } catch (_) {
-        tokens[sym] = 0;
-      }
-    }));
-    const data = { chainId, nativeEth, tokens };
-    window.__gwOcBalCache[ck] = { at: Date.now(), data };
+        if (!/^0x[0-9a-f]+$/i.test(String(raw))) throw new Error('Invalid token balance');
+        tokens[sym] = Number(BigInt(raw)) / (10 ** gwTokenDecimals(chainId, sym));
+      } catch (_) { incomplete = true; }
+    });
+    await Promise.all([nativeJob, ...tokenJobs]);
+    const data = { chainId, nativeEth, tokens, incomplete };
+    if (!incomplete) window.__gwOcBalCache[ck] = { at: Date.now(), data };
     return data;
   })().finally(() => { try { delete window.__gwOcBalInflight[ck]; } catch (_) {} });
 
@@ -5692,20 +5694,19 @@ async function gwOcFetchPrices() {
   return out;
 }
 
-async function gwOcFetchAllChains(address) {
+async function gwOcFetchAllChains(address, onChain, timeoutMs) {
   if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) return [];
-  // Only real EVM chain ids — TRON (728126428) is not eth_getBalance.
   const chains = Object.keys(GW_OC_CHAIN_META).map(Number).filter((id) => id > 0 && id < 1e8);
-  const results = await Promise.all(chains.map((chainId) =>
-    (typeof window.gromFetchOnchainBalances === 'function'
-      ? window.gromFetchOnchainBalances(address, chainId)
-      : Promise.resolve(null)
-    ).catch(() => null)
-  ));
-  return chains.map((chainId, i) => ({
-    chainId,
-    meta: GW_OC_CHAIN_META[chainId],
-    data: results[i] || null,
+  return Promise.all(chains.map(async (chainId) => {
+    let data = null;
+    try {
+      const read = typeof window.gromFetchOnchainBalances === 'function'
+        ? window.gromFetchOnchainBalances(address, chainId) : Promise.resolve(null);
+      data = timeoutMs ? await gwTkReadWithin(read, timeoutMs) : await read;
+    } catch (_) {}
+    const result = { chainId, meta: GW_OC_CHAIN_META[chainId], data };
+    try { if (onChain) onChain(result); } catch (_) {}
+    return result;
   }));
 }
 
@@ -14155,101 +14156,101 @@ function gwTkHoldingsCacheHasTron(rows) {
   } catch (_) { return false; }
 }
 
-async function gwTkLoadHoldings(force) {
+/** A slow price service or RPC must not hold the entire asset picker open. */
+function gwTkReadWithin(read, timeoutMs) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(read),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Balance read timed out')), timeoutMs); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+function gwTkHoldingsOwner() {
+  let addr = '', tAddr = '', solAddr = '';
+  try { addr = gwDisplayAddress() || ''; } catch (_) {}
+  try { tAddr = gwTronSavedAddr() || localStorage.getItem('grom_tron_addr') || window.GROM_CONN?.tron || ''; } catch (_) {}
+  try { solAddr = gwSolPubkey() || ''; } catch (_) {}
+  return { addr, tAddr, solAddr, key: [addr.toLowerCase(), tAddr, solAddr].join('|') };
+}
+
+async function gwTkLoadHoldings(force, onUpdate) {
   const cache = window.__gwTkHoldingsCache;
-  let addr = null;
-  try { addr = (typeof gwDisplayAddress === 'function') ? gwDisplayAddress() : null; } catch (_) {}
-  let tAddr = '';
-  try {
-    tAddr = (typeof gwTronSavedAddr === 'function') ? gwTronSavedAddr() : (window.__gwTronAddr || '');
-    if (!tAddr) tAddr = localStorage.getItem('grom_tron_addr') || window.GROM_CONN?.tron || '';
-  } catch (_) {}
-
-  const solAddr = typeof gwSolPubkey === 'function' ? gwSolPubkey() : '';
-  const ownerKey = [addr || '', tAddr || '', solAddr || ''].join('|');
-  /* Cache is scoped to the connected addresses across namespaces. */
-  const cacheOk = !force
-    && cache.ownerKey === ownerKey
-    && cache.rows?.length
-    && (Date.now() - cache.at < 20000)
-    && !(tAddr && !gwTkHoldingsCacheHasTron(cache.rows));
-  if (cacheOk) return cache.rows;
-
-  if (!addr && !tAddr && !solAddr) {
-    cache.rows = [];
-    cache.at = Date.now();
+  const owner = gwTkHoldingsOwner();
+  const sameOwner = cache.ownerKey === owner.key;
+  if (!owner.addr && !owner.tAddr && !owner.solAddr) {
+    Object.assign(cache, { ownerKey: owner.key, rows: [], at: Date.now(), incomplete: false });
     return [];
   }
-  try {
-    if (!tAddr && typeof gwTronMaybeAutolink === 'function') {
-      try { tAddr = (await gwTronMaybeAutolink()) || tAddr; } catch (_) {}
-    }
-    const prices = typeof gwOcFetchPrices === 'function'
-      ? await gwOcFetchPrices().catch(() => ({ USDT: 1, USDC: 1 }))
-      : { USDT: 1, USDC: 1 };
-    const rows = [];
-
-    const evmJob = (addr && /^0x[a-fA-F0-9]{40}$/i.test(addr) && typeof gwOcFetchAllChains === 'function')
-      ? gwOcFetchAllChains(addr).catch(() => [])
-      : Promise.resolve([]);
-    const tronJob = (tAddr && typeof gwTronFetchAllBalances === 'function')
-      ? gwTronFetchAllBalances(tAddr).catch(() => [])
-      : Promise.resolve([]);
-
-    const solJob = solAddr ? Promise.all(['SOL', 'USDC', 'USDT'].map(async sym => ({
-      sym, amt: await gwSolAvailableAmount(sym).catch(() => 0),
-    }))) : Promise.resolve([]);
-    const [chains, tRows, sRows] = await Promise.all([evmJob, tronJob, solJob]);
-
-    for (const c of chains || []) {
-      if (!c?.data) continue;
-      const meta = c.meta || GW_OC_CHAIN_META[c.chainId] || {};
-      if (c.data.nativeEth > 0.0000001) {
-        const sym = meta.native || 'ETH';
-        const usd = c.data.nativeEth * (prices[sym] || 0);
-        rows.push({
-          sym, chainId: c.chainId, chain: meta.label || String(c.chainId),
-          amt: c.data.nativeEth, usd, name: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).name || sym,
-          logo: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).logo || '',
-        });
-      }
-      for (const [sym, amt] of Object.entries(c.data.tokens || {})) {
-        if (!(amt > 0.0001)) continue;
-        rows.push({
-          sym, chainId: c.chainId, chain: meta.label || String(c.chainId),
-          amt, usd: amt * (prices[sym] || (sym === 'USDT' || sym === 'USDC' || sym === 'BUSD' ? 1 : 0)),
-          name: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).name || sym,
-          logo: (GW_DS_ASSETS.find((a) => a.sym === sym) || {}).logo || '',
-        });
-      }
-    }
-
-    for (const tr of tRows || []) {
-      const px = prices[tr.sym]
-        || ((tr.sym === 'USDT' || tr.sym === 'USDC') ? 1 : 0)
-        || ((typeof gwDsPriceUsd === 'function') ? (await gwDsPriceUsd(tr.sym).catch(() => 0)) : 0);
-      rows.push({
-        sym: tr.sym, chainId: GW_TRON_CHAIN_ID, chain: 'TRON',
-        amt: tr.amt, usd: tr.amt * (px || 0),
-        name: (GW_DS_ASSETS.find((a) => a.sym === tr.sym) || {}).name || tr.sym,
-        logo: (GW_DS_ASSETS.find((a) => a.sym === tr.sym) || {}).logo || '',
-      });
-    }
-
-    for (const r of sRows) {
-      if (!(r.amt > 0)) continue;
-      const px = prices[r.sym] || (r.sym === 'SOL' ? await gwDsPriceUsd('SOL').catch(() => 0) : 1);
-      rows.push({ ...r, chainId: GW_LIFI_SOL_CHAIN, chain: 'Solana', usd: r.amt * px, name: r.sym });
-    }
-    rows.sort((a, b) => b.usd - a.usd);
-    cache.ownerKey = ownerKey;
-    cache.rows = rows;
-    cache.at = Date.now();
-    return rows;
-  } catch (e) {
-    console.warn('[GROM] tk holdings', e?.message || e);
+  if (!force && sameOwner && Date.now() - cache.at < 20000) {
+    try { onUpdate?.(cache.rows || [], { loading: false, incomplete: !!cache.incomplete }); } catch (_) {}
     return cache.rows || [];
   }
+  window.__gwTkHoldingsInflight = window.__gwTkHoldingsInflight || new Map();
+  const inflight = window.__gwTkHoldingsInflight;
+  let job = inflight.get(owner.key);
+  if (!job) {
+    job = { listeners: new Set(), rows: sameOwner ? cache.rows || [] : [], incomplete: false };
+    inflight.set(owner.key, job);
+    job.promise = (async () => {
+      let prices = { USDT: 1, USDC: 1, BUSD: 1 };
+      try {
+        Object.assign(prices, __gwQuotesMem.data?.crypto || {});
+        if (prices.MATIC == null && prices.POL != null) prices.MATIC = prices.POL;
+      } catch (_) {}
+      const chunks = new Map();
+      const publish = (loading) => {
+        if (gwTkHoldingsOwner().key !== owner.key || (loading && !chunks.size)) return;
+        const rows = [];
+        for (const assets of chunks.values()) for (const asset of assets) {
+          const px = Number(prices[asset.sym]) || 0;
+          const info = GW_DS_ASSETS.find(a => a.sym === asset.sym) || {};
+          rows.push({ ...asset, usd: asset.amt * px, pricePending: !(px > 0), name: info.name || asset.sym, logo: info.logo || '' });
+        }
+        rows.sort((a, b) => b.usd - a.usd);
+        job.rows = rows;
+        Object.assign(cache, { ownerKey: owner.key, rows, incomplete: job.incomplete, at: loading ? 0 : Date.now() });
+        for (const notify of job.listeners) try { notify(rows, { loading, incomplete: job.incomplete }); } catch (_) {}
+      };
+      // Start all balance reads immediately; prices are optional display data.
+      const evm = /^0x[a-fA-F0-9]{40}$/.test(owner.addr) ? gwOcFetchAllChains(owner.addr, c => {
+        if (!c.data) { job.incomplete = true; return; }
+        if (c.data.incomplete) job.incomplete = true;
+        const meta = c.meta || {};
+        const assets = [];
+        if (c.data.nativeEth > 0.0000001) assets.push({ sym: meta.native || 'ETH', amt: c.data.nativeEth });
+        for (const [sym, amt] of Object.entries(c.data.tokens || {})) if (amt > 0.0001) assets.push({ sym, amt });
+        chunks.set(c.chainId, assets.map(a => ({ ...a, chainId: c.chainId, chain: meta.label || String(c.chainId) })));
+        publish(true);
+      }, 8000) : Promise.resolve();
+      const tron = owner.tAddr && typeof gwTronFetchAllBalances === 'function'
+        ? gwTkReadWithin(gwTronFetchAllBalances(owner.tAddr), 8000).then(rows => {
+          chunks.set('tron', (rows || []).map(a => ({ ...a, chainId: GW_TRON_CHAIN_ID, chain: 'TRON' })));
+          publish(true);
+        }).catch(() => { job.incomplete = true; }) : Promise.resolve();
+      const sol = owner.solAddr ? Promise.all(['SOL', 'USDC', 'USDT'].map(async sym => {
+        try {
+          const amt = await gwTkReadWithin(gwSolAvailableAmount(sym), 8000);
+          if (amt > 0) chunks.set('sol-' + sym, [{ sym, amt, chainId: GW_LIFI_SOL_CHAIN, chain: 'Solana' }]);
+          publish(true);
+        } catch (_) { job.incomplete = true; }
+      })) : Promise.resolve();
+      const priceJob = typeof gwOcFetchPrices === 'function'
+        ? gwTkReadWithin(gwOcFetchPrices(), 2000).then(p => { prices = { ...prices, ...p }; publish(true); }).catch(() => {})
+        : Promise.resolve();
+      await Promise.all([evm, tron, sol, priceJob]);
+      publish(false);
+      return gwTkHoldingsOwner().key === owner.key ? job.rows : [];
+    })().catch(() => {
+      job.incomplete = true;
+      return gwTkHoldingsOwner().key === owner.key ? job.rows : [];
+    }).finally(() => { if (inflight.get(owner.key) === job) inflight.delete(owner.key); });
+  }
+  if (onUpdate) {
+    job.listeners.add(onUpdate);
+    try { onUpdate(job.rows, { loading: true, incomplete: job.incomplete }); } catch (_) {}
+  }
+  try { return await job.promise; }
+  finally { if (onUpdate) job.listeners.delete(onUpdate); }
 }
 
 function gwTkGetFromContext() {
@@ -15004,25 +15005,32 @@ async function gwTkRender(q) {
       list.innerHTML = `<div class="gw-tk-empty">${tx('tk_need_connect', 'Connect a wallet to see your tokens.')}</div>`;
       return;
     }
-    /* Force refresh when TRON addr exists but cache is EVM-only (close/reopen bug). */
-    const needForce = !!(tAddr && !gwTkHoldingsCacheHasTron(window.__gwTkHoldingsCache?.rows));
-    const rows = await gwTkLoadHoldings(needForce);
-    // Race: user may have switched to TO while loading
-    if (!stillLive() || overlay.dataset.which !== 'from') return;
-    const filtered = gwUxFilterRows(gwDsSpendablePayHoldings(rows)).filter((a) =>
-      !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query) || (a.chain || '').toUpperCase().includes(query)
-    );
-    if (!filtered.length) {
-      list.innerHTML = `<div class="gw-tk-empty">${query
-        ? `Nothing matches «${q}»`
+    const holdingsOwnerKey = gwTkHoldingsOwner().key;
+    const renderHoldings = (rows, status = {}) => {
+      if (!stillLive() || overlay.dataset.which !== 'from' || gwTkHoldingsOwner().key !== holdingsOwnerKey) return;
+      const known = gwDsSpendablePayHoldings(rows);
+      const unpriced = gwDsSpendablePayHoldings((rows || []).filter(a => a.pricePending), 0);
+      const filtered = gwUxFilterRows([...known, ...unpriced.filter(a => !known.includes(a))]).filter(a =>
+        !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query) || (a.chain || '').toUpperCase().includes(query));
+      const notice = status.loading
+        ? gwUxText('Обновляем балансы остальных сетей…', 'Updating other networks…')
+        : status.incomplete ? gwUxText('Не все сети ответили. Можно повторить загрузку.', 'Some networks did not respond. Retry loading.') : '';
+      list.innerHTML = filtered.map(a => rowHtml(a,
+        `<div class="gw-tk-bal"><div class="amt">${Number(a.amt).toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>`
+        + `<div class="usd">${a.pricePending ? gwUxText('Курс уточняется', 'Price pending') : '≈ $' + Number(a.usd || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div></div>`
+      )).join('') || `<div class="gw-tk-empty">${status.loading ? tx('tk_loading', 'Loading balances…')
+        : status.incomplete ? gwUxText('Балансы пока недоступны.', 'Balances are currently unavailable.')
+        : query ? gwUxEsc(gwUxText('Ничего не найдено: ', 'Nothing matches: ') + q)
         : tx('tk_empty_wallet', 'No tokens in your wallet yet — deposit first, then choose what to pay with.')}</div>`;
-      return;
-    }
-    list.innerHTML = filtered.map((a) => rowHtml(a,
-      `<div class="gw-tk-bal"><div class="amt">${Number(a.amt).toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>`
-      + `<div class="usd">≈ $${Number(a.usd || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div></div>`
-    )).join('');
-    wire();
+      if (notice) list.insertAdjacentHTML('beforeend', `<div class="gw-tk-empty" aria-live="polite">${notice}${status.incomplete && !status.loading ? `<button type="button" id="gwTkRetry">${gwUxText('Повторить', 'Retry')}</button>` : ''}</div>`);
+      wire();
+      list.querySelector('#gwTkRetry')?.addEventListener('click', () => {
+        window.__gwTkHoldingsCache.at = 0;
+        gwTkRender(document.getElementById('gwTkSearch')?.value || '');
+      });
+    };
+    const rows = await gwTkLoadHoldings(false, renderHoldings);
+    renderHoldings(rows, { loading: false, incomplete: !!window.__gwTkHoldingsCache?.incomplete });
     return;
   }
 

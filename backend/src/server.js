@@ -24,7 +24,7 @@ import createAdminRouter from './admin/routes.js';
 import createActivityRouter from './activity/routes.js';
 import createReferralRouter from './referral/routes.js';
 import createDimensionsRouter from './dimensions/routes.js';
-import { startHealthPulse, getHealthSnapshot } from './activity/health-pulse.js';
+import { startHealthPulse, getHealthSnapshot, requestHealthRecheck, isHealthChecking } from './activity/health-pulse.js';
 import createAiRouter from './ai/routes.js';
 import {
   jupiterEnabled,
@@ -132,7 +132,7 @@ async function main() {
   app.use('/api/ai', createAiRouter({ requireAuth }));
   app.use('/api/activity', createActivityRouter({ requireAuth }));
   app.use('/api', createDimensionsRouter({ requireAuth }));
-  app.use('/api/admin', createAdminRouter({ requireAuth, getHealthSnapshot }));
+  app.use('/api/admin', createAdminRouter({ requireAuth, getHealthSnapshot, isHealthChecking, requestHealthRecheck: () => requestHealthRecheck({ priceAggregator }) }));
 
   let stopHealthPulse = () => {};
   if (isLeader) {

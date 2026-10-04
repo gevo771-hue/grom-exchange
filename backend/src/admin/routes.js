@@ -7,6 +7,7 @@ import config from '../config/index.js';
 import { query } from '../db/pool.js';
 import { clientIp, logAdminAudit, auditRowToEntry } from './audit.js';
 import { syncHlFillsIntoActivity } from '../activity/hl-fills-sync.js';
+import { healthView, issueDiagnostics } from '../activity/diagnostics.js';
 
 const PRODUCT_LABELS = {
   auth: 'Регистрация / вход',
@@ -93,7 +94,7 @@ function adminGate(requireAuth) {
   };
 }
 
-export default function createAdminRouter({ requireAuth, getHealthSnapshot }) {
+export default function createAdminRouter({ requireAuth, getHealthSnapshot, requestHealthRecheck, isHealthChecking }) {
   const r = express.Router();
   const admin = adminGate(requireAuth);
   r.use(admin);
@@ -640,8 +641,12 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot }) {
    */
   r.get('/activity/health', async (_req, res) => {
     const snap = typeof getHealthSnapshot === 'function' ? getHealthSnapshot() : null;
+    const view = healthView(snap);
     res.json({
-      ok: snap ? !!snap.ok : null,
+      stale: view.stale,
+      age_ms: view.age_ms,
+      checking: !!isHealthChecking?.(),
+      ok: view.ok ?? null,
       at: snap?.at || null,
       open: snap?.open ?? null,
       checks: snap?.checks || [],
@@ -649,6 +654,17 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot }) {
         ? 'Pulse runs every ~90s on the leader. Failures appear in AI монитор.'
         : 'Pulse ещё не успел отработать или worker не лидер — подождите ~30с.',
     });
+  });
+
+  // Read-only probes only. Never retries a wallet request or transaction.
+  r.post('/activity/health/recheck', async (req, res, next) => {
+    try {
+      if (!requestHealthRecheck) return res.status(503).json({ error: 'health_recheck_unavailable' });
+      const result = requestHealthRecheck();
+      if (result.accepted) await logAdminAudit({ actorId: req.user.sub, action: 'health_recheck',
+        ip: clientIp(req), metadata: { scope: 'read_only_probes' } });
+      res.status(result.accepted ? 202 : 200).json(result);
+    } catch (err) { next(err); }
   });
 
   /** AI monitor — client-reported failures (status=error) with classified cause. */
@@ -683,12 +699,20 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot }) {
            LIMIT $${params.length - 1} OFFSET $${params.length}`,
         params
       );
-      const open24 = await query(
-        `SELECT COUNT(*)::int AS n FROM user_activity
-          WHERE status IN ('error','failed','fail') AND created_at > NOW() - INTERVAL '24 hours'`
-      ).catch(() => ({ rows: [{ n: 0 }] }));
+      const statsParams = product ? [product] : [];
+      const { rows: repeats } = await query(
+        `SELECT product, action, COUNT(*)::int AS n, MAX(created_at) AS last_at
+           FROM user_activity
+          WHERE status IN ('error','failed','fail') AND created_at > NOW() - INTERVAL '24 hours'
+            ${product ? 'AND product = $1' : ''}
+          GROUP BY product, action`, statsParams);
+      const events24h = repeats.reduce((sum, group) => sum + group.n, 0);
+      const snapshot = getHealthSnapshot?.();
       res.json({
-        open_24h: open24.rows[0]?.n || 0,
+        open_24h: events24h, // Compatibility: a report count, NOT unresolved incidents.
+        reports_24h: events24h,
+        groups_24h: repeats.length,
+        generated_at: new Date().toISOString(),
         hasMore: rows.length >= limit,
         issues: rows.map((e) => ({
           id: e.id,
@@ -699,9 +723,8 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot }) {
           product_label: PRODUCT_LABELS[e.product] || e.product,
           action: e.action,
           status: e.status,
-          cause: e.detail?.cause || 'unknown',
-          ai_summary: e.detail?.ai_summary || e.detail?.message || e.action,
-          severity: e.detail?.severity || 'error',
+          ...issueDiagnostics(e, snapshot),
+          repeats_24h: repeats.find(group => group.product === e.product && group.action === e.action)?.n || 0,
           detail: e.detail,
           page: e.detail?.page || null,
           asset: e.asset,

@@ -6194,7 +6194,7 @@ async function gwRenderOnchainCard(opts = {}) {
         </div>`;
       }).join('');
       const more = hiddenN > 0 && shownItems.length
-        ? `<div class="gw-oc-tok-more">+${hiddenN} ${gwOcT('small')}</div>`
+        ? `<button type="button" class="gw-oc-dust-btn gw-oc-show-hidden">${gwOcT('showSmall')} (+${hiddenN})</button>`
         : '';
       return `
         <div class="gw-oc-chain">
@@ -6226,6 +6226,7 @@ async function gwRenderOnchainCard(opts = {}) {
         </div>
         <div class="gw-oc-actions">
           ${toggle}
+          ${snapshot.incomplete && !snapshot.loading ? `<span style="font-size:11px;color:#98a8c0" title="${gwUxText('Не все сети ответили. Известные балансы сохранены; обновите, чтобы проверить остальные.', 'Some networks did not respond. Known balances are retained; refresh to check the others.')}">${gwUxText('Обновлено частично', 'Partially updated')}</span>` : ''}
           <button type="button" class="gw-oc-refresh" id="gwOcRefresh">${gwOcT('refresh')}</button>
         </div>
       </div>
@@ -6237,10 +6238,12 @@ async function gwRenderOnchainCard(opts = {}) {
       gwRenderOnchainCard();
     });
 
-    if (snapshot.loading || snapshot.incomplete) {
+    card.querySelectorAll('.gw-oc-show-hidden').forEach(button => button.addEventListener('click', () => { gwOcHideSmall(false); gwRenderOnchainCard(); }));
+    if (snapshot.loading) {
       const hint = document.createElement('div');
       hint.className = 'gw-oc-empty';
-      hint.textContent = snapshot.loading ? gwOcT('loading') : gwUxText('Часть сетей пока недоступна. Известные балансы сохранены.', 'Some networks are unavailable. Known balances are retained.');
+      hint.style.cssText = 'padding:8px;font-size:11px';
+      hint.textContent = gwOcT('loading');
       card.appendChild(hint);
     }
   };
@@ -15137,13 +15140,16 @@ async function gwTkRender(q) {
     const holdingsOwnerKey = gwTkHoldingsOwner().key;
     const renderHoldings = (rows, status = {}) => {
       if (!stillLive() || overlay.dataset.which !== 'from' || gwTkHoldingsOwner().key !== holdingsOwnerKey) return;
-      const known = gwDsSpendablePayHoldings(rows);
+      const hideSmall = gwOcHideSmall();
+      const spendable = gwDsSpendablePayHoldings(rows, 0);
+      const smallCount = spendable.filter(a => !a.pricePending && Number(a.usd) < GW_OC_DUST_USD).length;
+      const known = hideSmall ? spendable.filter(a => a.pricePending || Number(a.usd) >= GW_OC_DUST_USD) : spendable;
       const unpriced = gwDsSpendablePayHoldings((rows || []).filter(a => a.pricePending), 0);
       const filtered = gwUxFilterRows([...known, ...unpriced.filter(a => !known.includes(a))]).filter(a =>
         !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query) || (a.chain || '').toUpperCase().includes(query));
       const notice = status.loading
         ? gwUxText('Обновляем балансы остальных сетей…', 'Updating other networks…')
-        : status.incomplete ? gwUxText('Не все сети ответили. Можно повторить загрузку.', 'Some networks did not respond. Retry loading.') : '';
+        : status.incomplete ? gwUxText('Обновлено частично', 'Partially updated') : '';
       list.innerHTML = filtered.map(a => rowHtml(a,
         `<div class="gw-tk-bal"><div class="amt">${Number(a.amt).toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>`
         + `<div class="usd">${a.pricePending ? gwUxText('Курс уточняется', 'Price pending') : '≈ $' + Number(a.usd || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div></div>`
@@ -15151,7 +15157,9 @@ async function gwTkRender(q) {
         : status.incomplete ? gwUxText('Балансы пока недоступны.', 'Balances are currently unavailable.')
         : query ? gwUxEsc(gwUxText('Ничего не найдено: ', 'Nothing matches: ') + q)
         : tx('tk_empty_wallet', 'No tokens in your wallet yet — deposit first, then choose what to pay with.')}</div>`;
-      if (notice) list.insertAdjacentHTML('beforeend', `<div class="gw-tk-empty" aria-live="polite">${notice}${status.incomplete && !status.loading ? `<button type="button" id="gwTkRetry">${gwUxText('Повторить', 'Retry')}</button>` : ''}</div>`);
+      if (smallCount || !hideSmall) list.insertAdjacentHTML('beforeend', `<div style="display:flex;justify-content:center;padding:8px"><button type="button" class="gw-oc-dust-btn" id="gwTkDustToggle">${hideSmall ? gwOcT('showSmall') + ' (' + smallCount + ')' : gwOcT('hideSmall')}</button></div>`);
+      list.querySelector('#gwTkDustToggle')?.addEventListener('click', () => { gwOcHideSmall(!hideSmall); renderHoldings(rows, status); });
+      if (notice) list.insertAdjacentHTML('beforeend', `<div style="padding:8px;text-align:center;font-size:11px;color:#98a8c0" aria-live="polite" title="${gwUxText('Не все сети ответили; известные балансы сохранены.', 'Some networks did not respond; known balances are retained.')}">${notice}${status.incomplete && !status.loading ? `<button type="button" id="gwTkRetry">${gwUxText('Повторить', 'Retry')}</button>` : ''}</div>`);
       wire();
       list.querySelector('#gwTkRetry')?.addEventListener('click', () => {
         window.__gwTkHoldingsCache.at = 0;
@@ -22785,6 +22793,9 @@ function gromSwapIssueSnapshot(extra) {
       d.stage = d.stage || op.stage || '';
       d.opId = op.id || '';
       d.hasTx = !!(op.hash || op.signature || op.boc);
+      d.requestDispatched = op.requestDispatched === true;
+      d.walletRequestAt = op.walletRequestAt || null;
+      d.signStep = op.signStep || null;
     }
   } catch (_) {}
   return d;
@@ -22875,17 +22886,17 @@ function gromSwapMarkAwaitingWallet(meta) {
         if (!pend) return;
         const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : null;
         const hasTx = !!(op && (op.hash || op.signature || op.boc));
-        if (hasTx) { window.__gromSwapAwaitWallet = null; return; }
+        if (hasTx || !op || op.id !== pend.snap.opId || op.walletNoConfirmAt || !op.requestDispatched) { window.__gromSwapAwaitWallet = null; return; }
         gromReportIssue({
           product: 'swap',
           action: 'wallet_no_confirm',
-          message: 'User tapped Start but did not confirm in wallet within 90s',
+          message: 'Wallet result still unknown after 90s; rejection or transaction submission not established',
           detail: Object.assign({}, pend.snap, {
             kind: 'no_confirm',
-            abandoned: true,
+            requestDispatched: op.requestDispatched === true,
             waitMs: 90000,
             stage: 'awaiting_signature',
-            admin_brief: 'Start нажат → запрос в кошелёк ушёл / не подтверждён за 90с',
+            admin_brief: 'Ответ кошелька не получен за 90с; доставка на телефон и отказ не установлены',
           }),
         });
         window.__gromSwapAwaitWallet = null;
@@ -22902,6 +22913,19 @@ function gromSwapClearAwaitingWallet() {
 try { window.gromSwapMarkAwaitingWallet = gromSwapMarkAwaitingWallet; } catch (_) {}
 try { window.gromSwapClearAwaitingWallet = gromSwapClearAwaitingWallet; } catch (_) {}
 
+function gromRuntimeIssue(event, kind) {
+  const error = kind === 'unhandled_rejection' ? event?.reason : event?.error;
+  if (!error || typeof error.message !== 'string' || error.name === 'AbortError' || Number(error.code) === 4001) return null;
+  const file = String(event?.filename || '');
+  if (file && !file.startsWith(location.origin + '/')) return null;
+  const message = error.message.slice(0, 400)
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/(?:https?:\/\/[^\s?#]+)[?#][^\s]*/g, '[URL parameters redacted]')
+    .replace(/(?:0x[a-f0-9]{128,}|eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/g, '[redacted]');
+  return { product: 'system', action: kind, message, detail: { source: 'client_runtime',
+    file: file.split(/[?#]/)[0], line: Number(event?.lineno) || null, visibility: document.visibilityState } };
+}
+
 /**
  * Continuous client watchdog — checks sections (i18n, Markets/HL, UI lag, /health)
  * and reports into the same admin AI монитор. Lightweight, deduped, no LLM.
@@ -22911,20 +22935,32 @@ try { window.gromSwapClearAwaitingWallet = gromSwapClearAwaitingWallet; } catch 
   window.__gromWatchdogStarted = true;
 
   let longTaskMs = 0;
+  let longTaskPage = '';
+  let visibleSince = performance.now();
+  document.addEventListener('visibilitychange', () => { longTaskMs = 0; longTaskPage = ''; visibleSince = performance.now(); });
   const bootAt = Date.now();
   try {
     if (typeof PerformanceObserver === 'function') {
       const po = new PerformanceObserver((list) => {
         // Ignore first 2 min — landing/admin boot routinely has 200–400ms tasks.
-        if (Date.now() - bootAt < 120_000) return;
+        if (Date.now() - bootAt < 120_000 || document.visibilityState === 'hidden') return;
         for (const e of list.getEntries()) {
           const d = Number(e.duration) || 0;
-          if (d > longTaskMs) longTaskMs = d;
+          if (e.startTime < visibleSince) continue;
+          if (d > longTaskMs) { longTaskMs = d; longTaskPage = route(); }
         }
       });
       po.observe({ type: 'longtask', buffered: false });
     }
   } catch (_) {}
+
+  let runtimeCount = 0, runtimeWindow = Date.now();
+  for (const kind of ['error', 'unhandledrejection']) window.addEventListener(kind, event => {
+    const issue = gromRuntimeIssue(event, kind === 'error' ? 'runtime_error' : 'unhandled_rejection');
+    if (!issue) return;
+    if (Date.now() - runtimeWindow > 60000) { runtimeCount = 0; runtimeWindow = Date.now(); }
+    if (runtimeCount++ < 5) gromReportIssue(issue);
+  });
 
   function route() {
     try { return (location.hash || '').replace(/^#/, '').split('?')[0] || 'landing'; } catch (_) { return ''; }
@@ -23089,7 +23125,7 @@ try { window.gromSwapClearAwaitingWallet = gromSwapClearAwaitingWallet; } catch 
       if (ms > 5000 && ms < 7800) {
         gromReportIssue({
           product: 'system',
-          action: 'ui_lag',
+          action: 'health_api_slow',
           message: `/health медленный (${ms}ms) — API под нагрузкой`,
           detail: { source: 'client_watchdog', ms, severity: 'warn' },
         });
@@ -23112,7 +23148,7 @@ try { window.gromSwapClearAwaitingWallet = gromSwapClearAwaitingWallet; } catch 
   function checkUiLag() {
     // SPA paint / admin table refresh routinely hit 200–400ms — not product bugs.
     if (Date.now() - bootAt < 120_000) { longTaskMs = 0; return; }
-    const page = route() || 'page';
+    const page = longTaskPage || route() || 'page';
     // Admin AI monitor re-render creates long tasks on itself — ignore.
     if (page === 'backoffice' || page === 'admin') { longTaskMs = 0; return; }
     // Mobile Safari / landing paint routinely 400–1800ms — only flag real freezes.
@@ -23121,7 +23157,7 @@ try { window.gromSwapClearAwaitingWallet = gromSwapClearAwaitingWallet; } catch 
       product: 'system',
       action: 'ui_lag',
       message: `Long task ${Math.round(longTaskMs)}ms на ${page} — UI подтормаживает`,
-      detail: { source: 'client_watchdog', ms: Math.round(longTaskMs), page, severity: 'warn' },
+      detail: { source: 'client_watchdog', ms: Math.round(longTaskMs), page, visibility: 'visible', severity: 'warn' },
     });
     longTaskMs = 0;
   }
@@ -24199,7 +24235,7 @@ async function gwDsSubmit() {
             action: 'wallet_no_confirm',
             message: 'Wallet signing request was dispatched; no transaction result arrived within 20s',
             detail: {
-              kind: 'no_confirm', abandoned: true,
+              kind: 'no_confirm', requestDispatched: current.requestDispatched === true,
               waitMs: Math.max(0, Date.now() - Number(current.walletRequestAt || Date.now())),
               from, to, amt, walletRequestAt: current.walletRequestAt,
               admin_brief: 'Запрос подписи реально отправлен в кошелёк → результат не получен за 20с',

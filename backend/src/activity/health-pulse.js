@@ -9,6 +9,7 @@ import { getRedis } from '../utils/redis.js';
 import logger from '../utils/logger.js';
 import { logUserActivity } from './log.js';
 import { classifyIssue } from './classify.js';
+import { createPulseController, trackProbe } from './diagnostics.js';
 
 const INTERVAL_MS = 90_000;
 const REMIND_MS = 45 * 60_1000;
@@ -32,7 +33,7 @@ function timed(fn) {
 }
 
 async function probeDb() {
-  const r = await timed(() => pool.query('SELECT 1'));
+  const r = await timed(() => pool.query({ text: 'SELECT 1', query_timeout: 5000 }));
   if (!r.ok) return { id: 'db', ok: false, severity: 'error', message: `PostgreSQL недоступен: ${r.error}`, ms: r.ms };
   // Occasional 1–2.5s cold queries under load — pulse yellow only, no AI spam.
   if (r.ms > 2500) {
@@ -62,7 +63,7 @@ async function probeRedis() {
 
 async function probePrices(priceAggregator) {
   if (!priceAggregator || typeof priceAggregator.health !== 'function') {
-    return { id: 'prices', ok: true, severity: 'ok', message: 'Price feed n/a (worker)', ms: 0 };
+    return { id: 'prices', ok: false, severity: 'warn', message: 'Источники цен не проверены на этом worker', ms: 0, skipIssueLog: true };
   }
   const h = priceAggregator.health();
   const raw = Array.isArray(h) ? h : Object.entries(h || {}).map(([name, v]) => ({
@@ -100,18 +101,18 @@ async function probePrices(priceAggregator) {
 
 let lastHlOk = null; // { at, n, ms }
 
-async function probeHyperliquid() {
+async function probeHyperliquid(force = false) {
   // Prefer in-process proxy (has 45s cache + stale-on-429) so pulse doesn't
   // burn Hyperliquid's shared droplet IP quota alongside user Trade/Markets.
   const localUrl = `http://127.0.0.1:${Number(process.env.PORT || process.env.GROM_BACKEND_PORT || 4000)}/api/futures/hl/info`;
 
-  if (lastHlOk && (Date.now() - lastHlOk.at) < 5 * 60_000) {
+  if (!force && lastHlOk && (Date.now() - lastHlOk.at) < 5 * 60_000) {
     return {
       id: 'hl',
       ok: true,
       severity: 'ok',
       message: `HL ok (кэш ${Math.round((Date.now() - lastHlOk.at) / 1000)}с) · ${lastHlOk.n} mids`,
-      ms: lastHlOk.ms,
+      ms: lastHlOk.ms, verification: 'cached', observed_at: new Date(lastHlOk.at).toISOString(),
       product: 'futures',
     };
   }
@@ -150,14 +151,14 @@ async function probeHyperliquid() {
 
   if (!r.ok) {
     const is429 = /429/.test(String(r.error || ''));
-    // Rate-limit is expected under load — keep pulse green if we had a recent ok.
+    // A previous success cannot prove a currently rate-limited API is healthy.
     if (is429) {
       if (lastHlOk) {
         return {
           id: 'hl',
-          ok: true,
-          severity: 'ok',
-          message: `HL ok · proxy/cache (rate-limit сглажен) · ${lastHlOk.n} mids`,
+          ok: false,
+          severity: 'warn',
+          message: `HL API: 429 · последний успех ${Math.round((Date.now() - lastHlOk.at) / 1000)}с назад · ${lastHlOk.n} mids`,
           ms: r.ms,
           product: 'futures',
         };
@@ -165,9 +166,9 @@ async function probeHyperliquid() {
       // No cache yet: soft warn in pulse card only — do NOT write to issues feed
       return {
         id: 'hl',
-        ok: true,
-        severity: 'ok',
-        message: 'HL краткий rate-limit (429) — кэш ещё пуст, Trade сам восстановится',
+        ok: false,
+        severity: 'warn',
+        message: 'HL API: 429 · успешной проверки ещё нет',
         ms: r.ms,
         product: 'futures',
         skipIssueLog: true,
@@ -193,14 +194,14 @@ async function probeHyperliquid() {
 let lastHipOk = null; // { at, n, ms }
 
 /** HIP-3 / TradFi: xyz dex must stay populated (Chrome used to empty it via 429). */
-async function probeHip3() {
-  if (lastHipOk && (Date.now() - lastHipOk.at) < 8 * 60_000) {
+async function probeHip3(force = false) {
+  if (!force && lastHipOk && (Date.now() - lastHipOk.at) < 8 * 60_000) {
     return {
       id: 'hip3',
       ok: true,
       severity: 'ok',
       message: `HIP-3 ok (кэш) · ${lastHipOk.n} xyz`,
-      ms: lastHipOk.ms,
+      ms: lastHipOk.ms, verification: 'cached', observed_at: new Date(lastHipOk.at).toISOString(),
       product: 'markets',
     };
   }
@@ -226,15 +227,15 @@ async function probeHip3() {
     if (/429/.test(String(r.error || ''))) {
       if (lastHipOk) {
         return {
-          id: 'hip3', ok: true, severity: 'ok', product: 'markets',
-          message: `HIP-3 ok · stale cache (${lastHipOk.n}) · rate-limit`,
-          ms: r.ms, skipIssueLog: true,
+          id: 'hip3', ok: false, severity: 'warn', product: 'markets',
+          message: `HIP-3 API: 429 · последний успех ${Math.round((Date.now() - lastHipOk.at) / 1000)}с назад (${lastHipOk.n})`,
+          ms: r.ms,
         };
       }
       return {
-        id: 'hip3', ok: true, severity: 'ok', product: 'markets',
-        message: 'HIP-3 rate-limit — клиентский backfill подхватит',
-        ms: r.ms, skipIssueLog: true,
+        id: 'hip3', ok: false, severity: 'warn', product: 'markets',
+        message: 'HIP-3 API: 429 · успешной проверки ещё нет',
+        ms: r.ms,
       };
     }
     return {
@@ -253,12 +254,12 @@ async function probeHip3() {
 
 let lastXstocksOk = null;
 
-async function probeXstocks() {
-  if (lastXstocksOk && (Date.now() - lastXstocksOk.at) < 10 * 60_000) {
+async function probeXstocks(force = false) {
+  if (!force && lastXstocksOk && (Date.now() - lastXstocksOk.at) < 10 * 60_000) {
     return {
       id: 'xstocks', ok: true, severity: 'ok', product: 'xstocks',
       message: `xStocks ok (кэш) · ${lastXstocksOk.n}`,
-      ms: lastXstocksOk.ms,
+      ms: lastXstocksOk.ms, verification: 'cached', observed_at: new Date(lastXstocksOk.at).toISOString(),
     };
   }
   const localUrl = `http://127.0.0.1:${Number(process.env.PORT || process.env.GROM_BACKEND_PORT || 4000)}/api/market/xstocks`;
@@ -324,8 +325,7 @@ async function maybeLogIssue(check) {
     if (check.ok) lastLogged.delete(check.id);
     return;
   }
-  // Never spam the issues feed with HL rate-limits — proxy cache handles UX.
-  if (check.id === 'hl' && /429|rate-?limit/i.test(String(check.message || ''))) return;
+  // Rate-limit reports use the same bounded reminder window as other probes.
   const prev = lastLogged.get(check.id);
   const now = Date.now();
   if (prev && prev.severity === check.severity && (now - prev.at) < REMIND_MS) return;
@@ -356,6 +356,8 @@ async function maybeLogIssue(check) {
       source: 'health_pulse',
       probe: check.id,
       ms: check.ms,
+      verification: check.verification,
+      observed_at: check.observed_at,
       reported_at: new Date().toISOString(),
     },
     status: 'error',
@@ -363,18 +365,19 @@ async function maybeLogIssue(check) {
   lastLogged.set(check.id, { at: now, severity: check.severity });
 }
 
-export async function runHealthPulse({ priceAggregator } = {}) {
-  const checks = await Promise.all([
+async function executeHealthPulse({ priceAggregator, force = false } = {}) {
+  const results = await Promise.all([
     probeDb(),
     probeRedis(),
     probePrices(priceAggregator),
-    probeHyperliquid(),
-    probeHip3(),
-    probeXstocks(),
+    probeHyperliquid(force || lastSnapshot?.checks?.some(check => check.id === 'hl' && !check.ok)),
+    probeHip3(force || lastSnapshot?.checks?.some(check => check.id === 'hip3' && !check.ok)),
+    probeXstocks(force || lastSnapshot?.checks?.some(check => check.id === 'xstocks' && !check.ok)),
     probeEventLoop(),
     probeMem(),
   ]);
 
+  const checks = results.map(check => trackProbe(check, lastSnapshot?.checks?.find(prev => prev.id === check.id)));
   const open = checks.filter((c) => !c.ok).length;
   lastSnapshot = {
     at: new Date().toISOString(),
@@ -390,6 +393,11 @@ export async function runHealthPulse({ priceAggregator } = {}) {
   }
   return lastSnapshot;
 }
+
+const pulseController = createPulseController(executeHealthPulse);
+export function runHealthPulse(options) { return pulseController.run(options); }
+export function requestHealthRecheck(options) { return pulseController.recheck(options); }
+export function isHealthChecking() { return pulseController.running; }
 
 export function startHealthPulse({ priceAggregator, isLeader }) {
   if (!isLeader) return () => {};

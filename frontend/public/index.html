@@ -738,6 +738,8 @@
 <meta name="application-name" content="GROM" />
 <meta name="mobile-web-app-capable" content="yes" />
 <style>
+#refSignInBtn[hidden]{display:none!important}
+
   /* =========================================================
      GROM — UI palette (sRGB / IEC 61966-2.1; CSS hex & rgb() are sRGB in browsers)
      ========================================================= */
@@ -6979,10 +6981,10 @@
       <div class="card" style="margin-top:14px" id="boffHealthCard">
         <div class="card-head">
           <h3>AI pulse · здоровье биржи <span id="boffHealthStamp" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
-          <button type="button" class="mini-btn" onclick="loadBoffHealth()">Обновить</button>
+          <button type="button" class="mini-btn" id="boffHealthRecheck" onclick="boffRecheckHealth()">Проверить сейчас</button>
         </div>
         <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
-          Постоянный мониторинг: БД, Redis, цены, Hyperliquid, event-loop и память. Плюс клиентский watchdog по разделам (языки, Markets, лаги UI). Сбои уходят в ленту ниже — при росте нагрузки это ранний сигнал, что биржа начинает тупить.
+          Проверки сервера и доступности API каждые ~90 секунд. Кэш отмечен отдельно. Зелёный статус не подтверждает исполнение сделок или работу всех пользовательских сценариев.
         </p>
         <div id="boffHealthGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px"></div>
       </div>
@@ -7006,9 +7008,9 @@
           </div>
         </div>
         <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
-          Клиентский AI-трекер ловит срывы (вход, своп, фьючи, ставки, акции), классифицирует причину и показывает здесь.
+          Диагностика по телеметрии, без догадок о действиях пользователя. Лента хранит прошлые сообщения; это не список нерешённых проблем. Повторная проверка читает данные и не отправляет сделки.
         </p>
-        <div class="boff-row boff-head"><div>Время</div><div>Кошелёк</div><div>Продукт</div><div>Причина</div><div>AI вывод</div><div>Sev</div></div>
+        <div class="boff-row boff-head"><div>Время</div><div>Кошелёк</div><div>Продукт</div><div>Причина</div><div>Факты и состояние</div><div>Уровень</div></div>
         <div id="boffIssuesList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
         </div>
@@ -20333,36 +20335,67 @@ async function loadBoffStats() {
 }
 window.loadBoffStats = loadBoffStats;
 
+function boffMonitorEsc(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, function(c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; });
+}
 function boffIssueRowHtml(ev) {
   var sev = ev.severity || 'error';
   var chip = sev === 'info' ? 'ok' : (sev === 'warn' ? 'warn' : 'err');
-  var summary = String(ev.ai_summary || '').replace(/</g, '&lt;').slice(0, 420);
-  var src = (ev.detail && ev.detail.source) ? String(ev.detail.source) : '';
-  var srcHint = src === 'health_pulse' ? ' · pulse' : (src === 'client_watchdog' ? ' · client' : '');
-  var wLbl = (ev.detail && ev.detail.walletLabel) ? String(ev.detail.walletLabel) : '';
-  var mobile = ev.detail && ev.detail.mobile ? ' · 📱' : '';
+  var src = ev.detail && ev.detail.source;
+  var srcHint = src === 'health_pulse' ? ' · сервер' : ' · клиент';
+  var repeats = Number(ev.repeats_24h) || 0;
   return '<div class="boff-row">'
-    + '<div class="mono" style="font-size:11px">' + boffFmtTime(ev.at) + '</div>'
-    + '<div class="mono" style="font-size:11px">' + (ev.wallet ? boffShortAddr(ev.wallet) : '—')
-      + (wLbl ? (' <span style="opacity:.65">' + wLbl.replace(/</g, '&lt;') + '</span>') : '')
-      + mobile + '</div>'
-    + '<div><span class="boff-chip">' + (ev.product_label || ev.product) + srcHint + '</span></div>'
-    + '<div class="mono" style="font-size:11px">' + (ev.cause || '—') + '</div>'
-    + '<div style="font-size:12px;color:var(--silver3);line-height:1.35">' + summary + '</div>'
-    + '<div><span class="boff-chip ' + chip + '">' + sev + '</span></div></div>';
+    + '<div class="mono" style="font-size:11px">' + boffMonitorEsc(boffFmtTime(ev.at)) + '</div>'
+    + '<div class="mono" style="font-size:11px">' + boffMonitorEsc(ev.wallet ? boffShortAddr(ev.wallet) : '—')
+      + '<div style="opacity:.65">' + boffMonitorEsc(ev.detail && ev.detail.walletLabel || '') + '</div></div>'
+    + '<div><span class="boff-chip">' + boffMonitorEsc((ev.product_label || ev.product) + srcHint) + '</span>'
+      + (ev.app_version ? '<div style="font-size:10px;opacity:.65">Версия ' + boffMonitorEsc(ev.app_version) + '</div>' : '') + '</div>'
+    + '<div class="mono" style="font-size:11px">' + boffMonitorEsc(ev.cause || '—')
+      + (repeats ? '<div style="opacity:.65">' + repeats + ' сообщ. / 24ч</div>' : '') + '</div>'
+    + '<div style="font-size:12px;color:var(--silver3);line-height:1.45">' + boffMonitorEsc(ev.ai_summary || '')
+      + '<div style="color:var(--ice);margin-top:5px">' + boffMonitorEsc(ev.state_label || 'Текущее состояние неизвестно') + '</div>'
+      + '<div style="opacity:.65;font-size:11px">' + boffMonitorEsc(ev.evidence_label || 'Сообщение клиента') + '</div></div>'
+    + '<div><span class="boff-chip ' + chip + '">' + boffMonitorEsc(sev) + '</span></div></div>';
 }
-
 function boffHealthChipHtml(c) {
-  var ok = !!c.ok;
-  var sev = c.severity || (ok ? 'ok' : 'err');
+  var cached = c.verification === 'cached';
+  var ok = !!c.ok && !cached;
+  var sev = cached ? 'warn' : c.severity || (ok ? 'ok' : 'err');
   var bg = ok ? 'rgba(34,193,124,.14)' : (sev === 'warn' ? 'rgba(245,185,77,.14)' : 'rgba(232,87,107,.14)');
   var fg = ok ? 'var(--success)' : (sev === 'warn' ? 'var(--warn)' : 'var(--danger)');
-  var label = ({ db: 'PostgreSQL', redis: 'Redis', prices: 'Цены', hl: 'Hyperliquid', eventloop: 'Event-loop', memory: 'Память' })[c.id] || c.id;
+  var label = ({ db: 'PostgreSQL', redis: 'Redis', prices: 'Цены', hl: 'Hyperliquid', hip3: 'HIP-3', xstocks: 'Акции', eventloop: 'Event-loop', memory: 'Память' })[c.id] || c.id;
+  var age = c.observed_at ? Math.max(0, Math.round((Date.now() - new Date(c.observed_at).getTime()) / 1000)) : null;
   return '<div style="padding:10px 12px;border-radius:10px;border:1px solid rgba(136,192,208,.14);background:' + bg + '">'
-    + '<div style="font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:' + fg + '">' + label + '</div>'
-    + '<div style="font-size:12px;color:var(--silver2);margin-top:4px;line-height:1.35">' + String(c.message || '').replace(/</g, '&lt;') + '</div>'
-    + '</div>';
+    + '<div style="font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:' + fg + '">' + boffMonitorEsc(label) + '</div>'
+    + '<div style="font-size:12px;color:var(--silver2);margin-top:4px;line-height:1.35">' + boffMonitorEsc(c.message || '') + '</div>'
+    + '<div style="font-size:10px;opacity:.65;margin-top:5px">' + (cached ? 'Кэш последней проверки' : 'Проверено') + (age != null ? ' · ' + age + 'с назад' : '')
+    + (c.consecutive_failures ? ' · сбоев подряд: ' + Number(c.consecutive_failures) : '')
+    + (c.recovered ? ' · восстановилось после повторной проверки' : '') + '</div></div>';
 }
+
+var __boffRecheckTimer = null;
+window.boffRecheckHealth = async function () {
+  var button = document.getElementById('boffHealthRecheck');
+  if (!checkAdminAccessFromJwt() || button && button.disabled) return;
+  if (button) { button.disabled = true; button.textContent = 'Проверяем…'; }
+  try {
+    var result = await gpost('/api/admin/activity/health/recheck', {});
+    if (!result) throw new Error('Нет ответа API');
+    if (result.retry_after_ms) { try { toast('Проверка недавно выполнена. Следующая доступна через ' + Math.ceil(result.retry_after_ms / 1000) + 'с', 'info'); } catch (_) {} }
+    var polls = 0;
+    async function follow() {
+      var data = await loadBoffHealth();
+      if (data && data.checking && polls++ < 20) { __boffRecheckTimer = setTimeout(follow, 2000); return; }
+      if (button) { button.disabled = false; button.textContent = 'Проверить сейчас'; }
+      loadBoffIssues();
+    }
+    clearTimeout(__boffRecheckTimer);
+    await follow();
+  } catch (_) {
+    if (button) { button.disabled = false; button.textContent = 'Проверить сейчас'; }
+    try { toast('Не удалось запустить проверку. Попробуйте позже.', 'warn'); } catch (_) {}
+  }
+};
 
 async function loadBoffHealth() {
   var host = document.getElementById('boffHealthGrid');
@@ -20380,7 +20413,7 @@ async function loadBoffHealth() {
     }
     if (stamp) {
       stamp.textContent = data.at
-        ? ('· ' + (data.ok ? 'OK' : ('проблем: ' + (data.open || 0))) + ' · ' + boffFmtTime(data.at))
+        ? ('· ' + (data.checking ? 'идёт свежая проверка' : data.stale ? 'данные устарели' : data.ok ? 'проверки без ошибок · учитывайте кэш' : ('проверок с ошибкой: ' + (data.open || 0))) + ' · ' + boffFmtTime(data.at))
         : '· ожидание первого pulse…';
     }
     var checks = data.checks || [];
@@ -20389,6 +20422,7 @@ async function loadBoffHealth() {
       return;
     }
     host.innerHTML = checks.map(boffHealthChipHtml).join('');
+    return data;
   } catch (_) {
     host.innerHTML = '<div style="opacity:.65;font-size:12px">Ошибка загрузки health</div>';
   }
@@ -20420,14 +20454,14 @@ async function loadBoffIssues(reset) {
     var data = await gget('/api/admin/activity/issues' + qs);
     var rows = (data && data.issues) || [];
     var cnt = document.getElementById('boffIssuesCount');
-    if (cnt) cnt.textContent = data && data.open_24h != null ? ('· ' + data.open_24h + ' за 24ч') : '';
+    if (cnt) cnt.textContent = data && data.open_24h != null ? ('· ' + (data.reports_24h != null ? data.reports_24h : data.open_24h) + ' сообщений за 24ч') : '';
     if (!data) {
       if (__boffIssuesOffset === 0) host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Ошибка API</div><div></div><div></div><div></div><div></div><div></div></div>';
       boffSetIssuesMore(false);
       return;
     }
     if (!rows.length && __boffIssuesOffset === 0) {
-      host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Пока нет сбоев — хорошо</div><div></div><div></div><div></div><div></div><div></div></div>';
+      host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Нет сообщений за выбранный период · это не полная проверка биржи</div><div></div><div></div><div></div><div></div><div></div></div>';
       boffSetIssuesMore(false);
       return;
     }

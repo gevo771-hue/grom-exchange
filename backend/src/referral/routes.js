@@ -1,7 +1,7 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { query } from '../db/pool.js';
-import { ensureReferralCode } from './invite.js';
+import { ensureReferralCode, ensurePublicReferralCode, normalizeReferralWallet } from './invite.js';
 
 const summaryLimiter = rateLimit({
   windowMs: 60_000,
@@ -12,8 +12,19 @@ const summaryLimiter = rateLimit({
   message: { error: 'rate_limited' },
 });
 
-export default function createReferralRouter({ requireAuth }) {
+export default function createReferralRouter({ requireAuth, publicCode = ensurePublicReferralCode }) {
   const router = express.Router();
+
+  router.get('/referral/link', summaryLimiter, async (req, res, next) => {
+    const wallet = normalizeReferralWallet(req.query.wallet);
+    if (!wallet) return res.status(400).json({ error: 'invalid_wallet' });
+    try {
+      const code = await publicCode(wallet);
+      res.set('Cache-Control', 'no-store');
+      // No JWT, counts, account id, private data, or account creation here.
+      return res.json({ code: `GROM-${code}`, link: `/r/${code}` });
+    } catch (err) { next(err); }
+  });
 
   router.get('/referral/summary', requireAuth, summaryLimiter, async (req, res, next) => {
     try {
@@ -29,7 +40,7 @@ export default function createReferralRouter({ requireAuth }) {
              WHERE COALESCE(last_seen_at, created_at) >= NOW() - INTERVAL '30 days'
            )::int AS active_30d
          FROM users
-         WHERE referred_by=$1`,
+         WHERE referred_by=$1 OR referred_by_wallet=(SELECT wallet_address FROM users WHERE id=$1)`,
         [userId]
       );
       const stats = rows[0] || {};

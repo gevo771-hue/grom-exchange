@@ -6,6 +6,7 @@ import config from '../config/index.js';
 import { isCurrentPmEnd } from './predict-freshness.js';
 import { registerXstocksChartRoute } from './xstocks-chart.js';
 import { registerXstocksReferenceRoute } from './xstocks-reference.js';
+import { fetchXstocksCatalogPages } from './xstocks-catalog-fetch.js';
 import { fetchAxelarGmpStatus } from './axelar-gmp.js';
 
 const CG_IDS = {
@@ -136,17 +137,15 @@ try {
 } catch (_) {}
 
 async function fetchBackedXstocksCatalog() {
-  const all = [];
-  for (let page = 0; page < 24; page++) {
+  const all = await fetchXstocksCatalogPages(async (page) => {
     const { data } = await axios.get('https://api.backed.fi/api/v2/public/assets', {
       params: { page },
       timeout: 12000,
       headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' },
     });
-    const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
-    all.push(...nodes);
-    if (!data?.page?.hasNextPage) break;
-  }
+    return data;
+  });
+  const previous = new Map((_xstocksCache.data || []).map((item) => [item.tokenSym, item]));
   const seen = new Set();
   const items = [];
   for (const n of all) {
@@ -180,6 +179,7 @@ async function fetchBackedXstocksCatalog() {
     if (!chains.length && !solMint) continue;
     seen.add(displaySym);
     const pref = [1, 42161, 10, 56, 8453].find((c) => addrs[c]) || chains[0] || null;
+    const prior = previous.get(tokenSym);
     items.push({
       sym: displaySym,
       yahooSym: toYahooSymbol(rawUnd || displaySym, n.underlyingIsin),
@@ -205,6 +205,10 @@ async function fetchBackedXstocksCatalog() {
       chgSource: null,
       vol24: '—',
       mc: '—',
+      // A catalog refresh must not erase already observed prices while the
+      // independent metrics refresh runs. Keep their original timestamps.
+      ...(prior ? Object.fromEntries(['price', 'fairPrice', 'fairPriceSource', 'fairPriceAt', 'chg', 'chgSource', 'vol24', 'mc']
+        .map((key) => [key, prior[key]])) : {}),
     });
   }
   items.sort((a, b) => String(a.tokenSym || a.sym).localeCompare(String(b.tokenSym || b.sym)));
@@ -275,6 +279,7 @@ async function fetchYahooEquityMetrics(items) {
   try { session = await ensureYahooSession(); } catch (_) { return out; }
 
   const chunkSize = 80;
+  let authRetried = false;
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
     const ysyms = chunk.map((r) => r.ysym);
@@ -308,6 +313,8 @@ async function fetchYahooEquityMetrics(items) {
       }
     } catch (e) {
       if (String(e?.response?.status || '') === '401' || String(e?.response?.status || '') === '403') {
+        if (authRetried) break;
+        authRetried = true;
         _yfSession = { crumb: '', cookie: '', ts: 0 };
         try {
           session = await ensureYahooSession();

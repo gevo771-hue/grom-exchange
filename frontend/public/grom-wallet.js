@@ -26654,28 +26654,13 @@ async function gwAiEnsurePredictCollateral(stakeUsd, statusEl, t) {
   const stake = Number(stakeUsd) || 20;
   const gp = window.gromPredict;
   if (!gp) return { ok: false, reason: 'no_predict_module' };
-  let st = null;
-  try { st = await gp.getStatus(); } catch (_) {}
-  if (st && st.polyBal >= Math.min(stake, 1)) {
-    try { await gp.ensurePolygon(); } catch (_) {}
+  const st = await gp.getStatus().catch(() => null);
+  if (st && st.polyBal != null && st.polyBal >= stake && !st.pending) {
     return { ok: true, bridged: false, st };
   }
-  if (statusEl) statusEl.textContent = t.actBridge || 'Bridging USDC to Polygon…';
-  try {
-    if (typeof gwToast === 'function') gwToast(t.actBridge || 'Bridge → Polygon USDC', 'info');
-  } catch (_) {}
-  try {
-    await gp.bridgeToPolygon({ amountUsd: stake });
-    return { ok: true, bridged: true, st };
-  } catch (e) {
-    const msg = String(e?.message || e || '');
-    // Already on polygon / no route — still open search so user can fund manually
-    if (/Already on Polygon|not supported|No bridge|Connect wallet/i.test(msg)) {
-      try { await gp.ensurePolygon(); } catch (_) {}
-      return { ok: false, reason: msg, st };
-    }
-    return { ok: false, reason: msg, st };
-  }
+  // Funding needs a reviewed amount/route and confirmed destination receipt.
+  // Opening the market below lets the user fund it through the standard UI.
+  return { ok: false, reason: 'pUSD · Polygon', st };
 }
 
 async function gwAiExecFutures(action) {
@@ -26771,13 +26756,13 @@ async function gwAiConfirmAction(action, cardEl) {
     if (type === 'predict.bet') {
       const stake = act.params?.stakeUsd || act.params?.amountUsd || 20;
       const query = act.params?.query || act.params?.goal || '';
-      gwAiAppendStep('1/3 · ' + (t.actBridge || 'Checking Polygon USDC…'));
+      gwAiAppendStep('1/3 · ' + (t.actBridge || 'Checking Polygon pUSD…'));
       const fund = await gwAiEnsurePredictCollateral(stake, statusEl, t);
       const ru = (localStorage.getItem('grom_lang') || 'en') === 'ru';
       if (!fund.ok && fund.reason) {
         gwAiAppendStep(String(fund.reason).slice(0, 160) + (ru
-          ? '\nПродолжаю: открою рынок — пополни USDC на Polygon, если попросит кошелёк.'
-          : '\nContinuing: I’ll open the market — fund Polygon USDC if the wallet asks.'));
+          ? '\nПродолжаю: открою рынок — пополни баланс pUSD на Polygon.'
+          : '\nContinuing: I’ll open the market — fund pUSD on Polygon.'));
       } else {
         gwAiAppendStep(fund.bridged
           ? (ru ? '2/3 · Мост отправлен. Жди 1–5 мин, затем ставка.' : '2/3 · Bridge submitted. Wait 1–5 min, then bet.')

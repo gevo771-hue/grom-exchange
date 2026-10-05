@@ -15393,6 +15393,7 @@ var GROM_XSTOCKS = [
       + '.gtm-x{background:none;border:none;color:var(--silver4,#8c9bb2);font-size:16px;cursor:pointer}'
       + '.gtm-sub{font-size:12px;color:var(--silver4,#8c9bb2);margin:6px 0 12px;line-height:1.4}'
       + '.gtm-bal{font-size:12px;color:var(--silver4,#8c9bb2);margin-bottom:10px;line-height:1.45}.gtm-bal b{color:var(--cyan,#3ac2ff)}'
+      + '.gtm-fund small{font-size:11px;line-height:1.5;color:var(--silver4,#8c9bb2)}.gtm-swap-btn[hidden]{display:none!important}'
       + '.gtm-fund{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}'
       + '.gtm-bridge-btn,.gtm-swap-btn{width:100%;padding:11px 12px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font:inherit}'
       + '.gtm-bridge-btn{border:1px solid rgba(58,194,255,.35);background:rgba(58,194,255,.1);color:var(--silver1,#e7eef8)}'
@@ -15630,21 +15631,24 @@ var GROM_XSTOCKS = [
   /* ---- modal ---- */
   function closeModal() { var m = document.getElementById('gromTradeModal'); if (m) m.remove(); }
 
-  /** Instant Swap (Advanced) → YOU RECEIVE native USDC on Polygon for Predict stakes. */
+  /** Instant Swap (Advanced) → YOU RECEIVE USDC.e on Polygon for Predict stakes. */
   function gwxOpenPolygonSwap(amountUsd) {
     closeModal();
     var wantUsd = Number(amountUsd) > 0 ? Number(amountUsd) : 25;
     var payload = {
-      toSym: 'USDC',
+      toSym: 'USDC.e',
       toChainId: 137,
-      toAddress: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
+      toAddress: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
       toDecimals: 6,
       amountUsd: wantUsd,
-      forceBridge: true,
-      hint: tx('px_pm_swap_hint', 'Advanced swap · YOU RECEIVE USDC on Polygon for Predict'),
+      forceBridge: false,
+      hint: tx('px_pm_swap_hint', 'Advanced swap · YOU RECEIVE USDC.e on Polygon, then convert to pUSD in Predictions'),
     };
+    var opened = false;
     var run = function () {
+      if (opened) return true;
       if (typeof window.gwOpenTargetSwap === 'function') {
+        opened = true;
         window.gwOpenTargetSwap(payload);
         return true;
       }
@@ -15659,7 +15663,7 @@ var GROM_XSTOCKS = [
       if (tries >= 60) {
         clearInterval(poll);
         try { location.hash = '#dashboard'; } catch (_) {}
-        notify(tx('px_pm_swap_hint', 'Open Instant Swap and bridge USDC to Polygon'), 'info');
+        notify(tx('px_pm_swap_hint', 'Open Instant Swap and bridge USDC.e to Polygon'), 'info');
       }
     }, 100);
     if (window.gromWalletReady && typeof window.gromWalletReady.then === 'function') {
@@ -15672,7 +15676,7 @@ var GROM_XSTOCKS = [
     var live = !!opts.live;
     var ov = document.createElement('div'); ov.id = 'gromTradeModal'; ov.className = 'gtm-ov';
     var balLine = live
-      ? (tx('px_pm_live_bal', 'Live · Polygon USDC/USDT in wallet'))
+      ? (tx('px_pm_live_bal', 'pUSD · Polygon'))
       : (tx('gtm_demo_bal', 'Balance:') + ' <b>' + money(bal()) + '</b>');
     ov.innerHTML = '<div class="gtm">'
       + '<div class="gtm-h"><span>' + opts.title + '</span><button class="gtm-x" type="button">✕</button></div>'
@@ -15680,8 +15684,12 @@ var GROM_XSTOCKS = [
       + '<div class="gtm-bal" id="gtmBal">' + balLine + '</div>'
       + (live ? '<div class="gtm-fund" id="gtmFund" style="display:none">'
         + '<button type="button" class="gtm-swap-btn" id="gtmFundBtn">'
-        + tx('px_pm_fund_poly', 'Fund Polygon · Swap / Bridge') + '</button></div>' : '')
-      + '<div class="gtm-field"><input type="number" id="gtmAmt" min="1" step="1" placeholder="0.00"/><span>USDT</span></div>'
+        + tx('px_pm_fund_poly', 'Get USDC.e on Polygon') + '</button>'
+        + '<button type="button" class="gtm-swap-btn" id="gtmWrapBtn" hidden>USDC.e → pUSD</button>'
+        + '<button type="button" class="gtm-swap-btn" id="gtmUnwrapBtn" hidden>pUSD → USDC.e</button>'
+        + '<button type="button" class="gtm-swap-btn" id="gtmRefreshBtn">' + tx('px_pm_refresh', 'Refresh balance') + '</button>'
+        + '<small>' + tx('px_pm_conversion_hint', 'Fund USDC.e on Polygon, then convert to pUSD. Conversion requires wallet confirmation and POL for gas.') + '</small></div>' : '')
+      + '<div class="gtm-field"><input type="number" id="gtmAmt" min="1" step="0.01" placeholder="0.00"/><span>' + (live ? 'pUSD' : 'USDT') + '</span></div>'
       + '<div class="gtm-presets"><button type="button" data-a="25">$25</button><button type="button" data-a="100">$100</button><button type="button" data-a="500">$500</button><button type="button" data-a="max">Max</button></div>'
       + '<div class="gtm-info" id="gtmInfo"></div>'
       + '<div class="gtm-actions"><button type="button" class="gtm-cancel">' + tx('gtm_cancel', 'Cancel') + '</button><button type="button" class="gtm-confirm">' + opts.confirmLabel + '</button></div>'
@@ -15689,12 +15697,17 @@ var GROM_XSTOCKS = [
     document.body.appendChild(ov);
     var amt = ov.querySelector('#gtmAmt'), info = ov.querySelector('#gtmInfo'), confirmBtn = ov.querySelector('.gtm-confirm');
     var balEl = ov.querySelector('#gtmBal'), fundWrap = ov.querySelector('#gtmFund');
-    var fundBtn = ov.querySelector('#gtmFundBtn');
+    var fundBtn = ov.querySelector('#gtmFundBtn'), wrapBtn = ov.querySelector('#gtmWrapBtn');
+    var unwrapBtn = ov.querySelector('#gtmUnwrapBtn'), refreshBtn = ov.querySelector('#gtmRefreshBtn');
+    var liveStatus = null;
+    function controlsBusy(busy) {
+      [confirmBtn, fundBtn, wrapBtn, unwrapBtn].forEach(function (el) { if (el) el.disabled = busy; });
+    }
     function upd() { info.innerHTML = opts.info(parseFloat(amt.value || '0')); }
     amt.addEventListener('input', upd);
     ov.querySelectorAll('.gtm-presets button').forEach(function (b) {
       b.addEventListener('click', function () {
-        amt.value = (b.dataset.a === 'max') ? (live ? '100' : String(Math.floor(bal()))) : b.dataset.a;
+        amt.value = (b.dataset.a === 'max') ? (live ? String(liveStatus && liveStatus.polyBal != null ? liveStatus.polyBal : 0) : String(Math.floor(bal()))) : b.dataset.a;
         upd();
       });
     });
@@ -15702,54 +15715,55 @@ var GROM_XSTOCKS = [
     ov.querySelector('.gtm-cancel').onclick = closeModal;
     ov.addEventListener('click', function (e) { if (e.target === ov) closeModal(); });
 
-    async function refreshLiveStatus() {
-      if (!live) return;
+    async function refreshLiveStatus(force) {
+      if (!live || !window.gromPredict) return;
+      if (refreshBtn) refreshBtn.disabled = true;
       try {
-        if (!window.gromPredict || typeof window.gromPredict.getStatus !== 'function') {
-          if (balEl) balEl.textContent = tx('px_connect_wallet', 'Connect wallet to trade');
-          if (fundWrap) fundWrap.style.display = '';
-          return;
-        }
-        var st = await window.gromPredict.getStatus();
-        if (!balEl) return;
+        var st = await window.gromPredict.getStatus({ force: !!force });
+        if (!ov.isConnected) return;
+        liveStatus = st;
+        if (fundWrap) fundWrap.style.display = '';
         if (!st.connected) {
           balEl.textContent = tx('px_connect_wallet', 'Connect wallet to trade');
-          if (fundWrap) fundWrap.style.display = '';
-          if (fundBtn) fundBtn.textContent = tx('px_pm_fund_poly', 'Fund Polygon · Swap / Bridge');
           return;
         }
-        var poly = Number(st.polyBal != null ? st.polyBal : ((st.polyUsdc || 0) + (st.polyUsdt || 0)));
-        var arb = Number(st.arbUsdc != null ? st.arbUsdc : 0);
-        var here = Number((st.usdc || 0) + (st.usdt || 0));
-        if (st.chainId === 42161 && arb > here) here = arb;
-        var need = !st.onPolygon || poly < 1 || !!st.needsFund;
-        if (!st.onPolygon) {
-          balEl.innerHTML = txFmt('px_pm_wrong_chain', 'Network: {n} · stakes need Polygon', { n: st.label || '—' })
-            + ' · here <b>' + money(here) + '</b>'
-            + (arb > 0 ? (' · Arb USDC <b>' + money(arb) + '</b>') : '')
-            + ' · Polygon <b>' + money(poly) + '</b>';
-        } else {
-          balEl.innerHTML = tx('px_pm_live_bal', 'Live · Polygon') + ' · USDC/USDT <b>' + money(poly) + '</b>'
-            + (arb > 0 ? (' · Arb USDC <b>' + money(arb) + '</b>') : '');
+        balEl.textContent = tx('px_pm_live_bal', 'pUSD · Polygon') + ': ' + (st.polyBal == null ? '—' : money(st.polyBal))
+          + ' · USDC.e: ' + (st.polyUsdce == null ? '—' : money(st.polyUsdce));
+        wrapBtn.hidden = !(st.polyUsdce > 0);
+        unwrapBtn.hidden = !(st.polyBal > 0);
+        controlsBusy(!!st.pending);
+        if (st.pending) {
+          balEl.textContent += ' · ' + tx('px_pm_pending', 'Previous request is awaiting confirmation.');
+        } else if (st.balanceUnavailable) {
+          balEl.textContent += ' · ' + tx('px_pm_balance_unavailable', 'Balance could not be refreshed. Try again.');
         }
-        if (fundWrap) fundWrap.style.display = need ? '' : 'none';
-        if (fundBtn) fundBtn.textContent = tx('px_pm_fund_poly', 'Fund Polygon · Swap / Bridge');
-      } catch (e) {
-        console.warn('[GROM] predict status', e);
-        if (balEl) balEl.textContent = tx('px_connect_wallet', 'Connect wallet to trade');
-        if (fundWrap) fundWrap.style.display = '';
-      }
+      } catch (_) {
+        balEl.textContent = tx('px_pm_balance_unavailable', 'Balance could not be refreshed. Try again.');
+      } finally { if (refreshBtn) refreshBtn.disabled = false; }
     }
     if (live) {
       refreshLiveStatus();
-      if (fundBtn) {
-        fundBtn.onclick = function () {
-          var v = parseFloat(amt.value || '0') || 25;
+      refreshBtn.onclick = function () { refreshLiveStatus(true); };
+      fundBtn.onclick = function () {
+        var v = parseFloat(amt.value || '0') || 25;
+        if (!gwxConnected()) { gwxOpenConnect(); return; }
+        gwxOpenPolygonSwap(v);
+      };
+      function convert(direction) {
+        return async function () {
+          var v = parseFloat(amt.value || '0');
+          if (!(v > 0)) { notify(tx('px_enter_amount', 'Enter amount'), 'info'); return; }
           if (!gwxConnected()) { gwxOpenConnect(); return; }
-          /* Always route via Instant Swap (Advanced) — not in-wallet LiFi bridge. */
-          gwxOpenPolygonSwap(v);
+          controlsBusy(true);
+          try {
+            await window.gromPredict.convertCollateral({ amountUsd: String(v), direction: direction });
+            notify(tx('px_pm_converted', 'Conversion confirmed'), 'success');
+          } catch (e) { notify(e.message || tx('px_swap_fail', 'Trade failed'), 'error'); }
+          finally { controlsBusy(false); await refreshLiveStatus(true); }
         };
       }
+      wrapBtn.onclick = convert('wrap');
+      unwrapBtn.onclick = convert('unwrap');
     }
 
     confirmBtn.onclick = async function () {
@@ -15762,16 +15776,15 @@ var GROM_XSTOCKS = [
         confirmBtn.textContent = tx('px_signing', 'Confirm in wallet…');
         try {
           if (live && window.gromPredict && typeof window.gromPredict.getStatus === 'function') {
-            var st0 = await window.gromPredict.getStatus();
-            if (st0.needsFund || (st0.polyBal != null && st0.polyBal < 1) || !st0.onPolygon) {
+            var st0 = await window.gromPredict.getStatus({ force: true });
+            if (st0.pending) throw new Error(tx('px_pm_pending', 'Previous request is awaiting confirmation.'));
+            if (st0.polyBal == null) throw new Error(tx('px_pm_balance_unavailable', 'Balance could not be refreshed. Try again.'));
+            if (st0.polyBal < v) {
               confirmBtn.disabled = false;
               confirmBtn.textContent = opts.confirmLabel;
               if (fundWrap) fundWrap.style.display = '';
-              notify(tx('px_pm_need_poly_funds', 'Need USDC on Polygon — bridge or open Swap'), 'warn');
+              notify(tx('px_pm_need_poly_funds', 'Fund pUSD on Polygon to trade.'), 'warn');
               return;
-            }
-            if (typeof window.gromPredict.ensurePolygon === 'function') {
-              await window.gromPredict.ensurePolygon();
             }
           }
           await opts.onConfirmAsync(v);
@@ -15811,7 +15824,7 @@ var GROM_XSTOCKS = [
 
   /* ---- balance chip ---- */
   function updateBalChips() {
-    // Predict hero is Polygon USDC — never overwrite with retired product paper demo.
+    // Predict hero is Polygon pUSD — never overwrite with retired product paper demo.
     document.querySelectorAll('.gwx-bal-v').forEach(function (el) {
       if (el.closest('#page-predict')) return;
       el.textContent = money(bal());
@@ -16060,7 +16073,7 @@ var GROM_XSTOCKS = [
     var totalVol = GROM_PREDICT_MARKETS.reduce(function (a, m) { return a + m.vol; }, 0);
     return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
       + '<h1 class="gwx-h1"><span class="gwx-h1-ico" aria-hidden="true"><svg width="21" height="21"><use href="#i-predict"/></svg></span><span>' + tx('pg_predict_title', 'Prediction markets') + '</span></h1>'
-      + '<div class="gwx-hero-aside"><div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">…</b><small>' + tx('px_poly_bal', 'Polygon USDC') + '</small></div><div><b>' + fmtVol(totalVol) + '</b><small>' + tx('px_vol_24h', '24h volume') + '</small></div><div><b>' + GROM_PREDICT_MARKETS.length + '</b><small>' + tx('px_markets_n', 'Markets') + '</small></div></div>'
+      + '<div class="gwx-hero-aside"><div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">…</b><small>' + tx('px_poly_bal', 'pUSD · Polygon') + '</small></div><div><b>' + fmtVol(totalVol) + '</b><small>' + tx('px_vol_24h', '24h volume') + '</small></div><div><b>' + GROM_PREDICT_MARKETS.length + '</b><small>' + tx('px_markets_n', 'Markets') + '</small></div></div>'
       + '</div></div></div>'
       + '<div class="gwx-view-tabs" role="tablist">'
       + '<button type="button" class="gwx-view-tab' + (gwxState.pView === 'all' ? ' on' : '') + '" data-pview="all" role="tab">' + tx('px_view_all', 'All markets') + '</button>'
@@ -17215,7 +17228,7 @@ var GROM_XSTOCKS = [
       }
     };
     if (!window.gromPredict || typeof window.gromPredict.getStatus !== 'function') {
-      apply(money(0), tx('px_poly_bal', 'Polygon USDC'));
+      apply(money(0), tx('px_poly_bal', 'pUSD · Polygon'));
       return;
     }
     window.gromPredict.getStatus().then(function (st) {
@@ -17224,10 +17237,10 @@ var GROM_XSTOCKS = [
         apply(money(0), tx('px_connect_wallet', 'Connect wallet'));
         return;
       }
-      var n = Number(st.polyBal || 0);
-      apply(money(n), tx('px_poly_bal', 'Polygon USDC'));
+      var n = st.polyBal;
+      apply(n == null ? '—' : money(n), tx('px_poly_bal', 'pUSD · Polygon'));
     }).catch(function () {
-      if (el.isConnected) apply(money(0), tx('px_poly_bal', 'Polygon USDC'));
+      if (el.isConnected) apply('—', tx('px_poly_bal', 'pUSD · Polygon'));
     });
   }
   function renderPredictPosDemo() {

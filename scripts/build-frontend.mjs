@@ -33,6 +33,7 @@ import {
 import {
   preparePublicRouteHtml,
   prepareAppShellHtml,
+  extractSectionInnerHtml,
 } from './seo-public-html.mjs';
 import {
   allLocalizedPages,
@@ -82,6 +83,9 @@ if (process.env.GROM_SKIP_WC_BUNDLE === '1') {
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 cpSync(SRC, OUT, { recursive: true });
+// The app loads this fragment after the public shell removes the admin section.
+// Derive it from the same source so controls and event handlers cannot drift.
+writeFileSync(join(OUT, 'pages/backoffice.html'), extractSectionInnerHtml(sourceIndexHtml, 'page-backoffice'));
 
 // Guard: critical wallet symbols must survive CSS/code-split transforms.
 // Catches critical wallet symbols being lost between inject stubs.

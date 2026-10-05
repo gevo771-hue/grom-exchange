@@ -5705,7 +5705,7 @@ function gwSetupTelegramHelpCard() {
 function gwSetupKillDemoNumbers() {
   const run = gwDebounce(() => {
     try {
-      if (document.getElementById('page-referral')) {
+      if (document.getElementById('page-referral')?.classList.contains('active')) {
         gwZeroRefStatsPlaceholders();
         // Re-run hydrate — the user may have just logged in.
         if (typeof hydrateReferralSlice === 'function') hydrateReferralSlice(true);
@@ -7239,7 +7239,6 @@ function gwSetupMetaPortfolio() {
   window.addEventListener('grom:hl-ready', () => { gwInvalidateMpCache(); run(); });
   window.addEventListener('grom:hl-balances', () => { gwInvalidateMpCache(); run(); });
   window.addEventListener('grom:lang-change', run);
-  run();
 }
 
 
@@ -7284,16 +7283,19 @@ function gwDashReconcileOrder() {
 window.gwDashReconcileOrder = gwDashReconcileOrder;
 
 function gwOnDashboardRoute(fn) {
+  const run = gwDebounce(() => {
+    if (!gwDashActive()) return;
+    try { gwDashReconcileOrder(); } catch (_) {}
+    fn();
+  }, 40);
   window.addEventListener('grom:route-change', (e) => {
     if (e.detail && e.detail.page === 'dashboard') {
-      try { gwDashReconcileOrder(); } catch (_) {}
-      fn();
+      run();
     }
   });
   window.addEventListener('hashchange', () => {
     if (gwDashActive()) {
-      try { gwDashReconcileOrder(); } catch (_) {}
-      fn();
+      run();
     }
   });
   if (gwDashActive()) fn();
@@ -29250,14 +29252,13 @@ function gwSetupDexPages() {
   const run = gwDebounce(() => {
     // DEX Quick Actions removed
     // try { if (document.getElementById('page-wallet'))   gwRenderDexWalletActions();   } catch (_) {}
-    try { if (document.getElementById('page-wallet'))   gwHydrateWalletPageAssets();  } catch (_) {}
-    try { if (document.getElementById('page-settings')) gwRenderDexSettings();        } catch (_) {}
-    try { if (document.getElementById('page-referral')) {
+    try { if (document.getElementById('page-wallet')?.classList.contains('active'))   gwHydrateWalletPageAssets();  } catch (_) {}
+    try { if (document.getElementById('page-settings')?.classList.contains('active')) gwRenderDexSettings();        } catch (_) {}
+    try { if (document.getElementById('page-referral')?.classList.contains('active')) {
       gwFixReferralQR();
     } } catch (_) {}
   }, 250);
   run();
-  let n = 0; const id = setInterval(() => { n++; const anyMounted = document.getElementById('gwDpWalletCard') || document.getElementById('gwDpSettingsCard'); if (anyMounted || n >= 20) clearInterval(id); else run(); }, 1600);
   window.addEventListener('hashchange', run);
   window.addEventListener('grom:wallet-connected', () => { try { gwHydrateWalletPageAssets(); } catch (_) {} });
   document.addEventListener('grom:wallet-address-known', () => { try { gwHydrateWalletPageAssets(); } catch (_) {} });

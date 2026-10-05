@@ -1,5 +1,4 @@
-
-      <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Админка</span></div>
+<div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Админка</span></div>
       <h1 class="page-title">Админ-панель</h1>
       <p class="page-subtitle">Регистрации, входы, ставки, свопы и все действия клиентов на бирже.</p>
 
@@ -52,10 +51,10 @@
       <div class="card" style="margin-top:14px" id="boffHealthCard">
         <div class="card-head">
           <h3>AI pulse · здоровье биржи <span id="boffHealthStamp" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
-          <button type="button" class="mini-btn" onclick="loadBoffHealth()">Обновить</button>
+          <button type="button" class="mini-btn" id="boffHealthRecheck" onclick="boffRecheckHealth()">Проверить сейчас</button>
         </div>
         <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
-          Постоянный мониторинг: БД, Redis, цены, Hyperliquid, event-loop и память. Плюс клиентский watchdog по разделам (языки, Markets, лаги UI). Сбои уходят в ленту ниже — при росте нагрузки это ранний сигнал, что биржа начинает тупить.
+          Проверки сервера и доступности API каждые ~90 секунд. Кэш отмечен отдельно. Зелёный статус не подтверждает исполнение сделок или работу всех пользовательских сценариев.
         </p>
         <div id="boffHealthGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px"></div>
       </div>
@@ -79,9 +78,9 @@
           </div>
         </div>
         <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
-          Клиентский AI-трекер ловит срывы (вход, своп, фьючи, ставки, акции), классифицирует причину и показывает здесь.
+          Диагностика по телеметрии, без догадок о действиях пользователя. Лента хранит прошлые сообщения; это не список нерешённых проблем. Повторная проверка читает данные и не отправляет сделки.
         </p>
-        <div class="boff-row boff-head"><div>Время</div><div>Кошелёк</div><div>Продукт</div><div>Причина</div><div>AI вывод</div><div>Sev</div></div>
+        <div class="boff-row boff-head"><div>Время</div><div>Кошелёк</div><div>Продукт</div><div>Причина</div><div>Факты и состояние</div><div>Уровень</div></div>
         <div id="boffIssuesList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
         </div>

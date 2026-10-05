@@ -9507,6 +9507,17 @@ function updateLandingTicker(base, price) {
 }
 function gromScheduleMarketUiRefresh() {
   if (document.hidden) return;
+  // Quotes keep updating in memory while the user scrolls. Defer DOM/canvas
+  // work until scrolling settles instead of competing with every wheel frame.
+  if (window.__gwxUserScrolling && Date.now() - window.__gwxUserScrolling < 250) {
+    if (!window.__gromPriceUiTimer) {
+      window.__gromPriceUiTimer = setTimeout(function () {
+        window.__gromPriceUiTimer = null;
+        gromScheduleMarketUiRefresh();
+      }, 280);
+    }
+    return;
+  }
   if (window.__gromPriceUiRaf) return;
   // Coalesce trade storms to ~2 UI refreshes/sec (Safari energy)
   var now = Date.now();
@@ -9522,10 +9533,12 @@ function gromScheduleMarketUiRefresh() {
   window.__gromPriceUiLast = now;
   window.__gromPriceUiRaf = requestAnimationFrame(function () {
     window.__gromPriceUiRaf = null;
+    var activePage = document.querySelector('.page.active');
+    var activeId = activePage ? activePage.id : '';
     try { if (typeof updatePairCards === 'function') updatePairCards(); } catch (_) {}
-    try { if (typeof updateSpotBoard === 'function' && window.spotState) updateSpotBoard(spotState.pair); } catch (_) {}
-    try { if (typeof updateFuturesBoard === 'function' && window.futDeskState) updateFuturesBoard(); } catch (_) {}
-    try { if (typeof syncTradingDeskPrices === 'function') syncTradingDeskPrices(); } catch (_) {}
+    try { if (activeId === 'page-spot' && typeof updateSpotBoard === 'function' && window.spotState) updateSpotBoard(spotState.pair); } catch (_) {}
+    try { if (activeId === 'page-futures' && typeof updateFuturesBoard === 'function' && window.futDeskState) updateFuturesBoard(); } catch (_) {}
+    try { if ((activeId === 'page-spot' || activeId === 'page-futures') && typeof syncTradingDeskPrices === 'function') syncTradingDeskPrices(); } catch (_) {}
     try {
       if (typeof drawChart === 'function') {
         ['retiredBoChart', 'spotChart', 'futChart'].forEach(function (id) {
@@ -10444,6 +10457,7 @@ function gromNeedsPriceTick() {
 
 function gromScheduleQuoteRowsRefresh() {
   if (document.hidden) return;
+  if (window.__gwxUserScrolling && Date.now() - window.__gwxUserScrolling < 250) return;
   if (window.GROM_SAFARI || window.GROM_MOBILE) return;
   var active = document.querySelector('.page.active');
   var id = active ? active.id : '';
@@ -14666,6 +14680,13 @@ var GROM_XSTOCKS = [
       ? Number(item.chg)
       : null;
     item.price = item.price || 0;
+    // Preserve the last observed share price for browsing only. Trading still
+    // requires gwxGetFairReference and the independent impact guard.
+    if (Number(item.fairPrice) > 0 && Number(item.fairPriceAt) > 0
+        && /^(xstocks|yahoo-usd)$/.test(item.fairPriceSource || '')) {
+      item.listPrice = Number(item.fairPrice);
+      item.listPriceAt = Number(item.fairPriceAt);
+    }
     return item;
   }
   function gwxFmtCompactUsd(n) {
@@ -14813,6 +14834,7 @@ var GROM_XSTOCKS = [
         }
         items = gwxSanitizeCatalog(items || []);
         if (items && items.length) {
+          gwxMetricsRefreshAt = Date.now();
           gwxApplyCatalog(items);
           gwxCatalogAt = Date.now();
           try { localStorage.setItem(GWX_CACHE_KEY, JSON.stringify({ at: gwxCatalogAt, items: items, v: 2 })); } catch (_) {}
@@ -14828,43 +14850,35 @@ var GROM_XSTOCKS = [
     })();
     return _gwxCatalogPromise;
   }
+  var gwxMetricsRefreshAt = 0;
+  var gwxMetricsRefreshPending = null;
   async function gwxRefreshPrices() {
-    var page = document.getElementById('page-xstocks');
-    var wanted = [];
-    var seen = {};
-    function take(s) {
-      if (!s || seen[s.sym]) return;
-      seen[s.sym] = 1;
-      wanted.push(s);
-    }
-    if (page) {
-      page.querySelectorAll('.gwx-row[data-sym]').forEach(function (row) { take(STOCK_MAP[row.dataset.sym]); });
-    }
-    var lim = gwxMobile() ? 24 : 80;
-    GROM_XSTOCKS.slice(0, lim).forEach(take);
-    var mints = wanted.map(function (s) { return String(s.solMint || ''); }).filter(function (m) { return m.length >= 32; });
-    for (var i = 0; i < mints.length; i += 25) {
-      var part = mints.slice(i, i + 25);
+    if (!gwxIsActiveXstocksPage()) return;
+    if (gwxMetricsRefreshPending) return gwxMetricsRefreshPending;
+    if (Date.now() - gwxMetricsRefreshAt < 30000) return;
+    gwxMetricsRefreshAt = Date.now();
+    gwxMetricsRefreshPending = (async function () {
       try {
-        var r = await fetch('https://api.dexscreener.com/tokens/v1/solana/' + part.join(','), { headers: { Accept: 'application/json' } });
-        if (!r.ok) continue;
-        var pairs = await r.json();
-        (Array.isArray(pairs) ? pairs : []).forEach(function (p) {
-          var mint = (p && p.baseToken && p.baseToken.address) || '';
-          var px = Number(p && p.priceUsd);
-          if (!mint || !(px > 0)) return;
-          GROM_XSTOCKS.forEach(function (s) {
-            if (String(s.solMint || '') !== mint) return;
-            gwxPx[s.sym] = px;
-            s.price = px;
-            if (!gwxB0[s.sym]) gwxB0[s.sym] = px;
-          });
+        var items = await gwxFetchBackedViaProxy();
+        // Merge asynchronously enriched catalog data without replacing rows,
+        // resetting search/load-more, or starting quote requests per stock.
+        items.forEach(function (fresh) {
+          var item = STOCK_MAP[fresh.sym];
+          if (!item || item.tokenSym !== fresh.tokenSym) return;
+          if (Number(fresh.listPriceAt) >= Number(item.listPriceAt || 0)) {
+            ['fairPrice', 'fairPriceAt', 'fairPriceSource', 'listPrice', 'listPriceAt', 'chg', 'chgSource', 'vol24', 'mc'].forEach(function (key) {
+              if (fresh[key] != null) item[key] = fresh[key];
+            });
+          }
         });
-      } catch (_) {}
-    }
-    // Patch visible rows only — full re-render drops mobile "Load more" window and janks scroll.
-    try { refreshStockPrices(); } catch (_) { renderXstocksRows(); }
+        refreshStockPrices();
+      } catch (_) { /* Existing observations retain their timestamps. */ }
+      finally { gwxMetricsRefreshPending = null; }
+    })();
+    return gwxMetricsRefreshPending;
   }
+  // Includes Safari, whose decorative price ticker is deliberately disabled.
+  setInterval(function () { if (gwxIsActiveXstocksPage()) gwxRefreshPrices(); }, 30000);
   var gwxFairRefInFlight = Object.create(null);
   var GWX_FAIR_REF_TTL = 60000;
   async function gwxGetFairReference(item) {
@@ -14911,121 +14925,78 @@ var GROM_XSTOCKS = [
       solMultiplier: Number(item.solMultiplier) > 0 ? Number(item.solMultiplier) : null,
     };
   }
-  // List prices use the same live buy-quote engine as the trade dialog. We
-  // quote a fixed notional so the displayed per-share price includes the
-  // selected route and GROM fee; the dialog refreshes at the amount entered.
-  var GWX_BUY_QUOTE_AMOUNT = 100;
-  var GWX_BUY_QUOTE_TTL = 30000;
-  var GWX_BUY_QUOTE_FAIL_TTL = 15000;
-  var GWX_BUY_QUOTE_CONCURRENCY = 2;
-  var gwxBuyQuoteQueue = [];
-  var gwxBuyQuoteInFlight = Object.create(null);
-  var gwxBuyQuoteWorkers = 0;
-  function gwxRowIsOnScreen(row) {
-    if (!row || !row.getBoundingClientRect) return false;
-    var box = row.getBoundingClientRect();
-    return box.bottom > 0 && box.top < (window.innerHeight || document.documentElement.clientHeight || 0);
+  // Browsing prices are independently sourced share references. A route is
+  // requested only inside the trade dialog, for the user's actual amount.
+  var gwxReferenceQueue = [];
+  var gwxReferenceQueued = Object.create(null);
+  var gwxReferenceWorkers = 0;
+  function gwxListPrice(stock) {
+    var price = Number(stock && stock.listPrice);
+    var at = Number(stock && stock.listPriceAt);
+    return price > 0 && isFinite(price) && at > 0 && Date.now() - at < 24 * 60 * 60 * 1000 ? price : 0;
   }
-  function gwxFormatBuyPrice(price) {
-    if (!(Number(price) > 0) || !isFinite(Number(price))) return '—';
-    var n = Number(price);
-    return '$' + n.toLocaleString('en-US', {
-      minimumFractionDigits: n < 1 ? 4 : 2,
-      maximumFractionDigits: n < 1 ? 4 : 2,
-    });
+  function gwxPriceText(stock) {
+    var price = gwxListPrice(stock);
+    return price > 0 ? '≈ $' + price.toLocaleString('en-US', { minimumFractionDigits: price < 1 ? 4 : 2, maximumFractionDigits: price < 1 ? 4 : 2 }) : '—';
   }
-  function gwxQuoteOutputTokens(q, trade) {
-    if (Number(q && q.outTokens) > 0) return Number(q.outTokens);
-    if (!q || q.toAmount == null) return 0;
-    var decimals = Number(q.outDecimals);
-    if (!(decimals >= 0 && decimals <= 36)) {
-      decimals = q.venue === 'solana' || q.venue === 'bridge-sol'
-        ? Number(trade.solDecimals || 8)
-        : Number(trade.decimals || 18);
-    }
-    try { return Number(BigInt(q.toAmount)) / Math.pow(10, decimals); } catch (_) { return 0; }
+  function gwxPriceHelp(stock) {
+    var text = tx('px_reference_help', 'Indicative price per share. The final trade price is calculated for your amount.');
+    if (gwxListPrice(stock)) text += ' · ' + new Date(Number(stock.listPriceAt)).toLocaleString();
+    return text;
   }
-  function gwxPaintBuyQuote(stock) {
-    var page = document.getElementById('page-xstocks');
-    var row = page && page.querySelector('.gwx-row[data-sym="' + stock.sym + '"]');
+  function gwxPaintReference(stock) {
+    var row = document.querySelector('#page-xstocks .gwx-row[data-sym="' + stock.sym + '"]');
     var cell = row && row.querySelector('.gwx-price');
     if (!cell) return;
-    var price = Number(stock.buyQuotePrice);
-    cell.textContent = gwxFormatBuyPrice(price);
-    cell.title = price > 0
-      ? tx('px_buy_quote_help', 'Average purchase price from the available route. The trade dialog recalculates for your amount; network gas is separate.')
-      : (stock.buyQuoteStatus === 'loading'
-        ? tx('px_quoting', 'Fetching route…')
-        : tx('px_buy_quote_unavailable', 'No executable buy quote is available right now.'));
-  }
-  function gwxPumpBuyQuoteQueue() {
-    while (gwxBuyQuoteWorkers < GWX_BUY_QUOTE_CONCURRENCY && gwxBuyQuoteQueue.length) {
-      var stock = gwxBuyQuoteQueue.shift();
-      delete gwxBuyQuoteInFlight[stock.sym];
-      if (!stock || !STOCK_MAP[stock.sym] || !gwxIsActiveXstocksPage()) continue;
-      var trade = gwxPickTrade(stock);
-      if (!trade || stock.halted || typeof window.gwXstocksQuote !== 'function') {
-        stock.buyQuoteStatus = 'unavailable';
-        stock.buyQuoteAt = Date.now();
-        gwxPaintBuyQuote(stock);
-        continue;
-      }
-      gwxBuyQuoteInFlight[stock.sym] = true;
-      gwxBuyQuoteWorkers++;
-      (async function (item, route) {
-        try {
-          var reference = await gwxGetFairReference(item);
-          route.solMultiplier = reference.solMultiplier;
-          if (!(reference.price > 0)) throw new Error('Independent share price unavailable');
-          var q = await window.gwXstocksQuote({
-            fromSym: 'USDT', toSym: route.tokenSym, amtNum: GWX_BUY_QUOTE_AMOUNT,
-            chainId: route.chainId, address: route.address, decimals: route.decimals,
-            name: item.name, logo: item.logo, solMint: route.solMint,
-            solDecimals: route.solDecimals, solMultiplier: reference.solMultiplier,
-            addrsByChain: item.addrs || null,
-            refPrice: reference.price,
-            probeLite: !!route.solMint,
-          });
-          var tokens = gwxQuoteOutputTokens(q, route);
-          var spend = Number(q && q.amountInUsd) || GWX_BUY_QUOTE_AMOUNT;
-          var price = q && !q.impactBlocked && tokens > 0 ? spend / tokens : 0;
-          item.buyQuotePrice = price > 0 && isFinite(price) ? price : 0;
-          item.buyQuoteStatus = item.buyQuotePrice > 0 ? 'ready' : 'unavailable';
-          item.buyQuoteAt = Date.now();
-          item.buyQuoteRoute = q ? String(q.aggregator || q.tool || 'DEX') : '';
-        } catch (_) {
-          item.buyQuotePrice = 0;
-          item.buyQuoteStatus = 'unavailable';
-          item.buyQuoteAt = Date.now();
-        } finally {
-          delete gwxBuyQuoteInFlight[item.sym];
-          gwxBuyQuoteWorkers = Math.max(0, gwxBuyQuoteWorkers - 1);
-          gwxPaintBuyQuote(item);
-          gwxPumpBuyQuoteQueue();
-        }
-      })(stock, trade);
-    }
+    var value = gwxPriceText(stock);
+    if (cell.textContent !== value) cell.textContent = value;
+    cell.title = gwxPriceHelp(stock);
   }
   function gwxIsActiveXstocksPage() {
     var page = document.getElementById('page-xstocks');
     return !!(page && page.classList.contains('active') && !document.hidden);
   }
-  function gwxQueueVisibleBuyQuotes() {
-    if (!gwxIsActiveXstocksPage() || typeof window.gwXstocksQuote !== 'function') return;
+  function gwxPumpReferenceQueue() {
+    while (gwxReferenceWorkers < 3 && gwxReferenceQueue.length) {
+      var stock = gwxReferenceQueue.shift();
+      if (!gwxIsActiveXstocksPage() || STOCK_MAP[stock.sym] !== stock) {
+        delete gwxReferenceQueued[stock.sym];
+        continue;
+      }
+      gwxReferenceWorkers++;
+      (async function (item) {
+        try {
+          var ref = await gwxGetFairReference(item);
+          if (ref.price > 0) {
+            item.listPrice = ref.price;
+            item.listPriceAt = item.fairPriceAt;
+          }
+        } finally {
+          delete gwxReferenceQueued[item.sym];
+          gwxReferenceWorkers--;
+          if (STOCK_MAP[item.sym] === item) gwxPaintReference(item);
+          gwxPumpReferenceQueue();
+        }
+      })(stock);
+    }
+  }
+  function gwxQueueVisibleReferences() {
+    if (!gwxIsActiveXstocksPage()) return;
     var page = document.getElementById('page-xstocks');
     var now = Date.now();
-    page.querySelectorAll('.gwx-row[data-sym]').forEach(function (row) {
-      if (!gwxRowIsOnScreen(row)) return;
-      var stock = STOCK_MAP[row.dataset.sym];
-      if (!stock || stock.halted || gwxBuyQuoteInFlight[stock.sym]) return;
-      var ttl = stock.buyQuoteStatus === 'ready' ? GWX_BUY_QUOTE_TTL : GWX_BUY_QUOTE_FAIL_TTL;
-      if (stock.buyQuoteAt && now - stock.buyQuoteAt < ttl) return;
-      if (gwxBuyQuoteQueue.some(function (item) { return item.sym === stock.sym; })) return;
-      stock.buyQuoteStatus = 'loading';
-      gwxPaintBuyQuote(stock);
-      gwxBuyQuoteQueue.push(stock);
+    // Read geometry in one pass, before any price-cell writes.
+    var stocks = Array.from(page.querySelectorAll('.gwx-row[data-sym]')).filter(function (row) {
+      var box = row.getBoundingClientRect();
+      return box.bottom > 0 && box.top < window.innerHeight;
+    }).map(function (row) { return STOCK_MAP[row.dataset.sym]; });
+    stocks.forEach(function (stock) {
+      if (!stock || gwxReferenceQueued[stock.sym]) return;
+      if (stock.referenceAt && now - stock.referenceAt < GWX_FAIR_REF_TTL) return;
+      if (gwxListPrice(stock) && now - stock.listPriceAt < GWX_FAIR_REF_TTL) return;
+      gwxReferenceQueued[stock.sym] = true;
+      gwxReferenceQueue.push(stock);
     });
-    gwxPumpBuyQuoteQueue();
+    gwxPumpReferenceQueue();
   }
   async function refreshUsdtBalChip() {
     try {
@@ -16030,7 +16001,6 @@ var GROM_XSTOCKS = [
       + (predictWhen(m) ? '<span>' + esc(predictWhen(m)) + '</span>' : '') + '</div></div>';
   }
   function stockRowHtml(s) {
-    var px = Number(s.buyQuotePrice) || 0;
     var hasChg = !!(s.chgSource && s.chg != null && isFinite(Number(s.chg)));
     var chg = hasChg ? Number(s.chg) : 0;
     var cls = chg >= 0 ? 'gwx-up' : 'gwx-dn';
@@ -16053,7 +16023,7 @@ var GROM_XSTOCKS = [
     return '<div class="gwx-row" data-sym="' + s.sym + '">'
       + '<div class="gwx-row-sym">' + logoHtml(s.sym, ini)
       + '<div class="nm"><div class="gwx-tick">' + tickLbl + '</div><div class="gwx-name">' + esc(s.name) + '</div></div></div>'
-      + '<div class="gwx-price" title="' + escA(tx('px_buy_quote_help', 'Average purchase price from the available route. The trade dialog recalculates for your amount; network gas is separate.')) + '">' + (px ? gwxFormatBuyPrice(px) : '—') + '</div>'
+      + '<div class="gwx-price" title="' + escA(gwxPriceHelp(s)) + '">' + gwxPriceText(s) + '</div>'
       + '<div class="gwx-chg ' + (hasChg ? cls : '') + '">' + (hasChg ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—') + '</div>'
       + '<div class="gwx-col-vol">' + (s.vol24 || '—') + '</div>'
       + '<div class="gwx-col-mc">' + (s.mc || '—') + '</div>'
@@ -16119,7 +16089,7 @@ var GROM_XSTOCKS = [
       + '<div class="gwx-toolbar"><div class="gwx-cats">' + catTabsHtml(GROM_SCATS, gwxState.sCat, false) + '</div>'
       + '<div class="gwx-search"><input type="text" placeholder="' + esc(tx('px_search_stocks', 'Search ticker…')) + '" /></div></div>'
       + '<div class="gwx-seo"><p>' + esc((window.GROM_SEO_I18N && window.GROM_SEO_I18N.pageBlurb) ? window.GROM_SEO_I18N.pageBlurb('xstocks', (window.GROM_SEO_I18N.curLang ? window.GROM_SEO_I18N.curLang() : 'en')) : 'Tokenized stocks and xStocks on GROM.') + '</p><div class="gwx-seo-nav"><button type="button" onclick="show(\'markets\')">Crypto markets</button><button type="button" onclick="show(\'futures\')">Futures</button><button type="button" onclick="show(\'predict\')">Predictions</button><button type="button" onclick="show(\'help\')">Help</button></div></div>'
-      + '<div class="gwx-table"><div class="gwx-thead"><div>' + tx('px_col_ticker', 'Ticker') + '</div><div title="' + escA(tx('px_buy_quote_help', 'Average purchase price from the available route. The trade dialog recalculates for your amount; network gas is separate.')) + '">' + tx('px_col_price', 'Price') + '</div><div>' + tx('px_col_chg', '24h %') + '</div><div class="gwx-col-vol">' + tx('px_col_vol', '24h vol') + '</div><div class="gwx-col-mc">' + tx('px_col_mc', 'Market cap') + '</div><div></div></div><div class="gwx-rows"></div></div>'
+      + '<div class="gwx-table"><div class="gwx-thead"><div>' + tx('px_col_ticker', 'Ticker') + '</div><div title="' + escA(tx('px_reference_help', 'Indicative price per share. The final trade price is calculated for your amount.')) + '">' + tx('px_reference_price', 'Indicative price') + '</div><div>' + tx('px_col_chg', '24h %') + '</div><div class="gwx-col-vol">' + tx('px_col_vol', '24h vol') + '</div><div class="gwx-col-mc">' + tx('px_col_mc', 'Market cap') + '</div><div></div></div><div class="gwx-rows"></div></div>'
       + '<div class="gxp" id="gromStockPos"><div class="gxp-h">' + tx('px_my_positions', 'My positions') + '</div><div class="gxp-list"></div></div>'
       + '<div class="gwx-foot">' + tx('px_foot_xstocks', 'Powered by Backed xStocks · fee 0.20% · non-custodial via LiFi') + '</div></div>';
   }
@@ -16283,7 +16253,7 @@ var GROM_XSTOCKS = [
       window.__gwxUserScrolling = Date.now();
       clearTimeout(_gwxScrollIdle);
       _gwxScrollIdle = setTimeout(function () { window.__gwxUserScrolling = 0; }, 400);
-    }, { passive: true });
+    }, { passive: true, capture: true });
   }
   function predictGridHasCards() {
     var grid = document.getElementById('page-predict')?.querySelector('.gwx-grid');
@@ -17025,8 +16995,8 @@ var GROM_XSTOCKS = [
       return catOk && (!q || s.sym.toLowerCase().indexOf(q) >= 0 || s.name.toLowerCase().indexOf(q) >= 0 || String(s.tokenSym || '').toLowerCase().indexOf(q) >= 0);
     });
     list.sort(function (a, b) {
-      var ap = Number(a.buyQuotePrice) > 0 ? 0 : 1;
-      var bp = Number(b.buyQuotePrice) > 0 ? 0 : 1;
+      var ap = gwxListPrice(a) > 0 ? 0 : 1;
+      var bp = gwxListPrice(b) > 0 ? 0 : 1;
       if (ap !== bp) return ap - bp;
       return String(a.tokenSym || a.sym).localeCompare(String(b.tokenSym || b.sym));
     });
@@ -17049,7 +17019,7 @@ var GROM_XSTOCKS = [
     if (typeof gromHydrateLogos === 'function') gromHydrateLogos(host);
     var countEl = document.getElementById('gwxTickerCount');
     if (countEl) countEl.textContent = String(GROM_XSTOCKS.length);
-    if (visible.length) setTimeout(gwxQueueVisibleBuyQuotes, 0);
+    if (visible.length) setTimeout(gwxQueueVisibleReferences, 0);
   }
 
   function gwxCurrentLang() {
@@ -17677,61 +17647,31 @@ var GROM_XSTOCKS = [
   });
 
   /* ---- live drift (only when page is active) ---- */
-  var undLast = {};
-  function getUnd(sym) { if (STOCK_MAP[sym]) return curPx(sym); return livePx(sym); }
-  function flash(el, up) { if (!el) return; el.classList.remove('flash-up', 'flash-dn'); void el.offsetWidth; el.classList.add(up ? 'flash-up' : 'flash-dn'); }
   function refreshStockPrices() {
     var page = document.getElementById('page-xstocks'); if (!page || !page.classList.contains('active')) return;
     initPx();
-    // Never substitute issuer, seed, or DEX mids for an executable buy quote.
+    // Update text only; leave the list and scroll position intact.
     page.querySelectorAll('.gwx-row[data-sym]').forEach(function (row) {
       var sym = row.dataset.sym;
       var s = STOCK_MAP[sym];
-      var p = Number(s && s.buyQuotePrice) || 0;
-      var pe = row.querySelector('.gwx-price'); if (pe) pe.textContent = gwxFormatBuyPrice(p);
+      if (s) {
+        gwxPaintReference(s);
+        [['.gwx-col-vol', s.vol24], ['.gwx-col-mc', s.mc]].forEach(function (pair) {
+          var cell = row.querySelector(pair[0]);
+          if (cell && cell.textContent !== (pair[1] || '—')) cell.textContent = pair[1] || '—';
+        });
+      }
       var ce = row.querySelector('.gwx-chg');
       var hasChg = !!(s && s.chgSource && s.chg != null && isFinite(Number(s.chg)));
       var chg = hasChg ? Number(s.chg) : 0;
       if (ce) {
-        ce.textContent = hasChg ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—';
+        var nextChange = hasChg ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—';
+        if (ce.textContent !== nextChange) ce.textContent = nextChange;
         ce.classList.toggle('gwx-up', hasChg && chg >= 0);
         ce.classList.toggle('gwx-dn', hasChg && chg < 0);
       }
     });
-    gwxQueueVisibleBuyQuotes();
-  }
-  function driftPredict() {
-    var page = document.getElementById('page-predict'); if (!page || !page.classList.contains('active')) return;
-    if (document.hidden || gwxState.pView === 'live' || gwxMobile()) return;
-    var lite = gwxMobile();
-    var deltas = {};
-    page.querySelectorAll('.gwx-card[data-und]').forEach(function (card) {
-      var u = card.dataset.und; if (deltas[u] !== undefined) return;
-      var cur = getUnd(u);
-      if (cur == null || !isFinite(cur) || cur <= 0) { deltas[u] = 0; return; }
-      var last = undLast[u]; deltas[u] = (last != null && last > 0) ? (cur - last) / last * 100 : 0; undLast[u] = cur;
-    });
-    var ocs = page.querySelectorAll('.gwx-oc');
-    var step = lite ? 2 : 1;
-    for (var oi = 0; oi < ocs.length; oi += step) {
-      var oc = ocs[oi];
-      var probEl = oc.querySelector('.gwx-oc-prob'); var fill = oc.querySelector('.gwx-oc-fill');
-      var yes = oc.querySelector('.gwx-bet.gwx-yes'); var no = oc.querySelector('.gwx-bet.gwx-no');
-      if (!probEl || !yes) continue;
-      var card = oc.closest('.gwx-card'); var u = card ? card.dataset.und : null;
-      var a = parseFloat(probEl.textContent) || 50;
-      var dir = (u && deltas[u]) ? Math.max(-3, Math.min(3, deltas[u] * 10)) : 0;
-      var jitter = lite ? 0.9 : 1.4;
-      var nv = Math.round(Math.min(99, Math.max(1, a + (Math.random() * jitter - jitter / 2) + dir)));
-      if (nv === a) continue;
-      probEl.textContent = nv + '%';
-      if (fill) fill.style.width = nv + '%';
-      yes.dataset.prob = nv; if (no) no.dataset.prob = 100 - nv;
-      if (!lite) {
-        probEl.classList.remove('up', 'dn'); void probEl.offsetWidth; probEl.classList.add(nv > a ? 'up' : 'dn');
-        setTimeout(function (el) { return function () { el.classList.remove('up', 'dn'); }; }(probEl), 480);
-      }
-    }
+    gwxQueueVisibleReferences();
   }
   var _gwxTick = 0;
   function refreshActive() {
@@ -17747,7 +17687,7 @@ var GROM_XSTOCKS = [
     }
     if (pp && pp.classList.contains('active')) {
       if (!window.GROM_SAFARI && _gwxTick % 3 === 0) patchPredictQuotes();
-      if (!gwxMobile() && !window.GROM_SAFARI) driftPredict();
+      // Prediction odds are updated only from provider responses.
       if (_gwxTick % 20 === 0) { renderPredictPos(); updateBalChips(); }
       if (!gwxMobile() && !window.GROM_SAFARI && _gwxTick % 10 === 0) loadPredictLive(false, { soft: true });
     }

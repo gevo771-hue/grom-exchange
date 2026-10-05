@@ -84,6 +84,23 @@ export function stripSectionById(html, id) {
   return html;
 }
 
+/** Canonical lazy-page content; fail the build instead of shipping an old copy. */
+export function extractSectionInnerHtml(html, id) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('Invalid section id');
+  const open = new RegExp(`<section\\b[^>]*\\bid="${id}"[^>]*>`, 'i').exec(html);
+  if (!open) throw new Error(`Missing section: ${id}`);
+  const start = open.index + open[0].length;
+  const tags = /<\/?section\b[^>]*>/gi;
+  tags.lastIndex = start;
+  let depth = 1;
+  let tag;
+  while ((tag = tags.exec(html))) {
+    depth += tag[0].startsWith('</') ? -1 : 1;
+    if (!depth) return html.slice(start, tag.index).trim() + '\n';
+  }
+  throw new Error(`Unclosed section: ${id}`);
+}
+
 export function stripAdminFromHtml(html) {
   /* Drop the heavy panel from crawlable HTML; keep #navBackoffice (hidden) so
    * admins can open the desk after /pages/backoffice.html is injected. */

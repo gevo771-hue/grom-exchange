@@ -1338,12 +1338,8 @@ export function createMarketRouter() {
     try {
       const sub = req.url || '/';
       const url = 'https://clob.polymarket.com' + (sub.startsWith('/') ? sub : '/' + sub);
-      // Soft-stub builder fee lookup so browser SDK does not hard-fail on CORS/404.
-      if (/\/fees\/builder-fees\//i.test(sub)) {
-        return res.json({ base_fee: 0, fee_rate: 0, feeRate: 0, rate: 0 });
-      }
       const headers = { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' };
-      for (const h of ['content-type', 'poly_api_key', 'poly_passphrase', 'poly_signature', 'poly_timestamp', 'poly_address', 'authorization']) {
+      for (const h of ['content-type', 'poly_api_key', 'poly_passphrase', 'poly_signature', 'poly_timestamp', 'poly_nonce', 'poly_address']) {
         const v = req.headers[h];
         if (v) headers[h] = v;
       }

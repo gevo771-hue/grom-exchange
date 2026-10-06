@@ -12,8 +12,8 @@
   const EXCHANGE = '0xE111180000d2663C0091e4f400237545B87B996B';
   const NEG_EXCHANGE = '0xe2222d279d744050d28e00520010520000310F59';
   const ERC20_BAL = '0x70a08231', ERC20_ALLOW = '0xdd62ed3e', ERC20_APPROVE = '0x095ea581';
-  let _cfg, _sdk, _client, _clientProvider, _clientAddress = '', _busy = false;
-  const _status = new Map(), _statusFlight = new Map(), _pendingMemory = new Map();
+  let _cfg, _sdk, _hashSdk, _lastSignedOrder, _expectedOrder, _client, _clientProvider, _clientAddress = '', _busy = false;
+  const _status = new Map(), _statusFlight = new Map(), _pendingMemory = new Map(), _resolved = new Map();
 
   function tr(ru, en) {
     try { return (localStorage.getItem('grom_lang') || document.documentElement.lang).startsWith('ru') ? ru : en; }
@@ -173,6 +173,13 @@
     _status.delete(address.toLowerCase());
   }
   function pendingError() { return fail('PREDICT_PENDING', 'Предыдущий запрос ещё проверяется. Проверьте историю кошелька перед повтором.', 'Previous request is still being checked. Check wallet history before trying again.'); }
+  function resolvePending(address, op, result) {
+    const current = pendingRead(address);
+    if (!current || current.at !== op.at || current.orderId !== op.orderId || current.hash !== op.hash) return false;
+    _resolved.set(address.toLowerCase(), result);
+    pendingWrite(address, null);
+    return true;
+  }
   async function checkPending(address) {
     const op = pendingRead(address);
     if (!op) return null;
@@ -180,10 +187,24 @@
       try {
         const rec = await polygonRead('eth_getTransactionReceipt', [op.hash]);
         if (rec?.blockNumber && (rec.status === '0x1' || rec.status === '0x0')) {
-          pendingWrite(address, null);
-          return null;
+          if (resolvePending(address, op, { kind: op.kind, hash: op.hash, status: rec.status === '0x1' ? 'CONFIRMED' : 'REVERTED' })) return null;
+          return pendingRead(address);
         }
       } catch (_) {}
+    }
+    // Reconcile the exact signed order, never infer completion from a changed
+    // balance or a matching market/amount. Passive refresh must not prompt auth.
+    if (op.orderId && _client && _clientAddress === address.toLowerCase() && eth() === _clientProvider) {
+      try {
+        const order = await bounded(_client.getOrder(op.orderId), 8000);
+        if (String(order?.id).toLowerCase() === op.orderId.toLowerCase()
+            && String(order.maker_address).toLowerCase() === address.toLowerCase()
+            && String(order.asset_id) === op.tokenId
+            && ['MATCHED', 'CANCELED', 'CANCELLED', 'UNMATCHED'].includes(order.status)) {
+          if (resolvePending(address, op, { kind: 'order', orderId: op.orderId, status: order.status })) return null;
+          return pendingRead(address);
+        }
+      } catch (_) { /* 404 or a timeout is not proof that a submission failed. */ }
     }
     return op;
   }
@@ -205,7 +226,8 @@
       const value = { connected: true, address, chainId: POLY_CHAIN, collateral: 'pUSD',
         polyBal: pusd === null ? null : Number(pusd) / 1e6,
         polyUsdce: usdce === null ? null : Number(usdce) / 1e6,
-        balanceUnavailable: pusd === null, needsFund: pusd !== null && pusd < 1000000n, pending };
+        balanceUnavailable: pusd === null, needsFund: pusd !== null && pusd < 1000000n, pending,
+        lastRequest: _resolved.get(key) || null };
       _status.set(key, { at: Date.now(), value });
       return value;
     })();
@@ -215,13 +237,16 @@
   async function exclusive(fn) {
     if (_busy) throw pendingError();
     _busy = true;
-    try { return await fn(); } finally { _busy = false; }
+    try { return await fn(); } finally { _busy = false; _expectedOrder = null; _lastSignedOrder = null; }
   }
   function rejected(e) { return Number(e?.code) === 4001 || /user rejected|user denied|request rejected/i.test(String(e?.message)); }
   async function sendConfirmed(provider, address, tx, kind) {
     await assertSigner(provider, address);
     if (await checkPending(address)) throw pendingError();
-    pendingWrite(address, { kind, at: Date.now(), state: 'wallet' });
+    const minNonce = await polygonRead('eth_getTransactionCount', [address, 'pending']);
+    await assertSigner(provider, address);
+    const op = { kind, at: Date.now(), state: 'wallet', tx, minNonce };
+    pendingWrite(address, op);
     let hash;
     try {
       hash = await provider.request({ method: 'eth_sendTransaction', params: [{ from: address, ...tx }] });
@@ -230,7 +255,7 @@
       throw e;
     }
     if (!/^0x[0-9a-f]{64}$/i.test(hash)) throw pendingError();
-    pendingWrite(address, { kind, hash, at: Date.now(), state: 'confirming' });
+    pendingWrite(address, { ...op, hash, state: 'confirming' });
     for (let i = 0; i < 30; i++) {
       const rec = await polygonRead('eth_getTransactionReceipt', [hash]).catch(() => null);
       if (rec?.blockNumber && (rec.status === '0x1' || rec.status === '0x0')) {
@@ -262,7 +287,23 @@
         const t = { ...types }; delete t.EIP712Domain;
         const typed = { types: { EIP712Domain: Object.keys(definitions).filter(k => domain[k] !== undefined).map(name => ({ name, type: definitions[name] })), ...t },
           primaryType: Object.keys(t)[0], domain, message: value };
-        return provider.request({ method: 'eth_signTypedData_v4', params: [address, JSON.stringify(typed, (_, v) => typeof v === 'bigint' ? v.toString() : v)] });
+        let orderId;
+        if (typed.primaryType === 'Order') {
+          const expected = _expectedOrder;
+          if (!expected || provider !== expected.provider || address.toLowerCase() !== expected.address.toLowerCase()
+              || domain.name !== 'Polymarket CTF Exchange' || String(domain.version) !== '2' || Number(domain.chainId) !== POLY_CHAIN
+              || String(domain.verifyingContract).toLowerCase() !== expected.exchange.toLowerCase()
+              || String(value.maker).toLowerCase() !== address.toLowerCase() || String(value.signer).toLowerCase() !== address.toLowerCase()
+              || Number(value.signatureType) !== 0 || Number(value.side) !== 0 || String(value.tokenId) !== expected.tokenId
+              || BigInt(value.makerAmount) <= 0n || BigInt(value.makerAmount) > expected.amount) throw new Error('Order exceeds selected amount or market');
+          if (!_hashSdk) _hashSdk = import(/* webpackIgnore: true */ 'https://esm.sh/ethers@6.13.4').catch(e => { _hashSdk = null; throw e; });
+          const { TypedDataEncoder } = await _hashSdk;
+          orderId = TypedDataEncoder.hash(domain, t, value);
+          await assertSigner(provider, address);
+        }
+        const signature = await provider.request({ method: 'eth_signTypedData_v4', params: [address, JSON.stringify(typed, (_, v) => typeof v === 'bigint' ? v.toString() : v)] });
+        if (orderId) _lastSignedOrder = { orderId, signature, address, tokenId: String(value.tokenId), makerAmount: String(value.makerAmount) };
+        return signature;
       },
       signTypedData: async function (domain, types, value) { return this._signTypedData(domain, types, value); },
     };
@@ -319,13 +360,18 @@
       await client.updateBalanceAllowance({ asset_type: 'COLLATERAL' });
       await assertSigner(provider, address);
       // Sign once, post once. Never retry an ambiguous financial submission.
+      _lastSignedOrder = null;
+      _expectedOrder = { provider, address, tokenId: String(tokenId), amount, exchange: actualNegRisk ? NEG_EXCHANGE : EXCHANGE };
       const order = await client.createMarketOrder({ tokenID: String(tokenId), amount: Number(amount) / 1e6,
         userUSDCBalance: Number(amount) / 1e6, side: 'BUY', orderType: 'FOK', builderCode: cfg.builderCode },
       { negRisk: actualNegRisk });
       if (BigInt(order.makerAmount) > amount || BigInt(order.makerAmount) <= 0n) throw new Error('Order exceeds selected amount');
+      const signed = _lastSignedOrder;
+      if (!signed || signed.signature !== order.signature || signed.address.toLowerCase() !== address.toLowerCase()
+          || signed.tokenId !== String(tokenId) || signed.makerAmount !== String(order.makerAmount)) throw new Error('Signed order identity unavailable');
       await assertSigner(provider, address);
       if (pendingRead(address)) throw pendingError();
-      pendingWrite(address, { kind: 'order', state: 'submitting', at: Date.now(), tokenId: String(tokenId), amount: String(amountUsd) });
+      pendingWrite(address, { kind: 'order', state: 'submitting', at: Date.now(), orderId: signed.orderId, tokenId: String(tokenId), amount: String(amountUsd) });
       let result;
       try { result = await client.postOrder(order, 'FOK'); }
       catch (e) {
@@ -337,9 +383,48 @@
         pendingWrite(address, null);
         throw new Error(result.errorMsg || result.error || 'Order rejected');
       }
-      if (result?.success !== true || !(result.orderID || result.orderId)) throw pendingError();
+      if (result?.success !== true || String(result.orderID || result.orderId).toLowerCase() !== signed.orderId.toLowerCase()) throw pendingError();
+      // Acceptance is not execution. A delayed order must retain its guard
+      // until the exchange reports a terminal status for this exact ID.
+      if (String(result.status).toUpperCase() !== 'MATCHED') {
+        if (await checkPending(address)) throw pendingError();
+        if (_resolved.get(address.toLowerCase())?.status !== 'MATCHED') throw fail('ORDER_UNFILLED', 'Заявка не исполнена. Проверьте позиции.', 'Order was not filled. Check your positions.');
+      }
       pendingWrite(address, null); _status.clear();
       return result;
+    });
+  }
+  async function recoverPending({ txHash } = {}) {
+    return exclusive(async () => {
+      const provider = eth(), address = await getAccount(provider);
+      let op = pendingRead(address);
+      if (op?.orderId) {
+        // Reauthorization is only requested by this explicit recovery action.
+        await getClient();
+        await assertSigner(provider, address);
+      } else if (op && !op.hash && txHash) {
+        if (!/^0x[0-9a-f]{64}$/i.test(txHash) || !op.tx || !op.minNonce) throw new Error('Transaction recovery data unavailable');
+        const tx = await polygonRead('eth_getTransactionByHash', [txHash]);
+        if (!tx || String(tx.from).toLowerCase() !== address.toLowerCase()
+            || String(tx.to).toLowerCase() !== op.tx.to.toLowerCase()
+            || String(tx.input).toLowerCase() !== op.tx.data.toLowerCase()
+            || BigInt(tx.value || '0x0') !== BigInt(op.tx.value || '0x0')
+            || BigInt(tx.nonce) < BigInt(op.minNonce)) throw fail('TX_MISMATCH', 'Эта транзакция не соответствует запросу.', 'This transaction does not match the request.');
+        if (pendingRead(address)?.at !== op.at) throw pendingError();
+        pendingWrite(address, { ...op, hash: txHash, state: 'confirming' });
+      }
+      await checkPending(address);
+      return getStatus({ force: true });
+    });
+  }
+  async function acknowledgeRejectedRequest(at) {
+    return exclusive(async () => {
+      const address = await getAccount(eth()), op = pendingRead(address);
+      // Only a user-confirmed rejection of a hashless wallet request can be
+      // dismissed. Submitted orders/known transactions must be reconciled.
+      if (!op || op.at !== at || op.state !== 'wallet' || op.kind === 'order' || op.hash) throw pendingError();
+      pendingWrite(address, null);
+      return getStatus({ force: true });
     });
   }
   async function listPositions() {
@@ -352,6 +437,6 @@
   function resetSession() { _client = null; _clientProvider = null; _clientAddress = ''; _status.clear(); }
   document.addEventListener('grom:wallet-disconnected', resetSession);
   document.addEventListener('grom:wallet-connected', resetSession);
-  window.gromPredict = { fetchConfig, getClient, buyMarket, listPositions, ensurePolygon, getStatus, convertCollateral,
+  window.gromPredict = { fetchConfig, getClient, buyMarket, listPositions, ensurePolygon, getStatus, convertCollateral, recoverPending, acknowledgeRejectedRequest,
     POLY_CHAIN, USDCE, PUSD, isLiveReady: async () => !!(await fetchConfig()).enabled };
 })();

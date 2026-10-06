@@ -1290,7 +1290,8 @@ function gwProviderRequestWithWake(provider, args, wakeOpts) {
     if (operationId && gwSwapOpGet()?.id !== operationId) return;
     let dispatched;
     try {
-      if (operationId && gwSwapOpGet()?.id === operationId) dispatched = gwMarkSwapWalletRequestDispatched(args);
+      if (!wakeOpts?.authOnly && /^(eth_sendTransaction|eth_signTransaction)$/.test(String(args?.method || ''))) window.__gwSwapSigPrompted = true;
+      if (operationId && gwSwapOpGet()?.id === operationId) dispatched = gwMarkSwapWalletRequestDispatched(Object.assign({}, args, { action: wakeOpts?.action || 'tx' }));
     } catch (_) {}
     if (dispatched) context = {
       id: dispatched.id, walletRequestAt: dispatched.walletRequestAt,
@@ -16767,6 +16768,11 @@ function gwUxWireStars(list) {
 }
 
 function gwDsSyncCtaState() {
+  if (window.__gwNativeMaxPending && window.__gwNativeMaxPending === window.__gwNativeMaxRequest) {
+    const maxCta = document.getElementById('gwDsCta');
+    if (maxCta) { maxCta.disabled = true; maxCta.textContent = gwGasUiRu() ? 'Рассчитываем MAX…' : 'Calculating MAX…'; }
+    return;
+  }
   if (window.GromSwapCore?.swapCtaModel && gwUxCta()) return;
   const cta = document.getElementById('gwDsCta');
   if (!cta) return;
@@ -17058,8 +17064,7 @@ try {
  * eth_sendTransaction that survives Trust→Safari WC callback loss:
  * race wallet response vs on-chain nonce bump + tx discovery.
  */
-async function gwProviderSendTx(provider, txParams, timeoutMs = 180000, chainIdHint) {
-  try { window.__gwSwapSigPrompted = true; } catch (_) {}
+async function gwProviderSendTx(provider, txParams, timeoutMs = 180000, chainIdHint, wakeOpts = { action: 'tx' }) {
   if (typeof gwNormalizeEvmTxForWallet === 'function') {
     txParams = gwNormalizeEvmTxForWallet(txParams);
   }
@@ -17081,7 +17086,7 @@ async function gwProviderSendTx(provider, txParams, timeoutMs = 180000, chainIdH
     nonceBefore = parseInt(hex, 16);
   } catch (_) {}
 
-  const wcP = gwProviderRequestWithWake(provider, { method: 'eth_sendTransaction', params: [txParams] })
+  const wcP = gwProviderRequestWithWake(provider, { method: 'eth_sendTransaction', params: [txParams] }, wakeOpts)
     .then((h) => {
       if (typeof h === 'string' && /^0x[a-fA-F0-9]{64}$/.test(h)) return h;
       throw new Error('Wallet returned invalid tx hash');
@@ -18490,7 +18495,6 @@ async function gwWaitSwapApproval(provider, hash, chainId) {
  * Skip entirely when allowance already covers `needed` (fewer Trust prompts).
  * USDT mainnet reset-to-0 only when existing allowance is positive but too low. */
 async function gwErc20ApproveMax(provider, token, spender, from, chainId, needed) {
-  try { window.__gwSwapSigPrompted = true; } catch (_) {}
   const tokenLc = String(token || '').toLowerCase();
   const need = (needed != null && BigInt(needed) > 0n) ? BigInt(needed) : null;
   let allow = 0n;
@@ -18501,19 +18505,13 @@ async function gwErc20ApproveMax(provider, token, spender, from, chainId, needed
 
   const USDT_RESET = new Set(['0xdac17f958d2ee523a2206206994597c13d831ec7']);
   if (USDT_RESET.has(tokenLc) && allow > 0n) {
-    try {
-      gwWakeWalletForSigning({ action: 'approve', step: '1/2' });
-    } catch (_) {}
     const data0 = '0x095ea7b3' + gwAddr(spender) + '0'.repeat(64);
-    const hash0 = await gwProviderSendTx(provider, { from, to: token, data: data0, value: '0x0' }, 180000, chainId);
+    const hash0 = await gwProviderSendTx(provider, { from, to: token, data: data0, value: '0x0' }, 180000, chainId, { action: 'approve', step: '1/2' });
     await gwWaitSwapApproval(provider, hash0, chainId);
   }
-  try {
-    gwWakeWalletForSigning({ action: 'approve', step: USDT_RESET.has(tokenLc) && allow > 0n ? '2/2' : '' });
-  } catch (_) {}
   const MAX = 'f'.repeat(64);
   const data = '0x095ea7b3' + gwAddr(spender) + MAX;
-  const hash = await gwProviderSendTx(provider, { from, to: token, data, value: '0x0' }, 180000, chainId);
+  const hash = await gwProviderSendTx(provider, { from, to: token, data, value: '0x0' }, 180000, chainId, { action: 'approve', step: USDT_RESET.has(tokenLc) && allow > 0n ? '2/2' : '' });
   await gwWaitSwapApproval(provider, hash, chainId);
   return hash;
 }
@@ -18998,14 +18996,64 @@ async function gwGasExecDonorBridgeTopUp({ destChainId, gasSym, account, provide
   const fromLabel = gwChainLabel(donor.chainId);
   const toLabel = gwChainLabel(dest);
   gwToast(gwGasUiRu()
-    ? ('Газ: ' + donor.amtNum.toPrecision(5) + ' ' + donor.sym + ' на ' + fromLabel + ' → ' + gas + ' на ' + toLabel + '. Комиссии ≈ $' + winner.feeUsd.toFixed(2) + '. Подтвердите пополнение в кошельке.')
-    : ('Gas: ' + donor.amtNum.toPrecision(5) + ' ' + donor.sym + ' on ' + fromLabel + ' → ' + gas + ' on ' + toLabel + '. Fees ≈ $' + winner.feeUsd.toFixed(2) + '. Confirm funding in your wallet.'), 'info');
+    ? ('Газ: ' + donor.amtNum.toPrecision(5) + ' ' + donor.sym + ' на ' + fromLabel + ' → ' + gas + ' на ' + toLabel + '. Комиссии ≈ $' + winner.feeUsd.toFixed(2) + '. Подготавливаем запрос пополнения.')
+    : ('Gas: ' + donor.amtNum.toPrecision(5) + ' ' + donor.sym + ' on ' + fromLabel + ' → ' + gas + ' on ' + toLabel + '. Fees ≈ $' + winner.feeUsd.toFixed(2) + '. Preparing the funding request.'), 'info');
   if (intent) gwSwapOpUpdate({ purpose: 'gas_topup', gasSwapIntent: intent, from: donor.sym, to: gas, amt: String(donor.amtNum),
     chainId: donor.chainId, fromChainId: donor.chainId, toChainId: dest, crossChain: true });
   const result = await gwOnChainSwapExecMeta({ chainId: donor.chainId, fromSym: donor.sym,
     toSym: gas, amtNum: donor.amtNum, quote, provider, account, deferReceipt: true, gasFundingPlan: fundingPlan });
   gwGasLogFunding(result, intent, donor.sym, gas, donor.amtNum, donor.chainId, dest);
   return gwGasWaitForFunding({ result, destChainId: dest, account, requiredNative, provider, intent });
+}
+
+/** Fill native MAX after subtracting gas; async reads may not overwrite a newer edit. */
+async function gwDsFillNativeMax({ chainId, fromSym, toSym, decimals = 18 }) {
+  const amtEl = document.getElementById('gwDsAmt');
+  if (!amtEl) return;
+  const selection = gwGasSelectionKey();
+  const original = amtEl.value;
+  const account = gwReadOnlyAddress() || '';
+  const mode = gwDsGetMode();
+  const requestId = window.__gwNativeMaxRequest = (window.__gwNativeMaxRequest || 0) + 1;
+  window.__gwNativeMaxPending = requestId;
+  try { gwDsSyncCtaState(); } catch (_) {}
+  const current = () => requestId === window.__gwNativeMaxRequest && selection === gwGasSelectionKey()
+    && amtEl.value === original && account === (gwReadOnlyAddress() || '') && mode === gwDsGetMode();
+  try {
+    const [balance, price] = await Promise.all([
+      gwGasNativeBal(chainId, account), gwGasNativeUsdPrice(gwChainGasSymbol(chainId)),
+    ]);
+    if (!current()) return;
+    const reserveUsd = gwGasSwapReserveUsd({ chainId, fromSym, toSym, account,
+      amtNum: window.__gwLastAggQuotes?.amtNum, nativeInput: true });
+    // A small buffer prevents price/rounding drift between MAX and the next quote.
+    const reserve = reserveUsd * 1.1 / price;
+    const precision = Math.min(8, decimals);
+    const scale = 10 ** precision;
+    const availableUnits = Math.floor(balance * scale);
+    const reserveUnits = Math.ceil(reserve * scale);
+    const amount = Math.max(0, availableUnits - reserveUnits) / scale;
+    const value = amount.toFixed(precision).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+    amtEl.value = value;
+    amtEl.readOnly = false;
+    amtEl.disabled = false;
+    const simEl = document.getElementById('gwDsSimAmt');
+    if (simEl) simEl.value = value;
+    const outEl = document.getElementById('gwDsOut');
+    if (outEl) { outEl.value = ''; delete outEl.dataset.pair; }
+    gwDsPaintAmtUsd(amount, fromSym);
+    gwToast(gwGasUiRu()
+      ? (amount > 0 ? 'MAX: часть ' + fromSym + ' оставлена на комиссию. Остаток после оплаты газа останется в кошельке.' : 'Баланс слишком мал для комиссии в этой сети.')
+      : (amount > 0 ? 'MAX leaves some ' + fromSym + ' for gas. Unused gas stays in your wallet.' : 'Balance is too low for network fees.'), amount > 0 ? 'info' : 'warn');
+    gwDsRefreshRate();
+  } catch (error) {
+    if (current()) gwToast(error?.message || 'Could not calculate MAX', 'warn');
+  } finally {
+    if (window.__gwNativeMaxPending === requestId) {
+      window.__gwNativeMaxPending = null;
+      try { gwDsSyncCtaState(); } catch (_) {}
+    }
+  }
 }
 
 function gwGasSwapReserveUsd({ chainId, fromSym, toSym, amtNum, account, nativeInput }) {
@@ -19035,7 +19083,7 @@ async function gwEnsureGasTopUpBeforeSwap({ chainId, fromSym, toSym, amtNum, acc
   const gasSym = gwChainGasSymbol(dest);
   const from = String(fromSym || '').toUpperCase();
   const resolved = typeof gwResolveEvmToken === 'function' ? gwResolveEvmToken(dest, from, 'from') : null;
-  const nativeInput = from === gasSym && resolved?.isNative !== false;
+  const nativeInput = resolved?.isNative === true;
   const bal = await gwGasNativeBal(dest, account);
   const px = await gwGasNativeUsdPrice(gasSym);
   const swapNative = nativeInput ? Number(amtNum) || 0 : 0;
@@ -19045,6 +19093,11 @@ async function gwEnsureGasTopUpBeforeSwap({ chainId, fromSym, toSym, amtNum, acc
   const reserveUsd = gwGasSwapReserveUsd({ chainId: dest, fromSym, toSym, amtNum, account, nativeInput });
   const requiredNative = swapNative + reserveUsd / px;
   if (bal >= requiredNative) return { ok: true, bal };
+  // Native MAX pays value and gas from the same balance. Do not bridge more
+  // ETH merely because the form reserved too little for this route.
+  if (nativeInput && bal > reserveUsd / px) throw Object.assign(new Error(gwGasUiRu()
+    ? ('Часть ' + gasSym + ' нужна для комиссии в сети ' + gwChainLabel(dest) + '. Нажмите MAX: комиссия будет вычтена из доступной суммы.')
+    : ('Keep some ' + gasSym + ' for fees on ' + gwChainLabel(dest) + '. Tap MAX to subtract the gas reserve from the swap amount.')), { code: 'GAS_NATIVE_RESERVE' });
   window.__gwGasTopUpInFlight = true;
   try {
     // Same-chain refuel is possible only when there is enough dust to pay for it.
@@ -20927,7 +20980,6 @@ async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, p
     const spender = quote.estimate?.approvalAddress || tx.to;
     const allow = await gwErc20Allowance(provider, inAddr, account, spender, execChain);
     if (allow < amountIn) {
-      try { gwWakeWalletForSigning({ action: 'approve' }); } catch (_) {}
       await gwErc20ApproveMax(provider, inAddr, spender, account, execChain, amountIn);
     }
   }
@@ -20935,8 +20987,8 @@ async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, p
     ? gwOcCanonicalDecimals(Number(quote._toChainId || execChain), toSym)
     : (cfg.decimals[toSym] ?? 18);
   const expected = quote.estimate?.toAmount || quote.toAmount || '0';
-  try { gwWakeWalletForSigning({ action: 'tx' }); } catch (_) {}
-  /* Coach already says confirm — skip duplicate toast. */
+
+  /* The send wrapper opens the wallet only after request dispatch. */
   try {
     window.__gwExpectedNativeWei = isNative ? amountIn.toString() : '0';
     window.__gwAllowLargeNativeTx = false;
@@ -22308,7 +22360,6 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
     console.log('[GROM] meta-exec allowance', { token: inAddr, spender: spender0, allow: allow.toString(), need: amountIn.toString() });
     if (allow < amountIn) {
       if (gasFundingPlan) gwGasAssertIntent(gasFundingPlan.intent, account);
-      try { gwWakeWalletForSigning({ action: 'approve' }); } catch (_) {}
       liveProvider = await gwEnsureLiveSigningProvider(liveProvider);
       await gwErc20ApproveMax(liveProvider, inAddr, spender0, account, execChain, amountIn);
       liveProvider = await gwEnsureLiveSigningProvider(liveProvider);
@@ -22400,7 +22451,6 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
         try { allowB = await gwErc20Allowance(liveProvider, inAddr, account, sp, execChain); } catch (_) { allowB = 0n; }
     if (allowB < amountIn) {
           liveProvider = await gwEnsureLiveSigningProvider(liveProvider);
-          try { gwWakeWalletForSigning({ action: 'approve' }); } catch (_) {}
           await gwErc20ApproveMax(liveProvider, inAddr, sp, account, execChain, amountIn);
           liveProvider = await gwEnsureLiveSigningProvider(liveProvider);
         }
@@ -22441,7 +22491,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
   if (!gwIsFeeVerified(execQuote)) {
     throw new Error('Fee not verified (20 bps) — refusing to sign');
   }
-  try { gwWakeWalletForSigning({ action: 'tx' }); } catch (_) {}
+
   /* One coach card — no second "Confirm swap" toast. */
   liveProvider = await gwEnsureLiveSigningProvider(liveProvider);
   try { await gwEnsureChain(liveProvider, execChain); } catch (_) {}
@@ -24043,6 +24093,10 @@ function gwDsFlashSuccess(msg) {
 }
 
 async function gwDsSubmit() {
+  if (window.__gwNativeMaxPending && window.__gwNativeMaxPending === window.__gwNativeMaxRequest) {
+    gwToast(gwGasUiRu() ? 'Подождите расчёт суммы с учётом газа.' : 'Wait for the gas-adjusted MAX amount.', 'info');
+    return;
+  }
   /* Always clear fake locks — soft Tron addr / dismissed QR must never block Start. */
   try {
     const op = typeof gwSwapOpGet === 'function' ? gwSwapOpGet() : window.__gwSwapOp;
@@ -24769,12 +24823,23 @@ function gwInjectDashSwapPanel() {
       const pct = Number(chip.dataset.pct);
       const from = document.getElementById('gwDsFrom')?.value || 'USDT';
       document.querySelectorAll('.gw-ds-chip').forEach((c) => c.classList.toggle('on', c === chip));
+      // Cancel any older native MAX calculation, including when 25/50/75 is tapped.
+      window.__gwNativeMaxRequest = (window.__gwNativeMaxRequest || 0) + 1;
+      const sourceChain = Number(window.__gwDsUserPickedFrom?.chainId || gwGetActiveUiChainId());
+      const sourceToken = gwResolveEvmToken(sourceChain, from, 'from');
+      if (pct === 100 && gwDsGetMode() === 'onchain' && sourceToken?.isNative) {
+        gwDsFillNativeMax({ chainId: sourceChain, fromSym: from,
+          toSym: document.getElementById('gwDsTo')?.value || '', decimals: sourceToken.decimals });
+        return;
+      }
       const fill = (avail) => {
         const amtEl = document.getElementById('gwDsAmt');
         const simEl = document.getElementById('gwDsSimAmt');
         if (!amtEl && !simEl) return false;
         const n = Math.max(0, (Number(avail) || 0) * pct) / 100;
-        const s = Number(n).toFixed(8).replace(/0+$/, '').replace(/\.$/, '') || '0';
+        const digits = Math.min(8, sourceToken?.decimals ?? 8);
+        const scale = 10 ** digits;
+        const s = (Math.floor(n * scale) / scale).toFixed(digits).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '') || '0';
         if (amtEl) {
           amtEl.value = s;
           amtEl.readOnly = false;

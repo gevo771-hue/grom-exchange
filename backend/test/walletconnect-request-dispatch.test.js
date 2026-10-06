@@ -44,6 +44,7 @@ function harness() {
 test('relay preparation never pretends a wallet prompt was dispatched', async () => {
   const h = harness(); const pending = h.begin();
   assert.equal(h.context.op.stage, 'preparing');
+  assert.equal(h.context.window.__gwSwapSigPrompted, undefined);
   assert.equal(h.timers.length, 0);
   h.reject(new Error('relay offline before dispatch'));
   await assert.rejects(pending, /relay offline/);
@@ -60,6 +61,7 @@ test('only the matching SDK dispatch wakes Trust and preserves the existing topi
   assert.equal(h.timers.length, 0);
   h.sent(); h.sent();
   assert.equal(h.context.op.stage, 'awaiting_signature');
+  assert.equal(h.context.window.__gwSwapSigPrompted, true);
   assert.equal(h.timers.length, 1);
   h.timers[0]();
   assert.equal(h.wake.length, 1);
@@ -162,4 +164,15 @@ test('classic header receives signer readiness from the wallet ES module', () =>
   assert.equal(window.gwHasSigningProvider(), false);
   provider = { request() {} };
   assert.equal(window.gwHasSigningProvider(), true);
+});
+
+test('ERC20 approval queues its request without an early wallet wake and supplies approval coach metadata',async()=>{
+ const sent=[];const account='0x'+'1'.repeat(40),spender='0x'+'2'.repeat(40),token='0x'+'3'.repeat(40);
+ const ctx=vm.createContext({window:{},gwErc20Allowance:async()=>0n,gwAddr:a=>a.slice(2).padStart(64,'0'),
+  gwWakeWalletForSigning:()=>assert.fail('do not open Trust before dispatch'),
+  gwProviderSendTx:async(...a)=>{sent.push(a);return 'hash';},gwWaitSwapApproval:async()=>{}});
+ vm.runInContext(fn('gwErc20ApproveMax'),ctx);
+ await ctx.gwErc20ApproveMax({},token,spender,account,42161,6000000n);
+ assert.equal(sent.length,1);assert.equal(sent[0][3],42161);assert.equal(sent[0][4].action,'approve');
+ assert.equal(ctx.window.__gwSwapSigPrompted,undefined);
 });

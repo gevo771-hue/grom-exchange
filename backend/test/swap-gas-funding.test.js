@@ -54,10 +54,9 @@ test('zero source gas never triggers a futile same-chain token swap',async()=>{
  assert.equal(donors,1);assert.equal(c.window.__gwGasTopUpInFlight,false);
 });
 test('native swap value is separate from its gas reserve; missing input is not funded as gas',async()=>{
- const c=harness({gwRpcTry:async()=>native(.001)});let requirement;
- c.gwGasExecDonorBridgeTopUp=async a=>{requirement=a.requiredNative;return {ok:true};};
- await c.gwEnsureGasTopUpBeforeSwap(args({fromSym:'ETH',amtNum:'.001'}));
- assert.ok(requirement>.001);
+ const c=harness({gwRpcTry:async()=>native(.001)});
+ c.gwGasExecDonorBridgeTopUp=()=>assert.fail('full native MAX must reserve gas, not bridge more funds');
+ await assert.rejects(c.gwEnsureGasTopUpBeforeSwap(args({fromSym:'ETH',amtNum:'.001'})),{code:'GAS_NATIVE_RESERVE'});
  await assert.rejects(c.gwEnsureGasTopUpBeforeSwap(args({fromSym:'ETH',amtNum:'.002'})),{code:'GAS_SWAP_BALANCE'});
 });
 test('WETH does not bypass gas checks',async()=>{
@@ -270,4 +269,71 @@ test('funding forces a fresh Squid quote even though ordinary Squid routes do no
  const c=execHarness({gwAggRefreshExecQuote:async()=>{refreshes++;},gwProviderSendTx:async()=>hash});
  const args=fundingExec(c);args.quote.aggregator='Squid · Bridge';
  await c.gwOnChainSwapExecMeta(args);assert.equal(refreshes,1);
+});
+
+function maxHarness(extra={}) {
+ const elements={gwDsAmt:{value:'0'},gwDsSimAmt:{value:'0'},gwDsOut:{value:'1.4',dataset:{pair:'ETH/USDT'}}};
+ let refreshes=0;
+ const c=harness({document:{documentElement:{lang:'en'},getElementById:id=>elements[id]},
+  gwReadOnlyAddress:()=>account,gwDsGetMode:()=> 'onchain',gwGetActiveUiChainId:()=>8453,
+  gwDsPaintAmtUsd(){},gwDsRefreshRate(){refreshes++;},gwRpcTry:async()=>native(.00051644),...extra});
+ return {c,elements,refreshes:()=>refreshes,run:()=>c.gwDsFillNativeMax({chainId:8453,fromSym:'ETH',toSym:'USDT',decimals:18})};
+}
+test('Base ETH MAX subtracts gas from the same balance and needs no donor funding',async()=>{
+ const h=maxHarness();await h.run();
+ const amount=h.elements.gwDsAmt.value;
+ assert.ok(Number(amount)>0 && Number(amount)<.00051644);
+ assert.ok((.00051644-Number(amount))*2500>=.22);
+ assert.equal(h.elements.gwDsSimAmt.value,amount);assert.equal(h.elements.gwDsOut.value,'');
+ assert.equal(h.refreshes(),1);
+ h.c.gwGasExecDonorBridgeTopUp=()=>assert.fail('MAX already reserved gas');
+ assert.equal((await h.c.gwEnsureGasTopUpBeforeSwap(args({fromSym:'ETH',toSym:'USDT',amtNum:amount}))).ok,true);
+});
+test('native MAX uses a live route gas estimate, and never makes a tiny balance negative',async()=>{
+ const h=maxHarness();h.c.window.__gwLastAggQuotes={chainId:8453,fromSym:'ETH',toSym:'USDT',account,amtNum:'0.0005',at:0,
+  quotes:[{toAmount:1n,gasUsd:.5}]};
+ await h.run();assert.ok((.00051644-Number(h.elements.gwDsAmt.value))*2500>=.825);
+ h.c.gwGasNativeBal=async()=>.000001;await h.run();assert.equal(h.elements.gwDsAmt.value,'0');
+});
+test('late native MAX balance cannot overwrite a changed amount, network, account or newer chip',async()=>{
+ for(const change of ['amount','network','account','request']) {
+  let finish;const h=maxHarness();h.c.gwGasNativeBal=()=>new Promise(r=>{finish=r;});
+  const pending=h.run();
+  if(change==='amount')h.elements.gwDsAmt.value='0.0002';
+  if(change==='network')h.c.gwGetActiveUiChainId=()=>42161;
+  if(change==='account')h.c.gwReadOnlyAddress=()=> '0x'+'d'.repeat(40);
+  if(change==='request')h.c.window.__gwNativeMaxRequest++;
+  finish(.00051644);await pending;
+  assert.equal(h.elements.gwDsAmt.value,change==='amount'?'0.0002':'0');assert.equal(h.refreshes(),0);
+ }
+});
+test('native MAX preserves the user amount when the source RPC is unavailable',async()=>{
+ const h=maxHarness();h.c.gwGasNativeBal=async()=>{throw new Error('RPC unavailable');};
+ await h.run();assert.equal(h.elements.gwDsAmt.value,'0');assert.equal(h.refreshes(),0);
+});
+test('a Squid cross-chain executor reaches the send boundary without opening Trust early',async()=>{
+ let sends=0;
+ const c=execHarness({gwWakeWalletForSigning:()=>assert.fail('wallet wake must follow relay dispatch'),
+  gwProviderSendTx:async(_p,tx,_timeout,chain)=>{sends++;assert.equal(chain,42161);assert.equal(tx.value,'0x0');return hash;}});
+ const result=await c.gwOnChainSwapExecMeta({chainId:42161,fromSym:'USDT',toSym:'USDT',amtNum:'6',account,
+  provider:{request:async()=>[account]},deferReceipt:true,
+  quote:quote({aggregator:'Squid · Bridge',_toChainId:137,_crossChain:true,outDecimals:6,
+    transactionRequest:{to:'0x'+'c'.repeat(40),data:'0x1234',value:'0x0'}})});
+ assert.equal(sends,1);assert.equal(result.fromChainId,42161);assert.equal(result.toChainId,137);assert.equal(result.status,'bridging');
+});
+
+test('MAX calculation blocks submission of the old amount until its balance arrives',async()=>{
+ let finish;const h=maxHarness();h.c.gwGasNativeBal=()=>new Promise(r=>{finish=r;});
+ const at=src.indexOf('async function gwDsSubmit(');
+ const guard=src.slice(at,src.indexOf('  /* Always clear fake locks',at))+'}';
+ vm.runInContext(guard,h.c);
+ const pending=h.run();
+ assert.equal(h.c.window.__gwNativeMaxPending,h.c.window.__gwNativeMaxRequest);
+ await h.c.gwDsSubmit(); // must return before any signing/preparation dependency
+ finish(.00051644);await pending;assert.equal(h.c.window.__gwNativeMaxPending,null);
+});
+test('the legacy MATIC label still reserves native Polygon gas by asset identity',async()=>{
+ const c=harness({gwRpcTry:async()=>native(2),gwResolveEvmToken:()=>({isNative:true})});
+ c.gwGasExecDonorBridgeTopUp=()=>assert.fail('native MAX should subtract POL gas');
+ await assert.rejects(c.gwEnsureGasTopUpBeforeSwap(args({chainId:137,fromSym:'MATIC',amtNum:'2'})),{code:'GAS_NATIVE_RESERVE'});
 });

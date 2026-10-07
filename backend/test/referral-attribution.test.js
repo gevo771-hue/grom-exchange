@@ -55,7 +55,7 @@ test('parallel public code registrations converge without touching users',async(
   assert.ok(queries.some(sql=>sql.includes('ON CONFLICT (wallet_address)')));
 });
 
-test('referral attribution is first-signup-only, self-referrals are rejected, and summary exposes counts only', { skip: !pgEnabled }, async () => {
+test('referral attribution is first-signup-only, self-referrals are rejected, and recent invitees are masked', { skip: !pgEnabled }, async () => {
   const wallets = Array.from({ length: 2 }, () => `0x${randomBytes(20).toString('hex')}`);
   let server;
   try {
@@ -101,6 +101,10 @@ test('referral attribution is first-signup-only, self-referrals are rejected, an
     assert.equal(body.funnel.active_30d, 1);
     assert.equal(body.tracking, 'active');
     assert.equal(body.rewards, 'inactive');
+    assert.equal(body.recent.length, 1);
+    assert.equal(body.recent[0].wallet, wallets[1].slice(0,6)+'…'+wallets[1].slice(-4));
+    assert.equal(body.recent[0].active_30d, true);
+    assert.equal(JSON.stringify(body).includes(wallets[1]), false);
     assert.equal('payout' in body, false);
     assert.equal('wallets' in body, false);
   } finally {
@@ -108,6 +112,30 @@ test('referral attribution is first-signup-only, self-referrals are rejected, an
     await pool.query('DELETE FROM users WHERE wallet_address = ANY($1::text[])', [wallets]);
     await pool.query('DELETE FROM wallet_referral_links WHERE wallet_address = ANY($1::text[])', [wallets]);
   }
+});
+
+test('private referral summary binds both queries to the authenticated account and never reaches DB anonymously', async () => {
+  const calls=[]; let server;
+  const app=express();
+  app.use('/api',createReferralRouter({
+    requireAuth(req,res,next){if(req.get('authorization')!=='Bearer test')return res.sendStatus(401);req.user={sub:'owner-id'};next();},
+    accountCode:async id=>{assert.equal(id,'owner-id');return 'ABCDEFGHJK';},
+    db:async(sql,args)=>{calls.push({sql,args});return {rows:sql.includes('COUNT(*)')?[{total_referred:4,signups_30d:2,active_30d:1}]:[{wallet:'0x1234…abcd',joined_at:'2026-10-07T12:00:00Z',active_30d:true,private:'must not escape'}]};},
+  }));
+  try {
+    server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});
+    const base=`http://127.0.0.1:${server.address().port}`;
+    assert.equal((await fetch(base+'/api/referral/summary?userId=another')).status,401);
+    assert.equal(calls.length,0);
+    const res=await fetch(base+'/api/referral/summary?userId=another',{headers:{Authorization:'Bearer test'}});
+    assert.equal(res.status,200);assert.equal(res.headers.get('cache-control'),'no-store');
+    const data=await res.json();
+    assert.deepEqual(data.recent,[{wallet:'0x1234…abcd',joined_at:'2026-10-07T12:00:00Z',active_30d:true}]);
+    assert.equal(data.totals.total_referred,4);
+    for(const c of calls)assert.deepEqual(c.args,['owner-id']);
+    assert.match(calls[1].sql,/LIMIT 10/);
+    assert.match(calls[1].sql,/LEFT\(wallet_address,6\)/);
+  } finally {if(server)await new Promise(resolve=>server.close(resolve));}
 });
 
 

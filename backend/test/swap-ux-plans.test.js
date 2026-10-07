@@ -99,7 +99,10 @@ test('referral UI does not promise inactive payouts or commission rates',()=>{
  assert.doesNotMatch(copy,/50\/50|ref_tag:[^\n]*(?:50\s*%|%\s*50)|automatically receive.*fee|автоматически идёт тебе/i);
  assert.match(landingHtml,/New wallet signups are counted once; rewards and payouts are not enabled/);
  assert.match(landingHtml,/Existing accounts are never reassigned/);
- assert.doesNotMatch(landingHtml,/Your earnings|Total earned|Pending payout/);
+ const referral=landingHtml.slice(landingHtml.indexOf('id="page-referral"'),landingHtml.indexOf('<!-- BACKOFFICE'));
+ assert.match(referral,/ref_total_earned[\s\S]*?ref-muted">—[\s\S]*?ref_rewards_inactive/);
+ assert.match(referral,/ref_pending_payout[\s\S]*?ref-muted">—[\s\S]*?ref_paid_daily/);
+ assert.doesNotMatch(referral,/onclick="[^"]*(?:payout|withdraw)/i);
 });
 
 test('referral invite identity is generated and attributed by the authenticated backend',()=>{

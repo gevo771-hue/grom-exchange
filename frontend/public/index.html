@@ -4464,6 +4464,77 @@
   }
   @media (max-width: 980px) { .ref-workbench, .ref-grid-2 { grid-template-columns: 1fr; } }
 
+  /* Referral desk: keep identity, reporting and payout status distinct. */
+  #page-referral .page-subtitle { max-width: 820px; line-height: 1.6; }
+  #page-referral .ref-hero {
+    grid-template-columns: minmax(220px,1fr) minmax(0,1.45fr) 210px;
+    gap: 0; overflow: hidden; border-radius: 22px;
+    border: 1px solid rgba(136,192,208,.18); background: rgba(31,39,54,.58);
+  }
+  #page-referral .ref-hero > div { min-width: 0; padding: 24px; border: 0; border-radius: 0; background: transparent; }
+  #page-referral .ref-hero > div + div { border-left: 1px solid rgba(136,192,208,.12); }
+  #page-referral .ref-code .ref-val { font-size: clamp(18px,1.6vw,25px); margin: 14px 0 18px; letter-spacing: -.025em; }
+  #page-referral .ref-link .ref-val { font-size: 14px; line-height: 1.6; margin: 14px 0 18px; user-select: all; }
+  #page-referral .ref-share-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  #page-referral button { min-height: 40px; }
+  #page-referral button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+  #page-referral .ref-qr { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  #page-referral #refQr { width: 156px; height: 156px; border-radius: 12px; overflow: hidden; background: rgba(255,255,255,.04); }
+  #page-referral #refQr:empty { display: grid; place-items: center; border: 1px dashed rgba(136,192,208,.25); }
+  #page-referral #refQr:empty::after { content: 'QR'; color: var(--silver5); font: 600 24px monospace; }
+  #page-referral #refQr canvas, #page-referral #refQr img { display: block; width: 100%; height: 100%; }
+  #page-referral .ref-kpis { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; }
+  #page-referral .kpi-card { min-width: 0; padding: 19px 20px; border-radius: 18px; }
+  #page-referral .kpi-val { font-size: 28px; margin: 10px 0 5px; }
+  #page-referral .kpi-sub { line-height: 1.5; }
+  #page-referral .ref-muted { color: var(--silver4); }
+  #page-referral .ref-workbench { grid-template-columns: minmax(0,1.65fr) minmax(280px,1fr); gap: 16px; }
+  #page-referral .ref-how-card { border-color: rgba(136,192,208,.18); }
+  #page-referral .ref-how-head { flex-wrap: wrap; }
+  #page-referral .ref-how-head p { max-width: 610px; }
+  #page-referral .ref-how-badge { letter-spacing: .02em; }
+  #page-referral .ref-commission-card, #page-referral .ref-list-card {
+    border: 1px solid rgba(136,192,208,.16); border-radius: 22px;
+    background: rgba(31,39,54,.55); overflow: hidden;
+  }
+  #page-referral .ref-panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 20px 22px; border-bottom: 1px solid rgba(136,192,208,.1); }
+  #page-referral .ref-panel-head h3 { margin: 0; font-size: 17px; }
+  #page-referral .ref-payout-state { color: #e5bc71; background: rgba(229,188,113,.08); border: 1px solid rgba(229,188,113,.2); padding: 5px 9px; border-radius: 8px; font-size: 11px; }
+  #page-referral .ref-commission-body { padding: 20px 22px; }
+  #page-referral .ref-commission-body p { margin: 0 0 16px; color: var(--silver3); font-size: 13px; line-height: 1.65; }
+  #page-referral .ref-status-line { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid rgba(136,192,208,.08); font-size: 12px; }
+  #page-referral .ref-status-line strong { color: var(--success); font-weight: 600; }
+  #page-referral .ref-status-line .ref-muted { color: var(--silver4); }
+  #page-referral .ref-stats-access { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 0 22px; }
+  #page-referral .ref-stats-access:has(#refStatsStatus:empty):has(#refSignInBtn[hidden]) { display: none; }
+  #page-referral .ref-list-meta { font-size: 12px; color: var(--silver4); }
+  #page-referral .ref-list-meta b { color: var(--silver1); font-weight: 600; }
+  #page-referral .ref-table-scroll { overflow-x: auto; }
+  #page-referral .ref-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+  #page-referral .ref-table th { padding: 12px 22px; color: var(--silver5); font-size: 10px; letter-spacing: .07em; font-weight: 700; text-transform: uppercase; background: rgba(255,255,255,.025); }
+  #page-referral .ref-table td { padding: 16px 22px; border-top: 1px solid rgba(136,192,208,.08); color: var(--silver2); }
+  #page-referral .ref-table td.ref-list-empty { padding: 28px 22px; color: var(--silver4); line-height: 1.6; }
+  #page-referral .ref-table .ref-seen { color: var(--success); }
+  #page-referral .ref-list-foot { margin: 0; padding: 14px 22px; border-top: 1px solid rgba(136,192,208,.08); color: var(--silver5); font-size: 11px; line-height: 1.5; }
+  @media(max-width:1150px) {
+    #page-referral .ref-hero { grid-template-columns: minmax(0,1fr) 200px; }
+    #page-referral .ref-hero .ref-code { padding-bottom: 8px; }
+    #page-referral .ref-hero .ref-link { grid-column: 1; border-left: 0; padding-top: 12px; }
+    #page-referral .ref-hero .ref-qr { grid-column: 2; grid-row: 1 / 3; justify-content: center; }
+    #page-referral .ref-workbench { grid-template-columns: 1fr; }
+  }
+  @media(max-width:760px) {
+    #page-referral .ref-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+    #page-referral .kpi-card { padding: 16px; }
+    #page-referral .ref-hero { grid-template-columns: 1fr; }
+    #page-referral .ref-hero > div { padding: 20px; }
+    #page-referral .ref-hero .ref-qr { grid-column: 1; grid-row: auto; border-left: 0; border-top: 1px solid rgba(136,192,208,.12); }
+    #page-referral .ref-how-steps { grid-template-columns: 1fr; }
+    #page-referral .ref-how-step { display: flex; align-items: flex-start; gap: 14px; }
+    #page-referral .ref-how-step > span { flex: none; margin: 0; }
+    #page-referral .ref-table th, #page-referral .ref-table td { padding-left: 14px; padding-right: 14px; }
+  }
+
   /* SPOT */
   .spot-overview {
     display: grid;
@@ -5300,7 +5371,6 @@
     /* Compact page headers — keep xStocks title on mobile (same as desktop) */
     #page-wallet .page-title,
     #page-wallet .page-subtitle,
-    #page-referral .page-subtitle,
     #page-history .page-title,
     #page-history .page-subtitle { display: none !important; }
 
@@ -6886,7 +6956,7 @@
 
     <!-- REFERRAL -->
     <section class="page" id="page-referral">
-      <h1 class="page-title"><span data-i18n="ref_title">Referral tracking</span> <span class="tag" data-i18n="ref_tag">Tracking only</span></h1>
+      <h1 class="page-title"><span data-i18n="ref_title">Referral program</span> <span class="tag" data-i18n="ref_tag">Invite tracking</span></h1>
       <p class="page-subtitle" data-i18n="ref_tracking_disclosure">Invite friends with your link. New wallet signups are counted once; rewards and payouts are not enabled.</p>
 
       <div class="ref-hero">
@@ -6899,8 +6969,8 @@
         </div>
         <div class="ref-link">
           <div class="ref-lbl" data-i18n="ref_invite_link">Invite link</div>
-          <div class="ref-val mono" id="refLink" style="font-size:13px" data-i18n="ref_connect_wallet_link">Connect wallet to reveal your link</div>
-          <div style="display:flex;gap:6px;margin-top:6px">
+          <div class="ref-val mono" id="refLink" data-i18n="ref_connect_wallet_link">Connect wallet to reveal your link</div>
+          <div class="ref-share-actions">
             <button class="btn-ghost" id="refCopyLinkBtn" disabled onclick="copyRefLink()" data-i18n="ref_copy_link">Copy link</button>
             <button class="btn-ghost" id="refShareXBtn" disabled onclick="refShareX()" data-i18n="ref_share_x">Share on X</button>
             <button class="btn-ghost" id="refShareTelegramBtn" disabled onclick="refShareTelegram()">Telegram</button>
@@ -6908,15 +6978,15 @@
         </div>
         <div class="ref-qr">
           <div class="ref-lbl" style="text-align:center" data-i18n="ref_scan_join">Scan to join</div>
-          <div id="refQr" aria-live="polite" style="width:120px;height:120px;margin:6px auto 0"></div>
+          <div id="refQr" aria-live="polite"></div>
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0"><p id="refStatsStatus" role="status" class="ref-status"></p><button class="btn-ghost" id="refSignInBtn" type="button" hidden onclick="gwReferralSignIn()" >Sign in with wallet</button></div>
       <div class="ref-kpis">
         <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_referred">Wallets invited</div><div class="kpi-val mono" id="refKpiTotalReferred">—</div><div class="kpi-sub" data-i18n="ref_total_invited_note">Accounts attributed to your code</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_signups_30d">New signups (30d)</div><div class="kpi-val mono" id="refKpiSignups30d">—</div><div class="kpi-sub" data-i18n="ref_signups_note">Created in the last 30 days</div></div>
         <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_active_30d">Seen (30d)</div><div class="kpi-val mono" id="refKpiActive30d">—</div><div class="kpi-sub" data-i18n="ref_active_note">Last seen in the last 30 days</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_earned">Total earned</div><div class="kpi-val mono ref-muted">—</div><div class="kpi-sub" data-i18n="ref_rewards_inactive">Rewards inactive</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_pending_payout">Pending payout</div><div class="kpi-val mono ref-muted">—</div><div class="kpi-sub" data-i18n="ref_paid_daily">Payout schedule is not active</div></div>
       </div>
 
       <div class="ref-workbench">
@@ -6926,14 +6996,33 @@
               <h3 data-i18n="ref_how_title">How invite tracking works</h3>
               <p data-i18n="ref_how_sub">A new wallet is attributed once when it first signs in through your link. Existing accounts are never reassigned.</p>
             </div>
-            <span class="ref-how-badge" data-i18n="ref_rewards_inactive">Rewards inactive</span>
+            <span class="ref-how-badge" data-i18n="ref_tracking_badge">One wallet · one invite</span>
           </div>
           <div class="ref-how-steps">
             <div class="ref-how-step"><span>1</span><p data-i18n="ref_step_1">Share your unique invite link.</p></div>
             <div class="ref-how-step"><span>2</span><p data-i18n="ref_step_2">A first-time wallet signup is attributed once.</p></div>
-            <div class="ref-how-step"><span>3</span><p data-i18n="ref_step_3">Self-referrals are rejected. Rewards and payouts are not enabled.</p></div>
+            <div class="ref-how-step"><span>3</span><p data-i18n="ref_step_3">Follow new signups and visits in your private statistics.</p></div>
           </div>
         </div>
+        <div class="ref-commission-card">
+          <div class="ref-panel-head"><h3 data-i18n="ref_commission_status">Commission status</h3><span class="ref-payout-state" data-i18n="ref_status_live">Inactive</span></div>
+          <div class="ref-commission-body">
+            <p data-i18n="ref_reward_disclosure">Invites are counted now. Fee rewards and on-chain payouts have not launched; no earnings are accrued yet.</p>
+            <div class="ref-status-line"><span data-i18n="ref_invite_tracking">Invite tracking</span><strong data-i18n="ref_tracking_available">Available</strong></div>
+            <div class="ref-status-line"><span data-i18n="ref_fee_rewards">Fee rewards</span><strong class="ref-muted" data-i18n="ref_not_launched">Not launched</strong></div>
+            <div class="ref-status-line"><span data-i18n="ref_withdrawals">On-chain payouts</span><strong class="ref-muted" data-i18n="ref_not_launched">Not launched</strong></div>
+          </div>
+        </div>
+      </div>
+      <div class="ref-list-card">
+        <div class="ref-panel-head"><h3 data-i18n="ref_your_referrals">Your referrals</h3><span class="ref-list-meta"><span data-i18n="ref_signups_30d">New signups (30d)</span>: <b id="refKpiSignups30d">—</b></span></div>
+        <div class="ref-stats-access"><p id="refStatsStatus" role="status" class="ref-status"></p><button class="btn-ghost" id="refSignInBtn" type="button" hidden onclick="gwReferralSignIn()">Sign in with wallet</button></div>
+        <div class="ref-table-scroll">
+          <table class="ref-table"><thead><tr><th scope="col" data-i18n="ref_tbl_user">Wallet</th><th scope="col" data-i18n="ref_tbl_joined">Joined</th><th scope="col" data-i18n="ref_tbl_activity">Activity</th></tr></thead>
+            <tbody id="refRows"><tr><td colspan="3" class="ref-list-empty" data-i18n="ref_list_signin">Sign in to view your referrals.</td></tr></tbody>
+          </table>
+        </div>
+        <p class="ref-list-foot" data-i18n="ref_list_privacy">The 10 most recent invites. Wallet addresses are shortened; activity means a visit in the last 30 days, not a completed trade.</p>
       </div>
     </section>
 
@@ -9435,18 +9524,19 @@ window.addEventListener('resize', () => {
 function copyRef() {
   const code = document.getElementById('refCode')?.textContent?.trim() || '';
   if (!/^GROM-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(code)) { toast('Connect wallet to create your invite code','info'); return; }
-  if (!navigator.clipboard) { toast('Clipboard not available','error'); return; }
+  if (!navigator.clipboard) { toast(t('ref_copy_failed'),'error'); return; }
   navigator.clipboard.writeText(code).then(() => {
     const b = document.getElementById('refCopyBtn');
-    if (b) { const old = b.textContent; b.textContent = 'Copied ✓'; setTimeout(() => b.textContent = old, 1500); }
-    toast('Invite code copied to clipboard','success');
-  }).catch(() => toast('Copy failed','error'));
+    if (b) { b.textContent = t('ref_copy_done'); setTimeout(() => b.textContent = t('common_copy'), 1500); }
+    toast(t('ref_copy_code_done'),'success');
+  }).catch(() => toast(t('ref_copy_failed'),'error'));
 }
 function copyRefLink() {
   const link = document.getElementById('refLink')?.textContent?.trim() || '';
   if (!/^https?:\/\/[^/]+\/r\/[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(link)) { toast('Connect wallet to reveal your invite link','info'); return; }
-  if (!navigator.clipboard) { toast('Clipboard not available','error'); return; }
-  navigator.clipboard.writeText(link).then(() => toast('Referral link copied','success'));
+  if (!navigator.clipboard) { toast(t('ref_copy_failed'),'error'); return; }
+  navigator.clipboard.writeText(link).then(() => toast(t('ref_copy_link_done'),'success'))
+    .catch(() => toast(t('ref_copy_failed'),'error'));
 }
 
 /* ========== Mobile drawer ========== */

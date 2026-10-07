@@ -11,14 +11,16 @@ function fn(name) {
 const a = '0x' + '1'.repeat(40), b = '0x' + '2'.repeat(40);
 function setup() {
   const elements = new Map();
-  const ids = ['refCode','refLink','refStatus','refSignInBtn','refCopyBtn','refCopyLinkBtn','refShareXBtn','refShareTelegramBtn','refQr','refKpiTotalReferred','refKpiSignups30d','refKpiActive30d','refStatsStatus','refLinkRetry'];
-  for (const id of ids) elements.set(id, { textContent: '', hidden: false, disabled: false, attrs: new Set(['data-i18n']), dataset: {}, classList: { add(){}, remove(){} }, removeAttribute(attr){ this.attrs.delete(attr); }, replaceChildren(){} });
+  const ids = ['refCode','refLink','refStatus','refSignInBtn','refCopyBtn','refCopyLinkBtn','refShareXBtn','refShareTelegramBtn','refQr','refKpiTotalReferred','refKpiSignups30d','refKpiActive30d','refStatsStatus','refLinkRetry','refRows'];
+  const node = () => ({ textContent: '', children: [], hidden: false, disabled: false, attrs: new Set(['data-i18n']), dataset: {}, classList: { add(){}, remove(){} }, removeAttribute(attr){ this.attrs.delete(attr); }, replaceChildren(){ this.children=[]; }, appendChild(child){ this.children.push(child); } });
+  for (const id of ids) elements.set(id, node());
   const storage = new Map([['grom_jwt', 'test-token']]);
   const calls = [];
   const ctx = vm.createContext({ window: { location: { origin: 'https://grom.exchange' } }, console, AbortController, URL, setTimeout, clearTimeout,
     address: a, owner: a, valid: true, gwReferralLoadId: 0, gwReferralSigning: false, gwReferralLinks: new Map(),
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key,value) => storage.set(key,value), removeItem: key => storage.delete(key) },
-    document: { getElementById: id => elements.get(id) || null },
+    document: { getElementById: id => elements.get(id) || null, createElement: node, documentElement: { lang: 'ru' } },
+    gwUi: key => key,
     gwDisplayAddress: () => ctx.address, gwReadOnlyAddress: () => '', gwUxText: (ru) => ru,
     gwJwtPayload: () => ({ addr: ctx.owner }), gwJwtValid: () => ctx.valid && !!storage.get('grom_jwt'),
     setText: (id,text) => { if(elements.has(id)) elements.get(id).textContent = text; },
@@ -29,7 +31,7 @@ function setup() {
     gwEnsureSignedIn: async opts => { calls.push(opts); storage.set('grom_jwt','new-token'); ctx.owner = ctx.address; return true; },
     gwToast() {},
   });
-  vm.runInContext(['gwReferralAddress','gwReferralActions','gwSetReferralEmpty','gwRenderReferralIdentity','gwReferralStatsSignIn','hydrateReferralSlice'].map(fn).join('\n'),ctx);
+  vm.runInContext(['gwReferralAddress','gwReferralActions','gwRenderReferralRows','gwSetReferralEmpty','gwRenderReferralIdentity','gwReferralStatsSignIn','hydrateReferralSlice'].map(fn).join('\n'),ctx);
   const start = source.indexOf('window.gwReferralSignIn = async function');
   vm.runInContext(source.slice(start,source.indexOf('\n};',start)+3),ctx);
   return { ctx, elements, storage, calls };
@@ -40,6 +42,33 @@ test('referrals show a connect action only when disconnected and disable sharing
   assert.equal(h.elements.get('refSignInBtn').hidden,false);
   for(const id of ['refCopyBtn','refCopyLinkBtn','refShareXBtn','refShareTelegramBtn']) assert.equal(h.elements.get(id).disabled,true);
   assert.equal(h.elements.get('refCode').attrs.has('data-i18n'),false);
+});
+
+test('referral list renders only masked wallets, caps rows and distinguishes unavailable from empty', () => {
+  const h=setup(), rows=h.elements.get('refRows');
+  h.ctx.gwRenderReferralRows([{wallet:'0x1234…abcd',joined_at:'2026-10-07T12:00:00Z',active_30d:true}]);
+  assert.equal(rows.children[0].children[0].textContent,'0x1234…abcd');
+  assert.equal(rows.children[0].children[2].textContent,'ref_seen_recent');
+  h.ctx.gwRenderReferralRows(Array.from({length:15},()=>({wallet:'<img onerror=alert(1)>',joined_at:'invalid',active_30d:null})));
+  assert.equal(rows.children.length,10);
+  assert.deepEqual(rows.children[0].children.map(c=>c.textContent),['—','—','—']);
+  h.ctx.gwRenderReferralRows([]);
+  assert.equal(rows.children[0].children[0].textContent,'ref_empty_list');
+  h.ctx.gwRenderReferralRows(undefined,'ref_list_unavailable');
+  assert.equal(rows.children[0].children[0].textContent,'ref_list_unavailable');
+  h.ctx.gwSetReferralEmpty();
+  assert.equal(rows.children[0].children[0].textContent,'ref_list_signin');
+});
+
+test('missing counts are not rendered as zero and failed statistics never leave previous invite rows', async () => {
+  const h=setup();
+  h.ctx.fetch=async url=>({ok:true,json:async()=>url.includes('/link?')?{code:'GROM-ABCDEFGHJK'}:{totals:{total_referred:null},funnel:{active_30d:-1},recent:[]}});
+  await h.ctx.hydrateReferralSlice(true);
+  for(const id of ['refKpiTotalReferred','refKpiSignups30d','refKpiActive30d']) assert.equal(h.elements.get(id).textContent,'—');
+  h.ctx.gwRenderReferralRows([{wallet:'0x1234…abcd',active_30d:true}]);
+  h.ctx.fetch=async()=>({ok:false,status:503});
+  await h.ctx.hydrateReferralSlice(true);
+  assert.equal(h.elements.get('refRows').children[0].children[0].textContent,'ref_list_unavailable');
 });
 test('public identity enables sharing, renders QR and survives language repaint', async () => {
   const h=setup(); await h.ctx.hydrateReferralSlice(true);

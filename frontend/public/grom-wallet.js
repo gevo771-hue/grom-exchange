@@ -5103,6 +5103,37 @@ function gwReferralActions(ready) {
     if (el) el.disabled = !ready;
   });
 }
+function gwRenderReferralRows(rows, emptyKey = 'ref_list_signin') {
+  const body = document.getElementById('refRows');
+  if (!body) return;
+  body.replaceChildren();
+  if (!Array.isArray(rows) || !rows.length) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 3; cell.className = 'ref-list-empty';
+    const key = Array.isArray(rows) ? 'ref_empty_list' : emptyKey;
+    cell.dataset.i18n = key;
+    cell.textContent = gwUi(key, 'Sign in to view your referrals.');
+    row.appendChild(cell); body.appendChild(row);
+    return;
+  }
+  for (const entry of rows.slice(0, 10)) {
+    const row = document.createElement('tr');
+    const wallet = document.createElement('td');
+    wallet.className = 'mono';
+    wallet.textContent = /^0x[0-9a-f]{4}…[0-9a-f]{4}$/i.test(entry?.wallet) ? entry.wallet : '—';
+    const joined = document.createElement('td');
+    const stamp = entry?.joined_at ? new Date(entry.joined_at) : null;
+    joined.textContent = stamp && Number.isFinite(stamp.getTime()) ? stamp.toLocaleDateString(
+      document.documentElement.lang || 'en', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+    const activity = document.createElement('td');
+    activity.className = entry?.active_30d === true ? 'ref-seen' : 'ref-muted';
+    if (typeof entry?.active_30d === 'boolean') activity.dataset.i18n = entry.active_30d ? 'ref_seen_recent' : 'ref_seen_older';
+    activity.textContent = entry?.active_30d === true ? gwUi('ref_seen_recent', 'Seen in 30 days')
+      : entry?.active_30d === false ? gwUi('ref_seen_older', 'No recent visits') : '—';
+    row.appendChild(wallet); row.appendChild(joined); row.appendChild(activity); body.appendChild(row);
+  }
+}
 function gwSetReferralEmpty(message) {
   const connected = !!gwReferralAddress();
   for (const id of ['refCode', 'refLink']) document.getElementById(id)?.removeAttribute('data-i18n');
@@ -5120,6 +5151,7 @@ function gwSetReferralEmpty(message) {
   setText('refStatsStatus', '');
   gwReferralActions(false);
   for (const id of ['refKpiTotalReferred', 'refKpiSignups30d', 'refKpiActive30d']) setText(id, '—');
+  gwRenderReferralRows(null);
   const qr = document.getElementById('refQr');
   if (qr) { qr.replaceChildren(); delete qr.dataset.gwQrUrl; }
 }
@@ -5135,6 +5167,7 @@ function gwRenderReferralIdentity(data) {
   gwFixReferralQR();
 }
 function gwReferralStatsSignIn(message) {
+  gwRenderReferralRows(null, message ? 'ref_list_unavailable' : 'ref_list_signin');
   const sign = document.getElementById('refSignInBtn');
   if (sign) {
     sign.hidden = false; sign.disabled = gwReferralSigning;
@@ -5185,6 +5218,7 @@ async function hydrateReferralSlice(force) {
   // A public link never implies authentication or permits another wallet's counts.
   if (!jwt || !gwJwtValid() || owner !== address) { gwReferralStatsSignIn(); return; }
   const statsController = new AbortController();
+  gwRenderReferralRows(null, 'ref_list_loading');
   const statsTimeout = setTimeout(() => statsController.abort(), 12000);
   try {
     const response = await fetch('/api/referral/summary', {
@@ -5197,10 +5231,11 @@ async function hydrateReferralSlice(force) {
     if (!response.ok) throw new Error('Referral statistics unavailable');
     const data = await response.json();
     if (!stillCurrent() || jwt !== (localStorage.getItem('grom_jwt') || '')) return;
-    const count = value => Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? Number(value).toLocaleString() : '—';
+    const count = value => Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString() : '—';
     setText('refKpiTotalReferred', count(data.totals?.total_referred));
     setText('refKpiSignups30d', count(data.funnel?.signups_30d));
     setText('refKpiActive30d', count(data.funnel?.active_30d));
+    gwRenderReferralRows(data.recent, 'ref_list_unavailable');
     const sign = document.getElementById('refSignInBtn');
     if (sign) sign.hidden = true;
     setText('refStatsStatus', '');
@@ -29293,7 +29328,7 @@ function gwFixReferralQR() {
   }
   if (qr.dataset.gwQrUrl === link) return;
   qr.dataset.gwQrUrl = link;
-  window.gwRenderQr(qr, link, { width: 120 }).catch(() => {
+  window.gwRenderQr(qr, link, { width: 156 }).catch(() => {
     if (qr.dataset.gwQrUrl === link) delete qr.dataset.gwQrUrl;
   });
 }

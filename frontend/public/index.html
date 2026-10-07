@@ -14734,6 +14734,8 @@ var GROM_XSTOCKS = [
   var _gwxCatalogPromise = null;
   var gwxCatalogAt = 0;
   var gwxUsdtBal = 0;
+  var gwxStableFunds = null;
+  var gwxFundsLoadId = 0;
   var gwxPositions = [];
   var GWX_STALE_MS = 24 * 60 * 60 * 1000;
   var GWX_FRESH_MS = 5 * 60 * 1000;
@@ -15099,14 +15101,17 @@ var GROM_XSTOCKS = [
     gwxPumpReferenceQueue();
   }
   async function refreshUsdtBalChip() {
+    var loadId = ++gwxFundsLoadId;
+    var owner = typeof gwReadOnlyAddress === 'function' ? gwReadOnlyAddress() : '';
     try {
-      if (!gwxConnected()) { gwxUsdtBal = 0; updateXstocksStats(); return; }
-      var tradeChain = gwxUiChainId();
-      if (typeof window.gwXstocksUsdtBalance === 'function') {
-        gwxUsdtBal = await window.gwXstocksUsdtBalance(tradeChain);
-      }
-    } catch (_) { gwxUsdtBal = 0; }
+      if (!gwxConnected()) { gwxStableFunds = null; gwxUsdtBal = 0; updateXstocksStats(); return null; }
+      var funds = await window.gwXstocksStableBalances();
+      if (loadId !== gwxFundsLoadId || owner !== (typeof gwReadOnlyAddress === 'function' ? gwReadOnlyAddress() : '')) return null;
+      gwxStableFunds = funds;
+      gwxUsdtBal = funds.usdt;
+    } catch (_) { if (loadId === gwxFundsLoadId) gwxStableFunds = null; }
     updateXstocksStats();
+    return gwxStableFunds;
   }
   function updateXstocksStats() {
     var page = document.getElementById('page-xstocks'); if (!page) return;
@@ -15114,9 +15119,9 @@ var GROM_XSTOCKS = [
     if (stats[0]) {
       var b = stats[0].querySelector('b');
       var sm = stats[0].querySelector('small');
-      if (b) b.textContent = gwxConnected() ? money(gwxUsdtBal) : '—';
+      if (b) b.textContent = gwxConnected() && gwxStableFunds ? money(gwxStableFunds.usdt + gwxStableFunds.usdc) : '—';
       if (sm) {
-        sm.textContent = gwxConnected() ? tx('px_my_usdt', 'My USDT balance') : tx('px_connect_for_bal', 'Connect wallet');
+        sm.textContent = gwxConnected() ? tx('px_stable_balance', 'USDC + USDT · across networks') : tx('px_connect_for_bal', 'Connect wallet');
         sm.classList.add('live');
       }
     }
@@ -15189,7 +15194,8 @@ var GROM_XSTOCKS = [
       + '<div class="gtm-trade-pane">'
       + '<div class="gtm-h"><span>' + opts.title + '</span><button class="gtm-x" type="button">✕</button></div>'
       + (opts.sub ? '<div class="gtm-sub">' + opts.sub + '</div>' : '')
-      + '<div class="gtm-bal" id="gtmStockBal">' + balLabel + '</div>'
+      + '<div class="gtm-bal" id="gtmStockBal">' + (sideBuy ? tx('px_balance_loading', 'Loading payment balances…') : balLabel) + '</div>'
+      + (sideBuy ? '<label class="gtm-payment"><span>' + tx('px_pay_with', 'Pay with') + '</span><select id="gtmPayment" disabled><option>' + tx('px_balance_loading', 'Loading payment balances…') + '</option></select></label>' : '')
       + (needSol
         ? ('<div class="gtm-sol-dest" id="gtmSolDestWrap"' + (sideBuy ? '' : ' hidden') + '>'
           + '<div class="gtm-sol-lbl">' + tx('px_sol_dest_lbl', 'Solana receive address (xStock lands here)') + '</div>'
@@ -15206,17 +15212,21 @@ var GROM_XSTOCKS = [
     var amt = ov.querySelector('#gtmAmt'), info = ov.querySelector('#gtmInfo'), confirmBtn = ov.querySelector('.gtm-confirm');
     var solDestInp = ov.querySelector('#gtmSolDest');
     var solWrap = ov.querySelector('#gtmSolDestWrap');
-    var quoteTimer = null, lastQuote = null, quoteSeq = 0;
+    var quoteTimer = null, lastQuote = null, quoteSeq = 0, quotedAmount = null, submitting = false;
+    var paymentSelect = ov.querySelector('#gtmPayment'), payments = [];
+    function payment() { return sideBuy ? payments[Number(paymentSelect && paymentSelect.value)] || null : null; }
+    function invalidateQuote() { ++quoteSeq; lastQuote = null; quotedAmount = null; confirmBtn.disabled = true; }
+    function scheduleQuote() { invalidateQuote(); clearTimeout(quoteTimer); quoteTimer = setTimeout(upd, 180); }
     function showSolForm(on) {
       if (!solWrap) return;
+      if (payment() && payment().namespace === 'solana') on = false;
       if (on) solWrap.removeAttribute('hidden');
-      else if (!sideBuy) solWrap.setAttribute('hidden', '');
+      else solWrap.setAttribute('hidden', '');
     }
     function syncSolDest() {
       if (!solDestInp) return '';
       var a = String(solDestInp.value || '').trim();
       if (a && typeof window.gwIsSolAddr === 'function' && window.gwIsSolAddr(a)) {
-        try { if (typeof window.gwXstocksSetSolDest === 'function') window.gwXstocksSetSolDest(a); } catch (_) {}
         return a;
       }
       return '';
@@ -15224,37 +15234,37 @@ var GROM_XSTOCKS = [
     if (solDestInp) {
       solDestInp.addEventListener('change', function () { syncSolDest(); upd(); });
       solDestInp.addEventListener('blur', function () { syncSolDest(); upd(); });
-      solDestInp.addEventListener('input', function () { syncSolDest(); });
+      solDestInp.addEventListener('input', function () { syncSolDest(); scheduleQuote(); });
     }
     async function upd() {
+      if (submitting) return;
+      invalidateQuote();
+      var seq = quoteSeq;
+      var selected = payment();
       var v = parseFloat(amt.value || '0');
-      if (!v || v <= 0) {
-        info.textContent = tx('px_enter_amount', 'Enter amount') + (opts.unit === 'TOKEN' ? '.' : ' USDT.');
+      if (sideBuy && !selected) { info.textContent = tx('px_select_payment', 'Select a funded USDC or USDT account.'); return; }
+      if (!Number.isFinite(v) || v <= 0) {
+        info.textContent = tx('px_enter_amount', 'Enter amount') + (opts.unit === 'TOKEN' ? '.' : ' ' + (selected ? selected.sym : 'USDC / USDT') + '.');
         confirmBtn.disabled = true;
         confirmBtn.textContent = opts.confirmLabel;
         return;
       }
-      syncSolDest();
-      var balShort = (opts.unit !== 'TOKEN' && v > gwxUsdtBal + 1e-9);
+      var receiveAddress = syncSolDest();
+      var balShort = sideBuy && (!selected || v > selected.amt + 1e-9);
+      if (balShort) { info.textContent = tx('px_insufficient_payment', 'Insufficient balance on the selected network.'); return; }
       info.textContent = tx('px_quoting', 'Fetching route…');
       confirmBtn.disabled = true;
       if (typeof opts.infoAsync === 'function') {
-        var seq = ++quoteSeq;
         try {
-          lastQuote = await opts.infoAsync(v);
-          if (seq !== quoteSeq) return;
+          var result = await opts.infoAsync(v, selected, receiveAddress);
+          if (seq !== quoteSeq || !ov.isConnected) return;
+          lastQuote = result; quotedAmount = v;
           info.innerHTML = lastQuote && lastQuote.html ? lastQuote.html : (lastQuote || '');
           var blocked = !!(lastQuote && lastQuote.blocked);
-          var bridgeOk = !!(lastQuote && lastQuote.quote && lastQuote.quote.venue === 'bridge-sol' && !blocked);
           var needSolDest = !!(lastQuote && lastQuote.needSolDest);
           var needPhantom = !!(lastQuote && lastQuote.needPhantom);
           if (needSolDest || needPhantom || (lastQuote && lastQuote.showSolForm)) showSolForm(true);
-          if (balShort && !bridgeOk && lastQuote && lastQuote.html) {
-            info.innerHTML = lastQuote.html + '<div class="gtm-warn">' + tx('px_insufficient_usdt', 'Insufficient USDT') + '</div>';
-          } else if (balShort && !bridgeOk && !needSolDest && !needPhantom) {
-            info.innerHTML = '<div class="gtm-warn">' + tx('px_insufficient_usdt', 'Insufficient USDT') + '</div>';
-          }
-          var allow = !blocked && lastQuote && lastQuote.quote && (!balShort || bridgeOk) && !needSolDest && !needPhantom;
+          var allow = !blocked && lastQuote && lastQuote.quote && !balShort && !needSolDest && !needPhantom;
           if (needSolDest || needPhantom) {
             confirmBtn.disabled = false;
             confirmBtn.textContent = tx('px_sol_set_dest', 'Set Solana address');
@@ -15265,7 +15275,7 @@ var GROM_XSTOCKS = [
             if (confirmBtn.disabled) {
               confirmBtn.title = blocked
                 ? tx('px_impact_blocked', 'Trade blocked — insufficient liquidity')
-                : tx('px_insufficient_usdt', 'Insufficient USDT');
+                : tx('px_no_payment_route', 'No route for this payment account.');
             } else {
               confirmBtn.removeAttribute('title');
             }
@@ -15277,16 +15287,13 @@ var GROM_XSTOCKS = [
         }
       } else if (typeof opts.info === 'function') {
         info.innerHTML = opts.info(v);
-        confirmBtn.disabled = (opts.unit !== 'TOKEN' && v > gwxUsdtBal + 1e-9);
+        confirmBtn.disabled = sideBuy && (!selected || v > selected.amt + 1e-9);
       }
     }
-    amt.addEventListener('input', function () {
-      clearTimeout(quoteTimer);
-      quoteTimer = setTimeout(upd, 180);
-    });
+    amt.addEventListener('input', scheduleQuote);
     ov.querySelectorAll('.gtm-presets button').forEach(function (b) {
       b.addEventListener('click', function () {
-        if (b.dataset.a === 'max') amt.value = opts.unit === 'TOKEN' ? String(opts.maxToken || 0) : String(Math.floor(gwxUsdtBal * 100) / 100);
+        if (b.dataset.a === 'max') amt.value = opts.unit === 'TOKEN' ? String(opts.maxToken || 0) : String(Math.floor((payment() ? payment().amt : 0) * 1e6) / 1e6);
         else amt.value = b.dataset.a;
         upd();
       });
@@ -15295,9 +15302,9 @@ var GROM_XSTOCKS = [
     ov.querySelector('.gtm-cancel').onclick = closeModal;
     ov.addEventListener('click', function (e) { if (e.target === ov) closeModal(); });
     confirmBtn.onclick = async function () {
-      if (confirmBtn.disabled) return;
+      if (confirmBtn.disabled || submitting) return;
       var v = parseFloat(amt.value || '0');
-      if (!v || v <= 0) { notify(tx('px_enter_amount', 'Enter amount'), 'error'); return; }
+      if (!Number.isFinite(v) || v <= 0) { notify(tx('px_enter_amount', 'Enter amount'), 'error'); return; }
       if (!gwxConnected()) { gwxOpenConnect(); return; }
       if (lastQuote && lastQuote.needSolDest) {
         if (solDestInp) solDestInp.focus();
@@ -15310,23 +15317,27 @@ var GROM_XSTOCKS = [
         notify(tx('px_sol_dest_need', 'Enter a Solana address — xStock arrives there via LiFi.'), 'info');
         return;
       }
-      if (opts.unit !== 'TOKEN' && v > gwxUsdtBal + 1e-9) {
-        var bridgeOk2 = !!(lastQuote && lastQuote.quote && lastQuote.quote.venue === 'bridge-sol');
-        if (!bridgeOk2) { notify(tx('px_insufficient_usdt', 'Insufficient USDT'), 'error'); return; }
+      if (!lastQuote || quotedAmount !== v || (sideBuy && (!payment() || v > payment().amt + 1e-9))) {
+        invalidateQuote(); upd(); return;
       }
       if (lastQuote && lastQuote.blocked) {
         notify(tx('px_impact_blocked', 'Trade blocked — insufficient liquidity'), 'error');
         return;
       }
+      submitting = true;
+      clearTimeout(quoteTimer);
+      ov.querySelectorAll('input, select, .gtm-presets button').forEach(function (el) { el.disabled = true; });
       confirmBtn.disabled = true;
       confirmBtn.textContent = tx('px_signing', 'Confirm in wallet…');
       try {
-        await opts.onConfirm(v, lastQuote);
+        await opts.onConfirm(v, lastQuote, payment(), syncSolDest());
         closeModal();
       } catch (e) {
+        submitting = false;
+        ov.querySelectorAll('input, select, .gtm-presets button').forEach(function (el) { el.disabled = false; });
         notify((e && e.message) || tx('px_swap_fail', 'Swap failed'), 'error');
-        confirmBtn.disabled = false;
         confirmBtn.textContent = opts.confirmLabel;
+        await upd();
       }
     };
     if (hasChart) {
@@ -15348,6 +15359,7 @@ var GROM_XSTOCKS = [
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, cssW, cssH);
         if (!points || points.length < 2) {
+          if (foot) foot.textContent = '';
           if (empty) { empty.hidden = false; empty.textContent = tx('px_chart_empty', 'Chart unavailable'); }
           return;
         }
@@ -15408,17 +15420,7 @@ var GROM_XSTOCKS = [
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (d) {
             if (d && d.points && d.points.length >= 2) { drawGtmChart(d.points); return; }
-            /* Fallback spark from last known price so modal never feels empty. */
-            var px0 = Number(opts.refPrice) || 0;
-            if (!(px0 > 0)) { drawGtmChart([]); return; }
-            var pts = [];
-            for (var i = 0; i < 28; i++) {
-              var t = i / 27;
-              var wave = Math.sin(i * 0.85 + (chartSym || '').length) * 0.004;
-              pts.push({ t: Date.now() - (27 - i) * 60000, c: px0 * (0.985 + 0.015 * t + wave) });
-            }
-            pts[27].c = px0;
-            drawGtmChart(pts);
+            drawGtmChart([]);
           })
           .catch(function (e) {
             if (e && e.name === 'AbortError') return;
@@ -15435,6 +15437,35 @@ var GROM_XSTOCKS = [
         });
       });
       setTimeout(loadGtmChart, 40);
+    }
+    if (paymentSelect) {
+      paymentSelect.addEventListener('change', function () {
+        ov.querySelector('#gtmPayUnit').textContent = payment() ? payment().sym : 'USDC / USDT';
+        showSolForm(needSol);
+        upd();
+      });
+      refreshUsdtBalChip().then(function (funds) {
+        if (!ov.isConnected) return;
+        payments = funds && Array.isArray(funds.rows) ? funds.rows : [];
+        paymentSelect.replaceChildren();
+        if (!payments.length) {
+          var emptyOption = document.createElement('option');
+          emptyOption.textContent = tx('px_select_payment', 'Select a funded USDC or USDT account.');
+          paymentSelect.appendChild(emptyOption);
+        }
+        payments.forEach(function (item, index) {
+          var option = document.createElement('option'); option.value = String(index);
+          option.textContent = item.sym + ' · ' + item.chain + ' · ' + item.amt.toFixed(6);
+          paymentSelect.appendChild(option);
+        });
+        paymentSelect.disabled = !payments.length;
+        ov.querySelector('#gtmStockBal').textContent = payments.length
+          ? tx('px_payment_separate', 'Each trade uses one token on one network. Gas is paid separately.')
+          : tx('px_select_payment', 'Select a funded USDC or USDT account.');
+        ov.querySelector('#gtmPayUnit').textContent = payment() ? payment().sym : 'USDC / USDT';
+        showSolForm(needSol);
+        upd();
+      });
     }
     if (sideBuy && needSol) showSolForm(true);
     upd(); setTimeout(function () { try { amt.focus(); } catch (_) {} }, 30);
@@ -15492,6 +15523,7 @@ var GROM_XSTOCKS = [
       + '.gtm-h{display:flex;justify-content:space-between;align-items:center;font-size:16px;font-weight:800;color:var(--silver1,#e7eef8)}'
       + '.gtm-x{background:none;border:none;color:var(--silver4,#8c9bb2);font-size:16px;cursor:pointer}'
       + '.gtm-sub{font-size:12px;color:var(--silver4,#8c9bb2);margin:6px 0 12px;line-height:1.4}'
+      + '.gtm-payment{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;font-size:12px;color:var(--silver4)}.gtm-payment select{width:100%;min-height:40px;background:#202737;color:#eceff4;border:1px solid rgba(136,192,208,.25);border-radius:10px;padding:8px;font:inherit}'
       + '.gtm-bal{font-size:12px;color:var(--silver4,#8c9bb2);margin-bottom:10px;line-height:1.45}.gtm-bal b{color:var(--cyan,#3ac2ff)}'
       + '.gtm-fund small{font-size:11px;line-height:1.5;color:var(--silver4,#8c9bb2)}.gtm-swap-btn[hidden]{display:none!important}'
       + '.gtm-fund{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}.gtm-fund[hidden],#gtmTxHash[hidden]{display:none!important}'
@@ -16223,8 +16255,8 @@ var GROM_XSTOCKS = [
   }
   function buildXstocks() {
     initPx();
-    var balTxt = gwxConnected() ? money(gwxUsdtBal) : '—';
-    var balSm = gwxConnected() ? tx('px_my_usdt', 'My USDT balance') : tx('px_connect_for_bal', 'Connect wallet');
+    var balTxt = gwxConnected() && gwxStableFunds ? money(gwxStableFunds.usdt + gwxStableFunds.usdc) : '—';
+    var balSm = gwxConnected() ? tx('px_stable_balance', 'USDC + USDT · across networks') : tx('px_connect_for_bal', 'Connect wallet');
     return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
       + '<div><h1 class="gwx-h1"><span class="gwx-h1-ico" aria-hidden="true"><svg width="21" height="21"><use href="#i-xstocks"/></svg></span><span>' + tx('pg_xstocks_title', 'Tokenized stocks') + '</span></h1>'
       + '<p class="gwx-sub">' + tx('pg_xstocks_sub', 'Real S&P 500 / NASDAQ stocks tokenized on-chain.') + '</p></div>'
@@ -17473,14 +17505,13 @@ var GROM_XSTOCKS = [
       notify(tx('px_switch_chain', 'Switch to') + ' ' + label + ' ' + tx('px_to_buy', 'to buy') + ' ' + (s.tokenSym || sym), 'info');
     }
     var px = Number(s.fairPrice) || 0;
-    refreshUsdtBalChip();
     var pos = (gwxPositions || []).find(function (p) { return p.sym === sym; });
     var maxTok = pos ? pos.qty : 0;
     var chainLbl = (trade.chainId && window.GWX_ID_TO_LABEL && window.GWX_ID_TO_LABEL[trade.chainId])
       || (trade.solMint ? 'Solana' : '');
     openStockModal({
       title: (side === 'buy' ? tx('px_buy', 'Buy') + ' ' : tx('px_sell', 'Sell') + ' ') + sym,
-      sub: (s.tokenSym || sym) + ' · ' + chainLbl + (px ? (' · ~$' + px.toFixed(2)) : ''),
+      sub: (s.tokenSym || sym) + (side === 'sell' ? ' · ' + chainLbl : '') + (px ? (' · ~$' + px.toFixed(2)) : ''),
       confirmLabel: (side === 'buy' ? tx('px_buy', 'Buy') + ' ' : tx('px_sell', 'Sell') + ' ') + sym,
       unit: side === 'sell' ? 'TOKEN' : 'USDT',
       maxToken: maxTok,
@@ -17489,7 +17520,7 @@ var GROM_XSTOCKS = [
       yahooSym: s.yahooSym || sym,
       solMint: trade.solMint || '',
       refPrice: px,
-      infoAsync: async function (v) {
+      infoAsync: async function (v, payment, receiveAddress) {
         var reference = await gwxGetFairReference(s);
         px = reference.price;
         trade.solMultiplier = reference.solMultiplier;
@@ -17499,28 +17530,28 @@ var GROM_XSTOCKS = [
         if (typeof window.gwXstocksQuote !== 'function') {
           return { html: px ? ('≈ ' + (side === 'buy' ? (v / px) : (v * px)).toFixed(4) + (side === 'buy' ? (' ' + (s.tokenSym || sym)) : ' USDT') + ' · fee 0.20%') : tx('px_quoting', 'Fetching route…') };
         }
-        var fromSym = side === 'buy' ? 'USDT' : trade.tokenSym;
+        var fromSym = side === 'buy' ? payment.sym : trade.tokenSym;
         var toSym = side === 'buy' ? trade.tokenSym : 'USDT';
-        var solDest = '';
-        try { solDest = (typeof window.gwXstocksSolDest === 'function' && window.gwXstocksSolDest()) || ''; } catch (_) {}
+        var solDest = receiveAddress || '';
         var q = await window.gwXstocksQuote({
           fromSym: fromSym, toSym: toSym, amtNum: v, chainId: trade.chainId,
           address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
           solMint: trade.solMint, solDecimals: trade.solDecimals, solMultiplier: trade.solMultiplier,
           addrsByChain: s.addrs || null,
           refPrice: px,
-          probeLite: !!trade.solMint,
+          probeLite: !!trade.solMint, payment: payment, receiveAddress: solDest,
         });
-        if (!q && trade.solMint) {
+        if (!q && trade.solMint && !payment) {
           q = await window.gwXstocksQuote({
             fromSym: fromSym, toSym: toSym, amtNum: v, chainId: trade.chainId,
             address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
             solMint: trade.solMint, solDecimals: trade.solDecimals, solMultiplier: trade.solMultiplier,
             addrsByChain: s.addrs || null,
-            refPrice: px,
+            refPrice: px, payment: payment,
           });
         }
         if (!q) {
+          if (payment && (payment.namespace === 'solana' || solDest || !trade.solMint)) return { html: tx('px_no_payment_route', 'No executable route for this token and network. Try another payment account or amount.'), blocked: true };
           if (trade.solMint) {
             var hasPhantom = false;
             try {
@@ -17551,26 +17582,26 @@ var GROM_XSTOCKS = [
           : (Number(q.toAmount) / Math.pow(10, outDec));
         var gas = (q.gasUsd != null) ? (' · gas ≈ $' + Number(q.gasUsd).toFixed(2)) : '';
         var route = (q.aggregator || q.tool || 'DEX')
-          + (q.venue === 'solana' ? ' · Solana' : (q.venue === 'bridge-sol' ? ' · LiFi→Sol' : ''));
+          + (q.venue === 'solana' ? ' · Solana' : (q.venue === 'bridge-sol' ? ' · ' + (payment ? payment.chain : chainLbl) + ' → Solana' : ' · ' + (payment ? payment.chain : chainLbl)));
         return {
           html: q.impactBlockReason === 'missing_fair_value' || q.impactBlockReason === 'missing_share_multiplier'
             ? tx('px_reference_price_missing', 'Independent share price unavailable — trade disabled.')
             : ('≈ <b>' + outAmt.toFixed(4) + '</b> ' + toSym
               + ' · route: ' + esc(route)
-              + ' · fee 0.20%' + gas),
+              + ' · fee ' + (Number(q._gromFeeBps != null ? q._gromFeeBps : 20) / 100).toFixed(2) + '%' + gas),
           quote: q, outAmt: outAmt,
           blocked: !!q.impactBlocked,
           showSolForm: q.venue === 'bridge-sol' || q.venue === 'solana',
         };
       },
-      onConfirm: async function (v) {
+      onConfirm: async function (v, displayed, payment, receiveAddress) {
         var reference = await gwxGetFairReference(s);
         px = reference.price;
         trade.solMultiplier = reference.solMultiplier;
         if (!(px > 0)) throw new Error(tx('px_reference_price_missing', 'Independent share price unavailable — trade disabled.'));
         if (side === 'buy') {
           await window.gwXstocksBuy({
-            tokenSym: trade.tokenSym, usdtAmount: v, chainId: trade.chainId,
+            tokenSym: trade.tokenSym, usdtAmount: v, chainId: trade.chainId, payment: payment, receiveAddress: receiveAddress, expectedQuote: displayed && displayed.quote,
             address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
             solMint: trade.solMint, solDecimals: trade.solDecimals, solMultiplier: trade.solMultiplier,
             addrsByChain: s.addrs || null,
@@ -17686,7 +17717,7 @@ var GROM_XSTOCKS = [
     } catch (_) {}
   });
   document.addEventListener('grom:wallet-connected', function () { refreshUsdtBalChip(); gwxLoadPositions(); });
-  document.addEventListener('grom:wallet-disconnected', function () { gwxUsdtBal = 0; gwxPositions = []; updateXstocksStats(); renderStockPos(); });
+  document.addEventListener('grom:wallet-disconnected', function () { ++gwxFundsLoadId; gwxStableFunds = null; gwxUsdtBal = 0; gwxPositions = []; updateXstocksStats(); renderStockPos(); });
 
   document.addEventListener('click', function (e) {
     var jump = e.target.closest('.gwx-jump');

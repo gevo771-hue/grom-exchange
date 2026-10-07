@@ -13699,9 +13699,9 @@ async function gwSolRpc(method, params) {
 }
 
 /** Native SOL + curated SPL balances for Instant Swap MAX. */
-async function gwSolAvailableAmount(sym) {
+async function gwSolAvailableAmount(sym, account) {
   const s = String(sym || '').toUpperCase();
-  const pk = gwSolPubkey()
+  const pk = account || gwSolPubkey()
     || window.__gwSolPubkey
     || (() => { try { return localStorage.getItem('grom_sol_addr') || ''; } catch (_) { return ''; } })();
   if (!pk || pk.length < 32) return 0;
@@ -19663,12 +19663,13 @@ async function gwXstocksQuoteLifiToSol({ chainId, fromSym, amtNum, account, solM
 }
 
 async function gwXstocksExecSolanaBuy({ quote, amtNum }) {
-  let solPk = gwSolPubkey();
+  let solPk = quote?._payment?.account || gwSolPubkey();
   if (!solPk) {
     solPk = await gwSolConnect();
     if (solPk) window.__gwSolAddr = solPk;
   }
   if (!solPk) throw new Error('Connect Phantom to buy xStocks on Solana');
+  if (quote?._payment?.account && quote._payment.account !== gwXstocksSolPayAccount()) throw new Error('Solana wallet changed. Review the payment account.');
   const q = quote?._solQuote || await (async () => {
     const inMint = quote?._solInMint || GW_SOL_TOKENS.USDC;
     const outMint = quote?._solMint;
@@ -19683,6 +19684,7 @@ async function gwXstocksExecSolanaBuy({ quote, amtNum }) {
   if (!p) throw new Error('Phantom not connected');
   gwToast('Jupiter · confirm in Phantom', 'info');
   const txB64 = await gwSolSwap({ quoteResponse: q, userPubkey: solPk });
+  if (quote?._payment?.account && quote._payment.account !== gwXstocksSolPayAccount()) throw new Error('Solana wallet changed. Review the payment account.');
   const signature = await gwSolSignAndSendBase64(p, txB64);
   gwToast('Submitted on Solana…', 'info');
   return signature;
@@ -19694,6 +19696,7 @@ async function gwXstocksExecLifiBridge({ quote, chainId, fromSym, amtNum }) {
   if (!provider?.request || !account) throw new Error('Connect EVM wallet first');
   const cid = Number(quote?._bridgeChainId || chainId);
   await gwXstocksPrepChain(cid);
+  if (quote?._payment && String(quote._payment.account).toLowerCase() !== String(gwReadOnlyAddress()).toLowerCase()) throw new Error('Payment wallet changed. Review the payment account.');
   return await gwOnChainSwapExecLifi({
     chainId: cid,
     fromSym: quote?._fromSym || fromSym || 'USDT',
@@ -19864,7 +19867,52 @@ async function gwXstocksQuoteEvmBest({ fromSym, toSym, amtNum, chainId, address,
   return pickBest(all);
 }
 
-window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, decimals, name, logo, solMint, solDecimals, solMultiplier, addrsByChain, refPrice }) {
+function gwXstocksSolPayAccount() {
+  try {
+    const key = (window.solana || window.phantom?.solana)?.publicKey?.toString?.() || '';
+    return key;
+  } catch (_) { return ''; }
+}
+
+// Explicit payment prevents an unfunded Jupiter preview from hiding a funded
+// EVM bridge and prevents a refreshed quote from spending another token/network.
+async function gwXstocksQuoteForPayment({ payment, receiveAddress, toSym, amtNum, chainId, address, decimals, name, logo, solMint, solDecimals, solMultiplier, addrsByChain, refPrice }) {
+  const amt = Number(amtNum);
+  const from = String(payment?.sym || '').toUpperCase();
+  if (!['USDC', 'USDT'].includes(from) || !['evm', 'solana'].includes(payment?.namespace)
+      || !Number.isFinite(amt) || !(amt > 0) || !Number.isFinite(payment?.amt) || amt > payment.amt) return null;
+  const enrich = q => {
+    const result = gwXstocksEnrichUsd(q, { amtNum: amt, buy: true, refPrice, solMultiplier });
+    if (result) result._payment = { ...payment };
+    return result;
+  };
+  if (payment.namespace === 'solana') {
+    if (!payment.account || payment.account !== gwXstocksSolPayAccount()) return null;
+    return enrich(await gwXstocksQuoteSolana({ fromSym: from, toSym, amtNum: amt, solMint, solDecimals }));
+  }
+  const cid = Number(payment.chainId);
+  const account = gwReadOnlyAddress();
+  if (!cid || !account || String(payment.account).toLowerCase() !== account.toLowerCase()) return null;
+  const tokenAddress = (Number(chainId) === cid && address) || addrsByChain?.[cid];
+  const solDest = String(receiveAddress || '').trim();
+  const jobs = [];
+  if (tokenAddress) jobs.push(gwXstocksQuoteEvmOnChain({ chainId: cid, fromSym: from, toSym, amtNum: amt, account,
+    address: tokenAddress, decimals, name, logo, tokenSym: toSym }).then(enrich));
+  if (solMint && gwIsSolAddr(solDest)) jobs.push(gwXstocksQuoteLifiToSol({ chainId: cid, fromSym: from, amtNum: amt,
+    account, solMint, solAddr: solDest, solDecimals }).then(q => {
+      if (q) q._solDest = solDest;
+      return enrich(q);
+    }));
+  return gwXstocksPickBestQuote(await Promise.all(jobs.map(job => job.catch(() => null))), { buy: true, refPrice });
+}
+
+function gwXstocksSamePaymentRoute(a, b) {
+  if (!a || !b) return false;
+  const key = q => [q.venue, q._execChainId || q._bridgeChainId || '', q._fromSym || q._solInMint || '', q._solDest || '', q._payment?.account || ''].join('|');
+  return key(a) === key(b);
+}
+
+window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, decimals, name, logo, solMint, solDecimals, solMultiplier, addrsByChain, refPrice, payment, receiveAddress, expectedQuote }) {
   const sym = String(tokenSym || '').toUpperCase();
   const amt = Number(usdtAmount);
   if (!sym || !(amt > 0)) throw new Error('Invalid buy amount');
@@ -19879,8 +19927,9 @@ window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, 
   // Live quote: Jupiter Solana ∥ EVM mega-agg ∥ LiFi bridge — pick best USD out
   const q = await window.gwXstocksQuote({
     fromSym: 'USDT', toSym: sym, amtNum: amt, chainId, address, decimals, name, logo,
-    solMint, solDecimals, solMultiplier, addrsByChain, refPrice,
+    solMint, solDecimals, solMultiplier, addrsByChain, refPrice, payment, receiveAddress,
   });
+  if (payment && (!q || !gwXstocksSamePaymentRoute(expectedQuote, q))) throw new Error('Payment route changed. Review a fresh quote before confirming.');
   if (!q) {
     if (solMint) {
       try {
@@ -19905,7 +19954,7 @@ window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, 
     );
   }
   if (q.impactBlocked) {
-    if (solMint && q.venue !== 'solana') {
+    if (!payment && solMint && q.venue !== 'solana') {
       try {
         let solPk = gwSolPubkey() || await gwSolConnect();
         if (solPk) window.__gwSolAddr = solPk;
@@ -19936,6 +19985,7 @@ window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, 
   const execCid = Number(q._execChainId || chainId);
   if (!execCid) throw new Error('No EVM market for this ticker');
   await gwXstocksPrepChain(execCid);
+  if (payment && String(payment.account).toLowerCase() !== String(gwReadOnlyAddress()).toLowerCase()) throw new Error('Payment wallet changed. Review the payment account.');
   const fromStable = String(q._fromSym || 'USDT').toUpperCase();
   return await gwOnChainSwapExec(fromStable, sym, amt);
 };
@@ -19985,7 +20035,8 @@ window.gwXstocksSell = async function ({ tokenSym, tokenAmount, chainId, address
   return await gwOnChainSwapExec(sym, toStable, amt);
 };
 
-window.gwXstocksQuote = async function ({ fromSym, toSym, amtNum, chainId, address, decimals, name, logo, solMint, solDecimals, solMultiplier, addrsByChain, refPrice, probeLite }) {
+window.gwXstocksQuote = async function ({ fromSym, toSym, amtNum, chainId, address, decimals, name, logo, solMint, solDecimals, solMultiplier, addrsByChain, refPrice, probeLite, payment, receiveAddress }) {
+  if (payment) return gwXstocksQuoteForPayment({ payment, receiveAddress, toSym, amtNum, chainId, address, decimals, name, logo, solMint, solDecimals, solMultiplier, addrsByChain, refPrice });
   const from = String(fromSym || '').toUpperCase();
   const to = String(toSym || '').toUpperCase();
   const amt = Number(amtNum);
@@ -20140,7 +20191,8 @@ window.gwXstocksStableBalances = async function () {
   const empty = { usdt: 0, usdc: 0, best: 0, lines: [], rows: [] };
   const addr = (typeof gwReadOnlyAddress === 'function') ? gwReadOnlyAddress()
     : ((typeof gwDisplayAddress === 'function') ? gwDisplayAddress() : null);
-  if (!addr) return empty;
+  const solAccount = gwXstocksSolPayAccount();
+  if (!addr && !solAccount) return empty;
   const CHAIN = {
     1: 'Ethereum', 10: 'Optimism', 56: 'BSC', 137: 'Polygon',
     8453: 'Base', 42161: 'Arbitrum', 43114: 'Avalanche',
@@ -20154,27 +20206,34 @@ window.gwXstocksStableBalances = async function () {
     const sym = String(r.sym || '').toUpperCase();
     if (sym !== 'USDT' && sym !== 'USDC') continue;
     const amt = Number(r.amt) || 0;
-    if (!(amt > 0.0001)) continue;
+    if (!Number.isFinite(amt) || !(amt > 0.0001)) continue;
     const cid = Number(r.chainId) || 0;
+    if (!addr || !GW_OC_SWAP[cid]) continue;
     const chain = r.chain || CHAIN[cid] || String(cid || '');
     stables.push({
-      sym, amt, usd: Number(r.usd) > 0 ? Number(r.usd) : amt,
+      namespace: 'evm', account: addr, sym, amt, usd: Number(r.usd) > 0 ? Number(r.usd) : amt,
       chainId: cid, chain,
     });
   }
   /* Fallback: probe common chains if holdings cache empty. */
-  if (!stables.length) {
+  if (addr && !stables.length) {
     for (const cid of [42161, 56, 1, 137, 8453, 10]) {
       try {
         const bal = await window.gromFetchOnchainBalances?.(addr, cid);
         if (!bal?.tokens) continue;
         for (const sym of ['USDC', 'USDT']) {
           const amt = Number(bal.tokens[sym]) || 0;
-          if (amt > 0.0001) {
-            stables.push({ sym, amt, usd: amt, chainId: cid, chain: CHAIN[cid] || String(cid) });
+          if (Number.isFinite(amt) && amt > 0.0001) {
+            stables.push({ namespace: 'evm', account: addr, sym, amt, usd: amt, chainId: cid, chain: CHAIN[cid] || String(cid) });
           }
         }
       } catch (_) {}
+    }
+  }
+  if (solAccount) {
+    for (const sym of ['USDC', 'USDT']) {
+      const amt = await gwSolAvailableAmount(sym, solAccount);
+      if (Number.isFinite(amt) && amt > 0.0001) stables.push({ namespace: 'solana', account: solAccount, sym, amt, usd: amt, chainId: 'solana', chain: 'Solana' });
     }
   }
   stables.sort((a, b) => b.usd - a.usd);
@@ -20184,10 +20243,11 @@ window.gwXstocksStableBalances = async function () {
     if (s.sym === 'USDT') usdt += s.amt;
     if (s.sym === 'USDC') usdc += s.amt;
   }
-  const best = Math.max(usdt, usdc, ...stables.map((s) => s.amt), 0);
+  const best = Math.max(...stables.map((s) => s.amt), 0);
   const lines = stables.slice(0, 4).map((s) => (
     s.sym + ' ' + (s.amt >= 1 ? s.amt.toFixed(2) : s.amt.toPrecision(3)) + ' · ' + s.chain
   ));
+  if (addr !== gwReadOnlyAddress() || solAccount !== gwXstocksSolPayAccount()) throw new Error('Payment wallet changed');
   return { usdt, usdc, best, lines, rows: stables };
 };
 

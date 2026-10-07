@@ -14989,17 +14989,21 @@ var GROM_XSTOCKS = [
     var hasPrice = Number(item.fairPrice) > 0 && Number.isFinite(Number(item.fairPrice));
     var hasMultiplier = !item.solMint || (Number(item.solMultiplier) > 0 && Number.isFinite(Number(item.solMultiplier)));
     var refAt = Number(item.referenceAt) || 0;
+    if (Number(item.referenceRetryAt) > now) {
+      return { price: hasPrice ? Number(item.fairPrice) : 0, solMultiplier: Number(item.solMultiplier) || null };
+    }
     if (hasPrice && hasMultiplier && refAt > 0 && now - refAt < GWX_FAIR_REF_TTL) {
       return { price: Number(item.fairPrice), solMultiplier: Number(item.solMultiplier) || null };
     }
-    if (refAt > 0 && now - refAt < GWX_FAIR_REF_TTL) {
-      return { price: hasPrice ? Number(item.fairPrice) : 0, solMultiplier: Number(item.solMultiplier) || null };
-    }
     if (!gwxFairRefInFlight[item.sym]) {
       gwxFairRefInFlight[item.sym] = (async function () {
+        var retryMs = 5000;
+        var controller = new AbortController();
+        var timeout = setTimeout(function () { controller.abort(); }, 12000);
         try {
           var url = '/api/market/xstocks/reference-price?symbol=' + encodeURIComponent(item.tokenSym);
-          var r = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+          var r = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store', signal: controller.signal });
+          if (r.status === 429) retryMs = Math.max(5000, (Number(r.headers.get('Retry-After')) || 60) * 1000);
           if (!r.ok) throw new Error('reference price unavailable');
           var d = await r.json();
           var price = Number(d && d.fairPrice);
@@ -15009,6 +15013,7 @@ var GROM_XSTOCKS = [
           item.fairPriceAt = Number(d && d.fetchedAt) || Date.now();
           item.solMultiplier = multiplier > 0 && Number.isFinite(multiplier) ? multiplier : null;
           item.referenceAt = Date.now();
+          item.referenceRetryAt = (!item.fairPrice || (item.solMint && !item.solMultiplier)) ? Date.now() + retryMs : 0;
         } catch (_) {
           // Never reuse a stale catalog price after the independent reference
           // endpoint fails; trades must remain disabled until it recovers.
@@ -15016,7 +15021,9 @@ var GROM_XSTOCKS = [
           item.fairPriceSource = null;
           item.solMultiplier = null;
           item.referenceAt = Date.now();
+          item.referenceRetryAt = Date.now() + retryMs;
         } finally {
+          clearTimeout(timeout);
           delete gwxFairRefInFlight[item.sym];
         }
       })();
@@ -15206,16 +15213,34 @@ var GROM_XSTOCKS = [
       + '<div class="gtm-field"><input type="number" id="gtmAmt" min="0" step="any" placeholder="0.00"/><span id="gtmPayUnit">' + (opts.unit || 'USDT') + '</span></div>'
       + '<div class="gtm-presets"><button type="button" data-a="25">$25</button><button type="button" data-a="100">$100</button><button type="button" data-a="500">$500</button><button type="button" data-a="max">Max</button></div>'
       + '<div class="gtm-info" id="gtmInfo"></div>'
+      + '<button type="button" class="gtm-retry" hidden>' + tx('px_retry_quote', 'Refresh quote') + '</button>'
       + '<div class="gtm-actions"><button type="button" class="gtm-cancel">' + tx('gtm_cancel', 'Cancel') + '</button><button type="button" class="gtm-confirm">' + opts.confirmLabel + '</button></div>'
       + '</div></div>';
     document.body.appendChild(ov);
     var amt = ov.querySelector('#gtmAmt'), info = ov.querySelector('#gtmInfo'), confirmBtn = ov.querySelector('.gtm-confirm');
     var solDestInp = ov.querySelector('#gtmSolDest');
     var solWrap = ov.querySelector('#gtmSolDestWrap');
-    var quoteTimer = null, lastQuote = null, quoteSeq = 0, quotedAmount = null, submitting = false;
+    var quoteTimer = null, retryTimer = null, lastQuote = null, quoteSeq = 0, quotedAmount = null, submitting = false;
     var paymentSelect = ov.querySelector('#gtmPayment'), payments = [];
+    var retryBtn = ov.querySelector('.gtm-retry');
     function payment() { return sideBuy ? payments[Number(paymentSelect && paymentSelect.value)] || null : null; }
-    function invalidateQuote() { ++quoteSeq; lastQuote = null; quotedAmount = null; confirmBtn.disabled = true; }
+    function invalidateQuote() {
+      ++quoteSeq; lastQuote = null; quotedAmount = null; confirmBtn.disabled = true;
+      confirmBtn.textContent = tx('px_quoting', 'Fetching route…');
+      confirmBtn.removeAttribute('title');
+      clearTimeout(retryTimer);
+      if (retryBtn) { retryBtn.hidden = true; retryBtn.disabled = false; }
+    }
+    function offerRetry(retryAt) {
+      if (!retryBtn || !ov.isConnected) return;
+      retryBtn.hidden = false;
+      var remaining = Math.max(0, Math.ceil(((Number(retryAt) || 0) - Date.now()) / 1000));
+      retryBtn.disabled = remaining > 0;
+      retryBtn.textContent = remaining > 0
+        ? tx('px_retry_wait', 'Retry in {seconds}s').replace('{seconds}', String(remaining))
+        : tx('px_retry_quote', 'Refresh quote');
+      if (remaining > 0) retryTimer = setTimeout(function () { offerRetry(retryAt); }, 1000);
+    }
     function scheduleQuote() { invalidateQuote(); clearTimeout(quoteTimer); quoteTimer = setTimeout(upd, 180); }
     function showSolForm(on) {
       if (!solWrap) return;
@@ -15242,16 +15267,26 @@ var GROM_XSTOCKS = [
       var seq = quoteSeq;
       var selected = payment();
       var v = parseFloat(amt.value || '0');
-      if (sideBuy && !selected) { info.textContent = tx('px_select_payment', 'Select a funded USDC or USDT account.'); return; }
+      if (sideBuy && !selected) {
+        info.textContent = tx('px_select_payment', 'Select a funded USDC or USDT account.');
+        confirmBtn.textContent = tx('px_no_stables', 'No USDC / USDT');
+        return;
+      }
       if (!Number.isFinite(v) || v <= 0) {
         info.textContent = tx('px_enter_amount', 'Enter amount') + (opts.unit === 'TOKEN' ? '.' : ' ' + (selected ? selected.sym : 'USDC / USDT') + '.');
         confirmBtn.disabled = true;
-        confirmBtn.textContent = opts.confirmLabel;
+        confirmBtn.textContent = tx('px_enter_amount', 'Enter amount');
         return;
       }
       var receiveAddress = syncSolDest();
       var balShort = sideBuy && (!selected || v > selected.amt + 1e-9);
-      if (balShort) { info.textContent = tx('px_insufficient_payment', 'Insufficient balance on the selected network.'); return; }
+      if (balShort) {
+        info.textContent = tx('px_insufficient_payment', 'Insufficient balance on the selected network.')
+          + ' ' + tx('px_available_payment', 'Available:') + ' ' + selected.amt.toFixed(6) + ' ' + selected.sym + ' · ' + selected.chain;
+        confirmBtn.textContent = tx('px_insufficient_token', 'Insufficient {token}').replace('{token}', selected.sym);
+        confirmBtn.title = info.textContent;
+        return;
+      }
       info.textContent = tx('px_quoting', 'Fetching route…');
       confirmBtn.disabled = true;
       if (typeof opts.infoAsync === 'function') {
@@ -15271,11 +15306,10 @@ var GROM_XSTOCKS = [
             confirmBtn.title = '';
           } else {
             confirmBtn.disabled = !allow;
-            confirmBtn.textContent = opts.confirmLabel;
+            confirmBtn.textContent = allow ? opts.confirmLabel : ((lastQuote && lastQuote.buttonLabel) || tx('px_trade_unavailable', 'Trade unavailable'));
+            if (!allow) offerRetry(lastQuote && lastQuote.retryAt);
             if (confirmBtn.disabled) {
-              confirmBtn.title = blocked
-                ? tx('px_impact_blocked', 'Trade blocked — insufficient liquidity')
-                : tx('px_no_payment_route', 'No route for this payment account.');
+              confirmBtn.title = info.textContent || tx('px_no_payment_route', 'No route for this payment account.');
             } else {
               confirmBtn.removeAttribute('title');
             }
@@ -15284,12 +15318,15 @@ var GROM_XSTOCKS = [
           if (seq !== quoteSeq) return;
           info.textContent = (e && e.message) || tx('px_quote_fail', 'Quote unavailable');
           confirmBtn.disabled = true;
+          confirmBtn.textContent = tx('px_trade_unavailable', 'Trade unavailable');
+          offerRetry();
         }
       } else if (typeof opts.info === 'function') {
         info.innerHTML = opts.info(v);
         confirmBtn.disabled = sideBuy && (!selected || v > selected.amt + 1e-9);
       }
     }
+    if (retryBtn) retryBtn.addEventListener('click', upd);
     amt.addEventListener('input', scheduleQuote);
     ov.querySelectorAll('.gtm-presets button').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -15543,6 +15580,8 @@ var GROM_XSTOCKS = [
       + '.gtm-actions button{flex:1;padding:11px 0;border-radius:11px;font-weight:800;font-size:13px;cursor:pointer;border:none}'
       + '.gtm-cancel{background:rgba(255,255,255,.06);color:var(--silver2,#c8d4e8)}'
       + '.gtm-confirm{background:linear-gradient(135deg,#3ac2ff,#0091c4);color:#04121b}'
+      + '.gtm.gtm-side-buy .gtm-confirm:disabled,.gtm.gtm-side-sell .gtm-confirm:disabled{background:#3c4654;color:#b6c0cd;cursor:not-allowed;box-shadow:none;opacity:.8}'
+      + '.gtm-retry{display:block;margin:0 0 12px;padding:8px 12px;border:1px solid rgba(136,192,208,.35);border-radius:9px;background:transparent;color:var(--cyan,#88c0d0);cursor:pointer}.gtm-retry[hidden]{display:none}.gtm-retry:disabled{opacity:.7;cursor:wait}'
       + '@media(max-width:560px){.gtm-ov{align-items:flex-end;padding:0}.gtm{max-width:100%;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}.gtm.gtm-with-chart{grid-template-columns:1fr;max-height:92vh;overflow:auto;padding:0}.gtm-chart-pane{border-right:0;border-bottom:1px solid rgba(255,255,255,.06);padding:14px 14px 10px}.gtm-trade-pane{padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px))}.gtm-chart-canvas-wrap canvas{height:150px}.gtm-chart-canvas-wrap{min-height:150px}.gtm-fund{background:#252d3a;padding-bottom:4px}}'
       // ---- page shells (predict / xstocks) ----
       + '.gwx-wrap{max-width:1240px}'
@@ -17525,7 +17564,7 @@ var GROM_XSTOCKS = [
         px = reference.price;
         trade.solMultiplier = reference.solMultiplier;
         if (!(px > 0)) {
-          return { html: tx('px_reference_price_missing', 'Independent share price unavailable — trade disabled.'), blocked: true };
+          return { html: tx('px_reference_price_missing', 'Independent share price unavailable — refresh the quote to retry.'), buttonLabel: tx('px_reference_unavailable', 'Price unavailable'), retryAt: s.referenceRetryAt, blocked: true };
         }
         if (typeof window.gwXstocksQuote !== 'function') {
           return { html: px ? ('≈ ' + (side === 'buy' ? (v / px) : (v * px)).toFixed(4) + (side === 'buy' ? (' ' + (s.tokenSym || sym)) : ' USDT') + ' · fee 0.20%') : tx('px_quoting', 'Fetching route…') };

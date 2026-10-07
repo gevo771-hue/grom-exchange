@@ -60,7 +60,7 @@ function uiHarness(infoAsync){
  const element=()=>({value:'',textContent:'',innerHTML:'',disabled:false,hidden:false,isConnected:true,dataset:{},children:[],events:{},
   classList:{add(){},remove(){}},addEventListener(k,cb){this.events[k]=cb;},setAttribute(){},removeAttribute(){},focus(){},
   appendChild(c){this.children.push(c);if(this.children.length===1)this.value=c.value;},replaceChildren(){this.children=[];this.value='';}});
- const ids=Object.fromEntries(['#gtmAmt','#gtmInfo','.gtm-confirm','#gtmPayment','#gtmPayUnit','#gtmStockBal','.gtm-x','.gtm-cancel'].map(k=>[k,element()]));
+ const ids=Object.fromEntries(['#gtmAmt','#gtmInfo','.gtm-confirm','.gtm-retry','#gtmPayment','#gtmPayUnit','#gtmStockBal','.gtm-x','.gtm-cancel'].map(k=>[k,element()]));
  const max=element();max.dataset.a='max';
  const ctx=vm.createContext({window:{},document:{body:{appendChild(e){overlay=e;}},createElement(){const e=element();e.querySelector=k=>ids[k]||null;e.querySelectorAll=k=>k==='.gtm-presets button'?[max]:[];return e;}},
   injectCss(){},closeModal(){if(overlay)overlay.isConnected=false;},tx:(k,f)=>f,esc:x=>x,money:x=>String(x),gwxConnected:()=>true,gwxUsdtBal:1.99,
@@ -77,6 +77,34 @@ test('buy form pays from selected USDC balance and MAX never sums wallets or net
  await h.ids['.gtm-confirm'].onclick();assert.equal(h.submitted[0].p.chainId,42161);
  const j=uiHarness();await j.settle();j.max.events.click();await j.settle();assert.equal(j.ids['#gtmAmt'].value,'18.4');
  j.ids['#gtmPayment'].value='1';j.ids['#gtmPayment'].events.change();await j.settle();assert.equal(j.ids['.gtm-confirm'].disabled,true);assert.match(j.ids['#gtmInfo'].textContent,/Insufficient/);
+ assert.equal(j.ids['.gtm-confirm'].textContent,'Insufficient USDT');assert.match(j.ids['#gtmInfo'].textContent,/1\.990000 USDT · Polygon/);
+});
+test('blocked quote explains the button and explicit refresh recovers only after a usable quote',async()=>{
+ let ready=false;const h=uiHarness(()=>ready?{quote:{},html:'route'}:{blocked:true,buttonLabel:'Price unavailable',html:'reference failed'});
+ await h.settle();await h.input('2');await h.quote();
+ assert.equal(h.ids['.gtm-confirm'].disabled,true);assert.equal(h.ids['.gtm-confirm'].textContent,'Price unavailable');
+ assert.equal(h.ids['.gtm-retry'].hidden,false);assert.equal(h.ids['.gtm-retry'].disabled,false);
+ ready=true;await h.ids['.gtm-retry'].events.click();
+ assert.equal(h.ids['.gtm-confirm'].disabled,false);assert.equal(h.ids['.gtm-confirm'].textContent,'Buy');assert.equal(h.ids['.gtm-retry'].hidden,true);
+});
+function referenceHarness(){
+ let time=100_000,calls=0,status=503,data={fairPrice:12.8,solMultiplier:1,fetchedAt:100_000};
+ const ctx=vm.createContext({Date:{now:()=>time},AbortController,setTimeout:()=>1,clearTimeout(){},encodeURIComponent,
+  fetch:async()=>{calls++;return {ok:status===200,status,headers:{get:()=> '60'},json:async()=>data};}});
+ const start=html.indexOf('  async function gwxGetFairReference(item)');
+ vm.runInContext('var gwxFairRefInFlight=Object.create(null);var GWX_FAIR_REF_TTL=60000;\n'+html.slice(start,html.indexOf('  // Browsing prices',start)),ctx);
+ return {ctx,item:{sym:'AAL',tokenSym:'AALx',solMint:'stock'},setStatus:s=>status=s,advance:n=>time+=n,get calls(){return calls;}};
+}
+test('a transient reference failure can recover after five seconds, without caching failure as a fresh price',async()=>{
+ const h=referenceHarness();assert.equal((await h.ctx.gwxGetFairReference(h.item)).price,0);h.setStatus(200);
+ assert.equal((await h.ctx.gwxGetFairReference(h.item)).price,0);assert.equal(h.calls,1);
+ h.advance(5000);assert.equal((await h.ctx.gwxGetFairReference(h.item)).price,12.8);assert.equal(h.calls,2);
+ h.advance(5000);assert.equal((await h.ctx.gwxGetFairReference(h.item)).price,12.8);assert.equal(h.calls,2);
+});
+test('reference refresh respects HTTP429 Retry-After instead of bypassing provider limits',async()=>{
+ const h=referenceHarness();h.setStatus(429);await h.ctx.gwxGetFairReference(h.item);h.setStatus(200);
+ h.advance(5000);assert.equal((await h.ctx.gwxGetFairReference(h.item)).price,0);assert.equal(h.calls,1);
+ h.advance(55000);assert.equal((await h.ctx.gwxGetFairReference(h.item)).price,12.8);assert.equal(h.calls,2);
 });
 test('clearing amount immediately disables an old quote and late responses cannot restore it',async()=>{
  let resolve;const h=uiHarness(()=>new Promise(r=>{resolve=r;}));await h.settle();await h.input('6');const pending=h.quote();await h.settle();

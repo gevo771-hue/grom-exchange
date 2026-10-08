@@ -19629,8 +19629,10 @@ async function gwXstocksQuoteLifiToSol({ chainId, fromSym, amtNum, account, solM
     qs.set('fee', String(GW_LIFI_FEE_PCT));
     qs.set('feeAddress', GW_LIFI_FEE_ADDR);
   }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    const r = await fetch(`${GW_LIFI_ENDPOINT}/quote?${qs}`, { headers: { accept: 'application/json' } });
+    const r = await fetch(`${GW_LIFI_ENDPOINT}/quote?${qs}`, { headers: { accept: 'application/json' }, signal: controller.signal });
     if (!r.ok) {
       const t = await r.text().catch(() => '');
       if (gwLifiIsFeeConfigErr(r.status, t)) {
@@ -19659,6 +19661,8 @@ async function gwXstocksQuoteLifiToSol({ chainId, fromSym, amtNum, account, solM
   } catch (e) {
     console.warn('[GROM] xstocks LiFi→Sol quote', e?.message || e);
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -19802,16 +19806,21 @@ async function gwXstocksQuoteEvmOnChain({ chainId, fromSym, toSym, amtNum, accou
   const to = String(toSym || '').toUpperCase();
   if (address) window.gwXstocksRegisterToken({ chainId: cid, sym: tokenSym, address, decimals, name, logo });
   try {
-    const quoteFn = (typeof gwMetaAggQuoteBest === 'function') ? gwMetaAggQuoteBest : gwMetaAggQuoteAll;
-    const quotes = await quoteFn({ chainId: cid, fromSym: from, toSym: to, amtNum, account });
-    if (quotes && quotes[0]) {
+    // This leg is explicitly on one EVM chain. The general swap router reads
+    // unrelated swap-picker state and probes other destination networks.
+    // Solana delivery is quoted separately with its explicit recipient.
+    const quotes = await gwMetaAggQuoteAll({ chainId: cid, toChainId: cid, fromSym: from, toSym: to, amtNum, account });
+    const quote = (quotes || []).find(q => q && !q._crossChain
+      && (q._fromChainId == null || Number(q._fromChainId) === cid)
+      && (q._toChainId == null || Number(q._toChainId) === cid));
+    if (quote) {
       return Object.assign({
-        venue: quotes[0]._crossChain ? 'bridge' : 'evm',
-        outDecimals: Number(quotes[0].outDecimals) || Number(decimals) || 18,
+        venue: 'evm',
+        outDecimals: Number(quote.outDecimals) || Number(decimals) || 18,
         _execChainId: cid,
         _fromSym: from,
         _toSym: to,
-      }, quotes[0]);
+      }, quote);
     }
   } catch (_) {}
   return null;

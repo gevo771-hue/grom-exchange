@@ -87,6 +87,31 @@ test('blocked quote explains the button and explicit refresh recovers only after
  ready=true;await h.ids['.gtm-retry'].events.click();
  assert.equal(h.ids['.gtm-confirm'].disabled,false);assert.equal(h.ids['.gtm-confirm'].textContent,'Buy');assert.equal(h.ids['.gtm-retry'].hidden,true);
 });
+function stockInfoHarness(quote){
+ const stock={sym:'AAPL',tokenSym:'AAPLX',fairPrice:336,chainId:42161,decimals:18};let opts;
+ const ctx=vm.createContext({window:{gwXstocksQuote:async()=>quote},STOCK_MAP:{AAPL:stock},gwxPositions:[],
+  gwxConnected:()=>true,gwxPickTrade:()=>stock,gwxUiChainId:()=>42161,tx:(k,f)=>f,esc:x=>x,
+  gwxGetFairReference:async()=>({price:336,solMultiplier:1}),openStockModal:o=>{opts=o;}});
+ const start=html.indexOf('  function gwxQuoteBlockNotice(q)');
+ vm.runInContext(html.slice(start,html.indexOf('  function tradeAttr(',start)),ctx);
+ ctx.onStockBySym('AAPL','buy');return opts.infoAsync;
+}
+test('a quote with poor reference value displays the reason and cannot submit, while a refreshed fair quote recovers',async()=>{
+ const quote={venue:'evm',outTokens:0.0042,priceImpact:0.2944,impactBlocked:true,aggregator:'KyberSwap',gasUsd:0.02};
+ const h=uiHarness(stockInfoHarness(quote));await h.settle();await h.input('2');await h.quote();
+ assert.match(h.ids['#gtmInfo'].innerHTML,/29\.4% less than the payment/);assert.match(h.ids['#gtmInfo'].innerHTML,/KyberSwap/);
+ assert.equal(h.ids['.gtm-confirm'].textContent,'Unfavorable rate');assert.equal(h.ids['.gtm-confirm'].disabled,true);
+ await h.ids['.gtm-confirm'].onclick();assert.equal(h.submitted.length,0);
+ Object.assign(quote,{outTokens:0.0059,priceImpact:0.0088,impactBlocked:false});await h.ids['.gtm-retry'].events.click();
+ assert.equal(h.ids['.gtm-confirm'].disabled,false);assert.doesNotMatch(h.ids['#gtmInfo'].innerHTML,/Trade blocked|less than/);
+});
+test('unverifiable quotes show a price-check failure instead of a fabricated percentage',async()=>{
+ for(const fields of [{priceImpact:NaN},{priceImpact:Infinity},{priceImpact:0.5,impactBlockReason:'missing_share_multiplier'}]){
+  const result=await stockInfoHarness({venue:'evm',outTokens:0.0042,impactBlocked:true,...fields})(2,funded,'');
+  assert.equal(result.blocked,true);assert.equal(result.buttonLabel,'Price unavailable');
+  assert.match(result.html,/Independent share price unavailable/);assert.doesNotMatch(result.html,/NaN|Infinity|less than/);
+ }
+});
 function referenceHarness(){
  let time=100_000,calls=0,status=503,data={fairPrice:12.8,solMultiplier:1,fetchedAt:100_000};
  const ctx=vm.createContext({Date:{now:()=>time},AbortController,setTimeout:()=>1,clearTimeout(){},encodeURIComponent,

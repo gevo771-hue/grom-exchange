@@ -327,11 +327,24 @@
     }
   }
 
-  function isHlSignRetriable(e) {
-    const raw = String((e && e.message) || e || '');
-    if (/4001|ACTION_REJECTED|user rejected|user denied|denied by user|Request rejected by user/i.test(raw)) {
-      return false;
+  function isHlSignatureCancelled(error) {
+    const pending = [error];
+    const seen = new Set();
+    while (pending.length && seen.size < 20) {
+      const e = pending.shift();
+      if (e == null || seen.has(e)) continue;
+      seen.add(e);
+      const raw = typeof e === 'string' ? e : String(e.message || '');
+      if (Number(e.code) === 4001 || e.code === 'ACTION_REJECTED'
+          || /4001|ACTION_REJECTED|user rejected|user denied|denied by user|Request rejected by user|cancelled by user|canceled by user/i.test(raw)) return true;
+      if (typeof e === 'object') pending.push(e.error, e.cause, e.info?.error, e.data?.originalError);
     }
+    return false;
+  }
+
+  function isHlSignRetriable(e) {
+    if (isHlSignatureCancelled(e)) return false;
+    const raw = String((e && e.message) || e || '');
     return /32603|32000|5201|coalesce|Internal JSON-RPC|WCError|unknown method|Missing or invalid|method.*not.*support|Unsupported wallet|signTypedData|An error has occurred|Please,?\s*try again/i.test(raw);
   }
 
@@ -445,6 +458,7 @@
               signedOk = true;
               return sig;
             } catch (eOrig) {
+              if (isHlSignatureCancelled(eOrig)) throw eOrig;
               if (!(TypedDataEncoder && typeof TypedDataEncoder.getPayload === 'function')) {
                 throw eOrig;
               }
@@ -460,7 +474,8 @@
                 });
                 signedOk = true;
                 return sig;
-              } catch (_) {
+              } catch (eV4) {
+                if (isHlSignatureCancelled(eV4)) throw eV4;
                 try {
                   const sig = await wakeReq({
                     method: 'eth_signTypedData',
@@ -468,7 +483,8 @@
                   });
                   signedOk = true;
                   return sig;
-                } catch (_) {
+                } catch (eLegacy) {
+                  if (isHlSignatureCancelled(eLegacy)) throw eLegacy;
                   throw eOrig;
                 }
               }
@@ -1030,6 +1046,9 @@
   function humanizeHlSignError(e) {
     const raw = String((e && e.message) || e || '');
     const w = hlWalletLabel();
+    if (isHlSignatureCancelled(e)) {
+      return 'Signature cancelled in ' + w + ' — tap Sell/Buy again and confirm';
+    }
     if (/insufficient balance to be approved/i.test(raw)) {
       return 'GROM builder needs ≥ $'
         + HL_BUILDER_MIN_USD
@@ -1039,9 +1058,6 @@
     if (/insufficient|not enough|minimum order|Order must|Invalid nonce|tick size|lot size|oracle|perp|spot balance|margin|builder fee|underfunded|dust/i.test(raw)
         && !/32603|32000|Internal JSON-RPC|WCError|signTypedData/i.test(raw)) {
       return raw.length > 160 ? (raw.slice(0, 160) + '…') : raw;
-    }
-    if (/4001|ACTION_REJECTED|user rejected|user denied|denied by user|Request rejected by user|cancelled by user/i.test(raw)) {
-      return 'Signature cancelled in ' + w + ' — tap Sell/Buy again and confirm';
     }
     if (/coalesce|32603|32000|5201|execution reverted|Internal JSON-RPC|WCError|unknown method|Missing or invalid|method.*not.*support|signTypedData|Unsupported wallet|An error has occurred|Please,?\s*try again/i.test(raw)) {
       return 'Подпись не дошла до '

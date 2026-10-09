@@ -1152,9 +1152,6 @@
     min-height: 40px;
     box-sizing: border-box;
   }
-  .grom-logo:hover .logo-img-shell {
-    filter: drop-shadow(0 0 12px rgba(0, 194, 255, 0.35));
-  }
   .grom-logo,
   .grom-logo:active,
   .grom-logo:focus,
@@ -1223,12 +1220,22 @@
   .grom-logo .logo-raster {
     display: block;
     flex-shrink: 0;
-    filter: drop-shadow(0 2px 10px rgba(0, 194, 255, 0.22)) drop-shadow(0 1px 4px rgba(0, 0, 0, 0.55));
+    filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.55));
     transition: filter 0.3s ease, transform 0.25s ease;
   }
-  .grom-logo:hover .logo-svg,
-  .grom-logo:hover .logo-raster {
-    filter: drop-shadow(0 2px 12px rgba(0, 194, 255, 0.35)) drop-shadow(0 1px 4px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px rgba(0, 150, 255, 0.35));
+  /* Touch browsers can retain :hover after a tap. Keep the glow on desktop only. */
+  @media (min-width: 901px) and (hover: hover) and (pointer: fine) {
+    .grom-logo .logo-svg,
+    .grom-logo .logo-raster {
+      filter: drop-shadow(0 2px 10px rgba(0, 194, 255, 0.22)) drop-shadow(0 1px 4px rgba(0, 0, 0, 0.55));
+    }
+    .grom-logo:hover .logo-img-shell {
+      filter: drop-shadow(0 0 12px rgba(0, 194, 255, 0.35));
+    }
+    .grom-logo:hover .logo-svg,
+    .grom-logo:hover .logo-raster {
+      filter: drop-shadow(0 2px 12px rgba(0, 194, 255, 0.35)) drop-shadow(0 1px 4px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px rgba(0, 150, 255, 0.35));
+    }
   }
   .logo-svg--header { width: 44px; height: 44px; }
   .logo-raster--header {

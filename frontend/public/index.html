@@ -17531,6 +17531,18 @@ var GROM_XSTOCKS = [
     if (!row) return;
     onStockBySym(row.dataset.sym, side);
   }
+  function gwxQuoteBlockNotice(q) {
+    if (!q || !q.impactBlocked) return null;
+    var impact = Number(q.priceImpact);
+    if (q.impactBlockReason === 'missing_fair_value' || q.impactBlockReason === 'missing_share_multiplier'
+        || q.impactBlockReason === 'invalid_fair_value' || !Number.isFinite(impact) || !(impact > 0)) {
+      return { text: tx('px_reference_price_missing', 'Independent share price unavailable — refresh the quote to retry.'), buttonLabel: tx('px_reference_unavailable', 'Price unavailable') };
+    }
+    return {
+      text: tx('px_quote_value_gap', 'At the reference price, the received tokens are worth about {n}% less than the payment. Trade blocked. Refresh the quote or change the amount.').replace('{n}', (impact * 100).toFixed(1)),
+      buttonLabel: tx('px_unfavorable_rate', 'Unfavorable rate'),
+    };
+  }
   function onStockBySym(sym, side) {
     if (!sym) return;
     if (!gwxConnected()) { gwxOpenConnect(); return; }
@@ -17622,12 +17634,13 @@ var GROM_XSTOCKS = [
         var gas = (q.gasUsd != null) ? (' · gas ≈ $' + Number(q.gasUsd).toFixed(2)) : '';
         var route = (q.aggregator || q.tool || 'DEX')
           + (q.venue === 'solana' ? ' · Solana' : (q.venue === 'bridge-sol' ? ' · ' + (payment ? payment.chain : chainLbl) + ' → Solana' : ' · ' + (payment ? payment.chain : chainLbl)));
+        var blockNotice = gwxQuoteBlockNotice(q);
         return {
-          html: q.impactBlockReason === 'missing_fair_value' || q.impactBlockReason === 'missing_share_multiplier'
-            ? tx('px_reference_price_missing', 'Independent share price unavailable — trade disabled.')
-            : ('≈ <b>' + outAmt.toFixed(4) + '</b> ' + toSym
+          html: ('≈ <b>' + outAmt.toFixed(4) + '</b> ' + toSym
               + ' · route: ' + esc(route)
-              + ' · fee ' + (Number(q._gromFeeBps != null ? q._gromFeeBps : 20) / 100).toFixed(2) + '%' + gas),
+              + ' · fee ' + (Number(q._gromFeeBps != null ? q._gromFeeBps : 20) / 100).toFixed(2) + '%' + gas)
+              + (blockNotice ? '<br><strong>' + esc(blockNotice.text) + '</strong>' : ''),
+          buttonLabel: blockNotice && blockNotice.buttonLabel,
           quote: q, outAmt: outAmt,
           blocked: !!q.impactBlocked,
           showSolForm: q.venue === 'bridge-sol' || q.venue === 'solana',

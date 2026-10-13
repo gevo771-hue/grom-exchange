@@ -44,3 +44,10 @@ frontend/public/*.gz
 frontend/public/**/*.gz
 frontend/public/*.[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].js
 frontend/public/*.[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].css
+
+# Private marketing operations live outside the application repository.
+/marketing/
+/tg/
+/grom-tg/
+.bot-token
+crontab-backups/

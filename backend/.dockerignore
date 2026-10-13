@@ -1,0 +1,8 @@
+# Never send local dependencies, secrets, tests or backups to the image builder.
+**
+!Dockerfile
+!package.json
+!package-lock.json
+!ecosystem.config.cjs
+!src/
+!src/**

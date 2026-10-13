@@ -2,8 +2,8 @@
 /**
  * GROM frontend build — content-hash cache busting (PERF §Update 2026-07-14 A.1).
  *
- * Zero dependencies (fs + crypto only). What it does:
- *   1. frontend/public → frontend/dist (full copy)
+ * No npm dependencies; requires a Git checkout. What it does:
+ *   1. Versioned frontend/public sources → frontend/dist (clean copy)
  *   2. Every top-level grom-*.js / *.css gets a hashed twin:
  *        grom-wallet.js → grom-wallet.a7b3c9d1.js
  *      Originals stay in dist as a fallback for old HTML cached at the edge.
@@ -17,7 +17,7 @@
 import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import {
-  cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync,
+  existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,11 +41,13 @@ import {
   SEO_LOCALES,
 } from './seo-locales.mjs';
 import { getSeoMeta } from './seo-copy-localized.mjs';
+import { frontendSources, copyFrontendSources } from './frontend-sources.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC = 'frontend/public';
 const OUT = 'frontend/dist';
 const SEO_STAMP = join(__dirname, '.seo-content-stamp.json');
+const sourceFiles = frontendSources(process.cwd());
 
 // Fail before touching dist. Missing markers previously made the build silently
 // publish the raw SPA for every localized URL while still exiting successfully.
@@ -82,7 +84,7 @@ if (process.env.GROM_SKIP_WC_BUNDLE === '1') {
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
-cpSync(SRC, OUT, { recursive: true });
+copyFrontendSources(process.cwd(), OUT, sourceFiles);
 // The app loads this fragment after the public shell removes the admin section.
 // Derive it from the same source so controls and event handlers cannot drift.
 writeFileSync(join(OUT, 'pages/backoffice.html'), extractSectionInnerHtml(sourceIndexHtml, 'page-backoffice'));
@@ -114,7 +116,7 @@ writeFileSync(join(OUT, 'pages/backoffice.html'), extractSectionInnerHtml(source
 
 
 // Discover hashable top-level assets (JS + CSS only; HTML stays un-hashed).
-const hashable = readdirSync(SRC).filter((f) => /^[\w-]+\.(js|css)$/.test(f));
+const hashable = sourceFiles.filter((f) => /^[\w-]+\.(js|css)$/.test(f));
 
 const map = {}; // 'grom-wallet.js' → 'grom-wallet.a7b3c9d1.js'
 for (const f of hashable) {

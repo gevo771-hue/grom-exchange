@@ -41,3 +41,11 @@ git diff --check
 - Остальные агрегаторы обязаны иметь свои fee identifiers; при отсутствии конфигурации маршрут остаётся недоступным.
 
 Frontend выкладывается только из `frontend/dist/` после clean build. Старое содержимое web-root удаляется перед копированием, чтобы hashed bundles не накапливались. Backend и миграции выкладываются отдельным контролируемым шагом с проверкой `/health` и `/api/swap/public-config`.
+
+## Чистые входные файлы релиза
+
+Сборка frontend требует Git checkout и копирует из `frontend/public/` только файлы, добавленные в Git. Новые исходники и assets нужно добавить через `git add` перед сборкой. Незарегистрированные preview, старые hashed bundles, gzip и резервные копии не попадают в `dist`, даже если остались на сервере. Отсутствующие tracked-файлы и symlink приводят к остановке до очистки прежнего `dist`.
+
+Docker-контексты ограничены `.dockerignore`: frontend передаёт только nginx-конфигурацию, backend — manifests и runtime-код. Локальные `node_modules` не заменяют зависимости, установленные `npm ci` внутри образа. Секреты, данные, backups и dev-файлы не должны копироваться в Docker-контекст.
+
+Резервные копии держать вне `/opt/grom-exchange`, например в `/root/grom-maintenance-backups`. Не использовать `git clean -fdx` на production: `.env` и runtime-данные нужно сохранять. Одноразовую очистку выполнять по предварительно проверенному списку с backup и под `/tmp/grom-deploy.lock`.

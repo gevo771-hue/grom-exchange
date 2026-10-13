@@ -34,3 +34,13 @@ coverage/
 .idea/
 .vscode/
 *.swp
+
+# Local recovery/build artefacts must not be committed.
+*.orig
+*.rej
+*.bak
+frontend/dist.backup*/
+frontend/public/*.gz
+frontend/public/**/*.gz
+frontend/public/*.[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].js
+frontend/public/*.[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].css

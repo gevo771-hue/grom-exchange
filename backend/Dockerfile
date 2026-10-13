@@ -8,9 +8,9 @@ COPY package.json package-lock.json* ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev --ignore-scripts
 
-# Copy source and strip dev-only artefacts.
-COPY . .
-RUN rm -rf tests __tests__ *.test.js .eslintrc* .prettier* .git .github
+# Copy only runtime sources; local node_modules must not overwrite npm ci.
+COPY src ./src
+COPY ecosystem.config.cjs ./ecosystem.config.cjs
 
 # ---- runtime stage ----
 FROM node:20-alpine AS runtime

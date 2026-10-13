@@ -1,0 +1,4 @@
+# The frontend image only contains nginx configuration. dist is deployed separately.
+**
+!Dockerfile
+!nginx.conf

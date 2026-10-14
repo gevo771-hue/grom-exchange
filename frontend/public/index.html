@@ -2769,8 +2769,30 @@
   .boff-kpi .k { font-size: 10.5px; color: var(--silver5); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
   .boff-kpi .v { font-size: 21px; color: var(--silver1); font-weight: 800; margin-top: 4px; }
   .boff-kpi .s { font-size: 11px; color: var(--silver4); margin-top: 2px; }
+    .boff-event-card{margin:10px 0;padding:18px;border:1px solid rgba(136,192,208,.17);border-radius:16px;background:linear-gradient(130deg,rgba(136,192,208,.045),rgba(7,17,28,.16));overflow-wrap:anywhere}
+    .boff-event-top,.boff-event-meta{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+    .boff-event-top time{color:var(--silver4);font-size:12px;margin-left:auto;font-variant-numeric:tabular-nums}
+    .boff-event-title{font-size:14px;font-weight:600;line-height:1.6;margin:12px 0 6px}
+    .boff-event-meta{font-size:11px;color:var(--silver4);margin-bottom:12px}
+    .boff-trade-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0 8px}
+    .boff-fact{padding:12px;border:1px solid rgba(136,192,208,.12);border-radius:10px;background:rgba(8,18,31,.18);min-width:0}
+    .boff-fact>span{display:block;color:var(--silver4);font-size:10px;letter-spacing:.04em;margin-bottom:7px}
+    .boff-fact strong{font-size:13px;font-weight:600;line-height:1.45;display:block}
+    .boff-fee-confirmed strong{color:var(--success)}
+    .boff-event-state{color:var(--ice);font-size:12px;line-height:1.5;margin-top:10px}
+    .boff-evidence{font-size:11px;color:var(--silver4);line-height:1.5;margin-top:4px}
+    .boff-event-details{border-top:1px solid rgba(136,192,208,.12);margin-top:14px;padding-top:10px;font-size:12px}
+    .boff-event-details summary{cursor:pointer;color:var(--ice);padding:4px 0;min-height:28px}
+    .boff-event-details dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}
+    .boff-event-details dt,.boff-original>span{font-size:10px;color:var(--silver4);margin-bottom:4px}
+    .boff-event-details dd{margin:0;line-height:1.5;user-select:text}
+    .boff-tx{margin-top:12px;line-height:2}.boff-tx code{user-select:text}.boff-tx a{color:var(--ice)}
+    .boff-original{padding:12px;background:rgba(0,0,0,.12);border-radius:8px;margin-top:12px}.boff-original p{margin:0;line-height:1.5}
+    .boff-monitor-search{width:min(100%,420px);margin:0 0 12px;height:38px;font-size:12px}
+    @media(max-width:1200px){.boff-trade-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:600px){.boff-event-card{padding:12px}.boff-event-top{gap:6px}.boff-event-top time{margin-left:0;font-size:10px}.boff-event-details dl{grid-template-columns:1fr}.boff-fact{padding:9px}.boff-fact strong{font-size:12px}}
   .boff-row {
-    display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr auto;
+    display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr;
     gap: 8px; padding: 10px 12px; border-top: 1px solid rgba(200,212,232,0.05); align-items: center;
     font-size: 12px;
   }
@@ -2786,8 +2808,8 @@
   .boff-log .item .t { color: var(--silver1); font-weight: 700; }
   @media (max-width: 1100px) {
     .boff-grid { grid-template-columns: repeat(2, 1fr); }
-    .boff-row { grid-template-columns: 1.2fr 1fr 1fr; }
-    .boff-row > *:nth-child(4), .boff-row > *:nth-child(5) { display: none; }
+
+    .boff-row { grid-template-columns: repeat(2,minmax(0,1fr)); }
   }
   .seg {
     display: inline-flex; gap: 2px;
@@ -7106,6 +7128,7 @@
               <option value="markets">Рынки</option>
               <option value="wallet">Кошелёк / SIWE</option>
               <option value="swap">Своп</option>
+              <option value="spot">Спот</option>
               <option value="futures">Фьючи</option>
               <option value="predict">Прогнозы</option>
               <option value="xstocks">Акции</option>
@@ -7117,7 +7140,7 @@
         <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
           Диагностика по телеметрии, без догадок о действиях пользователя. Лента хранит прошлые сообщения; это не список нерешённых проблем. Повторная проверка читает данные и не отправляет сделки.
         </p>
-        <div class="boff-row boff-head"><div>Время</div><div>Кошелёк</div><div>Продукт</div><div>Причина</div><div>Факты и состояние</div><div>Уровень</div></div>
+        <input id="boffIssuesSearch" class="set-input boff-monitor-search" type="search" aria-label="Поиск сообщений" placeholder="Кошелёк, пара, инструмент, хеш или ошибка" oninput="boffSearchActivity('issues')" />
         <div id="boffIssuesList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
         </div>
@@ -7142,7 +7165,7 @@
             <button class="mini-btn" onclick="loadBoffFeed()">Обновить</button>
           </div>
         </div>
-        <div class="boff-row boff-head"><div>Время</div><div>Кошелёк</div><div>Продукт</div><div>Действие</div><div>Детали</div><div>Статус</div></div>
+        <input id="boffFeedSearch" class="set-input boff-monitor-search" type="search" aria-label="Поиск операций" placeholder="Кошелёк, пара, инструмент, хеш или ошибка" oninput="boffSearchActivity('feed')" />
         <div id="boffFeedList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
         </div>
@@ -15346,6 +15369,16 @@ var GROM_XSTOCKS = [
     ov.querySelector('.gtm-x').onclick = closeModal;
     ov.querySelector('.gtm-cancel').onclick = closeModal;
     ov.addEventListener('click', function (e) { if (e.target === ov) closeModal(); });
+    function stockIssueContext(v) {
+      var selected = payment(), q = lastQuote && lastQuote.quote || {};
+      return { side: sideBuy ? 'buy' : 'sell', contract: opts.tokenSym || chartSym,
+        from: sideBuy ? selected && selected.sym : opts.tokenSym,
+        to: sideBuy ? opts.tokenSym : (q._toSym || 'USDT'), amount: v,
+        amountAsset: sideBuy ? selected && selected.sym : opts.tokenSym,
+        fromChainId: q.venue === 'solana' ? 1151111081099710 : (sideBuy ? selected && selected.chainId : q._execChainId || opts.tradeChainId),
+        toChainId: q.venue === 'solana' || q.venue === 'bridge-sol' ? 1151111081099710 : q._execChainId,
+        aggregator: q.aggregator || q.tool, venue: q.venue };
+    }
     confirmBtn.onclick = async function () {
       if (confirmBtn.disabled || submitting) return;
       var v = parseFloat(amt.value || '0');
@@ -15375,9 +15408,20 @@ var GROM_XSTOCKS = [
       confirmBtn.disabled = true;
       confirmBtn.textContent = tx('px_signing', 'Confirm in wallet…');
       try {
-        await opts.onConfirm(v, lastQuote, payment(), syncSolDest());
+        var result = await opts.onConfirm(v, lastQuote, payment(), syncSolDest());
+        try {
+          if (typeof window.gwTxLogPush === 'function' && lastQuote && lastQuote.quote
+              && /^(solana|bridge-sol)$/.test(lastQuote.quote.venue || '')) {
+            var context = stockIssueContext(v);
+            window.gwTxLogPush(Object.assign({}, context, { product: 'xstocks', action: sideBuy ? 'buy' : 'sell',
+              fromSym: context.from, toSym: context.to, amt: v, status: 'submitted',
+              hash: typeof result === 'string' ? result : result && (result.hash || result.signature) }));
+          }
+        } catch (_) {}
         closeModal();
       } catch (e) {
+        try { if (typeof window.gromReportIssue === 'function') window.gromReportIssue({ product: 'xstocks', action: 'trade_failed',
+          message: String(e && e.message || e), detail: stockIssueContext(v) }); } catch (_) {}
         submitting = false;
         ov.querySelectorAll('input, select, .gtm-presets button').forEach(function (el) { el.disabled = false; });
         notify((e && e.message) || tx('px_swap_fail', 'Swap failed'), 'error');
@@ -16008,6 +16052,7 @@ var GROM_XSTOCKS = [
                 action: live ? 'pm_bet_failed' : 'demo_bet_failed',
                 message: String((e && e.message) || e || 'Trade failed').slice(0, 500),
                 detail: {
+                  ...(opts.issueContext || {}),
                   live: !!live,
                   amount: v,
                   amt: v,
@@ -17576,6 +17621,8 @@ var GROM_XSTOCKS = [
       maxToken: maxTok,
       side: side,
       chartSym: sym,
+      tokenSym: trade.tokenSym,
+      tradeChainId: trade.chainId,
       yahooSym: s.yahooSym || sym,
       solMint: trade.solMint || '',
       refPrice: px,
@@ -17659,8 +17706,9 @@ var GROM_XSTOCKS = [
         px = reference.price;
         trade.solMultiplier = reference.solMultiplier;
         if (!(px > 0)) throw new Error(tx('px_reference_price_missing', 'Independent share price unavailable — trade disabled.'));
+        var result;
         if (side === 'buy') {
-          await window.gwXstocksBuy({
+          result = await window.gwXstocksBuy({
             tokenSym: trade.tokenSym, usdtAmount: v, chainId: trade.chainId, payment: payment, receiveAddress: receiveAddress, expectedQuote: displayed && displayed.quote,
             address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
             solMint: trade.solMint, solDecimals: trade.solDecimals, solMultiplier: trade.solMultiplier,
@@ -17669,7 +17717,7 @@ var GROM_XSTOCKS = [
           });
           notify(tx('px_bought', 'Bought') + ' ' + sym + ' · ' + money(v), 'success');
         } else {
-          await window.gwXstocksSell({
+          result = await window.gwXstocksSell({
             tokenSym: trade.tokenSym, tokenAmount: v, chainId: trade.chainId,
             address: trade.address, decimals: trade.decimals, name: s.name, logo: s.logo,
             solMint: trade.solMint, solDecimals: trade.solDecimals, solMultiplier: trade.solMultiplier,
@@ -17680,6 +17728,7 @@ var GROM_XSTOCKS = [
         }
         await refreshUsdtBalChip();
         await gwxLoadPositions();
+        return result;
       },
     });
   }
@@ -17735,6 +17784,7 @@ var GROM_XSTOCKS = [
 
     openModal({
       live: canLive,
+      issueContext: { market: q, outcome: label, side: 'buy', amountAsset: 'pUSD' },
       title: tx('px_bet_title', 'Bet:') + ' ' + label,
       sub: q + modeTag,
       confirmLabel: tx('gtm_buy_shares', 'Buy shares'),
@@ -17764,6 +17814,9 @@ var GROM_XSTOCKS = [
           tokenId: tokenId, amountUsd: v, tickSize: tickSize, negRisk: negRisk,
         });
         var oid = (resp && (resp.orderID || resp.orderId || resp.id)) || '';
+        try { if (typeof window.gwTxLogPush === 'function') window.gwTxLogPush({ product: 'predict', action: 'order_submitted',
+          market: q, outcome: label, side: 'buy', amt: v, amountAsset: 'pUSD', asset: 'pUSD',
+          fromChainId: 137, orderId: String(oid), status: 'submitted' }); } catch (_) {}
         notify(tx('px_pm_order_ok', 'Order submitted') + (oid ? (' · ' + String(oid).slice(0, 10) + '…') : ''), 'success');
         try { await renderPredictPosLive(); } catch (_) { renderPredictPos(); }
       } : null,
@@ -20031,11 +20084,11 @@ window.submitFuturesOrder = async function (side) {
       try {
         if (typeof window.gromReportIssue === 'function') {
           window.gromReportIssue({
-            product: 'futures',
+            product: spotMode ? 'spot' : 'futures',
             action: /reject|denied|4001|cancel/i.test(msg) ? 'tx_rejected' : 'order_failed',
             message: msg,
             detail: {
-              side, contract, size,
+              side, contract, size, sizeAsset: String(contract).split(/[-/]/)[0], leverage, price: type === 'market' ? undefined : price, orderType: type, reduceOnly, isCross,
               kind: /reject|denied|4001|cancel/i.test(msg) ? 'cancelled' : 'failed',
               admin_brief: /reject|denied|4001|cancel/i.test(msg)
                 ? 'Отклонил фьючерсный ордер в кошельке'
@@ -20516,25 +20569,65 @@ window.loadBoffStats = loadBoffStats;
 function boffMonitorEsc(value) {
   return String(value == null ? '' : value).replace(/[&<>"']/g, function(c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; });
 }
+function boffTradeHtml(trade) {
+  if (!trade) return '';
+  var a = trade.amount;
+  var fee = trade.commission || {};
+  var feeValue = fee.status === 'confirmed' && fee.amount_usd != null ? '$' + fee.amount_usd : (fee.label || 'Нет подтверждённых данных');
+  function fact(label, value, cls) { return '<div class="boff-fact ' + (cls || '') + '"><span>' + boffMonitorEsc(label) + '</span><strong>' + boffMonitorEsc(value) + '</strong></div>'; }
+  return '<div class="boff-trade-grid">'
+    + fact(trade.pair_label || 'Пара / инструмент', trade.pair || 'Не записаны')
+    + fact(a && a.label || 'Сумма в записи', a ? a.value + ' ' + (a.asset || '(единица не записана)') : 'Не записана')
+    + fact('Сеть', trade.network || 'Не записана')
+    + fact('Комиссия GROM', feeValue, fee.status === 'confirmed' ? 'boff-fee-confirmed' : '') + '</div>'
+    + '<div class="boff-evidence">' + boffMonitorEsc(trade.execution_label) + '</div>';
+}
+function boffEventDetailsHtml(ev) {
+  var d = ev.detail || {}, trade = ev.trade || {};
+  var fields = [{ label: 'Действие', value: ev.action }, { label: 'Кошелёк', value: ev.wallet },
+    { label: 'Приложение кошелька', value: d.walletLabel }, { label: 'Версия', value: ev.app_version || d.appVer },
+    { label: 'Этап', value: trade.stage || d.stage }, { label: 'ID операции', value: d.opId }]
+    .concat(trade.fields || []);
+  if (trade.commission) fields.push({ label: 'Учёт комиссии', value: trade.commission.evidence });
+  var html = fields.filter(function (f) { return f.value != null && f.value !== ''; }).map(function (f) {
+    return '<div><dt>' + boffMonitorEsc(f.label) + '</dt><dd>' + boffMonitorEsc(f.value) + '</dd></div>';
+  }).join('');
+  var tx = trade.tx;
+  var link = tx && /^https:\/\/(?:etherscan\.io|optimistic\.etherscan\.io|bscscan\.com|polygonscan\.com|basescan\.org|arbiscan\.io|snowtrace\.io|solscan\.io)\/tx\/(?:0x[a-f\d]{64}|[1-9A-HJ-NP-Za-km-z]{64,88})$/i.test(tx.url || '') ? tx.url : null;
+  return '<details class="boff-event-details"><summary>Детали операции</summary><dl>' + html + '</dl>'
+    + (ev.wallet ? '<button type="button" class="mini-btn" data-copy="' + boffMonitorEsc(ev.wallet) + '" onclick="boffCopyText(this)">Копировать адрес</button> ' : '')
+    + (tx ? '<div class="boff-tx"><span>Хеш / ID: </span><code>' + boffMonitorEsc(tx.hash) + '</code> '
+      + '<button type="button" class="mini-btn" data-copy="' + boffMonitorEsc(tx.hash) + '" onclick="boffCopyText(this)">Копировать</button> '
+      + (link ? '<a target="_blank" rel="noopener noreferrer" href="' + boffMonitorEsc(link) + '">Открыть в обозревателе ↗</a>' : '') + '</div>'
+      : (ev.trade ? '<p class="boff-evidence">Хеш транзакции не записан.</p>' : ''))
+    + (d.message ? '<div class="boff-original"><span>Исходное сообщение</span><p>' + boffMonitorEsc(String(d.message).slice(0, 600)) + '</p></div>' : '') + '</details>';
+}
 function boffIssueRowHtml(ev) {
   var sev = ev.severity || 'error';
   var chip = sev === 'info' ? 'ok' : (sev === 'warn' ? 'warn' : 'err');
-  var src = ev.detail && ev.detail.source;
-  var srcHint = src === 'health_pulse' ? ' · сервер' : ' · клиент';
+  var srcHint = ev.detail && ev.detail.source === 'health_pulse' ? ' · сервер' : ' · клиент';
   var repeats = Number(ev.repeats_24h) || 0;
-  return '<div class="boff-row">'
-    + '<div class="mono" style="font-size:11px">' + boffMonitorEsc(boffFmtTime(ev.at)) + '</div>'
-    + '<div class="mono" style="font-size:11px">' + boffMonitorEsc(ev.wallet ? boffShortAddr(ev.wallet) : '—')
-      + '<div style="opacity:.65">' + boffMonitorEsc(ev.detail && ev.detail.walletLabel || '') + '</div></div>'
-    + '<div><span class="boff-chip">' + boffMonitorEsc((ev.product_label || ev.product) + srcHint) + '</span>'
-      + (ev.app_version ? '<div style="font-size:10px;opacity:.65">Версия ' + boffMonitorEsc(ev.app_version) + '</div>' : '') + '</div>'
-    + '<div class="mono" style="font-size:11px">' + boffMonitorEsc(ev.cause || '—')
-      + (repeats ? '<div style="opacity:.65">' + repeats + ' сообщ. / 24ч</div>' : '') + '</div>'
-    + '<div style="font-size:12px;color:var(--silver3);line-height:1.45">' + boffMonitorEsc(ev.ai_summary || '')
-      + '<div style="color:var(--ice);margin-top:5px">' + boffMonitorEsc(ev.state_label || 'Текущее состояние неизвестно') + '</div>'
-      + '<div style="opacity:.65;font-size:11px">' + boffMonitorEsc(ev.evidence_label || 'Сообщение клиента') + '</div></div>'
-    + '<div><span class="boff-chip ' + chip + '">' + boffMonitorEsc(sev) + '</span></div></div>';
+  return '<article class="boff-event-card"><div class="boff-event-top"><span class="boff-chip">'
+    + boffMonitorEsc((ev.product_label || ev.product) + srcHint) + '</span><time>' + boffMonitorEsc(boffFmtTime(ev.at)) + '</time>'
+    + '<span class="boff-chip ' + chip + '">' + boffMonitorEsc(({ error: 'Ошибка', warn: 'Внимание', info: 'Информация' })[sev] || sev) + '</span></div>'
+    + '<div class="boff-event-title">' + boffMonitorEsc(ev.ai_summary || ev.cause || ev.action) + '</div>'
+    + '<div class="boff-event-meta"><span title="' + boffMonitorEsc(ev.wallet) + '">' + boffMonitorEsc(ev.wallet ? boffShortAddr(ev.wallet) : 'Без адреса кошелька') + '</span>'
+    + '<code>' + boffMonitorEsc(ev.cause || '') + '</code>'
+    + (repeats ? '<span>' + repeats + ' сообщений этого типа / 24ч</span>' : '') + '</div>'
+    + boffTradeHtml(ev.trade)
+    + '<div class="boff-event-state">' + boffMonitorEsc(ev.state_label || 'Текущее состояние неизвестно') + '</div>'
+    + '<div class="boff-evidence">' + boffMonitorEsc(ev.evidence_label || 'Сообщение клиента') + '</div>'
+    + boffEventDetailsHtml(ev) + '</article>';
 }
+window.boffCopyText = async function (button) {
+  try { await navigator.clipboard.writeText(button.getAttribute('data-copy') || ''); button.textContent = 'Скопировано'; }
+  catch (_) { button.textContent = 'Выделите текст вручную'; }
+};
+var __boffSearchTimers = {};
+window.boffSearchActivity = function (kind) {
+  clearTimeout(__boffSearchTimers[kind]);
+  __boffSearchTimers[kind] = setTimeout(function () { if (kind === 'issues') loadBoffIssues(); else loadBoffFeed(); }, 300);
+};
 function boffHealthChipHtml(c) {
   var cached = c.verification === 'cached';
   var ok = !!c.ok && !cached;
@@ -20609,6 +20702,7 @@ window.loadBoffHealth = loadBoffHealth;
 
 var __boffIssuesPageSize = 5;
 var __boffIssuesOffset = 0;
+var __boffIssuesRequest = 0;
 function boffSetIssuesMore(show) {
   var el = document.getElementById('boffIssuesMore');
   if (el) el.hidden = !show;
@@ -20621,6 +20715,8 @@ async function loadBoffIssues(reset) {
     return;
   }
   if (reset !== false) __boffIssuesOffset = 0;
+  var request = ++__boffIssuesRequest;
+  var search = document.getElementById('boffIssuesSearch')?.value || '';
   var f = document.getElementById('boffIssuesFilter')?.value || '';
   if (__boffIssuesOffset === 0) {
     host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>';
@@ -20628,11 +20724,12 @@ async function loadBoffIssues(reset) {
   }
   try {
     var qs = '?limit=' + __boffIssuesPageSize + '&offset=' + __boffIssuesOffset
-      + (f ? '&product=' + encodeURIComponent(f) : '') + boffPeriodQs();
+      + (f ? '&product=' + encodeURIComponent(f) : '') + (search ? '&search=' + encodeURIComponent(search) : '') + boffPeriodQs();
     var data = await gget('/api/admin/activity/issues' + qs);
+    if (request !== __boffIssuesRequest) return;
     var rows = (data && data.issues) || [];
     var cnt = document.getElementById('boffIssuesCount');
-    if (cnt) cnt.textContent = data && data.open_24h != null ? ('· ' + (data.reports_24h != null ? data.reports_24h : data.open_24h) + ' сообщений за 24ч') : '';
+    if (cnt) cnt.textContent = data && data.open_24h != null ? ('· ' + (data.reports_24h != null ? data.reports_24h : data.open_24h) + ' сообщений по продукту за 24ч') : '';
     if (!data) {
       if (__boffIssuesOffset === 0) host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Ошибка API</div><div></div><div></div><div></div><div></div><div></div></div>';
       boffSetIssuesMore(false);
@@ -20646,8 +20743,9 @@ async function loadBoffIssues(reset) {
     var html = rows.map(boffIssueRowHtml).join('');
     if (__boffIssuesOffset === 0) host.innerHTML = html; else host.innerHTML += html;
     __boffIssuesOffset += rows.length;
-    boffSetIssuesMore(!!(data.hasMore || rows.length >= __boffIssuesPageSize));
+    boffSetIssuesMore(!!data.hasMore);
   } catch (_) {
+    if (request !== __boffIssuesRequest) return;
     if (__boffIssuesOffset === 0) host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Ошибка загрузки</div><div></div><div></div><div></div><div></div><div></div></div>';
     boffSetIssuesMore(false);
   }
@@ -20657,8 +20755,13 @@ window.loadBoffIssues = loadBoffIssues;
 
 var __boffFeedPageSize = 5;
 var __boffFeedOffset = 0;
+var __boffFeedRequest = 0;
 function boffFeedRowHtml(ev) {
-  return '<div class="boff-row"><div class="mono" style="font-size:11px">' + boffMonitorEsc(boffFmtTime(ev.at)) + '</div><div class="mono" style="font-size:11px">' + boffMonitorEsc(boffShortAddr(ev.wallet)) + '</div><div><span class="boff-chip">' + boffMonitorEsc(ev.product_label || ev.product) + '</span></div><div class="mono">' + boffMonitorEsc(boffActionRu(ev.product, ev.action)) + '</div><div style="font-size:12px;color:var(--silver4)">' + boffMonitorEsc(boffDetailText(ev)) + '</div><div><span class="pill-dot">' + boffMonitorEsc(ev.status || '—') + '</span></div></div>';
+  return '<article class="boff-event-card"><div class="boff-event-top"><span class="boff-chip">' + boffMonitorEsc(ev.product_label || ev.product) + '</span><time>' + boffMonitorEsc(boffFmtTime(ev.at)) + '</time></div>'
+    + '<div class="boff-event-title">' + boffMonitorEsc(boffActionRu(ev.product, ev.action)) + '</div>'
+    + '<div class="boff-event-meta"><span>' + boffMonitorEsc(boffShortAddr(ev.wallet)) + '</span><span>Статус в записи: ' + boffMonitorEsc(ev.status || 'не записан') + '</span></div>'
+    + (ev.trade ? boffTradeHtml(ev.trade) : '<div class="boff-evidence">' + boffMonitorEsc(boffDetailText(ev)) + '</div>')
+    + boffEventDetailsHtml(ev) + '</article>';
 }
 function boffSetFeedMore(show) {
   var el = document.getElementById('boffFeedMore');
@@ -20672,14 +20775,17 @@ async function loadBoffFeed(reset) {
     return;
   }
   if (reset !== false) __boffFeedOffset = 0;
+  var request = ++__boffFeedRequest;
+  var search = document.getElementById('boffFeedSearch')?.value || '';
   var f = document.getElementById('boffFeedFilter')?.value || '';
   if (__boffFeedOffset === 0) {
     host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>';
     boffSetFeedMore(false);
   }
   try {
-    var qs = '?limit=' + __boffFeedPageSize + '&offset=' + __boffFeedOffset + (f ? '&product=' + encodeURIComponent(f) : '') + boffPeriodQs();
+    var qs = '?limit=' + __boffFeedPageSize + '&offset=' + __boffFeedOffset + (f ? '&product=' + encodeURIComponent(f) : '') + (search ? '&search=' + encodeURIComponent(search) : '') + boffPeriodQs();
     var data = await gget('/api/admin/activity/feed' + qs);
+    if (request !== __boffFeedRequest) return;
     var rows = (data && data.events) || [];
     if (!data) {
       if (__boffFeedOffset === 0) host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Ошибка API</div><div></div><div></div><div></div><div></div><div></div></div>';
@@ -20694,8 +20800,9 @@ async function loadBoffFeed(reset) {
     var html = rows.map(boffFeedRowHtml).join('');
     if (__boffFeedOffset === 0) host.innerHTML = html; else host.innerHTML += html;
     __boffFeedOffset += rows.length;
-    boffSetFeedMore(!!(data.hasMore || rows.length >= __boffFeedPageSize));
+    boffSetFeedMore(!!data.hasMore);
   } catch (_) {
+    if (request !== __boffFeedRequest) return;
     if (__boffFeedOffset === 0) host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Ошибка загрузки</div><div></div><div></div><div></div><div></div><div></div></div>';
     boffSetFeedMore(false);
   }

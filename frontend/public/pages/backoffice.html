@@ -69,6 +69,7 @@
               <option value="markets">Рынки</option>
               <option value="wallet">Кошелёк / SIWE</option>
               <option value="swap">Своп</option>
+              <option value="spot">Спот</option>
               <option value="futures">Фьючи</option>
               <option value="predict">Прогнозы</option>
               <option value="xstocks">Акции</option>
@@ -80,7 +81,7 @@
         <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
           Диагностика по телеметрии, без догадок о действиях пользователя. Лента хранит прошлые сообщения; это не список нерешённых проблем. Повторная проверка читает данные и не отправляет сделки.
         </p>
-        <div class="boff-row boff-head"><div>Время</div><div>Кошелёк</div><div>Продукт</div><div>Причина</div><div>Факты и состояние</div><div>Уровень</div></div>
+        <input id="boffIssuesSearch" class="set-input boff-monitor-search" type="search" aria-label="Поиск сообщений" placeholder="Кошелёк, пара, инструмент, хеш или ошибка" oninput="boffSearchActivity('issues')" />
         <div id="boffIssuesList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
         </div>
@@ -105,7 +106,7 @@
             <button class="mini-btn" onclick="loadBoffFeed()">Обновить</button>
           </div>
         </div>
-        <div class="boff-row boff-head"><div>Время</div><div>Кошелёк</div><div>Продукт</div><div>Действие</div><div>Детали</div><div>Статус</div></div>
+        <input id="boffFeedSearch" class="set-input boff-monitor-search" type="search" aria-label="Поиск операций" placeholder="Кошелёк, пара, инструмент, хеш или ошибка" oninput="boffSearchActivity('feed')" />
         <div id="boffFeedList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
         </div>

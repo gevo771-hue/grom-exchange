@@ -69,7 +69,7 @@ test('runtime monitor captures first-party crashes but drops cancellations, thir
 test('UI report safely escapes diagnostics and renders unknown results separately from severity',()=>{
  const html=readFileSync(new URL('../../frontend/public/index.html',import.meta.url),'utf8');
  const ctx=vm.createContext({boffFmtTime:x=>x,boffShortAddr:x=>x});
- vm.runInContext(fn(html,'boffMonitorEsc')+'\n'+fn(html,'boffIssueRowHtml'),ctx);
+ vm.runInContext(['boffMonitorEsc','boffTradeHtml','boffEventDetailsHtml','boffIssueRowHtml'].map(n=>fn(html,n)).join('\n'),ctx);
  const out=ctx.boffIssueRowHtml({at:'today',product_label:'<img src=x>',cause:'unknown',ai_summary:'<script>bad</script>',state_label:'Неизвестно',evidence_label:'Телеметрия',repeats_24h:2});
  assert.doesNotMatch(out,/<script|<img/);assert.match(out,/Неизвестно/);assert.match(out,/2 сообщ/);
 });

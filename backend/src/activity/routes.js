@@ -89,7 +89,7 @@ export default function createActivityRouter({ requireAuth }) {
       const authed = tryUserFromAuth(req);
       const wallet = (authed?.addr || body.wallet || '').toLowerCase() || null;
       if (!authed?.sub) {
-        const okGuest = (body.product === 'swap' || body.product === 'spot' || body.product === 'futures')
+        const okGuest = (body.product === 'swap' || body.product === 'spot' || body.product === 'futures' || body.product === 'xstocks')
           && !!body.tx_hash
           && !!wallet
           && /^0x[a-f0-9]{40}$/i.test(wallet);

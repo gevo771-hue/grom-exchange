@@ -58,7 +58,7 @@ test('account records distinguish placeholders, service and logged SIWE without 
 const html = readFileSync(new URL('../../frontend/public/index.html', import.meta.url), 'utf8');
 function extract(name) { const at = html.indexOf('function ' + name + '('); assert.ok(at >= 0); return html.slice(at, html.indexOf('\n}', at) + 2); }
 const ctx = vm.createContext({ boffShortAddr: x => x, boffFmtTime: x => x });
-vm.runInContext(['boffMonitorEsc', 'boffUserRowHtml', 'boffActionRu', 'boffDetailText', 'boffFeedRowHtml'].map(extract).join('\n'), ctx);
+vm.runInContext(['boffMonitorEsc', 'boffTradeHtml', 'boffEventDetailsHtml', 'boffUserRowHtml', 'boffActionRu', 'boffDetailText', 'boffFeedRowHtml'].map(extract).join('\n'), ctx);
 test('admin account and activity render untrusted report fields as text', () => {
   const unsafe = '<img src=x onerror=alert(1)>';
   const account = ctx.boffUserRowHtml({ wallet_address: unsafe, record_label: unsafe, created_at: unsafe, last_seen_at: unsafe });

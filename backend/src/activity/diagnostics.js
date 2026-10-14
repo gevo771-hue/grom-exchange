@@ -75,7 +75,7 @@ export function createPulseController(run, { now = Date.now, cooldownMs = 30_000
 export function trackProbe(check, previous, now = Date.now()) {
   const live = check.verification !== 'cached';
   return { ...check, verification: check.verification || 'live',
-    observed_at: check.observed_at || new Date(now).toISOString(),
+    observed_at: check.observed_at || (live ? new Date(now).toISOString() : null),
     consecutive_failures: live ? (check.ok ? 0 : (previous?.consecutive_failures || 0) + 1) : (previous?.consecutive_failures || 0),
     last_success_at: live && check.ok ? new Date(now).toISOString() : (previous?.last_success_at || null),
     recovered: live && check.ok && (previous?.consecutive_failures || 0) > 0 };

@@ -102,6 +102,7 @@ export function createHlFuturesRouter() {
           return res.status(hit.status)
             .set('cache-control', body?.type === 'allMids' ? 'public, max-age=1' : 'public, max-age=15')
             .set('x-grom-hl-cache', 'hit')
+            .set('x-grom-hl-observed-at', new Date(hit.at).toISOString())
             .json(hit.data);
         }
       }
@@ -119,17 +120,20 @@ export function createHlFuturesRouter() {
           return res.status(200)
             .set('cache-control', 'public, max-age=5')
             .set('x-grom-hl-cache', 'stale-on-429')
+            .set('x-grom-hl-observed-at', new Date(stale.at).toISOString())
             .json(stale.data);
         }
       }
 
+      const observedAt = Date.now();
       if (key && upstream.status < 400) {
-        infoCacheSet(key, { at: Date.now(), status: upstream.status, data: upstream.data });
+        infoCacheSet(key, { at: observedAt, status: upstream.status, data: upstream.data });
       }
 
       res.status(upstream.status)
         .set('cache-control', key ? 'public, max-age=15' : 'no-store')
         .set('x-grom-hl-cache', 'miss')
+        .set('x-grom-hl-observed-at', new Date(observedAt).toISOString())
         .json(upstream.data);
     } catch (e) {
       res.status(502).json({ error: String(e?.message || e) });

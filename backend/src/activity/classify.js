@@ -4,6 +4,8 @@
  */
 
 const RULES = [
+  { cause: 'diagnostic_probe', re: /^(?:probe|probe-canary|swap_simbolico_poc) /, summary: 'Клиент пометил событие как диагностическую проверку; исполнение сделки не подтверждено' },
+  { cause: 'wallet_relay_region_blocked', re: /WebSocket connection closed[^\n]*Country is blocked/i, summary: 'Сервис соединения кошелька отклонил WebSocket: Country is blocked' },
   { cause: 'runtime_error', re: /runtime_error|unhandled_rejection/i, summary: 'Необработанная ошибка JavaScript в приложении' },
   { cause: 'health_api_slow', re: /health_api_slow/i, summary: 'Медленный ответ health API — это время запроса, не зависание UI' },
   {
@@ -134,7 +136,7 @@ const RULES = [
   {
     cause: 'health_eventloop',
     re: /event-?loop|перегружен|health_eventloop/i,
-    summary: 'Бэкенд перегружен (event-loop lag) — при росте юзеров биржа будет тупить',
+    summary: 'Зафиксирована задержка event-loop; причина и длительность нагрузки требуют проверки',
   },
   {
     cause: 'health_memory',
@@ -238,6 +240,12 @@ export function classifyIssue(input = {}) {
   const blob = `${action} ${msg} ${code} ${JSON.stringify(detail).slice(0, 600)}`;
 
   let hit = null;
+  // Explicit diagnostic actions and relay errors must not become generic swap/JS failures.
+  if (['probe', 'probe-canary', 'swap_simbolico_poc'].includes(action)) {
+    hit = RULES.find(r => r.cause === 'diagnostic_probe');
+  } else if (/WebSocket connection closed[^\n]*Country is blocked/i.test(msg)) {
+    hit = RULES.find(r => r.cause === 'wallet_relay_region_blocked');
+  }
 
   if (code === '4001' || detail.kind === 'cancelled') {
     hit = RULES.find((r) => r.cause === 'user_rejected');
@@ -298,9 +306,9 @@ export function classifyIssue(input = {}) {
   else if (msg) ai_summary += ` · «${msg.slice(0, 140)}»`;
   ai_summary = ai_summary.slice(0, 480);
 
-  let severity = hit.cause === 'user_rejected' || hit.cause === 'i18n_drift' || hit.cause === 'wallet_no_confirm'
+  let severity = hit.cause === 'diagnostic_probe' || hit.cause === 'user_rejected' || hit.cause === 'i18n_drift' || hit.cause === 'wallet_no_confirm'
     ? 'info'
-    : (hit.cause === 'rate_limit' || hit.cause === 'network' || hit.cause === 'ui_lag' || hit.cause === 'quote_not_ready'
+    : (hit.cause === 'wallet_relay_region_blocked' || hit.cause === 'rate_limit' || hit.cause === 'network' || hit.cause === 'ui_lag' || hit.cause === 'quote_not_ready'
       ? 'warn' : 'error');
   if (hit.cause === 'ui_lag') {
     const ms = Number(detail.ms);

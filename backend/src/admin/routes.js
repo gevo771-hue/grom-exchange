@@ -8,6 +8,7 @@ import { query } from '../db/pool.js';
 import { clientIp, logAdminAudit, auditRowToEntry } from './audit.js';
 import { syncHlFillsIntoActivity } from '../activity/hl-fills-sync.js';
 import { healthView, issueDiagnostics } from '../activity/diagnostics.js';
+import { userRecordEvidence } from './user-evidence.js';
 
 const PRODUCT_LABELS = {
   auth: 'Регистрация / вход',
@@ -319,14 +320,18 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
       const countRes = await query(`SELECT COUNT(*)::int AS total FROM users u ${whereSql}`, params);
       params.push(limit, offset);
       const sql = `
-        SELECT u.id, u.wallet_address, u.role, u.status, u.created_at, u.last_seen_at
+        SELECT u.id, u.wallet_address, u.role, u.status, u.created_at, u.last_seen_at,
+               (SELECT MAX(a.created_at) FROM user_activity a
+                 WHERE a.user_id = u.id AND a.product = 'auth'
+                   AND a.action IN ('register', 'login') AND a.status = 'done'
+                   AND a.detail->>'method' IN ('siwe', 'device_siwe')) AS siwe_recorded_at
           FROM users u
          ${whereSql}
          ORDER BY u.last_seen_at DESC NULLS LAST, u.created_at DESC
          LIMIT $${params.length - 1} OFFSET $${params.length}`;
       const { rows } = await query(sql, params);
       res.json({
-        users: rows,
+        users: rows.map(row => ({ ...row, ...userRecordEvidence(row) })),
         total: countRes.rows[0]?.total || 0,
         hasMore: rows.length >= limit,
         limit,

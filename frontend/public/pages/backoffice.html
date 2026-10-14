@@ -1,6 +1,6 @@
 <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Админка</span></div>
       <h1 class="page-title">Админ-панель</h1>
-      <p class="page-subtitle">Регистрации, входы, ставки, свопы и все действия клиентов на бирже.</p>
+      <p class="page-subtitle">Журнал подключений, входов и сообщений о продуктах. Сообщение клиента само по себе не подтверждает исполнение сделки.</p>
 
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px;padding:10px 12px;border-radius:10px;background:rgba(37,45,58,.45);border:1px solid rgba(136,192,208,.12)">
         <span style="font-size:12px;font-weight:700;color:var(--silver4)">Период:</span>
@@ -15,7 +15,7 @@
       <div class="boff-grid" id="boffKpiGrid" style="grid-template-columns:repeat(3,1fr)">
         <div class="boff-kpi"><div class="k"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.7);margin-right:5px;vertical-align:middle"></span>Онлайн</div><div class="v mono" id="boffKpiOnline">—</div><div class="s" id="boffKpiOnlineSub">сейчас на бирже</div></div>
         <div class="boff-kpi"><div class="k">Посещения</div><div class="v mono" id="boffKpiVisits">—</div><div class="s" id="boffKpiVisitsSub">уник. за 24ч</div></div>
-        <div class="boff-kpi"><div class="k">Регистрации</div><div class="v mono" id="boffKpiReg">—</div><div class="s" id="boffKpiRegSub">сегодня · всего —</div></div>
+        <div class="boff-kpi"><div class="k">Новые записи</div><div class="v mono" id="boffKpiReg">—</div><div class="s" id="boffKpiRegSub">сегодня · всего —</div></div>
         <div class="boff-kpi"><div class="k">Своп</div><div class="v mono" id="boffKpiSwap">—</div><div class="s" id="boffKpiSwapSub">действий за 24ч</div></div>
         <div class="boff-kpi"><div class="k">Спот</div><div class="v mono" id="boffKpiSpot">—</div><div class="s" id="boffKpiSpotSub">действий за 24ч</div></div>
         <div class="boff-kpi"><div class="k">Фьючи</div><div class="v mono" id="boffKpiFut">—</div><div class="s" id="boffKpiFutSub">действий за 24ч</div></div>
@@ -61,7 +61,7 @@
 
       <div class="card" style="margin-top:14px">
         <div class="card-head">
-          <h3>AI монитор · сбои пользователей <span id="boffIssuesCount" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
+          <h3>AI монитор · сообщения и проверки <span id="boffIssuesCount" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <select id="boffIssuesFilter" class="set-input mono" style="width:auto;height:30px;padding:0 8px;font-size:12px" onchange="loadBoffIssues()">
               <option value="">Все продукты</option>
@@ -116,13 +116,14 @@
 
       <div class="card" style="margin-top:14px">
         <div class="card-head">
-          <h3>Пользователи <span id="boffUsersCount" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
+          <h3>Записи кошельков <span id="boffUsersCount" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
             <input id="boffUserSearch" class="set-input mono" placeholder="поиск по адресу" style="width:260px;height:30px;padding:0 8px;font-size:12px" oninput="debouncedUserSearch()" />
             <button class="mini-btn" onclick="loadBoffUsers()">Обновить</button>
           </div>
         </div>
-        <div class="boff-row boff-head"><div>Кошелёк</div><div>Регистрация</div><div>Последний вход</div><div></div></div>
+        <p style="padding:0 14px;color:var(--silver4);font-size:12px;line-height:1.5">Адрес может быть записан до подписи входа. Здесь есть неподтверждённые и служебные записи; их количество не равно числу клиентов. SIWE в журнале не устанавливает личность человека.</p>
+        <div class="boff-row boff-head"><div>Кошелёк</div><div>Первая запись</div><div>Последняя активность</div><div>Данные входа</div></div>
         <div id="boffUsersList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div></div>
         </div>

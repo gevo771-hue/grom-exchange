@@ -7037,7 +7037,7 @@
     <section class="page" id="page-backoffice">
       <div class="breadcrumb"><span>GROM</span><span class="sep">›</span><span class="now">Админка</span></div>
       <h1 class="page-title">Админ-панель</h1>
-      <p class="page-subtitle">Регистрации, входы, ставки, свопы и все действия клиентов на бирже.</p>
+      <p class="page-subtitle">Журнал подключений, входов и сообщений о продуктах. Сообщение клиента само по себе не подтверждает исполнение сделки.</p>
 
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px;padding:10px 12px;border-radius:10px;background:rgba(37,45,58,.45);border:1px solid rgba(136,192,208,.12)">
         <span style="font-size:12px;font-weight:700;color:var(--silver4)">Период:</span>
@@ -7052,7 +7052,7 @@
       <div class="boff-grid" id="boffKpiGrid" style="grid-template-columns:repeat(3,1fr)">
         <div class="boff-kpi"><div class="k"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.7);margin-right:5px;vertical-align:middle"></span>Онлайн</div><div class="v mono" id="boffKpiOnline">—</div><div class="s" id="boffKpiOnlineSub">сейчас на бирже</div></div>
         <div class="boff-kpi"><div class="k">Посещения</div><div class="v mono" id="boffKpiVisits">—</div><div class="s" id="boffKpiVisitsSub">уник. за 24ч</div></div>
-        <div class="boff-kpi"><div class="k">Регистрации</div><div class="v mono" id="boffKpiReg">—</div><div class="s" id="boffKpiRegSub">сегодня · всего —</div></div>
+        <div class="boff-kpi"><div class="k">Новые записи</div><div class="v mono" id="boffKpiReg">—</div><div class="s" id="boffKpiRegSub">сегодня · всего —</div></div>
         <div class="boff-kpi"><div class="k">Своп</div><div class="v mono" id="boffKpiSwap">—</div><div class="s" id="boffKpiSwapSub">действий за 24ч</div></div>
         <div class="boff-kpi"><div class="k">Спот</div><div class="v mono" id="boffKpiSpot">—</div><div class="s" id="boffKpiSpotSub">действий за 24ч</div></div>
         <div class="boff-kpi"><div class="k">Фьючи</div><div class="v mono" id="boffKpiFut">—</div><div class="s" id="boffKpiFutSub">действий за 24ч</div></div>
@@ -7098,7 +7098,7 @@
 
       <div class="card" style="margin-top:14px">
         <div class="card-head">
-          <h3>AI монитор · сбои пользователей <span id="boffIssuesCount" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
+          <h3>AI монитор · сообщения и проверки <span id="boffIssuesCount" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <select id="boffIssuesFilter" class="set-input mono" style="width:auto;height:30px;padding:0 8px;font-size:12px" onchange="loadBoffIssues()">
               <option value="">Все продукты</option>
@@ -7153,13 +7153,14 @@
 
       <div class="card" style="margin-top:14px">
         <div class="card-head">
-          <h3>Пользователи <span id="boffUsersCount" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
+          <h3>Записи кошельков <span id="boffUsersCount" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
           <div style="display:flex;gap:6px;align-items:center">
             <input id="boffUserSearch" class="set-input mono" placeholder="поиск по адресу" style="width:260px;height:30px;padding:0 8px;font-size:12px" oninput="debouncedUserSearch()" />
             <button class="mini-btn" onclick="loadBoffUsers()">Обновить</button>
           </div>
         </div>
-        <div class="boff-row boff-head"><div>Кошелёк</div><div>Регистрация</div><div>Последний вход</div><div></div></div>
+        <p style="padding:0 14px;color:var(--silver4);font-size:12px;line-height:1.5">Адрес может быть записан до подписи входа. Здесь есть неподтверждённые и служебные записи; их количество не равно числу клиентов. SIWE в журнале не устанавливает личность человека.</p>
+        <div class="boff-row boff-head"><div>Кошелёк</div><div>Первая запись</div><div>Последняя активность</div><div>Данные входа</div></div>
         <div id="boffUsersList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div></div>
         </div>
@@ -20165,6 +20166,7 @@ var GROM_ADMIN_WALLETS = ['0xcfef272536d6e91a4945063d40ac7cba7eb657b5'];
 function boffShortAddr(a) { a = String(a||''); return a.length <= 14 ? (a||'—') : a.slice(0,8)+'…'+a.slice(-6); }
 function boffFmtTime(iso) { try { return iso ? new Date(iso).toLocaleString('ru-RU') : '—'; } catch(_) { return '—'; } }
 function boffActionRu(p, a) {
+  if (a === 'probe' || a === 'probe-canary' || a === 'swap_simbolico_poc') return 'Диагностическая запись';
   if (p==='auth'&&a==='register') return 'Регистрация';
   if (p==='auth'&&a==='connect') return 'Подключение';
   if (p==='auth'&&a==='login') return 'Вход';
@@ -20177,6 +20179,7 @@ function boffActionRu(p, a) {
 }
 function boffDetailText(ev) {
   var d = ev.detail||{};
+  if (ev.action === 'probe' || ev.action === 'probe-canary' || ev.action === 'swap_simbolico_poc') return ev.tx_hash ? 'Хеш сообщён клиентом; исполнение требует проверки' : 'Исполнение сделки не подтверждено';
   if (ev.product==='auth') return d.method||'—';
   if (ev.product==='swap'||ev.product==='spot') return (d.from||d.fromSym||'?')+' → '+(d.to||d.toSym||'?');
   try { return JSON.stringify(d).slice(0,80); } catch(_) { return '—'; }
@@ -20454,7 +20457,7 @@ function boffUpdatePeriodHint() {
   el.textContent = (from || '…') + ' — ' + (to || '…');
 }
 function boffUpdateKpiLabels(hasRange) {
-  var sub = hasRange ? 'за период' : 'действий за 24ч';
+  var sub = hasRange ? 'сообщений за период' : 'сообщений за 24ч';
   ['boffKpiSwapSub', 'boffKpiSpotSub', 'boffKpiFutSub', 'boffKpiPredictSub', 'boffKpiXstocksSub'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el) el.textContent = sub;
@@ -20485,7 +20488,7 @@ async function loadBoffStats() {
     boffUpdatePeriodHint();
     document.getElementById('boffKpiReg').textContent = Number(s.registrationsToday || 0);
     document.getElementById('boffKpiRegSub').textContent = hasRange
-      ? ('за период · пользователей ' + Number(s.totalUsers || 0))
+      ? ('за период · записей ' + Number(s.totalUsers || 0))
       : ('сегодня · всего ' + Number(s.totalUsers || 0));
     var onlineEl = document.getElementById('boffKpiOnline');
     var onlineSub = document.getElementById('boffKpiOnlineSub');
@@ -20655,7 +20658,7 @@ window.loadBoffIssues = loadBoffIssues;
 var __boffFeedPageSize = 5;
 var __boffFeedOffset = 0;
 function boffFeedRowHtml(ev) {
-  return '<div class="boff-row"><div class="mono" style="font-size:11px">' + boffFmtTime(ev.at) + '</div><div class="mono" style="font-size:11px">' + boffShortAddr(ev.wallet) + '</div><div><span class="boff-chip">' + (ev.product_label || ev.product) + '</span></div><div class="mono">' + boffActionRu(ev.product, ev.action) + '</div><div style="font-size:12px;color:var(--silver4)">' + boffDetailText(ev) + '</div><div><span class="pill-dot">' + (ev.status || '—') + '</span></div></div>';
+  return '<div class="boff-row"><div class="mono" style="font-size:11px">' + boffMonitorEsc(boffFmtTime(ev.at)) + '</div><div class="mono" style="font-size:11px">' + boffMonitorEsc(boffShortAddr(ev.wallet)) + '</div><div><span class="boff-chip">' + boffMonitorEsc(ev.product_label || ev.product) + '</span></div><div class="mono">' + boffMonitorEsc(boffActionRu(ev.product, ev.action)) + '</div><div style="font-size:12px;color:var(--silver4)">' + boffMonitorEsc(boffDetailText(ev)) + '</div><div><span class="pill-dot">' + boffMonitorEsc(ev.status || '—') + '</span></div></div>';
 }
 function boffSetFeedMore(show) {
   var el = document.getElementById('boffFeedMore');
@@ -20764,7 +20767,7 @@ window.debouncedUserSearch = function () { clearTimeout(__boffUserSearchTimer); 
 var __boffUsersPageSize = 5;
 var __boffUsersOffset = 0;
 function boffUserRowHtml(u) {
-  return '<div class="boff-row"><div class="mono" style="font-size:11px">' + boffShortAddr(u.wallet_address) + '</div><div class="mono" style="font-size:11px">' + boffFmtTime(u.created_at) + '</div><div class="mono" style="font-size:11px;color:var(--silver5)">' + boffFmtTime(u.last_seen_at) + '</div><div></div></div>';
+  return '<div class="boff-row"><div class="mono" style="font-size:11px" title="' + boffMonitorEsc(u.wallet_address) + '">' + boffMonitorEsc(boffShortAddr(u.wallet_address)) + '</div><div class="mono" style="font-size:11px">' + boffMonitorEsc(boffFmtTime(u.created_at)) + '</div><div class="mono" style="font-size:11px;color:var(--silver5)">' + boffMonitorEsc(boffFmtTime(u.last_seen_at)) + '</div><div style="font-size:11px">' + boffMonitorEsc(u.record_label || 'Данные входа не проверены') + '</div></div>';
 }
 function boffSetUsersMore(show) {
   var el = document.getElementById('boffUsersMore');
@@ -20799,7 +20802,7 @@ async function loadBoffUsers(reset) {
       return;
     }
     if (!rows.length && __boffUsersOffset === 0) {
-      host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">' + (q ? 'Никого не найдено: ' + q.slice(0, 20) : 'Пусто') + '</div><div></div><div></div><div></div></div>';
+      host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">' + (q ? 'Ничего не найдено: ' + boffMonitorEsc(q.slice(0, 20)) : 'Пусто') + '</div><div></div><div></div><div></div></div>';
       boffSetUsersMore(false);
       return;
     }

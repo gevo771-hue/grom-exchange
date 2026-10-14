@@ -316,7 +316,7 @@ async function probeEventLoop() {
       id: 'eventloop',
       ok: false,
       severity: lag > 700 ? 'error' : 'warn',
-      message: `Event-loop lag ${lag}ms — бэкенд перегружен (риск «тупит» при масштабе)`,
+      message: `Event-loop lag ${lag}ms — задержка одного замера; причина требует проверки`,
       ms: lag,
     };
   }

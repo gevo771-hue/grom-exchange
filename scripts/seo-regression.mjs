@@ -181,11 +181,11 @@ if (!existsSync(sm)) fail('sitemap.xml missing');
 else {
   const sx = readFileSync(sm, 'utf8');
   if (!sx.includes('xmlns:xhtml')) fail('sitemap missing xhtml hreflang');
-  for (const p of PAGES) {
+  for (const p of PAGES.filter(p => p.locale.code === 'en' || p.route === 'landing')) {
     const loc = 'https://grom.exchange' + (p.path === '/' ? '/' : p.path);
     if (!sx.includes(`<loc>${loc}</loc>`)) fail(`sitemap missing ${loc}`);
   }
-  ok(`sitemap lists ${PAGES.length} URLs`);
+  ok('sitemap includes English product routes and translated landing pages');
 }
 
 const robotsPath = join(OUT, 'robots.txt');

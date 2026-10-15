@@ -6513,9 +6513,9 @@
         <!-- HERO -->
         <div class="lp-hero">
           <div class="lp-hero-left">
-            <span class="lp-eyebrow" data-i18n="lp_hero_eyebrow">⚡ Non-custodial DEX · 20+ chains · 10 000+ tokens</span>
+            <span class="lp-eyebrow" data-i18n="lp_hero_eyebrow">⚡ Non-custodial DEX · multiple chains · 10 000+ tokens</span>
             <h1 class="lp-h1" data-i18n-html="lp_hero_h1"><span class="lv2-h1-line">One wallet.</span><br><span class="lv2-h1-line lv2-accent">All of DeFi.</span></h1>
-            <p class="lp-h1-sub" data-i18n="lp_hero_sub">Cross-chain meta-aggregator — LiFi, Jupiter, CoWSwap, Paraswap, Kyber, Odos & more. One wallet, every chain, best route every time. No email. No custody. You sign every transaction.</p>
+            <p class="lp-h1-sub" data-i18n="lp_hero_sub">Compare available swap and bridge routes for your tokens and networks. Review the current quote and confirm each transaction in your own wallet.</p>
             <div class="lp-cta-row">
               <button class="lp-btn-primary" onclick="openConnectModal()" data-i18n="lp_hero_cta1">Connect wallet →</button>
               <button class="lp-btn-secondary" onclick="show('dashboard')" data-i18n="lp_hero_cta2">Explore dashboard</button>
@@ -6568,7 +6568,7 @@
             <button class="lp-btn-primary" onclick="openConnectModal()" data-i18n="lp_final_cta1">Connect wallet →</button>
             <button class="lp-btn-secondary" onclick="show('dashboard')" data-i18n="lp_final_cta2">Explore dashboard</button>
           </div>
-          <p class="lp-final-tiny" data-i18n="lp_final_tiny">20+ chains · 10 000+ tokens · 7 aggregators · Wallet-only access</p>
+          <p class="lp-final-tiny" data-i18n="lp_final_tiny">multiple chains · 10 000+ tokens · available aggregators · Wallet-only access</p>
         </div>
 
         <!-- SEO GUIDES (collapsed — bottom of page, crawlable) -->
@@ -7822,7 +7822,16 @@ function gromSeoSetProp(prop, value) {
   if (n) n.setAttribute('content', value);
 }
 function updateRouteSeo(page) {
-  var key = page === 'dashboard' ? 'landing' : page;
+  var key = page || 'landing';
+  var canonical = document.querySelector('link[rel="canonical"]');
+  var currentPath = (location.pathname || '/').replace(/\/$/, '') || '/';
+  var staticLocale = document.documentElement.getAttribute('data-grom-locale');
+  var staticRoute = document.documentElement.getAttribute('data-grom-route');
+  // Keep the translated, build-time metadata when JS hydrates that same route.
+  if (staticLocale && staticRoute === key && canonical && canonical.getAttribute('href').replace(/\/$/, '') === 'https://grom.exchange' + (currentPath === '/' ? '' : currentPath)) {
+    document.documentElement.lang = staticLocale;
+    return;
+  }
   var lang = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.curLang) ? window.GROM_SEO_I18N.curLang() : ((typeof getGromLang === 'function') ? getGromLang() : 'en');
   var i18nMeta = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.getRouteMeta) ? window.GROM_SEO_I18N.getRouteMeta(key, lang) : null;
   var pack = GROM_SEO_VARIANTS[GROM_SEO_AB] || GROM_SEO_VARIANTS.a;
@@ -7837,9 +7846,9 @@ function updateRouteSeo(page) {
   gromSeoSet('twitter:title', title);
   gromSeoSet('twitter:description', desc);
   gromSeoSet('keywords', kw);
-  var routeHash = (page && page !== 'landing' && page !== 'dashboard') ? ('#' + page) : '';
-  var canonicalUrl = 'https://grom.exchange/' + (lang && lang !== 'en' ? ('?lang=' + encodeURIComponent(lang)) : '') + routeHash;
-  var canonical = document.querySelector('link[rel="canonical"]');
+  var publicPaths = { landing: '/', dashboard: '/swap', futures: '/futures', predict: '/predict', xstocks: '/stocks', markets: '/markets' };
+  var localePrefix = /^\/(es|pt-BR|tr|ru|vi|id)(?:\/|$)/.exec(location.pathname || '');
+  var canonicalUrl = 'https://grom.exchange' + (localePrefix ? '/' + localePrefix[1] : '') + (publicPaths[key] || '/');
   if (canonical) canonical.setAttribute('href', canonicalUrl);
   gromSeoSetProp('og:url', canonicalUrl);
   try { document.documentElement.lang = lang === 'zh' ? 'zh-Hans' : lang; } catch (_) {}

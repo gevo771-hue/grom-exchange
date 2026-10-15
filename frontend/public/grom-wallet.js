@@ -309,7 +309,7 @@ function walletMetadata() {
   const origin = walletAppOrigin();
   return {
     name: 'GROM',
-    description: 'Non-custodial cross-chain DEX. 10 000+ tokens, 20+ networks, best-route swaps from your wallet.',
+    description: 'Non-custodial cross-chain DEX. 10 000+ tokens, supported networks, best-route swaps from your wallet.',
     url: origin,
     icons: [origin + '/icon-512.png'],
   };
@@ -8583,9 +8583,9 @@ if (typeof window !== 'undefined') {
 }
 
 const GW_DS_TR = {
-  ru: { h: 'Мгновенный своп', sub: 'Лучший курс из 6 источников · on-chain', from: 'ОТДАЁШЬ', to: 'ПОЛУЧАЕШЬ', est: 'Введи сумму, чтобы увидеть курс.', cta: 'Сделать своп', ctaOc: 'Своп через кошелёк', ctaReconnect: 'Начать', ctaLogin: 'Войди чтобы свопать', getting: 'Запрос курса…', bal: 'Баланс', modeT: 'Торговый счёт', modeO: 'On-chain кошелёк', slip: 'Проскальзывание', route: 'Маршрут', priceImpact: 'Влияние на цену', fee: 'Комиссия GROM', feeHint: 'если маршрут поддерживает · до 0.45%', feeNone: 'не на этом маршруте', nonCust: 'Без кастодиана', sources: 'источников', recent: 'Недавние свопы', success: 'Своп выполнен', flip: 'Поменять местами', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAX', rateFail: 'Курс недоступен', rateFailBridge: 'Мост ARB→ETH: нет маршрута для этой пары. Попробуй USDC→ETH или другой токен.', rateFailNet: 'Проверь сеть — выбрана {net}, кошелёк на {wallet}. Нажми ARB сверху.' },
-  en: { h: 'Instant swap',    sub: 'Best rate from 6 sources · on-chain', from: 'YOU PAY', to: 'YOU GET', est: 'Enter an amount to see the live rate.', cta: 'Swap now', ctaOc: 'Swap via wallet', ctaReconnect: 'Start', ctaLogin: 'Connect wallet to swap', getting: 'Fetching rate…', bal: 'Balance', modeT: 'Wallet', modeO: 'On-chain wallet', slip: 'Slippage', route: 'Route', priceImpact: 'Price impact', fee: 'GROM fee', feeHint: 'when route supports it · up to 0.45%', feeNone: 'not on this route', nonCust: 'Non-custodial', sources: 'sources', recent: 'Recent swaps', success: 'Swap complete', flip: 'Flip', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAX', rateFail: 'Rate unavailable', rateFailBridge: 'No bridge route for this pair. Try USDC→ETH or another token.', rateFailNet: 'Network mismatch — UI shows {net}, wallet on {wallet}. Tap the correct chain chip.' },
-  es: { h: 'Swap instantáneo', sub: 'Mejor tasa de 6 fuentes · on-chain', from: 'PAGAS', to: 'RECIBES', est: 'Introduce un importe para ver el tipo en vivo.', cta: 'Hacer swap', ctaOc: 'Swap con cartera', ctaLogin: 'Conecta cartera', getting: 'Obteniendo…', bal: 'Saldo', modeT: 'Cartera', modeO: 'Cartera on-chain', slip: 'Slippage', route: 'Ruta', priceImpact: 'Impacto', fee: 'Comisión GROM', recent: 'Swaps recientes', success: 'Swap completado', flip: 'Voltear', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MÁX' },
+  ru: { h: 'Мгновенный своп', sub: 'Лучший курс из доступных источников · on-chain', from: 'ОТДАЁШЬ', to: 'ПОЛУЧАЕШЬ', est: 'Введи сумму, чтобы увидеть курс.', cta: 'Сделать своп', ctaOc: 'Своп через кошелёк', ctaReconnect: 'Начать', ctaLogin: 'Войди чтобы свопать', getting: 'Запрос курса…', bal: 'Баланс', modeT: 'Торговый счёт', modeO: 'On-chain кошелёк', slip: 'Проскальзывание', route: 'Маршрут', priceImpact: 'Влияние на цену', fee: 'Комиссия GROM', feeHint: 'если маршрут поддерживает · до 0.45%', feeNone: 'не на этом маршруте', nonCust: 'Без кастодиана', sources: 'источников', recent: 'Недавние свопы', success: 'Своп выполнен', flip: 'Поменять местами', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAX', rateFail: 'Курс недоступен', rateFailBridge: 'Мост ARB→ETH: нет маршрута для этой пары. Попробуй USDC→ETH или другой токен.', rateFailNet: 'Проверь сеть — выбрана {net}, кошелёк на {wallet}. Нажми ARB сверху.' },
+  en: { h: 'Instant swap',    sub: 'Best rate from available sources · on-chain', from: 'YOU PAY', to: 'YOU GET', est: 'Enter an amount to see the live rate.', cta: 'Swap now', ctaOc: 'Swap via wallet', ctaReconnect: 'Start', ctaLogin: 'Connect wallet to swap', getting: 'Fetching rate…', bal: 'Balance', modeT: 'Wallet', modeO: 'On-chain wallet', slip: 'Slippage', route: 'Route', priceImpact: 'Price impact', fee: 'GROM fee', feeHint: 'when route supports it · up to 0.45%', feeNone: 'not on this route', nonCust: 'Non-custodial', sources: 'sources', recent: 'Recent swaps', success: 'Swap complete', flip: 'Flip', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MAX', rateFail: 'Rate unavailable', rateFailBridge: 'No bridge route for this pair. Try USDC→ETH or another token.', rateFailNet: 'Network mismatch — UI shows {net}, wallet on {wallet}. Tap the correct chain chip.' },
+  es: { h: 'Swap instantáneo', sub: 'Mejor tasa entre las fuentes disponibles · on-chain', from: 'PAGAS', to: 'RECIBES', est: 'Introduce un importe para ver el tipo en vivo.', cta: 'Hacer swap', ctaOc: 'Swap con cartera', ctaLogin: 'Conecta cartera', getting: 'Obteniendo…', bal: 'Saldo', modeT: 'Cartera', modeO: 'Cartera on-chain', slip: 'Slippage', route: 'Ruta', priceImpact: 'Impacto', fee: 'Comisión GROM', recent: 'Swaps recientes', success: 'Swap completado', flip: 'Voltear', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'MÁX' },
   ar: { h: 'مبادلة فوريّة', sub: 'أفضل سعر · على السلسلة · توقّع أنت', from: 'تدفع', to: 'تستلم', est: 'أدخل المبلغ لرؤية السعر.', cta: 'مبادلة', ctaOc: 'المبادلة عبر المحفظة', ctaLogin: 'اربط المحفظة', getting: 'جلب السعر…', bal: 'الرصيد', modeT: 'المحفظة', modeO: 'محفظة على السلسلة', slip: 'الانزلاق', route: 'المسار', priceImpact: 'أثر السعر', fee: 'رسوم GROM', recent: 'مبادلات حديثة', success: 'تمّت المبادلة', flip: 'تبديل', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'الحد' },
   zh: { h: '极速兑换',       sub: '最佳价格 · 链上结算 · 你签名', from: '你支付', to: '你得到', est: '输入金额以查看实时汇率。', cta: '立即兑换', ctaOc: '通过钱包兑换', ctaLogin: '连接钱包', getting: '获取报价…', bal: '余额', modeT: '钱包', modeO: '链上钱包', slip: '滑点', route: '路径', priceImpact: '价格影响', fee: 'GROM 手续费', recent: '最近兑换', success: '兑换完成', flip: '交换', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: '最大' },
   hi: { h: 'इंस्टेंट स्वैप',    sub: 'बेस्ट रेट · ऑन-चेन · आप साइन करें', from: 'आप देते हैं', to: 'आप पाते हैं', est: 'दर देखने के लिए राशि दर्ज करें।', cta: 'अभी स्वैप', ctaOc: 'वॉलेट से स्वैप', ctaLogin: 'वॉलेट कनेक्ट करें', getting: 'दर ली जा रही है…', bal: 'बैलेंस', modeT: 'वॉलेट', modeO: 'ऑन-चेन वॉलेट', slip: 'स्लिपेज', route: 'रूट', priceImpact: 'मूल्य प्रभाव', fee: 'GROM फ़ी', recent: 'हाल के स्वैप', success: 'स्वैप पूरा', flip: 'फ्लिप', pct25: '25%', pct50: '50%', pct75: '75%', pctMax: 'मैक्स' },
@@ -20330,7 +20330,7 @@ function gwSetupXstocksWalletBridge() {
  * LiFi meta-aggregator swap execution (2026-07-07).
  *
  * WHY LIFI vs. our inline Uniswap/Pancake V2 routers:
- *   • LiFi already routes across 20+ chains and 15+ DEXes (Uniswap,
+ *   • LiFi already routes across multiple chains and 15+ DEXes (Uniswap,
  *     Sushi, Pancake, Curve, Balancer, Velodrome, Aerodrome, TraderJoe,
  *     THORchain, …) and picks the best split automatically.
  *   • Cross-chain out of the box (BTC-EVM via THORchain, EVM-EVM via
@@ -23177,7 +23177,7 @@ function gromRuntimeIssue(event, kind) {
       const htmlLang = (document.documentElement.lang || '').split('-')[0] || '';
       if (htmlLang && stored && htmlLang !== stored) {
         // Auto-heal: sync document lang to stored preference.
-        try { document.documentElement.lang = stored; } catch (_) {}
+        try { document.documentElement.lang = document.documentElement.getAttribute('data-grom-locale') || stored; } catch (_) {}
       }
       // Predict/xstocks shells must match current language after switch.
       let shellDrift = false;
@@ -29198,16 +29198,16 @@ function gwSetupMegaCards() {
 const GW_DP_TR = {
   ru: {
     walletH: '⚡ DEX Quick Actions', walletSub: 'Всё что нужно — свап, мост, обзор on-chain',
-    walletA1: 'Мгновенный своп', walletA1s: '20+ сетей', walletA2: 'Bridge между сетями', walletA2s: 'LiFi + Squid', walletA3: 'Открыть в explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Свап через wallet', walletA4s: 'Non-custodial',
+    walletA1: 'Мгновенный своп', walletA1s: 'несколько сетей', walletA2: 'Bridge между сетями', walletA2s: 'LiFi + Squid', walletA3: 'Открыть в explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Свап через wallet', walletA4s: 'Non-custodial',
     setH: '⚙ DEX Preferences', setSub: 'Настройки маршрутизации и защиты от MEV',
-    setSlip: 'Slippage по умолчанию', setSlipS: 'Максимальное проскальзывание для свапов', setMev: 'MEV protection', setMevS: 'Приоритет CoWSwap batch, если доступно', setAgg: 'Основной агрегатор', setAggS: 'Наш meta-agg сравнивает 6 источников', setRpc: 'Свой RPC (опционально)', setRpcS: 'Для приватного нод-провайдера',
+    setSlip: 'Slippage по умолчанию', setSlipS: 'Максимальное проскальзывание для свапов', setMev: 'MEV protection', setMevS: 'Приоритет CoWSwap batch, если доступно', setAgg: 'Основной агрегатор', setAggS: 'Сравниваем доступные маршруты', setRpc: 'Свой RPC (опционально)', setRpcS: 'Для приватного нод-провайдера',
     saved: 'Сохранено',
   },
   en: {
     walletH: '⚡ DEX Quick Actions', walletSub: 'Everything you need — swap, bridge, on-chain review',
-    walletA1: 'Instant Swap', walletA1s: '20+ chains', walletA2: 'Cross-chain Bridge', walletA2s: 'LiFi + Squid', walletA3: 'View on explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Swap via wallet', walletA4s: 'Non-custodial',
+    walletA1: 'Instant Swap', walletA1s: 'multiple chains', walletA2: 'Cross-chain Bridge', walletA2s: 'LiFi + Squid', walletA3: 'View on explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Swap via wallet', walletA4s: 'Non-custodial',
     setH: '⚙ DEX Preferences', setSub: 'Routing settings and MEV protection',
-    setSlip: 'Default slippage', setSlipS: 'Maximum slippage tolerated on swaps', setMev: 'MEV protection', setMevS: 'Prefer CoWSwap batch when available', setAgg: 'Preferred aggregator', setAggS: 'Our meta-agg compares 6 sources', setRpc: 'Custom RPC (optional)', setRpcS: 'For private node providers',
+    setSlip: 'Default slippage', setSlipS: 'Maximum slippage tolerated on swaps', setMev: 'MEV protection', setMevS: 'Prefer CoWSwap batch when available', setAgg: 'Preferred aggregator', setAggS: 'Our meta-agg compares available sources', setRpc: 'Custom RPC (optional)', setRpcS: 'For private node providers',
     saved: 'Saved',
   },
 };

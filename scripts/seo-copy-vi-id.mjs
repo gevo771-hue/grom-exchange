@@ -103,7 +103,7 @@ export const SEO_COPY_VI = {
       {
         h2: 'Instant Swap làm gì',
         html: `<p>Chọn token và mạng nguồn, token và mạng đích, rồi số lượng. GROM hỏi báo giá song song từ nhiều aggregator và bridge rồi hiện một lộ trình bạn có thể chấp nhận hoặc từ chối. Bạn không gửi gốc swap vào hot wallet của GROM.</p>
-<p>Phạm vi gồm hàng nghìn token trên hơn hai mươi mạng khi có thanh khoản và bridge. Khả dụng thực tế phụ thuộc router lúc báo giá — cặp kém thanh khoản có thể không có lộ trình.</p>`,
+<p>Token và mạng được hỗ trợ phụ thuộc vào thanh khoản, bridge và các nhà cung cấp đang hoạt động. Khả dụng thực tế phụ thuộc router lúc báo giá — cặp kém thanh khoản có thể không có lộ trình.</p>`,
       },
       {
         h2: 'Mạng, ví và chữ ký',
@@ -280,7 +280,7 @@ export const SEO_COPY_ID = {
       {
         h2: 'Apa yang dilakukan Instant Swap',
         html: `<p>Pilih token dan jaringan asal, token dan jaringan tujuan, lalu jumlah. GROM meminta kuotasi paralel dari beberapa aggregator dan bridge lalu menampilkan rute yang bisa Anda terima atau tolak. Anda tidak mengirim pokok swap ke hot wallet GROM.</p>
-<p>Cakupan mencakup ribuan token di lebih dari dua puluh jaringan saat ada likuiditas dan bridge. Ketersediaan tepat bergantung pada router saat kuotasi — pasangan illiquid mungkin tidak punya rute.</p>`,
+<p>Token dan jaringan yang didukung bergantung pada likuiditas, bridge, dan penyedia yang aktif. Ketersediaan tepat bergantung pada router saat kuotasi — pasangan illiquid mungkin tidak punya rute.</p>`,
       },
       {
         h2: 'Jaringan, wallet, dan tanda tangan',

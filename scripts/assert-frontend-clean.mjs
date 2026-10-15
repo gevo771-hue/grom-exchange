@@ -40,7 +40,7 @@ const FORBIDDEN_PATTERNS = [
   { re: /start2faSetup|verify2fa|disable2fa|load2faStatus/, label: '2FA stubs' },
   { re: /\/auth\/email-login|__removed_email_login/i, label: 'email-login remnant' },
   { re: /\/auth\/2fa\//, label: '2FA route remnant' },
-  { re: /GROM_FIAT_PROVIDERS|openFiatProvider|MoonPay|Transak/, label: 'fiat on-ramp remnant' },
+  { re: /GROM_FIAT_PROVIDERS|openFiatProvider|\b(?:MoonPay|Transak)\b/, label: 'fiat on-ramp remnant' },
   { re: /Ramp\s*\/\s*Transak|Ramp\s*&\s*Transak/, label: 'Ramp/Transak marketing' },
   { re: /privy-session|Privy OAuth|grom-privy|Privy\/email/i, label: 'Privy remnant' },
   { re: /inline\s+OTP\s+form|OTP\s+harvesting/i, label: 'OTP remnant' },

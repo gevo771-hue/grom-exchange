@@ -69,7 +69,7 @@ test('runtime monitor captures first-party crashes but drops cancellations, thir
 test('UI report safely escapes diagnostics and renders unknown results separately from severity',()=>{
  const html=readFileSync(new URL('../../frontend/public/index.html',import.meta.url),'utf8');
  const ctx=vm.createContext({boffFmtTime:x=>x,boffShortAddr:x=>x});
- vm.runInContext(fn(html,'boffMonitorEsc')+'\n'+fn(html,'boffIssueRowHtml'),ctx);
+ vm.runInContext(['boffMonitorEsc','boffTradeHtml','boffEventDetailsHtml','boffIssueRowHtml'].map(n=>fn(html,n)).join('\n'),ctx);
  const out=ctx.boffIssueRowHtml({at:'today',product_label:'<img src=x>',cause:'unknown',ai_summary:'<script>bad</script>',state_label:'Неизвестно',evidence_label:'Телеметрия',repeats_24h:2});
  assert.doesNotMatch(out,/<script|<img/);assert.match(out,/Неизвестно/);assert.match(out,/2 сообщ/);
 });
@@ -77,7 +77,7 @@ test('actual health probes label caches, force fresh checks, and never turn HTTP
  const src=readFileSync(new URL('../src/activity/health-pulse.js',import.meta.url),'utf8');
  let requests=0,status=200;
  const ctx=vm.createContext({Date,Promise,process:{env:{}},axios:{post:async(url,body)=>{requests++;return {status,data:body.type==='allMids'?Object.fromEntries(Array.from({length:20},(_,i)=>[i,'1'])):[{universe:Array(30).fill({})}]};},get:async()=>{requests++;return {status,data:{items:Array(50).fill({solMint:'mint'})}};}}});
- vm.runInContext('const HL_API="https://api.hyperliquid.xyz";let lastHlOk=null,lastHipOk=null,lastXstocksOk=null;\n'+['timed','probeHyperliquid','probeHip3','probeXstocks'].map(name=>(name==='timed'?'':'async ')+fn(src,name)).join('\n'),ctx);
+ vm.runInContext('const HL_API="https://api.hyperliquid.xyz";let lastHlOk=null,lastHipOk=null,lastXstocksOk=null;\n'+['timed','hlResponseEvidence','probeHyperliquid','probeHip3','probeXstocks'].map(name=>(['timed','hlResponseEvidence'].includes(name)?'':'async ')+fn(src,name)).join('\n'),ctx);
  for(const name of ['probeHyperliquid','probeHip3','probeXstocks']) {
  const live=await ctx[name]();assert.equal(live.ok,true);const before=requests;
  const cached=await ctx[name]();assert.equal(cached.verification,'cached');assert.equal(requests,before);

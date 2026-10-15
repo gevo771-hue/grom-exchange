@@ -8,6 +8,8 @@ import { query } from '../db/pool.js';
 import { clientIp, logAdminAudit, auditRowToEntry } from './audit.js';
 import { syncHlFillsIntoActivity } from '../activity/hl-fills-sync.js';
 import { healthView, issueDiagnostics } from '../activity/diagnostics.js';
+import { enrichTradeFacts, addActivitySearch } from '../activity/trade-facts.js';
+import { userRecordEvidence } from './user-evidence.js';
 
 const PRODUCT_LABELS = {
   auth: 'Регистрация / вход',
@@ -319,14 +321,18 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
       const countRes = await query(`SELECT COUNT(*)::int AS total FROM users u ${whereSql}`, params);
       params.push(limit, offset);
       const sql = `
-        SELECT u.id, u.wallet_address, u.role, u.status, u.created_at, u.last_seen_at
+        SELECT u.id, u.wallet_address, u.role, u.status, u.created_at, u.last_seen_at,
+               (SELECT MAX(a.created_at) FROM user_activity a
+                 WHERE a.user_id = u.id AND a.product = 'auth'
+                   AND a.action IN ('register', 'login') AND a.status = 'done'
+                   AND a.detail->>'method' IN ('siwe', 'device_siwe')) AS siwe_recorded_at
           FROM users u
          ${whereSql}
          ORDER BY u.last_seen_at DESC NULLS LAST, u.created_at DESC
          LIMIT $${params.length - 1} OFFSET $${params.length}`;
       const { rows } = await query(sql, params);
       res.json({
-        users: rows,
+        users: rows.map(row => ({ ...row, ...userRecordEvidence(row) })),
         total: countRes.rows[0]?.total || 0,
         hasMore: rows.length >= limit,
         limit,
@@ -567,6 +573,7 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
         params.push(to.toISOString());
         filters.push(`created_at < $${params.length}::timestamptz`);
       }
+      addActivitySearch(filters, params, req.query.search);
       params.push(limit, offset);
       const productFilter = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
@@ -613,11 +620,12 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
         params
       );
 
+      const enriched = await enrichTradeFacts(rows, query);
       res.json({
         hasMore: rows.length >= limit,
         limit,
         offset,
-        events: rows.map((e) => ({
+        events: enriched.map((e) => ({
           at: e.created_at,
           user_id: e.user_id,
           wallet: e.wallet_address,
@@ -625,6 +633,7 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
           product_label: PRODUCT_LABELS[e.product] || e.product,
           action: e.action,
           detail: e.detail,
+          trade: e.trade,
           tx_hash: e.tx_hash,
           amount: e.amount != null ? Number(e.amount) : null,
           asset: e.asset,
@@ -689,6 +698,7 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
         params.push(to.toISOString());
         filters.push(`created_at < $${params.length}::timestamptz`);
       }
+      addActivitySearch(filters, params, req.query.search);
       params.push(limit, offset);
       const where = `WHERE ${filters.join(' AND ')}`;
       const { rows } = await query(
@@ -708,13 +718,14 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
           GROUP BY product, action`, statsParams);
       const events24h = repeats.reduce((sum, group) => sum + group.n, 0);
       const snapshot = getHealthSnapshot?.();
+      const enriched = await enrichTradeFacts(rows, query);
       res.json({
         open_24h: events24h, // Compatibility: a report count, NOT unresolved incidents.
         reports_24h: events24h,
         groups_24h: repeats.length,
         generated_at: new Date().toISOString(),
         hasMore: rows.length >= limit,
-        issues: rows.map((e) => ({
+        issues: enriched.map((e) => ({
           id: e.id,
           at: e.created_at,
           user_id: e.user_id,
@@ -726,6 +737,8 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
           ...issueDiagnostics(e, snapshot),
           repeats_24h: repeats.find(group => group.product === e.product && group.action === e.action)?.n || 0,
           detail: e.detail,
+          amount: e.amount,
+          trade: e.trade,
           page: e.detail?.page || null,
           asset: e.asset,
           tx_hash: e.tx_hash,

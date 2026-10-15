@@ -353,7 +353,7 @@
       const isBuy = side === 'buy' || side === 'long';
       const st0 = resp?.response?.data?.statuses?.[0] || {};
       const oid = st0.resting?.oid || st0.filled?.oid || st0.oid || null;
-      const filledSz = Number(st0.filled?.totalSz || size) || Number(size) || 0;
+      const filledSz = Number(st0.filled?.totalSz ?? size) || 0;
       const avgPx = Number(st0.filled?.avgPx || mid) || Number(mid) || 0;
       const notional = filledSz * avgPx;
       const fromSym = spot ? (isBuy ? 'USDC' : coin) : coin;
@@ -368,7 +368,9 @@
           asset: coin,
           amt: notional > 0 ? Number(notional.toFixed(4)) : filledSz,
           amount: notional > 0 ? Number(notional.toFixed(4)) : filledSz,
-          status: 'filled',
+          size: String(st0.filled?.totalSz ?? size), sizeAsset: coin, side, contract: coin, price: st0.filled?.avgPx,
+          amountAsset: 'USD',
+          status: st0.filled ? 'filled' : (st0.resting ? 'open' : 'submitted'),
           hash: oid != null ? ('hl:' + oid) : undefined,
           chain: 'hyperliquid',
         });
@@ -2083,7 +2085,7 @@
             action: /reject|denied|4001|cancel/i.test(msg) ? 'tx_rejected' : 'hl_order_error',
             message: msg,
             detail: {
-              coin, mid,
+              coin, mid, side, size: order.s, sizeAsset: coin, leverage: lev,
               kind: /reject|denied|4001|cancel/i.test(msg) ? 'cancelled' : 'failed',
               admin_brief: /reject|denied|4001|cancel/i.test(msg)
                 ? 'Отклонил HL-ордер в кошельке'

@@ -19,7 +19,14 @@ export function issueDiagnostics(row, snapshot, now = Date.now()) {
   let state = 'historical';
   let stateLabel = 'Событие в прошлом · текущее состояние неизвестно';
   let summary = classification.ai_summary;
-  if (cause === 'user_rejected') {
+  if (cause === 'diagnostic_probe') {
+    evidence = 'client_diagnostic'; evidenceLabel = 'Тип проверки указан клиентом · автор не установлен';
+    state = 'unverified'; stateLabel = row.tx_hash
+      ? 'Хеш сообщён клиентом · результат в сети требует проверки'
+      : 'Хеш транзакции не записан · исполнение сделки не подтверждено';
+  } else if (cause === 'wallet_relay_region_blocked') {
+    evidence = 'relay_rejection'; evidenceLabel = 'Клиент сообщил региональный отказ сервиса соединения';
+  } else if (cause === 'user_rejected') {
     evidence = 'wallet_rejection'; evidenceLabel = 'Клиент сообщил явный отказ кошелька';
     state = 'rejected'; stateLabel = 'Отказ в этой попытке';
   } else if (cause === 'wallet_no_confirm' || cause === 'wallet_request_timeout') {
@@ -32,6 +39,10 @@ export function issueDiagnostics(row, snapshot, now = Date.now()) {
   } else if (detail.source === 'health_pulse') {
     evidence = 'server_probe'; evidenceLabel = 'Проверка сервера';
     summary = detail.ai_summary || classification.ai_summary;
+    if (cause === 'health_eventloop') {
+      const lag = Number(detail.ms);
+      summary = `Система · Задержка event-loop${Number.isFinite(lag) && lag >= 0 ? ' ' + lag + 'ms' : ''}. Один замер не устанавливает причину или постоянную перегрузку.`;
+    }
     const view = healthView(snapshot, now);
     const check = view.checks?.find(c => `health_${c.id}` === cause);
     const eventAt = new Date(row.created_at || row.at).getTime();
@@ -75,7 +86,7 @@ export function createPulseController(run, { now = Date.now, cooldownMs = 30_000
 export function trackProbe(check, previous, now = Date.now()) {
   const live = check.verification !== 'cached';
   return { ...check, verification: check.verification || 'live',
-    observed_at: check.observed_at || new Date(now).toISOString(),
+    observed_at: check.observed_at || (live ? new Date(now).toISOString() : null),
     consecutive_failures: live ? (check.ok ? 0 : (previous?.consecutive_failures || 0) + 1) : (previous?.consecutive_failures || 0),
     last_success_at: live && check.ok ? new Date(now).toISOString() : (previous?.last_success_at || null),
     recovered: live && check.ok && (previous?.consecutive_failures || 0) > 0 };

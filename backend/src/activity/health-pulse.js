@@ -4,6 +4,7 @@
  * into user_activity so they show up in admin «AI монитор».
  */
 import axios from 'axios';
+import config from '../config/index.js';
 import { pool } from '../db/pool.js';
 import { getRedis } from '../utils/redis.js';
 import logger from '../utils/logger.js';
@@ -13,7 +14,7 @@ import { createPulseController, trackProbe } from './diagnostics.js';
 
 const INTERVAL_MS = 90_000;
 const REMIND_MS = 45 * 60_1000;
-const HL_API = 'https://api.hyperliquid.xyz';
+const HL_API = config.hyperliquid?.testnet ? 'https://api.hyperliquid-testnet.xyz' : 'https://api.hyperliquid.xyz';
 
 /** @type {null | { at: string, ok: boolean, checks: object[], open: number }} */
 let lastSnapshot = null;
@@ -99,10 +100,24 @@ async function probePrices(priceAggregator) {
   return { id: 'prices', ok: true, severity: 'ok', message: `Цены ok (${sources.length} sources)`, ms: 0 };
 }
 
+/** Proxy fallback data proves availability, not a fresh upstream success. */
+function hlResponseEvidence(response) {
+  const cache = String(response.headers?.['x-grom-hl-cache'] || '');
+  if (response.status === 429 || cache === 'stale-on-429') throw new Error('HL HTTP 429');
+  if (response.status >= 400) throw new Error('HL HTTP ' + response.status);
+  if (cache === 'hit') {
+    const at = Date.parse(response.headers?.['x-grom-hl-observed-at'] || '');
+    const observed_at = Number.isFinite(at) && at > 0 && at <= Date.now() ? new Date(at).toISOString() : null;
+    return { verification: 'cached', observed_at };
+  }
+  return { verification: 'live', observed_at: new Date(Date.now()).toISOString() };
+}
+
 let lastHlOk = null; // { at, n, ms }
 
 async function probeHyperliquid(force = false) {
-  // Prefer in-process proxy (has 45s cache + stale-on-429) so pulse doesn't
+  // Scheduled checks share the proxy cache; forced checks read upstream once.
+  // Prefer the in-process proxy so the pulse does not
   // burn Hyperliquid's shared droplet IP quota alongside user Trade/Markets.
   const localUrl = `http://127.0.0.1:${Number(process.env.PORT || process.env.GROM_BACKEND_PORT || 4000)}/api/futures/hl/info`;
 
@@ -118,35 +133,27 @@ async function probeHyperliquid(force = false) {
   }
 
   const r = await timed(async () => {
-    let status;
-    let data;
+    let res;
     try {
-      const res = await axios.post(
-        localUrl,
+      res = await axios.post(
+        force ? `${HL_API}/info` : localUrl,
         { type: 'allMids' },
         { timeout: 8000, headers: { 'Content-Type': 'application/json' }, validateStatus: () => true }
       );
-      status = res.status;
-      data = res.data;
-    } catch (_) {
+    } catch (error) {
+      if (force) throw error;
       // Fallback to upstream only if local proxy is down
-      const res = await axios.post(
+      res = await axios.post(
         `${HL_API}/info`,
         { type: 'allMids' },
         { timeout: 8000, headers: { 'Content-Type': 'application/json' }, validateStatus: () => true }
       );
-      status = res.status;
-      data = res.data;
     }
-    if (status === 429) {
-      const err = new Error('HL HTTP 429');
-      err.code = 429;
-      throw err;
-    }
-    if (status >= 400) throw new Error('HL HTTP ' + status);
+    const evidence = hlResponseEvidence(res);
+    const data = res.data;
     const n = data && typeof data === 'object' ? Object.keys(data).length : 0;
     if (n < 10) throw new Error('HL allMids empty');
-    return n;
+    return { n, ...evidence };
   });
 
   if (!r.ok) {
@@ -184,11 +191,15 @@ async function probeHyperliquid(force = false) {
     };
   }
 
-  lastHlOk = { at: Date.now(), n: r.value, ms: r.ms };
+  if (r.value.verification === 'cached') {
+    return { id: 'hl', ok: true, severity: 'ok', product: 'futures', ms: r.ms,
+      ...r.value, message: `HL доступен · кэш прокси · ${r.value.n} mids` };
+  }
+  lastHlOk = { at: Date.now(), n: r.value.n, ms: r.ms };
   if (r.ms > 3000) {
     return { id: 'hl', ok: false, severity: 'warn', message: `Hyperliquid медленный (${r.ms}ms)`, ms: r.ms, product: 'futures' };
   }
-  return { id: 'hl', ok: true, severity: 'ok', message: `HL ok · ${r.value} mids (${r.ms}ms)`, ms: r.ms, product: 'futures' };
+  return { id: 'hl', ok: true, severity: 'ok', message: `HL ok · ${r.value.n} mids (${r.ms}ms)`, ms: r.ms, product: 'futures' };
 }
 
 let lastHipOk = null; // { at, n, ms }
@@ -208,20 +219,15 @@ async function probeHip3(force = false) {
   const localUrl = `http://127.0.0.1:${Number(process.env.PORT || process.env.GROM_BACKEND_PORT || 4000)}/api/futures/hl/info`;
   const r = await timed(async () => {
     const res = await axios.post(
-      localUrl,
+      force ? `${HL_API}/info` : localUrl,
       { type: 'metaAndAssetCtxs', dex: 'xyz' },
       { timeout: 12000, headers: { 'Content-Type': 'application/json' }, validateStatus: () => true },
     );
-    if (res.status === 429) {
-      const err = new Error('HL HIP-3 429');
-      err.code = 429;
-      throw err;
-    }
-    if (res.status >= 400) throw new Error('HL HIP-3 HTTP ' + res.status);
+    const evidence = hlResponseEvidence(res);
     const uni = Array.isArray(res.data) ? res.data[0]?.universe : null;
     const n = Array.isArray(uni) ? uni.length : 0;
     if (n < 20) throw new Error('HIP-3 xyz universe thin (' + n + ')');
-    return n;
+    return { n, ...evidence };
   });
   if (!r.ok) {
     if (/429/.test(String(r.error || ''))) {
@@ -244,10 +250,14 @@ async function probeHip3(force = false) {
       ms: r.ms,
     };
   }
-  lastHipOk = { at: Date.now(), n: r.value, ms: r.ms };
+  if (r.value.verification === 'cached') {
+    return { id: 'hip3', ok: true, severity: 'ok', product: 'markets', ms: r.ms,
+      ...r.value, message: `HIP-3 доступен · кэш прокси · ${r.value.n} xyz` };
+  }
+  lastHipOk = { at: Date.now(), n: r.value.n, ms: r.ms };
   return {
     id: 'hip3', ok: true, severity: 'ok', product: 'markets',
-    message: `HIP-3 ok · ${r.value} xyz (${r.ms}ms)`,
+    message: `HIP-3 ok · ${r.value.n} xyz (${r.ms}ms)`,
     ms: r.ms,
   };
 }
@@ -266,13 +276,14 @@ async function probeXstocks(force = false) {
   const r = await timed(async () => {
     const res = await axios.get(localUrl, { timeout: 15000, validateStatus: () => true });
     if (res.status >= 400) throw new Error('xstocks HTTP ' + res.status);
+    if (res.data?.error) throw new Error('xstocks upstream unavailable');
     const n = Array.isArray(res.data?.items) ? res.data.items.length : 0;
     if (n < 40) throw new Error('xstocks catalog thin (' + n + ')');
     const sample = res.data.items[0] || {};
     if (!sample.solMint && !(sample.addrs && Object.keys(sample.addrs).length)) {
       throw new Error('xstocks items missing routes (Soon stuck)');
     }
-    return n;
+    return { n, cached: res.data?.cached === true };
   });
   if (!r.ok) {
     return {
@@ -281,10 +292,15 @@ async function probeXstocks(force = false) {
       ms: r.ms,
     };
   }
-  lastXstocksOk = { at: Date.now(), n: r.value, ms: r.ms };
+  if (r.value.cached) {
+    return { id: 'xstocks', ok: true, severity: 'ok', product: 'xstocks', ms: r.ms,
+      verification: 'cached', observed_at: null,
+      message: `Каталог акций доступен из кэша · ${r.value.n} tickers · свежесть источника не подтверждена` };
+  }
+  lastXstocksOk = { at: Date.now(), n: r.value.n, ms: r.ms };
   return {
     id: 'xstocks', ok: true, severity: 'ok', product: 'xstocks',
-    message: `xStocks ok · ${r.value} tickers (${r.ms}ms)`,
+    message: `xStocks ok · ${r.value.n} tickers (${r.ms}ms)`,
     ms: r.ms,
   };
 }
@@ -300,7 +316,7 @@ async function probeEventLoop() {
       id: 'eventloop',
       ok: false,
       severity: lag > 700 ? 'error' : 'warn',
-      message: `Event-loop lag ${lag}ms — бэкенд перегружен (риск «тупит» при масштабе)`,
+      message: `Event-loop lag ${lag}ms — задержка одного замера; причина требует проверки`,
       ms: lag,
     };
   }
@@ -322,7 +338,7 @@ async function probeMem() {
 
 async function maybeLogIssue(check) {
   if (check.ok || check.skipIssueLog) {
-    if (check.ok) lastLogged.delete(check.id);
+    if (check.ok && check.verification !== 'cached') lastLogged.delete(check.id);
     return;
   }
   // Rate-limit reports use the same bounded reminder window as other probes.

@@ -19996,7 +19996,7 @@ window.gwXstocksBuy = async function ({ tokenSym, usdtAmount, chainId, address, 
   await gwXstocksPrepChain(execCid);
   if (payment && String(payment.account).toLowerCase() !== String(gwReadOnlyAddress()).toLowerCase()) throw new Error('Payment wallet changed. Review the payment account.');
   const fromStable = String(q._fromSym || 'USDT').toUpperCase();
-  return await gwOnChainSwapExec(fromStable, sym, amt);
+  return await gwOnChainSwapExec(fromStable, sym, amt, { product: 'xstocks', action: 'buy' });
 };
 
 window.gwXstocksSell = async function ({ tokenSym, tokenAmount, chainId, address, decimals, name, logo, solMint, solDecimals, solMultiplier, addrsByChain, refPrice }) {
@@ -20041,7 +20041,7 @@ window.gwXstocksSell = async function ({ tokenSym, tokenAmount, chainId, address
   if (!execCid) throw new Error('No EVM market for this ticker');
   await gwXstocksPrepChain(execCid);
   const toStable = String(q._toSym || 'USDT').toUpperCase();
-  return await gwOnChainSwapExec(sym, toStable, amt);
+  return await gwOnChainSwapExec(sym, toStable, amt, { product: 'xstocks', action: 'sell' });
 };
 
 window.gwXstocksQuote = async function ({ fromSym, toSym, amtNum, chainId, address, decimals, name, logo, solMint, solDecimals, solMultiplier, addrsByChain, refPrice, probeLite, payment, receiveAddress }) {
@@ -22842,10 +22842,13 @@ function gwTxLogPush(entry) {
         detail: {
           from: e.fromSym, to: e.toSym, chain: e.chain, kind: e.kind,
           fromChainId: e.fromChainId, toChainId: e.toChainId, bridge: e.bridge,
+          amt: e.amt != null ? String(e.amt) : undefined,
+          amountAsset: e.amountAsset, size: e.size, sizeAsset: e.sizeAsset, side: e.side, contract: e.contract,
+          market: e.market, outcome: e.outcome, orderId: e.orderId, price: e.price, aggregator: e.aggregator,
         },
-        tx_hash: e.hash || e.tx_hash || null,
+        tx_hash: /^(?:0x[a-f\d]{64}|hl:\d+|[1-9A-HJ-NP-Za-km-z]{64,88})$/i.test(String(e.hash || e.tx_hash || '')) ? (e.hash || e.tx_hash) : undefined,
         amount: e.amt != null ? Number(e.amt) : (e.amount != null ? Number(e.amount) : undefined),
-        asset: e.fromSym || e.asset || null,
+        asset: e.asset || e.fromSym || undefined,
         status: e.status || 'filled',
         wallet: wallet || undefined,
       }),
@@ -22996,6 +22999,8 @@ function gromSwapIssueSnapshot(extra) {
       d.requestDispatched = op.requestDispatched === true;
       d.walletRequestAt = op.walletRequestAt || null;
       d.signStep = op.signStep || null;
+      if (op.from === d.from && op.to === d.to && Number(op.amt) === Number(d.amt)
+          && Number(op.chainId) === Number(d.fromChainId)) d.txHash = d.txHash || op.hash || op.signature || undefined;
     }
   } catch (_) {}
   return d;
@@ -24130,7 +24135,7 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
 /* Log successful Instant Swap / rebalance / limit fills into History */
 (function gwWrapSwapHistoryLog() {
   const _orig = gwOnChainSwapExec;
-  gwOnChainSwapExec = async function (fromSym, toSym, amtNum) {
+  gwOnChainSwapExec = async function (fromSym, toSym, amtNum, historyContext) {
     try {
       window.__gwLastExecConfirmed = false;
       window.__gwLastExecWasBridge = false;
@@ -24163,6 +24168,9 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
           });
         }
         gwTxLogPush({
+          product: historyContext && historyContext.product || 'swap',
+          action: historyContext && historyContext.action || 'swap',
+          side: historyContext && historyContext.action,
           kind: 'spot',
           fromSym,
           toSym,

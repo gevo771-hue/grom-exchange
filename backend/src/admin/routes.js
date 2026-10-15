@@ -9,7 +9,7 @@ import { clientIp, logAdminAudit, auditRowToEntry } from './audit.js';
 import { syncHlFillsIntoActivity } from '../activity/hl-fills-sync.js';
 import { healthView, issueDiagnostics } from '../activity/diagnostics.js';
 import { enrichTradeFacts, addActivitySearch } from '../activity/trade-facts.js';
-import { userRecordEvidence } from './user-evidence.js';
+import { userRecordEvidence, visibleWalletSql } from './user-evidence.js';
 
 const PRODUCT_LABELS = {
   auth: 'Регистрация / вход',
@@ -107,7 +107,7 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
       const [users, health] = await Promise.all([
         query(`SELECT COUNT(*)::int AS total,
                       COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '24 hours')::int AS active_24h
-                 FROM users WHERE status='active'`),
+                 FROM users WHERE status='active' AND ${visibleWalletSql('users.wallet_address')}`),
         query(`SELECT
                  CASE WHEN COUNT(*) FILTER (WHERE status='degraded') > 0 THEN 99.5 ELSE 99.98 END AS uptime
                FROM (SELECT 'ok' AS status) x`),
@@ -300,7 +300,7 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
       const from = parseDateParam(req.query.from);
       const to = parseDateParam(req.query.to, true);
       const params = [];
-      const where = [];
+      const where = [visibleWalletSql('u.wallet_address')];
       if (search) {
         params.push(`%${search.toLowerCase()}%`);
         where.push(`(u.wallet_address ILIKE $${params.length} OR u.id::text ILIKE $${params.length})`);
@@ -460,6 +460,8 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
         actWhere = `WHERE created_at > NOW() - INTERVAL '24 hours'`;
       }
 
+      actWhere += ` AND ${visibleWalletSql('user_activity.wallet_address')}`;
+
       const usersPromise = hasRange
         ? query(
           `SELECT COUNT(*)::int AS total,
@@ -469,7 +471,7 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
                     AND created_at < COALESCE($2::timestamptz, 'infinity'::timestamptz))::int AS users_in_range,
                   COUNT(*) FILTER (WHERE last_seen_at >= COALESCE($1::timestamptz, '-infinity'::timestamptz)
                     AND last_seen_at < COALESCE($2::timestamptz, 'infinity'::timestamptz))::int AS active_in_range
-             FROM users`,
+             FROM users WHERE ${visibleWalletSql('users.wallet_address')}`,
           [from ? from.toISOString() : null, to ? to.toISOString() : null]
         )
         : query(`SELECT
@@ -477,7 +479,7 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int AS reg_24h,
                    COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE)::int AS reg_today,
                    COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '24 hours')::int AS active_24h
-                 FROM users`);
+                 FROM users WHERE ${visibleWalletSql('users.wallet_address')}`);
 
       const [users, byProduct, onlineRes, visitsRes] = await Promise.all([
         usersPromise.catch(() => ({ rows: [{}] })),
@@ -488,7 +490,7 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
         query(
           `SELECT COUNT(*)::int AS online_now
              FROM users
-            WHERE last_seen_at > NOW() - INTERVAL '${ONLINE_WINDOW_MIN} minutes'`
+            WHERE ${visibleWalletSql('users.wallet_address')} AND last_seen_at > NOW() - INTERVAL '${ONLINE_WINDOW_MIN} minutes'`
         ).catch(() => ({ rows: [{ online_now: 0 }] })),
         (hasRange
           ? query(
@@ -550,7 +552,7 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
       }
 
       const params = [];
-      const filters = [];
+      const filters = [visibleWalletSql('feed.wallet_address')];
       if (product) {
         params.push(product);
         filters.push(`product = $${params.length}`);
@@ -685,7 +687,7 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
       const from = parseDateParam(req.query.from);
       const to = parseDateParam(req.query.to, true);
       const params = [];
-      const filters = [`status IN ('error','failed','fail')`];
+      const filters = [`status IN ('error','failed','fail')`, visibleWalletSql('user_activity.wallet_address')];
       if (product) {
         params.push(product);
         filters.push(`product = $${params.length}`);
@@ -713,7 +715,7 @@ export default function createAdminRouter({ requireAuth, getHealthSnapshot, requ
       const { rows: repeats } = await query(
         `SELECT product, action, COUNT(*)::int AS n, MAX(created_at) AS last_at
            FROM user_activity
-          WHERE status IN ('error','failed','fail') AND created_at > NOW() - INTERVAL '24 hours'
+          WHERE ${visibleWalletSql('user_activity.wallet_address')} AND status IN ('error','failed','fail') AND created_at > NOW() - INTERVAL '24 hours'
             ${product ? 'AND product = $1' : ''}
           GROUP BY product, action`, statsParams);
       const events24h = repeats.reduce((sum, group) => sum + group.n, 0);

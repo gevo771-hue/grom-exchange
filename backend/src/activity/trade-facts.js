@@ -47,7 +47,7 @@ function confirmedFee(fill) {
     evidence: 'Доля GROM по учёту LiFi · не подтверждение вывода средств' };
 }
 export function tradeFacts(row, fills = []) {
-  if (!PRODUCTS.has(row.product)) return null;
+  if (!PRODUCTS.has(row.product) || row.detail?.source === 'health_pulse') return null;
   const d = row.detail && typeof row.detail === 'object' ? row.detail : {};
   const from = text(d.from || d.fromSym || row.asset, 40), to = text(d.to || d.toSym, 40);
   const cid = chainId(d.fromChainId || d.chainId || d.chain_id || d.chain);

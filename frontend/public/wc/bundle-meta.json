@@ -1,0 +1,9 @@
+{
+  "sdk": "@walletconnect/sign-client",
+  "version": "2.26.0",
+  "packageSha256": "fb3b55858add024f7b776fa4709596c7808457d349e59ac763f6c0a3ce17abcc",
+  "lockSha256": "d1fbc9337b51fba55c94c60efcabc564562101067e7c8c7e59ea49f437ac9249",
+  "recipeSha256": "0fbeec8d56c8909a70a60a6f8b65ae58610ff637051b3157b79ce9d6dced5839",
+  "sha256": "de3fdfd6783b8dd8cd45675e966e679765b37f67fa7fa9ca6bc1bd12a5ecd2b7",
+  "bytes": 457691
+}

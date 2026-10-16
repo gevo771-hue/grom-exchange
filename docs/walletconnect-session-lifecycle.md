@@ -52,3 +52,32 @@ For live acceptance: connect Trust once, reload GROM, enter a small swap amount,
 and check that the CTA says Swap and no fresh pairing is proposed. The user
 starts and approves the real transaction. Token approval or gas funding may
 still require separate confirmations; session restoration does not bypass them.
+
+## SDK build and Reown metrics
+
+GROM uses `@walletconnect/sign-client` 2.26.0 with its own connection UI.
+It does not initialize the AppKit modal. The unused EthereumProvider/AppKit
+bundle and its preload were removed; loading AppKit a second time just to count
+visitors would introduce a separate lifecycle into the wallet integration.
+
+`scripts/walletconnect/package-lock.json` pins the complete dependency tree.
+`node scripts/bundle-wc.mjs` uses a clean `npm ci --ignore-scripts` install and
+records the SDK version, input hashes and output checksum in
+`frontend/public/wc/bundle-meta.json`. Offline frontend builds accept this
+bundle only when all hashes match. The frontend build gives the SDK a
+content-hashed URL shared by preload and dynamic import, so an older immutable
+browser cache cannot keep serving the previous SDK after deployment.
+
+The Reown **AppKit** analytics card measures AppKit interactions, not all GROM
+visitors. Compare SDK-specific metrics with GROM's authenticated activity, taking their
+different definitions and reporting delays into account. A zero AppKit count is not evidence of zero users.
+Do not emit invented AppKit connection/transaction events to fill the chart.
+
+Sources: [Reown analytics](https://docs.reown.com/cloud/analytics),
+[SignClient releases](https://github.com/WalletConnect/walletconnect-monorepo/releases).
+
+Dashboard inspection on 16 October 2026: the GROM project ID matches the
+application; apex and www domains are allowlisted; Event Tracking is ON.
+The dashboard still shows zero User Activity and an outdated AppKit notice.
+Updating SignClient does not promise to remove that historical AppKit notice
+or backfill AppKit interactions that this custom UI never emitted.

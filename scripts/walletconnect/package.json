@@ -1,0 +1,12 @@
+{
+  "name": "grom-walletconnect-bundle",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@walletconnect/sign-client": "2.26.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.0"
+  }
+}

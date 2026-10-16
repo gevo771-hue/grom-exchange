@@ -22,7 +22,7 @@
     if (/[?&]grom_device=/i.test(location.search || '')) needHot = true;
   } catch (_) {}
   var l = document.createElement('link');
-  l.href = '/wc/ethereum-provider.bundle.js';
+  l.href = '/wc/sign-client.bundle.js';
   l.crossOrigin = 'anonymous';
   if (needHot) {
     l.rel = safari ? 'preload' : 'modulepreload';

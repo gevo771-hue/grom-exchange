@@ -38,8 +38,8 @@ export const SEO_META_BY_LOCALE = {
       description: 'Swaps, perpetual futures, prediction markets and tokenized stocks from your own wallet. No sign-up, no deposits, no KYC for swaps.',
     },
     dashboard: {
-      title: 'Cross-Chain Crypto Swap — Best Route, 20+ Chains',
-      description: 'Swap 10 000+ tokens across 20+ chains. Six routers queried in parallel, you get the best quote. Signed in your wallet, settled on-chain.',
+      title: 'Crypto Swaps & Cross-Chain Routes — GROM Exchange',
+      description: 'Compare available crypto swap and bridge routes. Supported tokens, networks, fees and output depend on the current quote. Confirm each transaction in your wallet.',
     },
     futures: {
       title: 'Perpetual Futures From Your Wallet — Up to 40x',
@@ -47,7 +47,7 @@ export const SEO_META_BY_LOCALE = {
     },
     predict: {
       title: 'Prediction Markets — Politics, Sports, Crypto',
-      description: 'Live event markets funded from your own wallet and resolved on-chain. 0.30% taker, 0% maker. No balance to top up, nothing to withdraw.',
+      description: 'Explore event markets and review each market’s rules, collateral and current fees before submitting an order from your wallet. Availability depends on the venue and region.',
     },
     xstocks: {
       title: 'Tokenized Stocks On-Chain, 24/7 — AAPL, TSLA, NVDA',
@@ -153,7 +153,7 @@ const ES = {
       {
         h2: 'Qué hace Instant Swap',
         html: `<p>Elige token y red de origen, token y red de destino, y un importe. GROM pide cotizaciones a varios agregadores y bridges en paralelo y presenta una ruta que puedes aceptar o rechazar. Nunca envías el principal del swap a un hot wallet de GROM.</p>
-<p>La cobertura incluye miles de tokens en más de veinte redes cuando hay liquidez y bridges. La disponibilidad exacta depende de los routers en el momento de la cotización — puede no haber ruta para pares ilíquidos.</p>`,
+<p>Los tokens y las redes disponibles dependen de la liquidez, los bridges y los proveedores habilitados. La disponibilidad exacta depende de los routers en el momento de la cotización — puede no haber ruta para pares ilíquidos.</p>`,
       },
       {
         h2: 'Redes, monederos y firmas',
@@ -327,7 +327,7 @@ const PT = {
       {
         h2: 'O que o Instant Swap faz',
         html: `<p>Escolha token e rede de origem, token e rede de destino, e um valor. A GROM pede cotações a vários agregadores e bridges em paralelo e apresenta uma rota que você pode aceitar ou recusar. Você nunca envia o principal do swap para um hot wallet da GROM.</p>
-<p>A cobertura inclui milhares de tokens em mais de vinte redes quando há liquidez e bridges. A disponibilidade exata depende dos roteadores no momento da cotação — pares ilíquidos podem não ter rota.</p>`,
+<p>Os tokens e redes disponíveis dependem da liquidez, das bridges e dos provedores habilitados. A disponibilidade exata depende dos roteadores no momento da cotação — pares ilíquidos podem não ter rota.</p>`,
       },
       {
         h2: 'Redes, carteiras e assinaturas',

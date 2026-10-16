@@ -82,7 +82,7 @@ export const SEO_COPY = {
       {
         h2: 'What Instant Swap does',
         html: `<p>Choose a source token and chain, a destination token and chain, and an amount. GROM requests quotes from several aggregators and bridges in parallel, then presents a route you can accept or reject. You never send funds to a GROM hot wallet for the swap itself.</p>
-<p>Coverage includes thousands of tokens across twenty-plus networks when liquidity and bridges allow. Exact availability depends on the routers at quote time — empty routes are possible for illiquid pairs.</p>`,
+<p>Token and network coverage depends on the available liquidity, bridges and enabled providers. Exact availability depends on the routers at quote time — empty routes are possible for illiquid pairs.</p>`,
       },
       {
         h2: 'Chains, wallets, and signing',

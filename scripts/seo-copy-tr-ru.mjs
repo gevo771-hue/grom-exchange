@@ -103,7 +103,7 @@ export const SEO_COPY_TR = {
       {
         h2: 'Instant Swap ne yapar',
         html: `<p>Kaynak token ve ağ, hedef token ve ağ ile tutarı seçin. GROM birkaç aggregator ve bridge’den paralel kotasyon ister, kabul veya reddedebileceğiniz bir rota sunar. Swap anaparasını GROM hot wallet’ına göndermezsiniz.</p>
-<p>Likidite ve bridge’ler elverdiğinde yirmiden fazla ağda binlerce token kapsanır. Kesin uygunluk kotasyon anındaki router’lara bağlıdır — likit olmayan çiftlerde rota olmayabilir.</p>`,
+<p>Desteklenen tokenler ve ağlar likiditeye, bridge’lere ve etkin sağlayıcılara bağlıdır. Kesin uygunluk kotasyon anındaki router’lara bağlıdır — likit olmayan çiftlerde rota olmayabilir.</p>`,
       },
       {
         h2: 'Ağlar, cüzdanlar ve imza',
@@ -280,7 +280,7 @@ export const SEO_COPY_RU = {
       {
         h2: 'Что делает Instant Swap',
         html: `<p>Выберите исходный токен и сеть, целевой токен и сеть, сумму. GROM параллельно запрашивает котировки у нескольких агрегаторов и мостов и показывает маршрут, который можно принять или отклонить. Основную сумму swap вы не отправляете на hot wallet GROM.</p>
-<p>Покрытие — тысячи токенов на двадцати с лишним сетях, когда есть ликвидность и мосты. Точная доступность зависит от роутеров в момент котировки — для неликвидных пар маршрута может не быть.</p>`,
+<p>Доступные токены и сети зависят от ликвидности, мостов и включённых провайдеров. Точная доступность зависит от роутеров в момент котировки — для неликвидных пар маршрута может не быть.</p>`,
       },
       {
         h2: 'Сети, кошельки и подписи',

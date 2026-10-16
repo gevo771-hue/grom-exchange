@@ -14,13 +14,13 @@
  *
  * Usage: node scripts/build-frontend.mjs   (writes frontend/dist)
  */
+import { externalizeInline } from './externalize-inline.mjs';
 import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import {
   existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync,
 } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import {
   SEO_COPY,
@@ -40,13 +40,12 @@ import {
   hreflangBlock,
   SEO_LOCALES,
 } from './seo-locales.mjs';
-import { getSeoMeta } from './seo-copy-localized.mjs';
+import { getSeoMeta, getSeoCopy } from './seo-copy-localized.mjs';
 import { frontendSources, copyFrontendSources } from './frontend-sources.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC = 'frontend/public';
 const OUT = 'frontend/dist';
-const SEO_STAMP = join(__dirname, '.seo-content-stamp.json');
+
 const sourceFiles = frontendSources(process.cwd());
 
 // Fail before touching dist. Missing markers previously made the build silently
@@ -293,6 +292,17 @@ function applySeoToHtml(html, page) {
     html = injectBeforeBodyClose(html, `${jsonLd}`);
   }
 
+  if (page.route === 'landing') {
+    const c = localeCode === 'en' ? SEO_COPY.landing : getSeoCopy(localeCode, 'landing');
+    if (!c) throw new Error(`Missing landing translation: ${localeCode}`);
+    const esc = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const body = `<h2>${esc(c.h1)}</h2><p>${esc(c.lead)}</p>`
+      + c.sections.map(section => `<h3>${esc(section.h2)}</h3>${section.html}`).join('');
+    html = html.replace(/(<section\b[^>]*id="lpSeoPrimary"[^>]*>)[\s\S]*?<\/section>/i,
+      (_all, open) => open.replace(/lang="[^"]*"/, `lang="${loc.htmlLang}"`).replace(/>$/, ' data-seo-static="1">') + body + '</section>');
+    html = html.replace(/(<summary[^>]*id="lpSeoPrimarySum"[^>]*>)[\s\S]*?<\/summary>/i,
+      (_all, open) => open + esc(loc.aboutPrefix + ' GROM') + '</summary>');
+  }
   html = demoteExtraH1(html);
   /* Strip inactive SPA panels / admin / demo claims for this public URL. */
   html = preparePublicRouteHtml(html, page.route);
@@ -300,25 +310,8 @@ function applySeoToHtml(html, page) {
 }
 
 function stableSitemapLastmod() {
-  const today = new Date().toISOString().slice(0, 10);
-  const hash = createHash('sha256')
-    .update(JSON.stringify(SEO_COPY))
-    .update(SEO_PAGES.map((p) => `${p.path}|${p.title}|${p.description}`).join('\n'))
-    .digest('hex')
-    .slice(0, 16);
-  let lastmod = today;
-  try {
-    if (existsSync(SEO_STAMP)) {
-      const prev = JSON.parse(readFileSync(SEO_STAMP, 'utf8'));
-      if (prev && prev.hash === hash && prev.lastmod) lastmod = prev.lastmod;
-      else writeFileSync(SEO_STAMP, JSON.stringify({ hash, lastmod: today }, null, 2) + '\n');
-    } else {
-      writeFileSync(SEO_STAMP, JSON.stringify({ hash, lastmod: today }, null, 2) + '\n');
-    }
-  } catch {
-    lastmod = today;
-  }
-  return lastmod;
+  // Every deployment rebuilds public HTML, including its asset references.
+  return new Date().toISOString().slice(0, 10);
 }
 
 {
@@ -341,10 +334,10 @@ function stableSitemapLastmod() {
     }
   }
   const lastmod = stableSitemapLastmod();
-  const urls = SEO_PAGES.map((p) => {
+  const urls = SEO_PAGES.filter(p => p.locale.code === 'en' || p.route === 'landing').map((p) => {
     const loc = 'https://grom.exchange' + (p.path === '/' ? '/' : p.path);
     const productPath = p.productPath || p.path;
-    const alts = SEO_LOCALES.map((l) => {
+    const alts = (p.route === 'landing' ? SEO_LOCALES : SEO_LOCALES.filter(l => l.code === 'en')).map((l) => {
       const href = 'https://grom.exchange' + (l.prefix
         ? (productPath === '/' ? `${l.prefix}/` : `${l.prefix}${productPath}`)
         : (productPath === '/' ? '/' : productPath));
@@ -357,6 +350,13 @@ function stableSitemapLastmod() {
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n` +
     `        xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls}\n</urlset>\n`);
+}
+
+// Shared hashed files let subsequent product routes reuse the same CSS/JS.
+for (const file of ['app.html', ...SEO_PAGES.map(p => p.dir ? `${p.dir}/index.html` : 'index.html')]) {
+  const path = join(OUT, file);
+  const html = externalizeInline(readFileSync(path, 'utf8'), (name, body) => writeFileSync(join(OUT, name), body));
+  writeFileSync(path, html);
 }
 
 // Tiny version beacon — stale tabs poll this and self-reload when it changes.

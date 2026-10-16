@@ -57,6 +57,11 @@ async function main() {
   const app = express();
   app.set('trust proxy', 1);
   app.use(helmet());
+  // Include errors and preflight responses: API documents are not search pages.
+  app.use(['/api', '/auth'], (_req, res, next) => {
+    res.setHeader('X-Robots-Tag', 'noindex');
+    next();
+  });
   app.use(corsMw);
   const { captureRawBody } = await import('./utils/webhook-sig.js');
   app.use(express.json({

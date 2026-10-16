@@ -490,16 +490,16 @@ function gwSetupMegaCards() {
 const GW_DP_TR = {
   ru: {
     walletH: '⚡ DEX Quick Actions', walletSub: 'Всё что нужно — свап, мост, обзор on-chain',
-    walletA1: 'Мгновенный своп', walletA1s: '20+ сетей', walletA2: 'Bridge между сетями', walletA2s: 'LiFi + Squid', walletA3: 'Открыть в explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Свап через wallet', walletA4s: 'Non-custodial',
+    walletA1: 'Мгновенный своп', walletA1s: 'несколько сетей', walletA2: 'Bridge между сетями', walletA2s: 'LiFi + Squid', walletA3: 'Открыть в explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Свап через wallet', walletA4s: 'Non-custodial',
     setH: '⚙ DEX Preferences', setSub: 'Настройки маршрутизации и защиты от MEV',
-    setSlip: 'Slippage по умолчанию', setSlipS: 'Максимальное проскальзывание для свапов', setMev: 'MEV protection', setMevS: 'Приоритет CoWSwap batch, если доступно', setAgg: 'Основной агрегатор', setAggS: 'Наш meta-agg сравнивает 6 источников', setRpc: 'Свой RPC (опционально)', setRpcS: 'Для приватного нод-провайдера',
+    setSlip: 'Slippage по умолчанию', setSlipS: 'Максимальное проскальзывание для свапов', setMev: 'MEV protection', setMevS: 'Приоритет CoWSwap batch, если доступно', setAgg: 'Основной агрегатор', setAggS: 'Сравниваем доступные маршруты', setRpc: 'Свой RPC (опционально)', setRpcS: 'Для приватного нод-провайдера',
     saved: 'Сохранено',
   },
   en: {
     walletH: '⚡ DEX Quick Actions', walletSub: 'Everything you need — swap, bridge, on-chain review',
-    walletA1: 'Instant Swap', walletA1s: '20+ chains', walletA2: 'Cross-chain Bridge', walletA2s: 'LiFi + Squid', walletA3: 'View on explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Swap via wallet', walletA4s: 'Non-custodial',
+    walletA1: 'Instant Swap', walletA1s: 'multiple chains', walletA2: 'Cross-chain Bridge', walletA2s: 'LiFi + Squid', walletA3: 'View on explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Swap via wallet', walletA4s: 'Non-custodial',
     setH: '⚙ DEX Preferences', setSub: 'Routing settings and MEV protection',
-    setSlip: 'Default slippage', setSlipS: 'Maximum slippage tolerated on swaps', setMev: 'MEV protection', setMevS: 'Prefer CoWSwap batch when available', setAgg: 'Preferred aggregator', setAggS: 'Our meta-agg compares 6 sources', setRpc: 'Custom RPC (optional)', setRpcS: 'For private node providers',
+    setSlip: 'Default slippage', setSlipS: 'Maximum slippage tolerated on swaps', setMev: 'MEV protection', setMevS: 'Prefer CoWSwap batch when available', setAgg: 'Preferred aggregator', setAggS: 'Our meta-agg compares available sources', setRpc: 'Custom RPC (optional)', setRpcS: 'For private node providers',
     saved: 'Saved',
   },
 };

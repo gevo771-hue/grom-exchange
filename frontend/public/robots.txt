@@ -1,4 +1,5 @@
-# GROM robots.txt — AI crawl / Content-Signal rules are injected by Cloudflare Managed Content.
-# Only Sitemap lives here so User-agent blocks are not duplicated at the edge.
+User-agent: *
+Disallow: /api/admin/
+Disallow: /auth/
 
 Sitemap: https://grom.exchange/sitemap.xml

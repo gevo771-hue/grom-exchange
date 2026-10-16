@@ -12,7 +12,7 @@
         <span id="boffPeriodHint" style="font-size:11px;color:var(--silver5);margin-left:4px"></span>
       </div>
 
-      <div class="boff-grid" id="boffKpiGrid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="boff-grid" id="boffKpiGrid">
         <div class="boff-kpi"><div class="k"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.7);margin-right:5px;vertical-align:middle"></span>Онлайн</div><div class="v mono" id="boffKpiOnline">—</div><div class="s" id="boffKpiOnlineSub">сейчас на бирже</div></div>
         <div class="boff-kpi"><div class="k">Посещения</div><div class="v mono" id="boffKpiVisits">—</div><div class="s" id="boffKpiVisitsSub">уник. за 24ч</div></div>
         <div class="boff-kpi"><div class="k">Новые записи</div><div class="v mono" id="boffKpiReg">—</div><div class="s" id="boffKpiRegSub">сегодня · всего —</div></div>
@@ -53,10 +53,10 @@
           <h3>AI pulse · здоровье биржи <span id="boffHealthStamp" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
           <button type="button" class="mini-btn" id="boffHealthRecheck" onclick="boffRecheckHealth()">Проверить сейчас</button>
         </div>
-        <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
+        <details class="boff-help"><summary>Как читать этот раздел</summary><p>
           Проверки сервера и доступности API каждые ~90 секунд. Кэш отмечен отдельно. Зелёный статус не подтверждает исполнение сделок или работу всех пользовательских сценариев.
-        </p>
-        <div id="boffHealthGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px"></div>
+        </p></details>
+        <div id="boffHealthGrid"></div>
       </div>
 
       <div class="card" style="margin-top:14px">
@@ -78,10 +78,11 @@
             <button class="mini-btn" onclick="loadBoffIssues()">Обновить</button>
           </div>
         </div>
-        <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
+        <details class="boff-help"><summary>Как читать этот раздел</summary><p>
           Диагностика по телеметрии, без догадок о действиях пользователя. Лента хранит прошлые сообщения; это не список нерешённых проблем. Повторная проверка читает данные и не отправляет сделки.
-        </p>
+        </p></details>
         <input id="boffIssuesSearch" class="set-input boff-monitor-search" type="search" aria-label="Поиск сообщений" placeholder="Кошелёк, пара, инструмент, хеш или ошибка" oninput="boffSearchActivity('issues')" />
+        <div id="boffIssuesStatus" class="boff-list-status" role="status" aria-live="polite"></div>
         <div id="boffIssuesList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
         </div>
@@ -107,6 +108,7 @@
           </div>
         </div>
         <input id="boffFeedSearch" class="set-input boff-monitor-search" type="search" aria-label="Поиск операций" placeholder="Кошелёк, пара, инструмент, хеш или ошибка" oninput="boffSearchActivity('feed')" />
+        <div id="boffFeedStatus" class="boff-list-status" role="status" aria-live="polite"></div>
         <div id="boffFeedList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
         </div>
@@ -123,7 +125,7 @@
             <button class="mini-btn" onclick="loadBoffUsers()">Обновить</button>
           </div>
         </div>
-        <p style="padding:0 14px;color:var(--silver4);font-size:12px;line-height:1.5">Шаблонные адреса без записи подписанного входа и служебные аккаунты скрыты из списка, ленты и счётчиков. Остальные записи могут быть неподтверждёнными; их количество не равно числу клиентов. SIWE в журнале не устанавливает личность человека.</p>
+        <details class="boff-help"><summary>Какие кошельки здесь показаны</summary><p>Шаблонные адреса без записи подписанного входа и служебные аккаунты скрыты из списка, ленты и счётчиков. Остальные записи могут быть неподтверждёнными; их количество не равно числу клиентов. SIWE в журнале не устанавливает личность человека.</p></details>
         <div class="boff-row boff-head"><div>Кошелёк</div><div>Первая запись</div><div>Последняя активность</div><div>Данные входа</div></div>
         <div id="boffUsersList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div></div>

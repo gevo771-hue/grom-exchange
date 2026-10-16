@@ -2759,38 +2759,54 @@
   }
   .set-toggle input:checked + .tg { background: rgba(0, 194, 255, 0.55); }
   .set-toggle input:checked + .tg::after { transform: translateX(18px); }
-  .boff-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
-  .boff-kpi {
-    background: linear-gradient(180deg, rgba(48,54,66,0.65), rgba(37,45,58,0.55));
-    border: 1px solid rgba(200,212,232,0.08);
-    border-radius: 12px;
-    padding: 12px;
-  }
-  .boff-kpi .k { font-size: 10.5px; color: var(--silver5); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
-  .boff-kpi .v { font-size: 21px; color: var(--silver1); font-weight: 800; margin-top: 4px; }
-  .boff-kpi .s { font-size: 11px; color: var(--silver4); margin-top: 2px; }
-    .boff-event-card{margin:10px 0;padding:18px;border:1px solid rgba(136,192,208,.17);border-radius:16px;background:linear-gradient(130deg,rgba(136,192,208,.045),rgba(7,17,28,.16));overflow-wrap:anywhere}
-    .boff-event-top,.boff-event-meta{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
-    .boff-event-top time{color:var(--silver4);font-size:12px;margin-left:auto;font-variant-numeric:tabular-nums}
-    .boff-event-title{font-size:14px;font-weight:600;line-height:1.6;margin:12px 0 6px}
-    .boff-event-meta{font-size:11px;color:var(--silver4);margin-bottom:12px}
-    .boff-trade-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0 8px}
-    .boff-fact{padding:12px;border:1px solid rgba(136,192,208,.12);border-radius:10px;background:rgba(8,18,31,.18);min-width:0}
-    .boff-fact>span{display:block;color:var(--silver4);font-size:10px;letter-spacing:.04em;margin-bottom:7px}
-    .boff-fact strong{font-size:13px;font-weight:600;line-height:1.45;display:block}
-    .boff-fee-confirmed strong{color:var(--success)}
-    .boff-event-state{color:var(--ice);font-size:12px;line-height:1.5;margin-top:10px}
-    .boff-evidence{font-size:11px;color:var(--silver4);line-height:1.5;margin-top:4px}
-    .boff-event-details{border-top:1px solid rgba(136,192,208,.12);margin-top:14px;padding-top:10px;font-size:12px}
-    .boff-event-details summary{cursor:pointer;color:var(--ice);padding:4px 0;min-height:28px}
-    .boff-event-details dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}
-    .boff-event-details dt,.boff-original>span{font-size:10px;color:var(--silver4);margin-bottom:4px}
-    .boff-event-details dd{margin:0;line-height:1.5;user-select:text}
-    .boff-tx{margin-top:12px;line-height:2}.boff-tx code{user-select:text}.boff-tx a{color:var(--ice)}
-    .boff-original{padding:12px;background:rgba(0,0,0,.12);border-radius:8px;margin-top:12px}.boff-original p{margin:0;line-height:1.5}
-    .boff-monitor-search{width:min(100%,420px);margin:0 0 12px;height:38px;font-size:12px}
-    @media(max-width:1200px){.boff-trade-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media(max-width:600px){.boff-event-card{padding:12px}.boff-event-top{gap:6px}.boff-event-top time{margin-left:0;font-size:10px}.boff-event-details dl{grid-template-columns:1fr}.boff-fact{padding:9px}.boff-fact strong{font-size:12px}}
+  #page-backoffice .page-title{font-size:24px;margin-bottom:6px}
+  #page-backoffice .page-subtitle{font-size:12px;margin-bottom:14px}
+  #page-backoffice .card{border-radius:12px;box-shadow:none;background:rgba(28,36,49,.36)}
+  #page-backoffice .card-head{padding:10px 14px;gap:8px;flex-wrap:wrap}
+  #page-backoffice .card-head h3{font-size:13px;gap:6px;flex-wrap:wrap}
+  #page-backoffice .card-head h3 .mono{font-size:11px!important}
+  #page-backoffice .boff-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+  .boff-kpi{background:rgba(48,54,66,.4);border:1px solid rgba(200,212,232,.07);border-radius:9px;padding:9px 12px}
+  .boff-kpi .k{font-size:10.5px;color:var(--silver4);font-weight:600}
+  .boff-kpi .v{font-size:19px;color:var(--silver1);font-weight:700;margin-top:2px}
+  .boff-kpi .s{font-size:11px;color:var(--silver4);margin-top:2px}
+  .boff-help{margin:8px 14px;font-size:11px;color:var(--silver4);line-height:1.5}
+  .boff-help summary{cursor:pointer;min-height:22px}
+  .boff-help p{margin:4px 0 8px}
+  #boffHealthGrid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;padding:0 12px 10px}
+  .boff-health-chip{padding:7px 8px;border-radius:7px;border:1px solid rgba(136,192,208,.1);background:rgba(12,23,37,.16);min-width:0;overflow-wrap:anywhere}
+  .boff-health-name{font-size:10px;font-weight:600;color:var(--silver3);display:flex;gap:5px;align-items:center}
+  .boff-health-name:before{content:'';flex:0 0 5px;height:5px;border-radius:50%;background:var(--success)}
+  .boff-health-chip.warn .boff-health-name:before{background:var(--warn)}
+  .boff-health-chip.err .boff-health-name:before{background:var(--danger)}
+  .boff-health-message{font-size:11px;line-height:1.35;margin-top:4px;color:var(--silver2)}
+  .boff-health-age{font-size:10px;line-height:1.35;margin-top:4px;color:var(--silver4)}
+  .boff-list-status{min-height:16px;margin:0 14px 4px;font-size:11px;color:var(--silver4);line-height:16px}
+  .boff-list-status[data-error="true"]{color:var(--warn)}
+  .boff-event-card{margin:0;padding:10px 14px;border-top:1px solid rgba(136,192,208,.1);overflow-wrap:anywhere}
+  .boff-event-top,.boff-event-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+  .boff-event-top>.boff-chip:first-child{padding-left:0;color:var(--silver4);font-weight:500}
+  .boff-event-top time{color:var(--silver4);font-size:11px;margin-left:auto;font-variant-numeric:tabular-nums}
+  .boff-event-title{font-size:13px;font-weight:500;line-height:1.4;margin:4px 0}
+  .boff-event-meta{font-size:11px;color:var(--silver4);margin:4px 0}
+  .boff-trade-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:6px 0}
+  .boff-fact{padding:4px 8px 4px 0;min-width:0}
+  .boff-fact>span{display:block;color:var(--silver4);font-size:10px;margin-bottom:2px}
+  .boff-fact strong{font-size:12px;font-weight:500;line-height:1.4;display:block}
+  .boff-fee-confirmed strong{color:var(--success)}
+  .boff-event-state{color:var(--silver3);font-size:11px;line-height:1.4;margin-top:4px}
+  .boff-evidence{font-size:11px;color:var(--silver4);line-height:1.4;margin-top:4px}
+  .boff-event-details{margin-top:4px;font-size:12px}
+  .boff-event-details summary{cursor:pointer;color:var(--silver4);padding:2px 0;min-height:22px;font-size:11px}
+  .boff-event-details[open]{padding-bottom:4px}
+  .boff-event-details dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}
+  .boff-event-details dt,.boff-original>span{font-size:10px;color:var(--silver4);margin-bottom:3px}
+  .boff-event-details dd{margin:0;line-height:1.4;user-select:text}
+  .boff-tx{margin-top:8px;line-height:1.6}.boff-tx code{user-select:text}.boff-tx a{color:var(--ice)}
+  .boff-original{padding:8px;background:rgba(0,0,0,.1);border-radius:6px;margin-top:8px}.boff-original p{margin:0;line-height:1.4}
+  .boff-monitor-search{width:calc(100% - 28px);max-width:420px;margin:8px 14px 4px;height:30px;font-size:12px}
+  @media(max-width:1200px){#boffHealthGrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  @media(max-width:600px){#page-backoffice .boff-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#boffHealthGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.boff-event-card{padding:9px 12px}.boff-event-top{gap:6px}.boff-event-top time{margin-left:0;font-size:10px}.boff-event-details dl{grid-template-columns:1fr}.boff-trade-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.boff-event-details summary,.boff-help summary{min-height:30px}}
   .boff-row {
     display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr;
     gap: 8px; padding: 10px 12px; border-top: 1px solid rgba(200,212,232,0.05); align-items: center;
@@ -7071,7 +7087,7 @@
         <span id="boffPeriodHint" style="font-size:11px;color:var(--silver5);margin-left:4px"></span>
       </div>
 
-      <div class="boff-grid" id="boffKpiGrid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="boff-grid" id="boffKpiGrid">
         <div class="boff-kpi"><div class="k"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.7);margin-right:5px;vertical-align:middle"></span>Онлайн</div><div class="v mono" id="boffKpiOnline">—</div><div class="s" id="boffKpiOnlineSub">сейчас на бирже</div></div>
         <div class="boff-kpi"><div class="k">Посещения</div><div class="v mono" id="boffKpiVisits">—</div><div class="s" id="boffKpiVisitsSub">уник. за 24ч</div></div>
         <div class="boff-kpi"><div class="k">Новые записи</div><div class="v mono" id="boffKpiReg">—</div><div class="s" id="boffKpiRegSub">сегодня · всего —</div></div>
@@ -7112,10 +7128,10 @@
           <h3>AI pulse · здоровье биржи <span id="boffHealthStamp" class="mono" style="font-size:12px;color:var(--silver5);font-weight:400"></span></h3>
           <button type="button" class="mini-btn" id="boffHealthRecheck" onclick="boffRecheckHealth()">Проверить сейчас</button>
         </div>
-        <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
+        <details class="boff-help"><summary>Как читать этот раздел</summary><p>
           Проверки сервера и доступности API каждые ~90 секунд. Кэш отмечен отдельно. Зелёный статус не подтверждает исполнение сделок или работу всех пользовательских сценариев.
-        </p>
-        <div id="boffHealthGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px"></div>
+        </p></details>
+        <div id="boffHealthGrid"></div>
       </div>
 
       <div class="card" style="margin-top:14px">
@@ -7137,10 +7153,11 @@
             <button class="mini-btn" onclick="loadBoffIssues()">Обновить</button>
           </div>
         </div>
-        <p style="font-size:12px;color:var(--silver4);margin:0 0 10px;line-height:1.45">
+        <details class="boff-help"><summary>Как читать этот раздел</summary><p>
           Диагностика по телеметрии, без догадок о действиях пользователя. Лента хранит прошлые сообщения; это не список нерешённых проблем. Повторная проверка читает данные и не отправляет сделки.
-        </p>
+        </p></details>
         <input id="boffIssuesSearch" class="set-input boff-monitor-search" type="search" aria-label="Поиск сообщений" placeholder="Кошелёк, пара, инструмент, хеш или ошибка" oninput="boffSearchActivity('issues')" />
+        <div id="boffIssuesStatus" class="boff-list-status" role="status" aria-live="polite"></div>
         <div id="boffIssuesList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
         </div>
@@ -7166,6 +7183,7 @@
           </div>
         </div>
         <input id="boffFeedSearch" class="set-input boff-monitor-search" type="search" aria-label="Поиск операций" placeholder="Кошелёк, пара, инструмент, хеш или ошибка" oninput="boffSearchActivity('feed')" />
+        <div id="boffFeedStatus" class="boff-list-status" role="status" aria-live="polite"></div>
         <div id="boffFeedList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>
         </div>
@@ -7182,7 +7200,7 @@
             <button class="mini-btn" onclick="loadBoffUsers()">Обновить</button>
           </div>
         </div>
-        <p style="padding:0 14px;color:var(--silver4);font-size:12px;line-height:1.5">Шаблонные адреса без записи подписанного входа и служебные аккаунты скрыты из списка, ленты и счётчиков. Остальные записи могут быть неподтверждёнными; их количество не равно числу клиентов. SIWE в журнале не устанавливает личность человека.</p>
+        <details class="boff-help"><summary>Какие кошельки здесь показаны</summary><p>Шаблонные адреса без записи подписанного входа и служебные аккаунты скрыты из списка, ленты и счётчиков. Остальные записи могут быть неподтверждёнными; их количество не равно числу клиентов. SIWE в журнале не устанавливает личность человека.</p></details>
         <div class="boff-row boff-head"><div>Кошелёк</div><div>Первая запись</div><div>Последняя активность</div><div>Данные входа</div></div>
         <div id="boffUsersList">
           <div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div></div>
@@ -20595,7 +20613,8 @@ function boffEventDetailsHtml(ev) {
   var d = ev.detail || {}, trade = ev.trade || {};
   var fields = [{ label: 'Действие', value: ev.action }, { label: 'Кошелёк', value: ev.wallet },
     { label: 'Приложение кошелька', value: d.walletLabel }, { label: 'Версия', value: ev.app_version || d.appVer },
-    { label: 'Этап', value: trade.stage || d.stage }, { label: 'ID операции', value: d.opId }]
+    { label: 'Этап', value: trade.stage || d.stage }, { label: 'ID операции', value: d.opId },
+    { label: 'Код причины', value: ev.cause }, { label: 'Источник данных', value: ev.evidence_label }]
     .concat(trade.fields || []);
   if (trade.commission) fields.push({ label: 'Учёт комиссии', value: trade.commission.evidence });
   var html = fields.filter(function (f) { return f.value != null && f.value !== ''; }).map(function (f) {
@@ -20603,7 +20622,7 @@ function boffEventDetailsHtml(ev) {
   }).join('');
   var tx = trade.tx;
   var link = tx && /^https:\/\/(?:etherscan\.io|optimistic\.etherscan\.io|bscscan\.com|polygonscan\.com|basescan\.org|arbiscan\.io|snowtrace\.io|solscan\.io)\/tx\/(?:0x[a-f\d]{64}|[1-9A-HJ-NP-Za-km-z]{64,88})$/i.test(tx.url || '') ? tx.url : null;
-  return '<details class="boff-event-details"><summary>Детали операции</summary><dl>' + html + '</dl>'
+  return '<details class="boff-event-details"><summary>' + (d.source === 'health_pulse' ? 'Детали проверки' : 'Детали операции') + '</summary><dl>' + html + '</dl>'
     + (ev.wallet ? '<button type="button" class="mini-btn" data-copy="' + boffMonitorEsc(ev.wallet) + '" onclick="boffCopyText(this)">Копировать адрес</button> ' : '')
     + (tx ? '<div class="boff-tx"><span>Хеш / ID: </span><code>' + boffMonitorEsc(tx.hash) + '</code> '
       + '<button type="button" class="mini-btn" data-copy="' + boffMonitorEsc(tx.hash) + '" onclick="boffCopyText(this)">Копировать</button> '
@@ -20620,12 +20639,10 @@ function boffIssueRowHtml(ev) {
     + boffMonitorEsc((ev.product_label || ev.product) + srcHint) + '</span><time>' + boffMonitorEsc(boffFmtTime(ev.at)) + '</time>'
     + '<span class="boff-chip ' + chip + '">' + boffMonitorEsc(({ error: 'Ошибка', warn: 'Внимание', info: 'Информация' })[sev] || sev) + '</span></div>'
     + '<div class="boff-event-title">' + boffMonitorEsc(ev.ai_summary || ev.cause || ev.action) + '</div>'
-    + '<div class="boff-event-meta"><span title="' + boffMonitorEsc(ev.wallet) + '">' + boffMonitorEsc(ev.wallet ? boffShortAddr(ev.wallet) : 'Без адреса кошелька') + '</span>'
-    + '<code>' + boffMonitorEsc(ev.cause || '') + '</code>'
+    + '<div class="boff-event-meta">' + (ev.wallet ? '<span title="' + boffMonitorEsc(ev.wallet) + '">' + boffMonitorEsc(boffShortAddr(ev.wallet)) + '</span>' : '')
     + (repeats ? '<span>' + repeats + ' сообщений этого типа / 24ч</span>' : '') + '</div>'
     + boffTradeHtml(ev.trade)
     + '<div class="boff-event-state">' + boffMonitorEsc(ev.state_label || 'Текущее состояние неизвестно') + '</div>'
-    + '<div class="boff-evidence">' + boffMonitorEsc(ev.evidence_label || 'Сообщение клиента') + '</div>'
     + boffEventDetailsHtml(ev) + '</article>';
 }
 window.boffCopyText = async function (button) {
@@ -20641,16 +20658,14 @@ function boffHealthChipHtml(c) {
   var cached = c.verification === 'cached';
   var ok = !!c.ok && !cached;
   var sev = cached ? 'warn' : c.severity || (ok ? 'ok' : 'err');
-  var bg = ok ? 'rgba(34,193,124,.14)' : (sev === 'warn' ? 'rgba(245,185,77,.14)' : 'rgba(232,87,107,.14)');
-  var fg = ok ? 'var(--success)' : (sev === 'warn' ? 'var(--warn)' : 'var(--danger)');
   var label = ({ db: 'PostgreSQL', redis: 'Redis', prices: 'Цены', hl: 'Hyperliquid', hip3: 'HIP-3', xstocks: 'Акции', eventloop: 'Event-loop', memory: 'Память' })[c.id] || c.id;
   var age = c.observed_at ? Math.max(0, Math.round((Date.now() - new Date(c.observed_at).getTime()) / 1000)) : null;
-  return '<div style="padding:10px 12px;border-radius:10px;border:1px solid rgba(136,192,208,.14);background:' + bg + '">'
-    + '<div style="font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:' + fg + '">' + boffMonitorEsc(label) + '</div>'
-    + '<div style="font-size:12px;color:var(--silver2);margin-top:4px;line-height:1.35">' + boffMonitorEsc(c.message || '') + '</div>'
-    + '<div style="font-size:10px;opacity:.65;margin-top:5px">' + (cached ? 'Кэш последней проверки' : 'Проверено') + (age != null ? ' · ' + age + 'с назад' : '')
+  return '<div class="boff-health-chip ' + (ok ? 'ok' : sev === 'warn' ? 'warn' : 'err') + '">'
+    + '<div class="boff-health-name">' + boffMonitorEsc(label) + '</div>'
+    + '<div class="boff-health-message">' + boffMonitorEsc(c.message || '') + '</div>'
+    + '<div class="boff-health-age">' + (cached ? 'Кэш' : 'Проверено') + (age != null ? ' · ' + age + 'с назад' : '')
     + (c.consecutive_failures ? ' · сбоев подряд: ' + Number(c.consecutive_failures) : '')
-    + (c.recovered ? ' · восстановилось после повторной проверки' : '') + '</div></div>';
+    + (c.recovered ? ' · восстановилось' : '') + '</div></div>';
 }
 
 var __boffRecheckTimer = null;
@@ -20667,7 +20682,7 @@ window.boffRecheckHealth = async function () {
       var data = await loadBoffHealth();
       if (data && data.checking && polls++ < 20) { __boffRecheckTimer = setTimeout(follow, 2000); return; }
       if (button) { button.disabled = false; button.textContent = 'Проверить сейчас'; }
-      loadBoffIssues();
+      loadBoffIssues('refresh');
     }
     clearTimeout(__boffRecheckTimer);
     await follow();
@@ -20688,8 +20703,7 @@ async function loadBoffHealth() {
   try {
     var data = await gget('/api/admin/activity/health');
     if (!data) {
-      host.innerHTML = '<div style="opacity:.65;font-size:12px">Нет ответа health API</div>';
-      return;
+      throw new Error('Нет ответа health API');
     }
     if (stamp) {
       stamp.textContent = data.at
@@ -20698,73 +20712,18 @@ async function loadBoffHealth() {
     }
     var checks = data.checks || [];
     if (!checks.length) {
-      host.innerHTML = '<div style="opacity:.65;font-size:12px">' + (data.note || 'Pulse ещё не готов') + '</div>';
+      if (!host.querySelector('.boff-health-chip')) host.textContent = data.note || 'Pulse ещё не готов';
       return;
     }
     host.innerHTML = checks.map(boffHealthChipHtml).join('');
     return data;
   } catch (_) {
-    host.innerHTML = '<div style="opacity:.65;font-size:12px">Ошибка загрузки health</div>';
+    if (stamp) stamp.textContent = '· обновление недоступно · показана предыдущая проверка';
+    if (!host.querySelector('.boff-health-chip')) host.textContent = 'Проверка пока недоступна';
   }
 }
 window.loadBoffHealth = loadBoffHealth;
 
-var __boffIssuesPageSize = 5;
-var __boffIssuesOffset = 0;
-var __boffIssuesRequest = 0;
-function boffSetIssuesMore(show) {
-  var el = document.getElementById('boffIssuesMore');
-  if (el) el.hidden = !show;
-}
-async function loadBoffIssues(reset) {
-  var host = document.getElementById('boffIssuesList'); if (!host) return;
-  if (!checkAdminAccessFromJwt()) {
-    boffSetIssuesMore(false);
-    host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Нужен вход в админку</div><div></div><div></div><div></div><div></div><div></div></div>';
-    return;
-  }
-  if (reset !== false) __boffIssuesOffset = 0;
-  var request = ++__boffIssuesRequest;
-  var search = document.getElementById('boffIssuesSearch')?.value || '';
-  var f = document.getElementById('boffIssuesFilter')?.value || '';
-  if (__boffIssuesOffset === 0) {
-    host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>';
-    boffSetIssuesMore(false);
-  }
-  try {
-    var qs = '?limit=' + __boffIssuesPageSize + '&offset=' + __boffIssuesOffset
-      + (f ? '&product=' + encodeURIComponent(f) : '') + (search ? '&search=' + encodeURIComponent(search) : '') + boffPeriodQs();
-    var data = await gget('/api/admin/activity/issues' + qs);
-    if (request !== __boffIssuesRequest) return;
-    var rows = (data && data.issues) || [];
-    var cnt = document.getElementById('boffIssuesCount');
-    if (cnt) cnt.textContent = data && data.open_24h != null ? ('· ' + (data.reports_24h != null ? data.reports_24h : data.open_24h) + ' сообщений по продукту за 24ч') : '';
-    if (!data) {
-      if (__boffIssuesOffset === 0) host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Ошибка API</div><div></div><div></div><div></div><div></div><div></div></div>';
-      boffSetIssuesMore(false);
-      return;
-    }
-    if (!rows.length && __boffIssuesOffset === 0) {
-      host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Нет сообщений за выбранный период · это не полная проверка биржи</div><div></div><div></div><div></div><div></div><div></div></div>';
-      boffSetIssuesMore(false);
-      return;
-    }
-    var html = rows.map(boffIssueRowHtml).join('');
-    if (__boffIssuesOffset === 0) host.innerHTML = html; else host.innerHTML += html;
-    __boffIssuesOffset += rows.length;
-    boffSetIssuesMore(!!data.hasMore);
-  } catch (_) {
-    if (request !== __boffIssuesRequest) return;
-    if (__boffIssuesOffset === 0) host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Ошибка загрузки</div><div></div><div></div><div></div><div></div><div></div></div>';
-    boffSetIssuesMore(false);
-  }
-}
-window.boffIssuesShowMore = function () { loadBoffIssues(false); };
-window.loadBoffIssues = loadBoffIssues;
-
-var __boffFeedPageSize = 5;
-var __boffFeedOffset = 0;
-var __boffFeedRequest = 0;
 function boffFeedRowHtml(ev) {
   return '<article class="boff-event-card"><div class="boff-event-top"><span class="boff-chip">' + boffMonitorEsc(ev.product_label || ev.product) + '</span><time>' + boffMonitorEsc(boffFmtTime(ev.at)) + '</time></div>'
     + '<div class="boff-event-title">' + boffMonitorEsc(boffActionRu(ev.product, ev.action)) + '</div>'
@@ -20772,52 +20731,104 @@ function boffFeedRowHtml(ev) {
     + (ev.trade ? boffTradeHtml(ev.trade) : '<div class="boff-evidence">' + boffMonitorEsc(boffDetailText(ev)) + '</div>')
     + boffEventDetailsHtml(ev) + '</article>';
 }
-function boffSetFeedMore(show) {
-  var el = document.getElementById('boffFeedMore');
-  if (el) el.hidden = !show;
+/* Keep the current snapshot while refreshing. Filters and page requests share
+ * a generation so late responses cannot overwrite a newer view. */
+var __boffActivity = {};
+function boffActivityKey(ev) {
+  return ev.id != null ? String(ev.id) : JSON.stringify([ev.at, ev.wallet, ev.product, ev.action, ev.source, ev.tx_hash, ev.detail && ev.detail.opId]);
 }
-async function loadBoffFeed(reset) {
-  var host = document.getElementById('boffFeedList'); if (!host) return;
+function boffRenderActivity(host, rows, render, emptyText) {
+  var old = new Map(), seen = new Map(), keep = new Set();
+  Array.from(host.children).forEach(function (el) { if (el.dataset.eventKey) old.set(el.dataset.eventKey, el); });
+  rows.forEach(function (ev, index) {
+    var base = boffActivityKey(ev), occurrence = seen.get(base) || 0;
+    seen.set(base, occurrence + 1);
+    var key = base + ':' + occurrence, html = render(ev), el = old.get(key);
+    if (!el) {
+      var template = document.createElement('template'); template.innerHTML = html;
+      el = template.content.firstElementChild; el.dataset.eventKey = key;
+    } else if (el.__boffHtml !== html) {
+      var expanded = !!el.querySelector('details[open]');
+      var template = document.createElement('template'); template.innerHTML = html;
+      el.replaceChildren.apply(el, Array.from(template.content.firstElementChild.childNodes));
+      if (expanded && el.querySelector('details')) el.querySelector('details').open = true;
+    }
+    el.__boffHtml = html; keep.add(el);
+    if (host.children[index] !== el) host.insertBefore(el, host.children[index] || null);
+  });
+  Array.from(host.children).forEach(function (el) { if (!keep.has(el)) el.remove(); });
+  if (!rows.length) {
+    var empty = document.createElement('div'); empty.className = 'boff-event-card boff-evidence';
+    empty.textContent = emptyText; host.appendChild(empty);
+  }
+}
+async function boffLoadActivity(kind, mode) {
+  var suffix = kind === 'issues' ? 'Issues' : 'Feed';
+  var host = document.getElementById('boff' + suffix + 'List'); if (!host) return;
+  var more = document.getElementById('boff' + suffix + 'More');
+  var status = document.getElementById('boff' + suffix + 'Status');
+  var state = __boffActivity[kind] || (__boffActivity[kind] = { rows: [], request: 0, query: null, loading: false });
   if (!checkAdminAccessFromJwt()) {
-    boffSetFeedMore(false);
-    host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Нужен вход в админку</div><div></div><div></div><div></div><div></div><div></div></div>';
+    state.request++; state.rows = []; state.query = null; state.loading = false;
+    host.textContent = 'Нужен вход в админку'; host.setAttribute('aria-busy', 'false');
+    if (more) more.hidden = true;
+    if (status) status.textContent = '';
     return;
   }
-  if (reset !== false) __boffFeedOffset = 0;
-  var request = ++__boffFeedRequest;
-  var search = document.getElementById('boffFeedSearch')?.value || '';
-  var f = document.getElementById('boffFeedFilter')?.value || '';
-  if (__boffFeedOffset === 0) {
-    host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Загрузка…</div><div></div><div></div><div></div><div></div><div></div></div>';
-    boffSetFeedMore(false);
-  }
+  var search = document.getElementById('boff' + suffix + 'Search')?.value || '';
+  var filter = document.getElementById('boff' + suffix + 'Filter')?.value || '';
+  var query = (filter ? '&product=' + encodeURIComponent(filter) : '') + (search ? '&search=' + encodeURIComponent(search) : '') + boffPeriodQs();
+  if ((mode === 'refresh' && (state.loading || query !== state.query)) || (mode === false && state.loading)) return;
+  var sameQuery = state.query === query;
+  var append = mode === false && sameQuery;
+  var offset = append ? state.rows.length : 0;
+  var desired = !append && sameQuery ? Math.max(5, state.rows.length) : 5;
+  var request = ++state.request;
+  state.loading = true; host.setAttribute('aria-busy', 'true');
+  if (status) { status.dataset.error = 'false'; status.textContent = sameQuery ? 'Обновление…' : 'Загрузка выбранных данных…'; }
+  if (more) { var button = more.querySelector('button'); if (button) button.disabled = true; }
   try {
-    var qs = '?limit=' + __boffFeedPageSize + '&offset=' + __boffFeedOffset + (f ? '&product=' + encodeURIComponent(f) : '') + (search ? '&search=' + encodeURIComponent(search) : '') + boffPeriodQs();
-    var data = await gget('/api/admin/activity/feed' + qs);
-    if (request !== __boffFeedRequest) return;
-    var rows = (data && data.events) || [];
-    if (!data) {
-      if (__boffFeedOffset === 0) host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Ошибка API</div><div></div><div></div><div></div><div></div><div></div></div>';
-      boffSetFeedMore(false);
-      return;
+    var rows = [], data;
+    // API caps a response at 100. Refresh every already-visible page atomically.
+    while (rows.length < desired) {
+      var limit = Math.min(100, desired - rows.length);
+      data = await gget('/api/admin/activity/' + kind + '?limit=' + limit + '&offset=' + (offset + rows.length) + query);
+      if (request !== state.request) return;
+      var page = data && data[kind === 'issues' ? 'issues' : 'events'];
+      if (!Array.isArray(page)) throw new Error('Нет ответа API');
+      rows = rows.concat(page);
+      if (!data.hasMore || !page.length) break;
     }
-    if (!rows.length && __boffFeedOffset === 0) {
-      host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Нет событий</div><div></div><div></div><div></div><div></div><div></div></div>';
-      boffSetFeedMore(false);
-      return;
+    state.rows = append ? state.rows.concat(rows) : rows;
+    state.query = query;
+    boffRenderActivity(host, state.rows, kind === 'issues' ? boffIssueRowHtml : boffFeedRowHtml,
+      kind === 'issues' ? 'Нет сообщений за выбранный период · это не полная проверка биржи' : 'Нет событий');
+    if (kind === 'issues') {
+      var count = document.getElementById('boffIssuesCount');
+      if (count) count.textContent = data.reports_24h != null || data.open_24h != null ? '· ' + (data.reports_24h ?? data.open_24h) + ' сообщений / 24ч' : '';
     }
-    var html = rows.map(boffFeedRowHtml).join('');
-    if (__boffFeedOffset === 0) host.innerHTML = html; else host.innerHTML += html;
-    __boffFeedOffset += rows.length;
-    boffSetFeedMore(!!data.hasMore);
+    if (more) more.hidden = !data.hasMore;
+    if (status) status.textContent = '';
   } catch (_) {
-    if (request !== __boffFeedRequest) return;
-    if (__boffFeedOffset === 0) host.innerHTML = '<div class="boff-row" style="opacity:.6"><div class="mono">Ошибка загрузки</div><div></div><div></div><div></div><div></div><div></div></div>';
-    boffSetFeedMore(false);
+    if (request !== state.request) return;
+    if (status) { status.dataset.error = 'true'; status.textContent = state.query != null
+      ? 'Не удалось обновить · показаны предыдущие данные. Нажмите «Обновить».'
+      : 'Не удалось загрузить данные. Нажмите «Обновить».'; }
+    if (state.query == null) host.textContent = 'Данные пока недоступны';
+  } finally {
+    if (request === state.request) {
+      state.loading = false; host.setAttribute('aria-busy', 'false');
+      if (more) { var button = more.querySelector('button'); if (button) button.disabled = false; }
+    }
   }
 }
-window.boffFeedShowMore = function () { loadBoffFeed(false); };
+function loadBoffIssues(mode) { return boffLoadActivity('issues', mode); }
+function loadBoffFeed(mode) { return boffLoadActivity('feed', mode); }
+window.boffIssuesShowMore = function () { return loadBoffIssues(false); };
+window.boffFeedShowMore = function () { return loadBoffFeed(false); };
+window.loadBoffIssues = loadBoffIssues;
 window.loadBoffFeed = loadBoffFeed;
+
 function showAdminLink(isAdmin) { window.__gromIsAdminLive = !!isAdmin; var l = document.getElementById('navBackoffice'); if (l) l.style.display = isAdmin ? '' : 'none'; if (isAdmin && typeof ensureBackofficePage === 'function') { try { ensureBackofficePage(); } catch (_) {} } }
 function checkAdminAccessFromJwt() {
   try {
@@ -21005,10 +21016,10 @@ window.boffEnsureAdminSession = boffEnsureAdminSession;
     if (__boffStatsPoll) return;
     __boffStatsPoll = setInterval(function () {
       var page = document.getElementById('page-backoffice');
-      if (!page || !page.classList.contains('active')) return;
+      if (!page || !page.classList.contains('active') || document.visibilityState === 'hidden') return;
       if (typeof loadBoffStats === 'function') loadBoffStats();
       if (typeof loadBoffHealth === 'function') loadBoffHealth();
-      if (typeof loadBoffIssues === 'function') loadBoffIssues();
+      if (typeof loadBoffIssues === 'function') loadBoffIssues('refresh');
     }, 30000);
   }
   function boffStopStatsPoll() {

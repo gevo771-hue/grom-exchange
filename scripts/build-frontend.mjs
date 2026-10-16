@@ -14,6 +14,7 @@
  *
  * Usage: node scripts/build-frontend.mjs   (writes frontend/dist)
  */
+import { verifyWcBundle } from './bundle-wc.mjs';
 import { externalizeInline } from './externalize-inline.mjs';
 import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -60,26 +61,15 @@ if (seoBeginIndex < 0 || seoEndIndex <= seoBeginIndex) {
   process.exit(1);
 }
 
-// Self-hosted WalletConnect bundles (Safari-safe). SEO-only/offline builds can
-// explicitly reuse the checked-in bundle instead of waiting on npm/network.
-const cachedWcBundle = join(SRC, 'wc/ethereum-provider.bundle.js');
-if (process.env.GROM_SKIP_WC_BUNDLE === '1') {
-  if (!existsSync(cachedWcBundle)) {
-    console.error('❌ GROM_SKIP_WC_BUNDLE=1 but no cached WalletConnect bundle exists');
-    process.exit(1);
-  }
-  console.warn('⚠️  WalletConnect rebuild skipped — using cached frontend/public/wc bundle');
-} else {
+// Offline/fallback builds may reuse only the exact locked and verified SDK bundle.
+if (process.env.GROM_SKIP_WC_BUNDLE !== '1') {
   try {
     execSync('node scripts/bundle-wc.mjs', { stdio: 'inherit', timeout: 60_000 });
-  } catch (e) {
-    if (!existsSync(cachedWcBundle)) {
-      console.error('❌ WC bundle failed and no cached bundle in frontend/public/wc/');
-      process.exit(1);
-    }
-    console.warn('⚠️  WalletConnect bundle failed/timed out — using cached frontend/public/wc bundle');
+  } catch {
+    console.warn('⚠️ WalletConnect rebuild failed; checking the committed bundle against current inputs');
   }
 }
+verifyWcBundle();
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
@@ -117,9 +107,15 @@ writeFileSync(join(OUT, 'pages/backoffice.html'), extractSectionInnerHtml(source
 // Discover hashable top-level assets (JS + CSS only; HTML stays un-hashed).
 const hashable = sourceFiles.filter((f) => /^[\w-]+\.(js|css)$/.test(f));
 
-const map = {}; // 'grom-wallet.js' → 'grom-wallet.a7b3c9d1.js'
+// Hash the nested SDK first, then embed its URL before hashing the wallet loader.
+const wcFile = 'wc/sign-client.bundle.js';
+const wcContent = readFileSync(join(SRC, wcFile));
+const wcHashed = wcFile.replace('.bundle.js', '.' + createHash('sha256').update(wcContent).digest('hex').slice(0, 8) + '.js');
+writeFileSync(join(OUT, wcHashed), wcContent);
+const map = { [wcFile]: wcHashed };
 for (const f of hashable) {
-  const content = readFileSync(join(SRC, f));
+  const content = readFileSync(join(SRC, f), 'utf8').replaceAll('/' + wcFile, '/' + wcHashed);
+  writeFileSync(join(OUT, f), content);
   const hash = createHash('sha256').update(content).digest('hex').slice(0, 8);
   const hashed = f.replace(/\.(js|css)$/, `.${hash}.$1`);
   writeFileSync(join(OUT, hashed), content);

@@ -66,7 +66,8 @@ test('futures funding controls are not hijacked by a fake spot-success handler',
  assert.doesNotMatch(landingHtml,/function wireSpot\(\)|0\.00500 BTC submitted/);
  assert.doesNotMatch(landingHtml,/queued \(offline\)/);
  assert.match(landingHtml,/window\.submitFuturesOrder = async function \(side\)/);
- assert.match(landingHtml,/if \(resp && resp\.order\)[\s\S]{0,500}Futures service unavailable — no order was placed/);
+ assert.match(landingHtml,/Futures service unavailable — no order was placed/);
+ assert.doesNotMatch(landingHtml,/gpost\('\/api\/futures\/orders'/);
  assert.match(landingHtml,/function updateFuturesBoard\(\)[\s\S]{0,180}window\.__gromHlActive[\s\S]{0,180}gromHlPriceForPair\(futDeskState\.pair, null, isTradeSpot\(\) \? 'spot' : 'perp'\)/);
  assert.match(landingHtml,/function futDeskMidPx\(\)[\s\S]{0,220}gromHlPriceForPair\(pair, null, isTradeSpot\(\) \? 'spot' : 'perp'\)/);
  assert.match(landingHtml,/id="hlFundPerpBtn"[^>]*>Fund Perp/);

@@ -15,10 +15,13 @@ const FORBIDDEN_PUBLIC = [
   'grom-app.css',
   'grom-wallet-ui.css',
   'grom-privy.js',
+  'grom-gwx.js', 'grom-markets.js', 'grom-dash-watch.js', 'grom-dom-safe.js',
 ];
 
 /** Semantic remnants that must not appear in first-party runtime (not migrations). */
 const FORBIDDEN_PATTERNS = [
+  { re: /\/api\/(?:notifications|sessions|support\/tickets|stream\/sse|__removed_spot|settings)\b/, label: 'retired client API' },
+  { re: /\/api\/futures\/(?:overview|funding|liquidations|orders|positions)\b/, label: 'retired CEX futures API' },
   { re: /id=["']page-binary["']|getElementById\(['\"]page-binary['\"]\)|#page-binary/i, label: 'legacy page-binary remnant' },
   { re: /placeBinary\s*\(|gromPlaceBinaryDemo|boState\s*=/i, label: 'Binary Options runtime remnant' },
   { re: /grom-live\.js|__gromLoadLive/i, label: 'grom-live Binary client remnant' },

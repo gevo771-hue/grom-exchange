@@ -143,24 +143,6 @@ async function main() {
   if (isLeader) {
     stopHealthPulse = startHealthPulse({ priceAggregator, isLeader: true }) || (() => {});
   }
-  /** Legacy backoffice risk save — PUT /api/settings */
-  app.put('/api/settings', requireAuth, async (req, res, next) => {
-    try {
-      if (req.user?.role !== 'admin') return res.status(403).json({ error: 'admin_required' });
-      const { query: dbQuery } = await import('./db/pool.js');
-      const { logAdminAudit, clientIp } = await import('./admin/audit.js');
-      const cur = await dbQuery(`SELECT value FROM admin_settings WHERE key='risk'`);
-      const risk = { ...(cur.rows[0]?.value || {}), ...(req.body?.risk || req.body || {}) };
-      await dbQuery(
-        `INSERT INTO admin_settings (key, value, updated_at, updated_by) VALUES ('risk',$1::jsonb,NOW(),$2)
-         ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW(), updated_by=EXCLUDED.updated_by`,
-        [JSON.stringify(risk), req.user.sub]
-      );
-      await logAdminAudit({ actorId: req.user.sub, action: 'risk_config_save', ip: clientIp(req), metadata: risk });
-      res.json({ risk });
-    } catch (err) { next(err); }
-  });
-
   app.post('/api/swap/quote', requireAuth, async (req, res, next) => {
     try {
       const { chainId, src, dst, amount, userAddress } = req.body || {};

@@ -6457,7 +6457,16 @@ async function gwWaitForGromHl(ms) {
   const budget = Math.max(500, Number(ms) || 12000);
   const t0 = Date.now();
   try {
-    if (typeof window.gromLoadAuxScripts === 'function') window.gromLoadAuxScripts();
+    if (typeof window.gromEnsureProductModule === 'function') {
+      let timer;
+      try {
+        await Promise.race([
+          window.gromEnsureProductModule('trade'),
+          new Promise((resolve) => { timer = setTimeout(resolve, budget); }),
+        ]);
+        return !!(window.gromHL && typeof window.gromHL.balancesSnapshot === 'function');
+      } finally { clearTimeout(timer); }
+    }
   } catch (_) {}
   while (Date.now() - t0 < budget) {
     if (window.gromHL && typeof window.gromHL.balancesSnapshot === 'function') return true;
@@ -7113,8 +7122,7 @@ async function gwMpDexFetchTrade() {
   const evm = gwOcConnectedAddress();
   if (!evm || !/^0x[a-fA-F0-9]{40}$/.test(evm)) return zero;
   try {
-    if ((!window.gromHL || typeof window.gromHL.balancesSnapshot !== 'function') && typeof window.gromLoadAuxScripts === 'function') window.gromLoadAuxScripts();
-    for (let i = 0; i < 12 && (!window.gromHL || typeof window.gromHL.balancesSnapshot !== 'function'); i++) await new Promise((r) => setTimeout(r, 250));
+    if (!(await gwWaitForGromHl())) return zero;
     if (!window.gromHL || typeof window.gromHL.balancesSnapshot !== 'function') return zero;
     const [b, quotes] = await Promise.all([window.gromHL.balancesSnapshot(), gwFetchMarketQuotes().catch(() => null)]);
     const perp = Number(b?.perp) || 0;
@@ -26829,6 +26837,9 @@ function gwAiOpenPredictSearch(query, stakeUsd) {
 
 async function gwAiEnsurePredictCollateral(stakeUsd, statusEl, t) {
   const stake = Number(stakeUsd) || 20;
+  try {
+    if (typeof window.gromEnsureProductModule === 'function') await window.gromEnsureProductModule('predict');
+  } catch (_) { return { ok: false, reason: 'no_predict_module' }; }
   const gp = window.gromPredict;
   if (!gp) return { ok: false, reason: 'no_predict_module' };
   const st = await gp.getStatus().catch(() => null);

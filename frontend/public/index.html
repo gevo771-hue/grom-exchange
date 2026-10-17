@@ -6131,8 +6131,6 @@
     .page-subtitle { overflow-wrap: anywhere; }
   }
 </style>
-<!-- TradingView lightweight-charts: professional candles/area/line — same library Binance/OKX use. MIT license, ~300KB. -->
-<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 <div id="gromSplash" aria-hidden="true">
@@ -7429,6 +7427,55 @@ if (window.GROM_STABLE_UI) try { document.documentElement.classList.add('grom-st
 if (window.GROM_LANDING) try { document.documentElement.classList.add('grom-landing'); } catch (_) {}
 </script>
 <script>
+/* Product module loader: no requests until a route or a consumer needs one. */
+(function () {
+  var modules = {
+    predict: { src: '/grom-predict.js', ready: function () { return window.gromPredict; } },
+    trade: { src: '/grom-hyperliquid.js', ready: function () { return window.gromHL; } },
+    charts: { src: 'https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js', ready: function () { return window.LightweightCharts; } },
+  };
+  var pending = Object.create(null);
+  window.gromEnsureProductModule = function (name) {
+    var entry = modules[name];
+    if (!entry) return Promise.reject(new Error('Unknown product module: ' + name));
+    if (entry.ready()) return Promise.resolve(entry.ready());
+    if (pending[name]) return pending[name];
+    var script = document.createElement('script');
+    script.id = 'grom-product-' + name;
+    script.src = entry.src;
+    script.async = true;
+    var promise = new Promise(function (resolve, reject) {
+      script.onload = function () {
+        if (!entry.ready()) { script.onerror(); return; }
+        resolve(entry.ready());
+      };
+      script.onerror = function () {
+        script.remove();
+        reject(new Error('Could not load ' + name + ' module'));
+      };
+    });
+    pending[name] = promise;
+    promise.then(function () {
+      delete pending[name];
+    }, function () {
+      // A later route entry or explicit action can retry a failed download.
+      delete pending[name];
+    });
+    document.head.appendChild(script);
+    return promise;
+  };
+  window.gromLoadPageModules = function (page) {
+    var names = [];
+    if (page === 'predict') names.push('predict');
+    // Trade data also powers market lists, portfolio totals and history.
+    if (['dashboard', 'futures', 'markets', 'wallet', 'history'].indexOf(page) !== -1) names.push('trade');
+    if (page === 'futures') names.push('charts');
+    return Promise.all(names.map(window.gromEnsureProductModule));
+  };
+})();
+/* End product module loader. */
+</script>
+<script>
 if (location.protocol !== 'file:') {
   window.gromWalletReady = new Promise(function (resolve) {
     window.__gromWalletReadyResolve = resolve;
@@ -7527,31 +7574,6 @@ if (location.protocol !== 'file:') {
     }, true);
   })();
 
-  window.gromLoadAuxScripts = function () {
-    if (window.__gromAuxLoaded) return;
-    window.__gromAuxLoaded = true;
-    if (!document.getElementById('grom-predict-js')) {
-      var predictModule = document.createElement('script');
-      predictModule.id = 'grom-predict-js';
-      predictModule.src = '/grom-predict.js';
-      document.head.appendChild(predictModule);
-    }
-    if (!document.getElementById('grom-hl-js')) {
-      var hlModule = document.createElement('script');
-      hlModule.id = 'grom-hl-js';
-      hlModule.src = '/grom-hyperliquid.js';
-      document.head.appendChild(hlModule);
-    }
-  };
-  if (window.GROM_LANDING || window.GROM_SAFARI) {
-    setTimeout(window.gromLoadAuxScripts, window.GROM_SAFARI ? 10000 : 12000);
-    document.addEventListener('click', function gromAuxOnce() {
-      window.gromLoadAuxScripts();
-      document.removeEventListener('click', gromAuxOnce, true);
-    }, true);
-  } else {
-    window.gromLoadAuxScripts();
-  }
 
 }
 </script>
@@ -8428,8 +8450,10 @@ function show(page) {
     if (typeof gromEnsureDashWallet === 'function') gromEnsureDashWallet();
     else if (typeof gromLoadWalletScripts === 'function') gromLoadWalletScripts();
   }
-  if (page === 'futures' && typeof window.gromLoadAuxScripts === 'function') window.gromLoadAuxScripts();
-  if ((page === 'predict' || page === 'xstocks') && typeof window.gromLoadAuxScripts === 'function') window.gromLoadAuxScripts();
+  if (page === 'futures') window.__gromTVLoadFailed = false;
+  if (typeof window.gromLoadPageModules === 'function') {
+    window.gromLoadPageModules(page).catch(function (err) { console.warn('[grom] product module', err); });
+  }
   // Close any mobile drawer / pair picker when navigating
   document.body.classList.remove('drawer-open', 'desk-pair-open', 'spot-pair-open');
   document.querySelectorAll('.spot-pair-pop').forEach(function (el) { el.hidden = true; });
@@ -11508,8 +11532,8 @@ function _gromTVUpdateBinaryHud(state, container) {
 }
 window.gromDrawTVChart = gromDrawTVChart;
 
-// Trading desk charts: prefer the professional lightweight renderer, with SVG
-// fallback if the vendor script is unavailable.
+// Load the trading chart renderer only for a visible desk. Wait for its download
+// once instead of scheduling animation frames while the network is pending.
 var _gromTVChartIds = ['retiredBoChart', 'spotChart', 'futChart'];
 function scheduleDeskChartDraw(id) {
   if (!id) return;
@@ -11523,25 +11547,22 @@ function scheduleDeskChartDraw(id) {
 window.scheduleDeskChartDraw = scheduleDeskChartDraw;
 function gromWaitForLightweightCharts(cb) {
   if (typeof LightweightCharts !== 'undefined') { cb(); return; }
-  if (window.__gromTVLibWait) return;
-  var n = 0;
-  window.__gromTVLibWait = setInterval(function () {
-    n++;
-    if (typeof LightweightCharts !== 'undefined') {
-      clearInterval(window.__gromTVLibWait);
-      window.__gromTVLibWait = null;
-      cb();
-    } else if (n > 120) {
-      clearInterval(window.__gromTVLibWait);
-      window.__gromTVLibWait = null;
-    }
-  }, 50);
+  if (window.__gromTVLibWait || window.__gromTVLoadFailed) return;
+  if (typeof window.gromEnsureProductModule !== 'function') return;
+  window.__gromTVLibWait = window.gromEnsureProductModule('charts').then(function () {
+    window.__gromTVLibWait = null;
+    cb();
+  }, function () {
+    window.__gromTVLibWait = null;
+    window.__gromTVLoadFailed = true;
+  });
 }
 function drawChart(id) {
   if (_gromTVChartIds.indexOf(id) !== -1) {
+    var chart = document.getElementById(id);
+    if (!chart || !chart.closest('.page.active') || chart.offsetParent === null) return;
     if (typeof LightweightCharts === 'undefined') {
       gromWaitForLightweightCharts(function () { drawVisibleDeskCharts(); });
-      scheduleDeskChartDraw(id);
       return;
     }
     if (typeof window.gromDrawTVChart === 'function') {
@@ -13783,6 +13804,8 @@ function exportHistoryCsv() {
 
   async function fetchHlHistoryItems() {
     try {
+      if (!gromHistoryWalletAddress()) return [];
+      if (typeof window.gromEnsureProductModule === 'function') await window.gromEnsureProductModule('trade');
       if (window.gromHL && typeof window.gromHL.historyItems === 'function') {
         return await window.gromHL.historyItems(60);
       }
@@ -17037,6 +17060,7 @@ var GROM_XSTOCKS = [
   // Create real <section class="page"> shells so the app's own show() router
   // renders them on click AND on direct #predict / #xstocks URLs.
   function ensurePredictPage() {
+    preparePredictWallet();
     var anchor = document.getElementById('page-markets') || document.querySelector('main .page');
     if (!anchor || !anchor.parentNode) return;
     var sec = document.getElementById('page-predict');
@@ -17279,6 +17303,7 @@ var GROM_XSTOCKS = [
   }
   var _predictHeroRefreshAt = 0;
   function renderPredictPos() {
+    if (!document.getElementById('page-predict')?.classList.contains('active')) return;
     pmIsLive().then(function (live) {
       if (Date.now() - _predictHeroRefreshAt > 120000) {
         _predictHeroRefreshAt = Date.now();
@@ -17295,6 +17320,14 @@ var GROM_XSTOCKS = [
       }
       renderPredictPosDemo();
     }).catch(function () { renderPredictPosDemo(); });
+  }
+  var _predictModuleRefresh = null;
+  function preparePredictWallet() {
+    if (!document.getElementById('page-predict')?.classList.contains('active')) return;
+    if (_predictModuleRefresh || typeof window.gromEnsureProductModule !== 'function') return;
+    _predictModuleRefresh = window.gromEnsureProductModule('predict').then(function () {
+      renderPredictPos();
+    }).catch(function () {}).finally(function () { _predictModuleRefresh = null; });
   }
   function closePos(kind, i) {
     if (kind === 'stock') {
@@ -17486,18 +17519,22 @@ var GROM_XSTOCKS = [
     var tokenId = side === 'yes' ? tokenYes : tokenNo;
     var tickSize = tradeAttr(btn, 'data-tick') || tradeAttr(oc, 'data-tick') || '0.01';
     var negRisk = (tradeAttr(btn, 'data-neg-risk') || tradeAttr(oc, 'data-neg-risk')) === '1';
+    try {
+      if (typeof window.gromEnsureProductModule === 'function') await window.gromEnsureProductModule('predict');
+    } catch (_) {
+      notify(tx('px_trade_unavailable', 'Trade unavailable'), 'error');
+      return;
+    }
+    // The market may expire while its module downloads on a slow connection.
+    if (endsAt && !predictIsFresh({ endsAt: endsAt })) {
+      notify(tx('px_market_closed', 'Рынок закрыт — ставки недоступны.'), 'error');
+      return;
+    }
     var builderOn = false;
     var predictReady = !!(window.gromPredict && typeof window.gromPredict.buyMarket === 'function');
     try {
       if (window.gromPredict && typeof window.gromPredict.fetchConfig === 'function') {
         builderOn = !!(await window.gromPredict.fetchConfig()).enabled;
-      } else if (!predictReady) {
-        // Script still loading — one quick retry
-        await new Promise(function (r) { setTimeout(r, 120); });
-        predictReady = !!(window.gromPredict && typeof window.gromPredict.buyMarket === 'function');
-        if (predictReady && typeof window.gromPredict.fetchConfig === 'function') {
-          builderOn = !!(await window.gromPredict.fetchConfig()).enabled;
-        }
       }
     } catch (_) {}
     var canLive = !!(tokenId && predictReady && builderOn);

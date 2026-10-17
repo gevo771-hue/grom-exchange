@@ -1,6 +1,6 @@
 /**
  * HTML / URL sanitizers for untrusted token metadata (LI.FI, custom tokens).
- * Keep in sync with frontend/public/grom-dom-safe.js (window.GromDomSafe).
+ * Shared server-side HTML escaping helpers.
  */
 
 const SAFE_SYM = /^[\p{L}\p{N}.$_+-]{1,32}$/u;

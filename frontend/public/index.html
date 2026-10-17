@@ -6311,7 +6311,7 @@
     </div>
   </div>
   <div class="notif-list" id="notifList">
-    <div class="notif-empty" id="notifEmpty"><strong data-i18n="notif_empty_title">No notifications yet</strong><span data-i18n="notif_empty_body">Trades, swaps and product updates will show up here.</span></div>
+    <div class="notif-empty" id="notifEmpty"><strong data-i18n="notif_empty_title">No notifications yet</strong><span data-i18n="notif_local_body">Only notices received while this page is open appear here. See History for your transactions.</span></div>
   </div>
 </div>
 
@@ -7229,6 +7229,7 @@
         <div class="card-body">
           <div class="set-row"><div class="set-lbl" data-i18n="set_display_name">Display name</div><input class="set-input" type="text" id="setName" value="" placeholder="—"/></div>
           <div class="set-row"><div class="set-lbl" data-i18n="set_wallet">Wallet</div><div class="set-val mono" id="setWalletAddr">—</div></div>
+          <p class="page-subtitle" data-i18n="set_local_note">Display name is saved only in this browser.</p>
           <div class="set-actions"><button type="button" class="btn-primary" onclick="saveSettings()" data-i18n="set_save">Save changes</button></div>
         </div>
       </div>
@@ -7236,9 +7237,10 @@
       <div class="card">
         <div class="card-head"><h3 data-i18n="set_notif_title">Notifications</h3></div>
         <div class="card-body">
-          <div class="set-row"><div class="set-lbl" data-i18n="set_notif_fills">Trades and swaps</div><label class="set-toggle"><input type="checkbox" id="setNotifFills" checked><span class="tg"></span></label></div>
-          <div class="set-row"><div class="set-lbl" data-i18n="set_notif_digest">Weekly digest</div><label class="set-toggle"><input type="checkbox" id="setNotifDigest"><span class="tg"></span></label></div>
-          <div class="set-row"><div class="set-lbl" data-i18n="set_notif_product">Product updates</div><label class="set-toggle"><input type="checkbox" id="setNotifProduct"><span class="tg"></span></label></div>
+          <p class="page-subtitle" id="setNotifUnavailable" data-i18n="set_notif_unavailable">Notification subscriptions are not available.</p>
+          <div class="set-row"><div class="set-lbl" data-i18n="set_notif_fills">Trades and swaps</div><label class="set-toggle"><input type="checkbox" id="setNotifFills" disabled aria-describedby="setNotifUnavailable"><span class="tg"></span></label></div>
+          <div class="set-row"><div class="set-lbl" data-i18n="set_notif_digest">Weekly digest</div><label class="set-toggle"><input type="checkbox" id="setNotifDigest" disabled aria-describedby="setNotifUnavailable"><span class="tg"></span></label></div>
+          <div class="set-row"><div class="set-lbl" data-i18n="set_notif_product">Product updates</div><label class="set-toggle"><input type="checkbox" id="setNotifProduct" disabled aria-describedby="setNotifUnavailable"><span class="tg"></span></label></div>
         </div>
       </div>
 
@@ -8475,8 +8477,8 @@ function show(page) {
       if (typeof updateFuturesBoard === 'function') updateFuturesBoard();
       if (typeof scheduleDeskChartDraw === 'function') scheduleDeskChartDraw('futChart');
       if (typeof loadFuturesOverview === 'function') loadFuturesOverview();
-      if (typeof loadFundingForPair === 'function' && window.futDeskState) loadFundingForPair(futDeskState.pair);
-      if (typeof loadLiquidationsForPair === 'function' && window.futDeskState) loadLiquidationsForPair(futDeskState.pair);
+
+
     }
     if ((page === 'wallet' || page === 'history') && typeof hydrateWalletSlice === 'function') {
       hydrateWalletSlice();
@@ -8682,9 +8684,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') toggleCmdk(false);
 });
 
-/* Notifications — production inbox (API + WS) */
+/* Notifications — current-page notices; no remote inbox or sign-in. */
 (function gromNotifBoot() {
-  var state = { items: [], unread: 0, loading: false, loaded: false };
+  var state = { items: [], unread: 0 };
 
   function tx(key, fallback) {
     try {
@@ -8694,38 +8696,6 @@ document.addEventListener('keydown', (e) => {
       }
     } catch (_) {}
     return fallback;
-  }
-  function hasAuth() {
-    try {
-      if (typeof window.gwJwtValid === 'function') return window.gwJwtValid();
-    } catch (_) {}
-    try {
-      var j = localStorage.getItem('grom_jwt') || '';
-      return !!(j && j !== 'demo-session' && j.split('.').length >= 3);
-    } catch (_) { return false; }
-  }
-  function walletLive() {
-    try {
-      if (typeof window.gwIsWalletUiConnected === 'function' && window.gwIsWalletUiConnected()) return true;
-      if (typeof window.gwHasRestoredWalletIdentity === 'function' && window.gwHasRestoredWalletIdentity()) return true;
-    } catch (_) {}
-    try {
-      if (window.GROM_CONN && window.GROM_CONN.connected && window.GROM_CONN.label) return true;
-      var lbl = localStorage.getItem('grom_wallet_label') || '';
-      if (lbl && lbl.length > 6) return true;
-    } catch (_) {}
-    return false;
-  }
-  async function trySignIn() {
-    try {
-      if (typeof window.gwEnsureSignedIn === 'function') {
-        return await window.gwEnsureSignedIn({
-          rejectToast: tx('notif_signin_reject', 'Sign in to see notifications'),
-        });
-      }
-      if (typeof window.gwOpenSignIn === 'function') { window.gwOpenSignIn(); return false; }
-    } catch (_) {}
-    return false;
   }
   function kindClass(kind) {
     var k = String(kind || '').toLowerCase();
@@ -8751,37 +8721,10 @@ document.addEventListener('keydown', (e) => {
   function render() {
     var list = document.getElementById('notifList');
     if (!list) return;
-    var empty = document.getElementById('notifEmpty');
-    if (!hasAuth()) {
-      if (walletLive()) {
-        list.innerHTML =
-          '<div class="notif-empty"><strong>' + tx('notif_signin_title', 'Complete sign-in') + '</strong>' +
-          '<span>' + tx('notif_signin_body', 'Your wallet is connected — sign the message to unlock notifications.') + '</span>' +
-          '<button type="button" class="notif-action" id="notifSignInBtn">' + tx('notif_signin_btn', 'Sign in') + '</button></div>';
-        var siBtn = document.getElementById('notifSignInBtn');
-        if (siBtn) siBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          trySignIn().then(function (ok) { if (ok || hasAuth()) refresh(); else render(); });
-        });
-      } else {
-        list.innerHTML =
-          '<div class="notif-empty"><strong>' + tx('notif_login_title', 'Connect wallet') + '</strong>' +
-          '<span>' + tx('notif_login_body', 'Sign in to see fills, deposits and alerts.') + '</span>' +
-          '<button type="button" class="notif-action" id="notifConnectBtn">' + tx('notif_connect_btn', 'Connect wallet') + '</button></div>';
-        var cBtn = document.getElementById('notifConnectBtn');
-        if (cBtn) cBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          if (typeof openConnectModal === 'function') openConnectModal();
-          else if (typeof connectWallet === 'function') connectWallet();
-        });
-      }
-      setBadge(0);
-      return;
-    }
     if (!state.items.length) {
       list.innerHTML =
         '<div class="notif-empty" id="notifEmpty"><strong>' + tx('notif_empty_title', 'No notifications yet') + '</strong>' +
-        '<span>' + tx('notif_empty_body', 'Trades, swaps and product updates will show up here.') + '</span></div>';
+        '<span>' + tx('notif_local_body', 'Only notices received while this page is open appear here. See History for your transactions.') + '</span></div>';
       return;
     }
     list.innerHTML = state.items.map(function (n) {
@@ -8810,41 +8753,8 @@ document.addEventListener('keydown', (e) => {
     else state.items.push(item);
     if (state.items.length > 80) state.items.length = 80;
   }
-  async function api(path, opts) {
-    if (typeof window.gromApiFetch === 'function') return window.gromApiFetch(path, opts);
-    if (typeof gget === 'function' && (!opts || opts.method === 'GET' || !opts.method)) return gget(path);
-    var token = '';
-    try { token = localStorage.getItem('grom_jwt') || ''; } catch (_) {}
-    var headers = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = 'Bearer ' + token;
-    var res = await fetch(path, Object.assign({}, opts || {}, { headers: Object.assign(headers, (opts && opts.headers) || {}) }));
-    if (!res.ok) throw new Error('api ' + res.status);
-    return res.json();
-  }
-  async function refresh() {
-    if (!hasAuth()) { state.items = []; state.loaded = true; render(); return; }
-    if (state.loading) return;
-    state.loading = true;
-    try {
-      var data = await api('/api/notifications?limit=40');
-      state.items = (data && data.notifications) || [];
-      setBadge(data && data.unread_count);
-      state.loaded = true;
-      render();
-    } catch (_) {
-      if (!state.loaded) {
-        state.items = [];
-        render();
-      }
-    } finally {
-      state.loading = false;
-    }
-  }
-  async function markAllRead() {
-    if (!hasAuth() || !state.unread) { setBadge(0); render(); return; }
-    try {
-      await api('/api/notifications/read', { method: 'POST', body: JSON.stringify({ all: true }) });
-    } catch (_) {}
+  function refresh() { render(); return Promise.resolve(); }
+  function markAllRead() {
     state.items.forEach(function (n) { if (!n.read_at) n.read_at = new Date().toISOString(); });
     setBadge(0);
     render();
@@ -8853,14 +8763,7 @@ document.addEventListener('keydown', (e) => {
     var panel = document.getElementById('notifPanel');
     if (!panel) return;
     panel.classList.add('open');
-    if (!hasAuth() && walletLive()) {
-      render();
-      trySignIn().then(function (ok) {
-        if (ok || hasAuth()) refresh().then(function () { markAllRead(); });
-      });
-      return;
-    }
-    refresh().then(function () { markAllRead(); });
+    markAllRead();
   }
   function closePanel() {
     var panel = document.getElementById('notifPanel');
@@ -8934,19 +8837,11 @@ document.addEventListener('keydown', (e) => {
   window.addEventListener('grom-ws-notification', function (ev) {
     ingestLive(ev.detail && ev.detail.data ? ev.detail.data : ev.detail);
   });
-  document.addEventListener('grom:wallet-connected', function () { refresh(); });
-  window.addEventListener('grom:siwe-ok', function () { refresh(); });
-  window.addEventListener('storage', function (e) {
-    if (e.key === 'grom_jwt') refresh();
-  });
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { refresh(); });
-  else setTimeout(refresh, 0);
-  setInterval(function () {
-    if (document.hidden) return;
-    if (!hasAuth()) return;
-    refresh();
-  }, 120000);
+  function resetNotices() { state.items = []; setBadge(0); render(); }
+  document.addEventListener('grom:wallet-connected', resetNotices);
+  window.addEventListener('storage', function (e) { if (e.key === 'grom_jwt') resetNotices(); });
+  window.addEventListener('grom:lang-change', refresh);
+  refresh();
 })();
 
 /* Wallet / Connect */
@@ -12160,18 +12055,6 @@ function renderSpotLiquidity(sym) {
 }
 
 // Fetch a snapshot from REST and re-render. WS pushes will keep it in sync.
-async function loadSpotOrderbook(sym) {
-  var pair = sym || (window.spotState && spotState.pair) || 'BTC/USDT';
-  if (!window.gromApiFetch) return;
-  try {
-    var snap = await window.gromApiFetch('/api/__removed_spot/orderbook?pair=' + encodeURIComponent(pair) + '&depth=20');
-    if (!snap || snap.pair !== pair) return;
-    window.__gromSpotBook = snap;
-    if (typeof renderSpotLiquidity === 'function') renderSpotLiquidity(pair);
-  } catch (_) { /* keep fallback */ }
-}
-window.loadSpotOrderbook = loadSpotOrderbook;
-
 // Track WS subscriptions so we don't double-subscribe and we cleanly switch pairs.
 window.__gromSpotBookSub = null;
 window.__gromSpotTradesSub = null;
@@ -12194,18 +12077,6 @@ function subscribeSpotOrderbook(sym) {
   }
 }
 window.subscribeSpotOrderbook = subscribeSpotOrderbook;
-
-async function loadSpotTrades(sym) {
-  var pair = sym || (window.spotState && spotState.pair) || 'BTC/USDT';
-  if (!window.gromApiFetch) return;
-  try {
-    var res = await window.gromApiFetch('/api/__removed_spot/trades?pair=' + encodeURIComponent(pair) + '&limit=50');
-    if (!res || !Array.isArray(res.trades)) return;
-    window.__gromSpotTrades[pair] = res.trades;
-    if (window.spotState && spotState.pair === pair && typeof renderSpotRecentTrades === 'function') renderSpotRecentTrades(pair);
-  } catch (_) { /* keep synthetic fallback */ }
-}
-window.loadSpotTrades = loadSpotTrades;
 
 function applySpotTickerToBoard(sym, ticker) {
   if (!ticker) return;
@@ -12233,18 +12104,6 @@ function applySpotTickerToBoard(sym, ticker) {
     if (spP) spP.textContent = '$' + marketFmt(last);
   }
 }
-
-async function loadSpotTicker(sym) {
-  var pair = sym || (window.spotState && spotState.pair) || 'BTC/USDT';
-  if (!window.gromApiFetch) return;
-  try {
-    var res = await window.gromApiFetch('/api/__removed_spot/ticker?pair=' + encodeURIComponent(pair));
-    if (!res || !res.ticker) return;
-    window.__gromSpotTickers[pair] = res.ticker;
-    applySpotTickerToBoard(pair, res.ticker);
-  } catch (_) {}
-}
-window.loadSpotTicker = loadSpotTicker;
 
 // Apply WS pushes for the active pair only.
 window.addEventListener('grom-ws-event', function (ev) {
@@ -12529,18 +12388,10 @@ function setFuturesPair(sym, opts) {
   scheduleDeskChartDraw('futChart');
   // Real-time futures: subscribe + pull funding/liquidations for the new contract.
   if (typeof subscribeFuturesContract === 'function') subscribeFuturesContract(futDeskState.pair);
-  if (typeof loadFundingForPair === 'function') loadFundingForPair(futDeskState.pair);
-  if (typeof loadLiquidationsForPair === 'function') loadLiquidationsForPair(futDeskState.pair);
 }
 window.setFuturesPair = setFuturesPair;
 
-/* ===== Futures real-time (Sprint 4) =====
- * Wires positions & orders table to /api/futures/overview, subscribes to
- *   - positions.user.<id>  → re-fetch (debounced)
- *   - mark_price.<contract> → in-place mark + uPnL update
- *   - funding.<contract>    → HUD funding rate
- * GET /api/futures/funding & /api/futures/liquidations populate liq HUD widgets.
- */
+/* Shared Trade table state, populated by Hyperliquid. */
 window.__gromFuturesState = window.__gromFuturesState || {
   positions: [],
   orders: [],
@@ -12683,21 +12534,6 @@ async function loadFuturesOverview() {
     try { await window.gromHL.syncDeskState(); } catch (_) {}
     return;
   }
-  if (!window.gromApiFetch) return;
-  if (st.fetchInflight) { st.fetchDirty = true; return; }
-  st.fetchInflight = true;
-  try {
-    var data = await window.gromApiFetch('/api/futures/overview');
-    if (data && Array.isArray(data.positions)) st.positions = data.positions;
-    if (data && Array.isArray(data.orders)) st.orders = data.orders;
-    // Subscribe to mark_price for all unique contracts in positions.
-    var contracts = new Set((st.positions || []).filter(function (p) { return p.status === 'open'; }).map(function (p) { return p.contract; }));
-    contracts.forEach(function (c) { subscribeFuturesContract(c); });
-    renderFuturesTable();
-  } catch (_) {} finally {
-    st.fetchInflight = false;
-    if (st.fetchDirty) { st.fetchDirty = false; loadFuturesOverview(); }
-  }
 }
 window.loadFuturesOverview = loadFuturesOverview;
 
@@ -12719,19 +12555,6 @@ function subscribeFuturesContract(contract) {
   try { window.gromWS.subscribe('funding.' + contract); } catch (_) {}
 }
 window.subscribeFuturesContract = subscribeFuturesContract;
-
-async function loadFundingForPair(contract) {
-  var st = window.__gromFuturesState;
-  if (!st || !contract || !window.gromApiFetch) return;
-  try {
-    var data = await window.gromApiFetch('/api/futures/funding?contract=' + encodeURIComponent(contract));
-    if (data && Array.isArray(data.funding)) {
-      st.fundingByContract[contract] = data.funding;
-      applyFundingHud(contract);
-    }
-  } catch (_) {}
-}
-window.loadFundingForPair = loadFundingForPair;
 
 function applyFundingHud(contract) {
   var st = window.__gromFuturesState;
@@ -12761,19 +12584,6 @@ function msToCountdown(ms) {
   return h + 'h ' + m + 'm';
 }
 
-async function loadLiquidationsForPair(contract) {
-  var st = window.__gromFuturesState;
-  if (!st || !contract || !window.gromApiFetch) return;
-  try {
-    var data = await window.gromApiFetch('/api/futures/liquidations?contract=' + encodeURIComponent(contract));
-    if (data && Array.isArray(data.liquidations)) {
-      st.liquidationsByContract[contract] = data.liquidations;
-      applyLiqHud(contract);
-    }
-  } catch (_) {}
-}
-window.loadLiquidationsForPair = loadLiquidationsForPair;
-
 function applyLiqHud(contract) {
   var st = window.__gromFuturesState;
   if (!st || !window.futDeskState || futDeskState.pair !== contract) return;
@@ -12798,22 +12608,8 @@ function applyLiqHud(contract) {
   }
 }
 
-window.openFuturesTpsl = async function (positionId) {
-  var tp = prompt('Take-profit price (or empty):');
-  var sl = prompt('Stop-loss price (or empty):');
-  if (tp === null && sl === null) return;
-  var body = {};
-  if (tp != null && tp !== '') body.take_profit_price = Number(tp);
-  if (sl != null && sl !== '') body.stop_loss_price = Number(sl);
-  try {
-    await window.gromApiFetch('/api/futures/positions/' + encodeURIComponent(positionId) + '/tpsl', {
-      method: 'POST', body: JSON.stringify(body),
-    });
-    if (typeof toast === 'function') toast('TP/SL updated', 'success');
-    loadFuturesOverview();
-  } catch (e) {
-    if (typeof toast === 'function') toast('TP/SL failed', 'error');
-  }
+window.openFuturesTpsl = function () {
+  if (typeof toast === 'function') toast('TP/SL is unavailable for this position', 'info');
 };
 
 window.closeFuturesPos = async function (positionId) {
@@ -12827,11 +12623,7 @@ window.closeFuturesPos = async function (positionId) {
       if (typeof window.gromHL.syncDeskState === 'function') await window.gromHL.syncDeskState();
       return;
     }
-    await window.gromApiFetch('/api/futures/positions/' + encodeURIComponent(positionId) + '/close', {
-      method: 'POST', body: JSON.stringify({}),
-    });
-    if (typeof toast === 'function') toast('Position closed', 'success');
-    loadFuturesOverview();
+    if (typeof toast === 'function') toast('Position service unavailable — no close was submitted', 'error');
   } catch (e) {
     if (typeof toast === 'function') toast((e && e.message) || 'Close failed', 'error');
   }
@@ -12976,9 +12768,6 @@ function setSpotPair(sym) {
   drawChart('spotChart');
   if (typeof initSpotTradeControls === 'function') initSpotTradeControls();
   // Real-time market data: pull fresh REST snapshots, then keep them live via WS.
-  if (typeof loadSpotOrderbook === 'function') loadSpotOrderbook(spotState.pair);
-  if (typeof loadSpotTrades    === 'function') loadSpotTrades(spotState.pair);
-  if (typeof loadSpotTicker    === 'function') loadSpotTicker(spotState.pair);
   if (typeof subscribeSpotOrderbook === 'function') subscribeSpotOrderbook(spotState.pair);
 }
 
@@ -13703,7 +13492,6 @@ function exportHistoryCsv() {
     return '';
   }
 
-  var __devLoginDisabled = false;
   function isGromJwt(token) {
     return !!(token && token !== 'demo-session' && token !== 'wallet-session' && String(token).split('.').length === 3);
   }
@@ -13711,32 +13499,7 @@ function exportHistoryCsv() {
     var token = '';
     try { token = localStorage.getItem('grom_jwt') || ''; } catch (_) {}
     if (isGromJwt(token)) return token;
-    if (__devLoginDisabled) return '';
-    try {
-      var res = await fetch(apiBase() + '/auth/dev-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!res.ok) {
-        // Disable dev-login attempts for this session — not available in production.
-        if (res.status === 404 || res.status === 403 || res.status === 401) {
-          __devLoginDisabled = true;
-        }
-        return isGromJwt(token) ? token : '';
-      }
-      var data = await res.json();
-      if (data && data.token) {
-        try { localStorage.setItem('grom_jwt', data.token); } catch (_) {}
-        if (data.user && data.user.wallet_address) {
-          try { localStorage.setItem('grom_wallet_label', data.user.wallet_address); } catch (_) {}
-          if (typeof setWalletLabel === 'function') setWalletLabel(data.user.wallet_address);
-        }
-        return data.token;
-      }
-    } catch (_) {
-      __devLoginDisabled = true;
-    }
-    return isGromJwt(token) ? token : '';
+    return '';
   }
 
   async function apiFetch(path, options) {
@@ -14199,7 +13962,7 @@ function exportHistoryCsv() {
   };
 })();
 /* ===== gromWS — realtime WebSocket client (Sprint 2) =====
- * Connects to /ws (or SSE fallback at /api/stream/sse), authenticates with the
+ * Connects to /ws with bounded reconnect backoff, authenticates with the
  * JWT in localStorage.grom_jwt, and forwards events to the rest of the app:
  *   - balances.user.<id>      → re-hydrate wallet
  *   - orders.user.<id>        → fire grom-ws-order
@@ -14214,9 +13977,8 @@ function exportHistoryCsv() {
   var subs = new Set();
   var state = {
     socket: null,
-    es: null,
     publicSocket: null,
-    transport: null,        // 'ws' | 'sse' | 'feed' | null
+    transport: null,        // 'ws' | 'feed' | null
     connected: false,
     publicFeed: false,
     backoff: 1000,
@@ -14329,12 +14091,6 @@ function exportHistoryCsv() {
     return proto + '//' + host + '/ws' + (token ? ('?token=' + encodeURIComponent(token)) : '');
   }
 
-  function sseUrl(token, channels) {
-    var qs = 'token=' + encodeURIComponent(token);
-    if (channels && channels.length) qs += '&channels=' + encodeURIComponent(channels.join(','));
-    return '/api/stream/sse?' + qs;
-  }
-
   function closePublicWs() {
     if (!state.publicSocket) return;
     try { state.publicSocket.close(); } catch (_) {}
@@ -14388,7 +14144,6 @@ function exportHistoryCsv() {
     var payload = decodeJwt(token);
     state.sub = payload && payload.sub ? String(payload.sub) : null;
     if (!state.sub) return;
-    closeSse();
     try {
       var ws = new WebSocket(wsUrl(token));
       state.socket = ws;
@@ -14417,7 +14172,6 @@ function exportHistoryCsv() {
         if (wasConnected) emit('disconnect', {});
         if (state.closed) return;
         state.wsFailures++;
-        if (state.wsFailures >= 3) { openSse(); return; }
         scheduleReconnect();
       });
       ws.addEventListener('error', function () {
@@ -14429,59 +14183,11 @@ function exportHistoryCsv() {
     }
   }
 
-  function openSse() {
-    if (state.closed) return;
-    if (typeof EventSource === 'undefined') { scheduleReconnect(); return; }
-    var token = getToken();
-    if (!token || !state.sub) { scheduleReconnect(); return; }
-    closeWs();
-    var channels = defaultUserChannels().concat(defaultPriceChannels());
-    subs.forEach(function (c) { if (channels.indexOf(c) === -1) channels.push(c); });
-    try {
-      var es = new EventSource(sseUrl(token, channels));
-      state.es = es;
-      es.addEventListener('ready', function () {
-        state.connected = true;
-        state.transport = 'sse';
-        state.backoff = 1000;
-        refreshIndicator();
-        emit('connect', { transport: 'sse' });
-      });
-      es.addEventListener('message', function (ev) {
-        try {
-          var msg = JSON.parse(ev.data);
-          if (msg && msg.channel) dispatchEvent(msg.channel, msg.data);
-        } catch (_) {}
-      });
-      es.addEventListener('error', function () {
-        var wasConnected = state.connected;
-        state.connected = false;
-        state.transport = null;
-        refreshIndicator();
-        if (wasConnected) emit('disconnect', {});
-        try { es.close(); } catch (_) {}
-        state.es = null;
-        // try WS again after backoff
-        state.wsFailures = 0;
-        scheduleReconnect();
-      });
-      channels.forEach(function (c) { subs.add(c); });
-    } catch (_) {
-      scheduleReconnect();
-    }
-  }
-
   function closeWs() {
     if (!state.socket) return;
     try { state.socket.close(); } catch (_) {}
     state.socket = null;
   }
-  function closeSse() {
-    if (!state.es) return;
-    try { state.es.close(); } catch (_) {}
-    state.es = null;
-  }
-
   function scheduleReconnect() {
     if (state.closed) return;
     var delay = Math.min(state.backoff, state.backoffMax);
@@ -14498,8 +14204,7 @@ function exportHistoryCsv() {
       return;
     }
     if (state.connected) return;
-    if (state.wsFailures >= 3) openSse();
-    else openWs();
+    openWs();
   }
 
   function subscribe(channel) {
@@ -14507,9 +14212,6 @@ function exportHistoryCsv() {
     subs.add(channel);
     if (state.transport === 'ws' && state.socket && state.socket.readyState === 1) {
       try { state.socket.send(JSON.stringify({ type: 'subscribe', channels: [channel] })); } catch (_) {}
-    } else if (state.transport === 'sse') {
-      // SSE channels are fixed at connection — re-open with updated set
-      closeSse(); openSse();
     }
   }
 
@@ -14531,7 +14233,7 @@ function exportHistoryCsv() {
 
   window.gromWS = {
     connect: connect,
-    close: function () { state.closed = true; closeWs(); closeSse(); closePublicWs(); setIndicator(false); },
+    close: function () { state.closed = true; closeWs(); closePublicWs(); setIndicator(false); },
     subscribe: subscribe,
     unsubscribe: unsubscribe,
     on: on,
@@ -14543,7 +14245,7 @@ function exportHistoryCsv() {
     if (ev.key === 'grom_jwt') {
       state.wsFailures = 0;
       state.backoff = 1000;
-      closeWs(); closeSse();
+      closeWs();
       state.connected = false; closePublicWs(); refreshIndicator();
       if (ev.newValue) connect();
     }
@@ -18276,69 +17978,20 @@ var GROM_XSTOCKS = [
 /* ========== Settings ========== */
 async function saveSettings() {
   var name = (document.getElementById('setName')?.value || '').trim();
-  var notif = {
-    fills: !!(document.getElementById('setNotifFills')?.checked),
-    digest: !!(document.getElementById('setNotifDigest')?.checked),
-    product: !!(document.getElementById('setNotifProduct')?.checked),
-  };
   try {
-    if (name)  localStorage.setItem('grom_set_name', name);
-    localStorage.setItem('grom_notif_fills', notif.fills ? '1' : '0');
-    localStorage.setItem('grom_notif_digest', notif.digest ? '1' : '0');
-    localStorage.setItem('grom_notif_product', notif.product ? '1' : '0');
-  } catch (_) {}
-  try {
-    var prev = {};
-    try {
-      var cur = typeof gget === 'function' ? await gget('/api/settings') : null;
-      if (cur && cur.settings && cur.settings.notifications && typeof cur.settings.notifications === 'object') {
-        prev = cur.settings.notifications;
-      }
-    } catch (_) {}
-    var body = { notifications: Object.assign({}, prev, notif) };
-    if (name) body.display_name = name;
-    if (typeof gput === 'function') await gput('/api/settings', body);
-    else if (typeof window.gromApiFetch === 'function') {
-      await window.gromApiFetch('/api/settings', { method: 'PUT', body: JSON.stringify(body) });
-    }
-  } catch (_) {}
-  toast('Settings saved', 'success');
+    localStorage.setItem('grom_set_name', name);
+    toast(typeof t === 'function' ? t('set_saved_local') : 'Saved in this browser', 'success');
+  } catch (_) {
+    toast(typeof t === 'function' ? t('set_save_failed') : 'Could not save in this browser', 'error');
+  }
 }
 (function wireSettings() {
-  // Restore persisted values (local first, then server)
+  // Display name is a browser preference, separate from admin risk settings.
   try {
     var n = localStorage.getItem('grom_set_name');
-    if (n) { var en = document.getElementById('setName'); if (en) en.value = n; }
-    var nf = localStorage.getItem('grom_notif_fills');
-    var nd = localStorage.getItem('grom_notif_digest');
-    var np = localStorage.getItem('grom_notif_product');
-    if (nf != null) { var el = document.getElementById('setNotifFills'); if (el) el.checked = nf === '1'; }
-    if (nd != null) { var el3 = document.getElementById('setNotifDigest'); if (el3) el3.checked = nd === '1'; }
-    if (np != null) { var el4 = document.getElementById('setNotifProduct'); if (el4) el4.checked = np === '1'; }
+    var en = document.getElementById('setName');
+    if (en && n != null) en.value = n;
   } catch (_) {}
-  (async function hydrateNotifPrefs() {
-    try {
-      var data = typeof gget === 'function' ? await gget('/api/settings') : null;
-      var n = data && data.settings && data.settings.notifications;
-      if (!n || typeof n !== 'object') return;
-      var map = [
-        ['fills', 'setNotifFills', 'grom_notif_fills'],
-        ['digest', 'setNotifDigest', 'grom_notif_digest'],
-        ['product', 'setNotifProduct', 'grom_notif_product'],
-      ];
-      map.forEach(function (row) {
-        if (!Object.prototype.hasOwnProperty.call(n, row[0])) return;
-        var on = n[row[0]] !== false;
-        var el = document.getElementById(row[1]);
-        if (el) el.checked = on;
-        try { localStorage.setItem(row[2], on ? '1' : '0'); } catch (_) {}
-      });
-      if (data.settings.display_name) {
-        var en = document.getElementById('setName');
-        if (en && !en.value) en.value = data.settings.display_name;
-      }
-    } catch (_) {}
-  })();
   // Language seg → hooks into existing i18n
   var lng = document.getElementById('setLangSeg');
   if (lng) {
@@ -20129,100 +19782,12 @@ window.submitFuturesOrder = async function (side) {
     }
   }
 
-  var body = { contract: contract, side: side, type: type, size: size, leverage: leverage, reduceOnly: reduceOnly };
-  if (type !== 'market' && price) body.price = price;
-  var resp = await gpost('/api/futures/orders', body);
-  if (resp && resp.order) {
-    toast((side === 'buy' ? 'Long ' : 'Short ') + leverage + '× ' + contract + ' · ' + size + ' @ ' + resp.order.type, 'success');
-    if (typeof window.refreshFuturesBoard === 'function') window.refreshFuturesBoard();
-  } else {
-    toast('Futures service unavailable — no order was placed', 'error');
-  }
+  toast('Futures service unavailable — no order was placed', 'error');
 };
 
 window.refreshHlFuturesBoard = async function () {
   if (!window.gromHL || typeof window.gromHL.syncDeskState !== 'function') return;
   try { await window.gromHL.syncDeskState(); } catch (_) {}
-};
-
-/* ===== Sessions ===== */
-async function loadSessions() {
-  var host = document.getElementById('sessionsList');
-  if (!host) return;
-  var data = await gget('/api/sessions');
-  if (!data || !data.sessions) {
-    // demo fallback
-    host.innerHTML =
-      '<div class="session-row"><div><div class="title">MacBook Pro · Chrome</div><div class="meta">Current session</div></div><div class="mono">JWT</div><div class="pill-dot">Current</div><button class="mini-btn" onclick="toast(\'Saved as protected\',\'success\')">Protected</button></div>';
-    return;
-  }
-  if (!data.sessions.length) {
-    host.innerHTML = '<div class="session-row" style="opacity:.6"><div><div class="title">No active sessions</div><div class="meta">You will see devices here after sign-in</div></div><div></div><div></div><div></div></div>';
-    return;
-  }
-  host.innerHTML = data.sessions.map(function (s) {
-    var pillCls  = s.revoked_at ? 'pill-dot' : (s.is_protected ? 'pill-dot' : 'pill-dot warn');
-    var pillTxt  = s.revoked_at ? 'Revoked' : (s.is_protected ? 'Protected' : 'Active');
-    var btn = s.revoked_at
-      ? '<span class="mini-btn" style="opacity:.4">—</span>'
-      : (s.is_protected
-          ? '<button class="mini-btn" onclick="toggleProtect(\'' + s.id + '\', false)">Unlock</button>'
-          : '<button class="mini-btn" onclick="toggleProtect(\'' + s.id + '\', true)">Protect</button>'
-            + ' <button class="mini-btn danger" onclick="revokeSession(\'' + s.id + '\')">Revoke</button>');
-    return '<div class="session-row">' +
-      '<div><div class="title">' + (s.device_label || 'Unknown device') + '</div>' +
-      '<div class="meta">' + (s.ip_address || 'IP unknown') + ' · last seen ' + new Date(s.last_seen_at).toLocaleString() + '</div></div>' +
-      '<div class="mono">' + (s.user_agent ? s.user_agent.slice(0, 32) + '…' : '—') + '</div>' +
-      '<div class="' + pillCls + '">' + pillTxt + '</div>' +
-      btn +
-      '</div>';
-  }).join('');
-}
-window.toggleProtect = async function (id, prot) {
-  var r = await gpost('/api/sessions/' + id + '/protect', { protected: prot });
-  toast(r ? (prot ? 'Session protected' : 'Protection removed') : 'Operation queued', prot ? 'success' : 'info');
-  loadSessions();
-};
-window.revokeSession = async function (id) {
-  if (!confirm('Revoke this session? It will be signed out immediately.')) return;
-  var r = await gdel('/api/sessions/' + id);
-  toast(r ? 'Session revoked' : 'Revocation queued', 'success');
-  loadSessions();
-};
-
-/* ===== Risk editor ===== */
-window.openRiskEditor = async function () {
-  var settings = await gget('/api/settings');
-  var risk = settings?.settings?.risk || { daily_loss_cap_usdt: 2500, max_round_size_usdt: 250, cooldown_after_loss_min: 15 };
-  var html = '<div class="wm-overlay open" id="riskEditMd" onclick="if(event.target===this) document.getElementById(\'riskEditMd\').remove()">' +
-    '<div class="wm" style="max-width:460px"><div class="wm-head"><h3>Risk & limits</h3>' +
-    '<button class="wm-close" onclick="document.getElementById(\'riskEditMd\').remove()">✕</button></div>' +
-    '<div class="wm-body" style="display:flex;flex-direction:column;gap:12px;padding:14px">' +
-      '<label style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span>Daily loss cap (USDT)</span><input id="rkLoss" type="number" min="0" value="' + risk.daily_loss_cap_usdt + '" style="width:120px;padding:8px;border-radius:8px;background:rgba(37,45,58,.6);color:#e8f1fa;border:1px solid rgba(136,192,208,.2)"/></label>' +
-      '<label style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span>Max round size (USDT)</span><input id="rkSize" type="number" min="1" value="' + risk.max_round_size_usdt + '" style="width:120px;padding:8px;border-radius:8px;background:rgba(37,45,58,.6);color:#e8f1fa;border:1px solid rgba(136,192,208,.2)"/></label>' +
-      '<label style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span>Cooldown after loss (min)</span><input id="rkCool" type="number" min="0" value="' + risk.cooldown_after_loss_min + '" style="width:120px;padding:8px;border-radius:8px;background:rgba(37,45,58,.6);color:#e8f1fa;border:1px solid rgba(136,192,208,.2)"/></label>' +
-      '<button class="btn-primary" onclick="saveRiskCaps()">Save risk caps</button>' +
-    '</div></div></div>';
-  document.body.insertAdjacentHTML('beforeend', html);
-};
-window.saveRiskCaps = async function () {
-  var risk = {
-    daily_loss_cap_usdt: Number(document.getElementById('rkLoss').value) || 0,
-    max_round_size_usdt: Number(document.getElementById('rkSize').value) || 0,
-    cooldown_after_loss_min: Number(document.getElementById('rkCool').value) || 0,
-  };
-  var r = await gput('/api/settings', { risk: risk });
-  toast(r ? 'Risk caps saved' : 'Saved locally — backend pending', r ? 'success' : 'info');
-  document.getElementById('riskEditMd')?.remove();
-};
-
-/* ===== Support tickets ===== */
-window.openSupportTicket = async function (cat, title) {
-  var subj = prompt(title || 'Open support ticket', title || '');
-  if (!subj) return;
-  var body = prompt('Describe the issue (optional):', '');
-  var r = await gpost('/api/support/tickets', { category: cat || 'other', subject: subj, body: body || '', priority: 'normal' });
-  toast(r?.ticket ? 'Ticket #' + r.ticket.id.slice(0,8) + ' created' : 'Ticket queued', r ? 'success' : 'info');
 };
 
 /* ===== Referral X / Telegram share ===== */
@@ -21060,10 +20625,6 @@ window.copyBridgeReceipt = function (btn) {
   window.show = function (page) {
     var r = prevShow ? prevShow.apply(this, arguments) : null;
     setTimeout(function () {
-      if (page === 'settings') {
-        loadSessions();
-        loadApiKeys();
-      }
       if (page === 'backoffice') {
         boffRefreshAll();
       }

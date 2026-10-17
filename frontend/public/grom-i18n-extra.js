@@ -1081,6 +1081,66 @@
     if (EXTRA[lng]) Object.assign(EXTRA[lng], REFERRAL_TRACKING[lng]);
   });
 
+  var LOCAL_SETTINGS_COPY = {
+  "en": {
+    "set_saved_local": "Saved in this browser",
+    "set_save_failed": "Could not save in this browser",
+    "set_local_note": "Display name is saved only in this browser.",
+    "set_notif_unavailable": "Notification subscriptions are not available.",
+    "notif_local_body": "Only notices received while this page is open appear here. See History for your transactions.",
+    "pg_settings_sub": "Language and trading preferences are stored in this browser."
+  },
+  "ru": {
+    "set_saved_local": "Сохранено в этом браузере",
+    "set_save_failed": "Не удалось сохранить в этом браузере",
+    "set_local_note": "Отображаемое имя сохраняется только в этом браузере.",
+    "set_notif_unavailable": "Подписки на уведомления пока недоступны.",
+    "notif_local_body": "Здесь видны уведомления, полученные при открытой странице. Операции смотрите в Истории.",
+    "pg_settings_sub": "Язык и торговые настройки хранятся в этом браузере."
+  },
+  "es": {
+    "set_saved_local": "Guardado en este navegador",
+    "set_save_failed": "No se pudo guardar en este navegador",
+    "set_local_note": "El nombre se guarda solo en este navegador.",
+    "set_notif_unavailable": "Las suscripciones a notificaciones no están disponibles.",
+    "notif_local_body": "Aquí solo aparecen avisos recibidos con esta página abierta. Consulta tus operaciones en Historial.",
+    "pg_settings_sub": "El idioma y las preferencias de trading se guardan en este navegador."
+  },
+  "tr": {
+    "set_saved_local": "Bu tarayıcıda kaydedildi",
+    "set_save_failed": "Bu tarayıcıda kaydedilemedi",
+    "set_local_note": "Görünen ad yalnızca bu tarayıcıda saklanır.",
+    "set_notif_unavailable": "Bildirim abonelikleri henüz kullanılamıyor.",
+    "notif_local_body": "Burada yalnızca bu sayfa açıkken alınan bildirimler görünür. İşlemler için Geçmiş bölümüne bakın.",
+    "pg_settings_sub": "Dil ve işlem tercihleri bu tarayıcıda saklanır."
+  },
+  "ar": {
+    "set_saved_local": "تم الحفظ في هذا المتصفح",
+    "set_save_failed": "تعذّر الحفظ في هذا المتصفح",
+    "set_local_note": "يُحفظ اسم العرض في هذا المتصفح فقط.",
+    "set_notif_unavailable": "اشتراكات الإشعارات غير متاحة حالياً.",
+    "notif_local_body": "تظهر هنا الإشعارات المستلمة أثناء فتح هذه الصفحة فقط. راجع السجل للاطلاع على معاملاتك.",
+    "pg_settings_sub": "تُحفظ اللغة وتفضيلات التداول في هذا المتصفح."
+  },
+  "zh": {
+    "set_saved_local": "已保存在此浏览器中",
+    "set_save_failed": "无法保存在此浏览器中",
+    "set_local_note": "显示名称仅保存在此浏览器中。",
+    "set_notif_unavailable": "通知订阅暂不可用。",
+    "notif_local_body": "这里只显示此页面打开时收到的通知。请在历史记录中查看交易。",
+    "pg_settings_sub": "语言和交易偏好保存在此浏览器中。"
+  },
+  "hi": {
+    "set_saved_local": "इस ब्राउज़र में सेव किया गया",
+    "set_save_failed": "इस ब्राउज़र में सेव नहीं हो सका",
+    "set_local_note": "डिस्प्ले नाम केवल इस ब्राउज़र में सेव होता है।",
+    "set_notif_unavailable": "सूचना सदस्यताएँ अभी उपलब्ध नहीं हैं।",
+    "notif_local_body": "यहाँ केवल इस पेज के खुले रहने पर मिली सूचनाएँ दिखती हैं। लेनदेन के लिए इतिहास देखें।",
+    "pg_settings_sub": "भाषा और ट्रेडिंग प्राथमिकताएँ इस ब्राउज़र में सेव होती हैं।"
+  }
+};
+  Object.keys(LOCAL_SETTINGS_COPY).forEach(function (lng) { Object.assign(EXTRA[lng], LOCAL_SETTINGS_COPY[lng]); });
+
   function syncSettingsLangSeg(lng) {
     var seg = document.getElementById('setLangSeg');
     if (!seg) return;

@@ -5098,7 +5098,7 @@ function gwReferralAddress() {
   catch (_) { return ''; }
 }
 function gwReferralActions(ready) {
-  ['refCopyBtn', 'refCopyLinkBtn', 'refShareXBtn', 'refShareTelegramBtn'].forEach((id) => {
+  ['refCopyBtn', 'refCopyLinkBtn', 'refShareXBtn', 'refShareTelegramBtn', 'refShareBtn'].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.disabled = !ready;
   });

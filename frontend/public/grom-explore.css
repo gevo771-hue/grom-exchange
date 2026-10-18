@@ -1,0 +1,56 @@
+/* Calm, compact prediction discovery. Scoped to preserve other product layouts. */
+#page-predict .gwx-wrap{max-width:1320px;min-width:0}
+#page-predict .gwx-hero{margin-bottom:20px}
+#page-predict .gwx-h1{font-size:clamp(23px,2.3vw,30px);letter-spacing:-.035em;gap:12px}
+#page-predict .gwx-h1-ico{width:38px;height:38px;border-radius:12px;background:rgba(136,192,208,.08);border-color:rgba(136,192,208,.2);box-shadow:none;color:#a7d6e3}
+#page-predict .gwx-stats{gap:20px}
+#page-predict .gwx-stats b{font-size:16px;font-weight:650}
+#page-predict .gwx-stats small{font-size:11px;color:#a1adbe}
+#page-predict .gwx-view-tabs{border-bottom:1px solid rgba(200,212,232,.12);gap:22px;margin:0 0 16px;align-items:stretch}
+#page-predict .gwx-view-tab,#page-predict .gwx-view-tabs .gwx-jump{border:0;border-radius:0;background:none;box-shadow:none;padding:12px 0;color:#b1bccd;font-size:13px;min-height:44px}
+#page-predict .gwx-view-tab.on{border-bottom:2px solid #88c0d0;color:#e3edf4}
+#page-predict .gwx-view-tabs .gwx-jump{margin-left:auto;color:#a8d8e6}
+#page-predict .gwx-toolbar{display:flex;flex-direction:column-reverse;align-items:stretch;gap:14px;margin-bottom:20px}
+#page-predict .gwx-search{width:100%;max-width:none}
+#page-predict .gwx-search input{width:100%;min-height:44px;background:#242c39;border:1px solid rgba(200,212,232,.12);border-radius:12px;font-size:14px;padding-right:16px}
+#page-predict .gwx-cats{display:flex;flex-wrap:nowrap;overflow-x:auto;max-width:100%;gap:6px;padding:0 0 5px;scrollbar-width:thin;scrollbar-color:#4c566a transparent}
+#page-predict .gwx-pill{flex:0 0 auto;min-height:40px;padding:9px 13px;font-size:12px;border:1px solid transparent;border-radius:9px;background:transparent;color:#b4c0d1;box-shadow:none}
+#page-predict .gwx-pill.on{background:rgba(136,192,208,.13);border-color:rgba(136,192,208,.18);color:#dceff5}
+#page-predict .gwx-pill-ico{display:none}
+#page-predict .gwx-card-title{font:inherit;font-size:15px;line-height:1.45;font-weight:650;color:inherit;background:none;border:0;padding:0;text-align:left;cursor:pointer}
+#page-predict button:focus-visible,#gromTradeModal summary:focus-visible{outline:2px solid #88c0d0;outline-offset:4px}
+@media(hover:hover) and (pointer:fine){#page-predict .gwx-card-title:hover{color:#a8d8e6}#page-predict .gwx-pill:hover{background:rgba(136,192,208,.08)}}
+#page-predict .gwx-wrap.gwx-detail-open>:not(#gromPredictDetail){display:none!important}
+#gromPredictDetail{scroll-margin-top:95px;color:#e1e7ef}
+#gromPredictDetail[hidden]{display:none!important}
+.gpe-nav{display:flex;justify-content:space-between;gap:12px;margin:0 0 26px}
+.gpe-nav button,.gpe-message button{border:1px solid rgba(200,212,232,.14);border-radius:9px;background:rgba(24,31,43,.35);color:#b9dfe9;min-height:40px;padding:8px 13px;font:inherit;font-size:12px;cursor:pointer}
+.gpe-heading{display:flex;gap:16px;align-items:center;margin-bottom:18px}.gpe-heading>div{min-width:0}
+.gpe-heading img{width:62px;height:62px;border-radius:14px;object-fit:cover;flex-shrink:0}
+.gpe-heading h1{font-size:clamp(22px,2.3vw,32px);line-height:1.25;margin:5px 0;letter-spacing:-.03em;overflow-wrap:anywhere}
+.gpe-eyebrow{font-size:11px;color:#a4b6ca}
+.gpe-metrics{display:flex;flex-wrap:wrap;gap:12px 24px;padding:0 0 22px;color:#9eacc0;font-size:12px}
+.gpe-metrics b{color:#d5deea;font-weight:600;margin-left:5px}
+.gpe-chart-panel{padding:22px;border:1px solid rgba(200,212,232,.12);border-radius:16px;background:rgba(24,31,43,.42);margin-bottom:24px}
+.gpe-chart-head{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:16px}
+.gpe-chart-head>div:first-child{display:flex;align-items:center;gap:16px;min-width:0}.gpe-chart-head span{font-size:14px;line-height:1.45}.gpe-chart-head strong{font-size:26px;color:#a8d8e6;white-space:nowrap}
+.gpe-ranges{display:flex;gap:4px;flex-shrink:0}.gpe-ranges button{font:inherit;font-size:12px;border:0;border-radius:7px;padding:9px 10px;min-height:36px;background:transparent;color:#a9b6c8;cursor:pointer}.gpe-ranges button[aria-pressed=true]{background:rgba(136,192,208,.15);color:#e3eff7}
+#gpeChart{min-height:240px}#gpeChart svg{width:100%;height:auto;display:block}#gpeChart svg text{font:11px system-ui;fill:#8999ad}
+.gpe-gridline{stroke:rgba(176,191,214,.13);stroke-dasharray:3 5;fill:none}.gpe-line{stroke:#88c0d0;stroke-width:2.5;fill:none;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.gpe-chart-dates{display:flex;justify-content:space-between;gap:8px;color:#a1b0c3;font-size:10px;min-height:28px}.gpe-chart-dates output{color:#d8e9ef;text-align:center}.gpe-chart-note{font-size:11px;color:#96a6bd;margin-top:10px}
+.gpe-body{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:28px}.gpe-body h2{font-size:17px;margin:0 0 10px}.gpe-body h2 small{font-size:12px;color:#9cacbe;font-weight:400;margin-left:6px}.gpe-muted{font-size:12px;color:#9eacc0;line-height:1.5}
+#page-predict .gpe-outcome.gwx-card{padding:0;margin:0;background:transparent;border:0;border-bottom:1px solid rgba(200,212,232,.1);border-radius:0;box-shadow:none}
+#page-predict .gpe-outcome .gwx-oc{display:flex;flex-wrap:wrap;gap:10px;padding:14px 0;margin:0;align-items:center;justify-content:space-between}
+.gpe-select{display:flex;align-items:center;gap:10px;flex:1 1 240px;min-width:0;background:transparent;border:0;padding:4px 0;color:#dbe4ef;text-align:left;cursor:pointer;font:inherit;font-size:13px;line-height:1.4}.gpe-select small{display:block;margin-top:5px;font-size:10px;color:#98a9be}.gpe-select b{margin-left:auto;padding-left:10px;white-space:nowrap;font-size:18px}.gpe-selection-dot{width:8px;height:8px;border:1px solid #697b91;border-radius:50%;flex:none}.gpe-select[aria-pressed=true] .gpe-selection-dot{background:#88c0d0;border-color:#88c0d0}
+.gpe-order-buttons{display:flex;gap:6px;justify-content:flex-end;flex:0 0 auto}.gpe-order-buttons .gwx-bet{min-height:36px;min-width:80px;font-size:12px}.gpe-order-buttons b{margin-left:5px;font-weight:600}
+.gpe-rules{align-self:start;background:rgba(24,31,43,.3);border:1px solid rgba(200,212,232,.1);border-radius:14px;padding:20px}.gpe-rules h3{font-size:13px;line-height:1.5;margin:16px 0 10px}.gpe-rules p{white-space:pre-wrap;font-size:12px;line-height:1.8;color:#b0bfd0;overflow-wrap:anywhere;margin:0 0 16px}.gpe-rules a{color:#a8d8e6;font-size:12px}.gpe-source{margin:20px 0 8px;font-size:10px;color:#91a1b6}
+.gpe-message{display:flex;gap:16px;align-items:center;justify-content:center;min-height:220px;color:#acb9cb;font-size:14px;text-align:center;padding:20px}
+#gromTradeModal #gtmFund{padding:12px;border:1px solid rgba(136,192,208,.13);border-radius:10px;background:rgba(24,31,43,.3)}
+#gromTradeModal #gtmFundBtn{background:rgba(136,192,208,.12);border-color:rgba(136,192,208,.25);color:#c8e7ef;font-size:13px}
+#gromTradeModal #gtmRefreshBtn{border:0;background:transparent;color:#adccda;min-height:32px;padding:6px;font-size:12px;font-weight:500}
+#gromTradeModal .gtm-fund details{font-size:11px;color:#9fafc2;line-height:1.65}#gromTradeModal .gtm-fund summary{cursor:pointer;color:#bcc9d8;padding:5px 0}#gromTradeModal .gtm-fund details p{margin:6px 0}
+#gromTradeModal .gtm{max-height:90dvh;overflow-y:auto}#gtmBal{font-size:12px;line-height:1.6}
+@media(min-width:1500px){#page-predict .gwx-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 250px;align-items:center;gap:20px}#page-predict .gwx-search{grid-column:2;grid-row:1}#page-predict .gwx-cats{grid-column:1;grid-row:1}}
+@media(max-width:760px){#page-predict .gwx-hero-row{align-items:flex-start;gap:16px}#page-predict .gwx-h1{font-size:24px}#page-predict .gwx-stats{gap:18px;justify-content:flex-start}#page-predict .gwx-stats b{font-size:14px}#page-predict .gwx-view-tabs{gap:18px}#page-predict .gwx-view-tabs .gwx-jump{font-size:12px}#page-predict .gwx-view-tabs .gwx-jump svg{display:none}.gpe-heading img{width:44px;height:44px;border-radius:10px}.gpe-heading h1{font-size:22px}.gpe-nav{margin-bottom:20px}.gpe-body{grid-template-columns:1fr;gap:24px}.gpe-chart-panel{padding:14px}.gpe-chart-head{align-items:flex-start;flex-direction:column;gap:10px}.gpe-chart-head>div:first-child{width:100%;justify-content:space-between}#gpeChart{min-height:150px}.gpe-chart-dates{flex-wrap:wrap}.gpe-chart-dates output{order:3;width:100%;min-height:14px}.gpe-chart-dates span{font-size:9px}.gpe-metrics{gap:10px 18px;font-size:11px}.gpe-outcome .gpe-select{flex-basis:100%}.gpe-order-buttons{margin-left:18px}.gpe-rules{padding:16px}}
+
+.gpe-heading h1:focus{outline:none}#page-predict .gwx-card[data-pm-id],#page-predict .gwx-cal-row[data-pm-id]{cursor:pointer}

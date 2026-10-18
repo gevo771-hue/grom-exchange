@@ -1,0 +1,40 @@
+/* Referral invitation, with details kept out of the primary sharing flow. */
+#page-referral{max-width:1120px}
+#page-referral .ref-heading{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:28px}
+#page-referral .ref-eyebrow{font-size:10px;letter-spacing:.18em;color:#99b6c8;margin-bottom:14px}
+#page-referral .page-title{font-size:clamp(27px,3vw,40px);line-height:1.15;letter-spacing:-.04em;max-width:620px;margin:0 0 14px}
+#page-referral .ref-heading p{font-size:14px;color:#a6b5c8;line-height:1.6;margin:0}
+#page-referral .ref-heading-mark{width:100px;height:100px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(136,192,208,.22);background:rgba(136,192,208,.06);flex:none}
+#page-referral .ref-heading-mark svg{width:44px;height:44px;color:#a0d0df}
+#page-referral .ref-invite-panel{padding:28px;border-radius:18px;border:1px solid rgba(136,192,208,.18);background:linear-gradient(120deg,#293746,#242c39);margin-bottom:20px}
+#page-referral .ref-lbl{font-size:12px;color:#adbed0;letter-spacing:0;text-transform:none}
+#page-referral .ref-invite-main #refLink{font-size:clamp(15px,1.8vw,20px);color:#e0ecf4;margin:12px 0 20px;overflow-wrap:anywhere;user-select:all}
+#page-referral .ref-share-actions{gap:10px}#page-referral .ref-share-actions button{min-height:44px;padding:10px 20px;font-size:13px;border-radius:10px}
+#page-referral .ref-share-actions .btn-primary{background:#9dcfdf;color:#172631;box-shadow:none;border:1px solid #9dcfdf}
+#page-referral .ref-code-line{display:flex;align-items:center;gap:16px;margin-top:22px;padding-top:16px;border-top:1px solid rgba(200,212,232,.1)}
+#page-referral .ref-code-line #refCode{font-size:12px;margin:0 0 0 auto;color:#c4d2e2;overflow-wrap:anywhere;min-width:0}
+#page-referral .ref-code-line button{padding:7px 11px;font-size:12px;border:0;background:rgba(136,192,208,.07);min-height:36px;border-radius:8px}
+#page-referral .ref-status:empty{display:none}
+#page-referral .ref-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;background:rgba(24,31,43,.3);border:1px solid rgba(200,212,232,.1);border-radius:14px;margin:0 0 12px}
+#page-referral .ref-kpis .kpi-card{padding:20px;border:0;border-radius:0;background:transparent;box-shadow:none}#page-referral .ref-kpis .kpi-card+.kpi-card{border-left:1px solid rgba(200,212,232,.1)}
+#page-referral .ref-kpis .kpi-lbl{font-size:11px;letter-spacing:0;text-transform:none;color:#9eafc3;line-height:1.5}
+#page-referral .ref-kpis .kpi-val{font-size:27px;color:#dfe9f3;margin:8px 0 0;font-weight:600}
+#page-referral .ref-rewards-note{color:#9aaac0;font-size:12px;line-height:1.6;margin:0 0 26px}
+#page-referral .ref-panel-head{padding:16px 20px}#page-referral .ref-panel-head h3{font-size:15px}
+#page-referral .ref-list-card{border-radius:14px;background:rgba(24,31,43,.25)}
+#page-referral .ref-table th,#page-referral .ref-table td{padding:12px 20px}#page-referral .ref-table td.ref-list-empty{padding:24px 20px}
+#page-referral .ref-conditions{margin-top:20px;border-top:1px solid rgba(200,212,232,.12);padding-top:16px;color:#a0b2c8;font-size:12px;line-height:1.7}
+#page-referral .ref-conditions summary{cursor:pointer;min-height:36px;font-size:13px;color:#c1d1e3}#page-referral .ref-conditions p{max-width:740px}
+#refShareDialog{width:min(450px,calc(100vw - 32px));max-height:90dvh;overflow:auto;box-sizing:border-box;border:1px solid rgba(176,204,222,.2);border-radius:22px;background:#252e3c;color:#e3edf5;padding:20px;box-shadow:0 24px 100px #0006}
+#refShareDialog::backdrop{background:rgba(8,13,22,.7);backdrop-filter:blur(6px)}
+.ref-dialog-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.ref-dialog-head h2{font-size:17px;margin:0}.ref-dialog-head button{border:0;background:none;font-size:27px;color:#b7c7d7;cursor:pointer;min-width:36px}
+.ref-poster{position:relative;overflow:hidden;padding:26px;border-radius:14px;border:1px solid rgba(136,192,208,.18);background:radial-gradient(circle at 110% 15%,rgba(136,192,208,.12),transparent 65%),#1e2937}
+.ref-poster:before{content:'';position:absolute;right:-110px;top:-100px;width:300px;height:300px;border:1px solid rgba(136,192,208,.16);border-radius:50%;pointer-events:none}
+.ref-poster-brand{font-size:17px;letter-spacing:.22em;color:#d8e9f2;font-weight:750}.ref-poster-brand span{display:block;font-size:7px;color:#8fafc4;letter-spacing:.28em;margin-top:4px}
+.ref-poster h3{position:relative;font-size:30px;letter-spacing:-.035em;line-height:1.2;max-width:300px;margin:34px 0 12px}.ref-poster p{font-size:13px;color:#adc0d2;margin:0}
+.ref-poster-bottom{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-top:36px}.ref-poster-bottom>span{font-size:12px;color:#9ecbda}
+#page-referral #refShareDialog #refQr{width:92px;height:92px;border-radius:8px;background:white;padding:5px;box-sizing:content-box;flex:none}#page-referral #refShareDialog #refQr canvas,#page-referral #refShareDialog #refQr img{width:92px;height:92px}
+.ref-share-link{padding:16px 4px;overflow-wrap:anywhere;font-size:12px;color:#adc5d6}
+.ref-dialog-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.ref-dialog-actions button{border:1px solid rgba(200,212,232,.12);background:rgba(136,192,208,.05);color:#d0e0ed;border-radius:10px;padding:10px 4px;font:inherit;font-size:11px;cursor:pointer;min-height:44px}
+#refShareStatus{font-size:12px;color:#c5d3e2;margin:10px 0 0}#refShareStatus:empty{display:none}
+@media(max-width:760px){#page-referral .ref-heading{margin-bottom:22px}#page-referral .ref-heading-mark{display:none}#page-referral .page-title{font-size:30px;max-width:340px}#page-referral .ref-heading p{font-size:13px}#page-referral .ref-invite-panel{padding:20px}#page-referral .ref-share-actions{display:grid;grid-template-columns:1fr 1fr}#page-referral .ref-share-actions button{padding:10px 8px}#page-referral .ref-code-line{gap:8px;flex-wrap:wrap}#page-referral .ref-code-line>.ref-lbl{width:100%}#page-referral .ref-code-line #refCode{margin:0 auto 0 0;font-size:11px}#page-referral .ref-kpis .kpi-card{padding:16px 12px}#page-referral .ref-kpis .kpi-lbl{font-size:10px}#page-referral .ref-kpis .kpi-val{font-size:24px}#page-referral .ref-table th,#page-referral .ref-table td{padding:12px;font-size:11px}#refShareDialog{margin:auto auto 0;width:100%;max-height:94dvh;border-radius:22px 22px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px))}.ref-poster h3{font-size:28px}}

@@ -6131,6 +6131,9 @@
     .page-subtitle { overflow-wrap: anywhere; }
   }
 </style>
+<link rel="stylesheet" href="/grom-explore.css">
+<link rel="stylesheet" href="/grom-referral.css">
+<script defer src="/grom-referral-share.js"></script>
 </head>
 <body>
 <div id="gromSplash" aria-hidden="true">
@@ -6999,74 +7002,31 @@
 
     <!-- REFERRAL -->
     <section class="page" id="page-referral">
-      <h1 class="page-title"><span data-i18n="ref_title">Referral program</span> <span class="tag" data-i18n="ref_tag">Invite tracking</span></h1>
-      <p class="page-subtitle" data-i18n="ref_tracking_disclosure">Invite friends with your link. New wallet signups are counted once; rewards and payouts are not enabled.</p>
-
-      <div class="ref-hero">
-        <div class="ref-code">
-          <div class="ref-lbl" data-i18n="ref_invite_code">Your invite code</div>
-          <div class="ref-val mono" id="refCode" data-i18n="ref_connect_wallet_code">Connect wallet to generate</div>
-          <button class="btn-primary" onclick="copyRef()" id="refCopyBtn" disabled data-i18n="common_copy">Copy</button>
-          <p id="refStatus" role="status" class="ref-status"></p>
-          <button class="btn-ghost" id="refLinkRetry" type="button" hidden onclick="hydrateReferralSlice(true)" aria-label="Retry invite link">↻</button>
+      <div class="ref-heading"><div><div class="ref-eyebrow">GROM / COMMUNITY</div><h1 class="page-title" data-i18n="ref_new_title">Good things are better shared.</h1><p data-i18n="ref_new_sub">Invite friends to GROM. Your link, your community.</p></div><span class="ref-heading-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-referral"/></svg></span></div>
+      <div class="ref-invite-panel">
+        <div class="ref-invite-main"><div class="ref-lbl" data-i18n="ref_invite_link">Invite link</div><div class="ref-val mono" id="refLink" data-i18n="ref_connect_wallet_link">Connect wallet to reveal your link</div>
+          <div class="ref-share-actions"><button type="button" class="btn-primary" id="refShareBtn" data-ref-share="open" disabled data-i18n="ref_new_share">Share invitation</button><button type="button" class="btn-ghost" id="refCopyLinkBtn" disabled onclick="copyRefLink()" data-i18n="ref_copy_link">Copy link</button></div>
+          <p id="refStatus" role="status" class="ref-status"></p><button class="btn-ghost" id="refLinkRetry" type="button" hidden onclick="hydrateReferralSlice(true)" aria-label="Retry invite link">↻</button>
         </div>
-        <div class="ref-link">
-          <div class="ref-lbl" data-i18n="ref_invite_link">Invite link</div>
-          <div class="ref-val mono" id="refLink" data-i18n="ref_connect_wallet_link">Connect wallet to reveal your link</div>
-          <div class="ref-share-actions">
-            <button class="btn-ghost" id="refCopyLinkBtn" disabled onclick="copyRefLink()" data-i18n="ref_copy_link">Copy link</button>
-            <button class="btn-ghost" id="refShareXBtn" disabled onclick="refShareX()" data-i18n="ref_share_x">Share on X</button>
-            <button class="btn-ghost" id="refShareTelegramBtn" disabled onclick="refShareTelegram()">Telegram</button>
-          </div>
-        </div>
-        <div class="ref-qr">
-          <div class="ref-lbl" style="text-align:center" data-i18n="ref_scan_join">Scan to join</div>
-          <div id="refQr" aria-live="polite"></div>
-        </div>
+        <div class="ref-code-line"><span class="ref-lbl" data-i18n="ref_invite_code">Your invite code</span><div class="ref-val mono" id="refCode" data-i18n="ref_connect_wallet_code">Connect wallet to generate</div><button class="btn-ghost" type="button" onclick="copyRef()" id="refCopyBtn" disabled data-i18n="common_copy">Copy</button></div>
       </div>
-
       <div class="ref-kpis">
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_referred">Wallets invited</div><div class="kpi-val mono" id="refKpiTotalReferred">—</div><div class="kpi-sub" data-i18n="ref_total_invited_note">Accounts attributed to your code</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_active_30d">Seen (30d)</div><div class="kpi-val mono" id="refKpiActive30d">—</div><div class="kpi-sub" data-i18n="ref_active_note">Last seen in the last 30 days</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_earned">Total earned</div><div class="kpi-val mono ref-muted">—</div><div class="kpi-sub" data-i18n="ref_rewards_inactive">Rewards inactive</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_pending_payout">Pending payout</div><div class="kpi-val mono ref-muted">—</div><div class="kpi-sub" data-i18n="ref_paid_daily">Payout schedule is not active</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_referred">Wallets invited</div><div class="kpi-val mono" id="refKpiTotalReferred">—</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_signups_30d">New signups (30d)</div><div class="kpi-val mono" id="refKpiSignups30d">—</div></div>
+        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_active_30d">Seen (30d)</div><div class="kpi-val mono" id="refKpiActive30d">—</div></div>
       </div>
-
-      <div class="ref-workbench">
-        <div class="ref-how-card">
-          <div class="ref-how-head">
-            <div>
-              <h3 data-i18n="ref_how_title">How invite tracking works</h3>
-              <p data-i18n="ref_how_sub">A new wallet is attributed once when it first signs in through your link. Existing accounts are never reassigned.</p>
-            </div>
-            <span class="ref-how-badge" data-i18n="ref_tracking_badge">One wallet · one invite</span>
-          </div>
-          <div class="ref-how-steps">
-            <div class="ref-how-step"><span>1</span><p data-i18n="ref_step_1">Share your unique invite link.</p></div>
-            <div class="ref-how-step"><span>2</span><p data-i18n="ref_step_2">A first-time wallet signup is attributed once.</p></div>
-            <div class="ref-how-step"><span>3</span><p data-i18n="ref_step_3">Follow new signups and visits in your private statistics.</p></div>
-          </div>
-        </div>
-        <div class="ref-commission-card">
-          <div class="ref-panel-head"><h3 data-i18n="ref_commission_status">Commission status</h3><span class="ref-payout-state" data-i18n="ref_status_live">Inactive</span></div>
-          <div class="ref-commission-body">
-            <p data-i18n="ref_reward_disclosure">Invites are counted now. Fee rewards and on-chain payouts have not launched; no earnings are accrued yet.</p>
-            <div class="ref-status-line"><span data-i18n="ref_invite_tracking">Invite tracking</span><strong data-i18n="ref_tracking_available">Available</strong></div>
-            <div class="ref-status-line"><span data-i18n="ref_fee_rewards">Fee rewards</span><strong class="ref-muted" data-i18n="ref_not_launched">Not launched</strong></div>
-            <div class="ref-status-line"><span data-i18n="ref_withdrawals">On-chain payouts</span><strong class="ref-muted" data-i18n="ref_not_launched">Not launched</strong></div>
-          </div>
-        </div>
-      </div>
+      <p class="ref-rewards-note" data-i18n="ref_new_rewards">Invite tracking is active. Rewards and payouts have not launched.</p>
       <div class="ref-list-card">
-        <div class="ref-panel-head"><h3 data-i18n="ref_your_referrals">Your referrals</h3><span class="ref-list-meta"><span data-i18n="ref_signups_30d">New signups (30d)</span>: <b id="refKpiSignups30d">—</b></span></div>
+        <div class="ref-panel-head"><h3 data-i18n="ref_your_referrals">Your referrals</h3></div>
         <div class="ref-stats-access"><p id="refStatsStatus" role="status" class="ref-status"></p><button class="btn-ghost" id="refSignInBtn" type="button" hidden onclick="gwReferralSignIn()">Sign in with wallet</button></div>
-        <div class="ref-table-scroll">
-          <table class="ref-table"><thead><tr><th scope="col" data-i18n="ref_tbl_user">Wallet</th><th scope="col" data-i18n="ref_tbl_joined">Joined</th><th scope="col" data-i18n="ref_tbl_activity">Activity</th></tr></thead>
-            <tbody id="refRows"><tr><td colspan="3" class="ref-list-empty" data-i18n="ref_list_signin">Sign in to view your referrals.</td></tr></tbody>
-          </table>
-        </div>
-        <p class="ref-list-foot" data-i18n="ref_list_privacy">The 10 most recent invites. Wallet addresses are shortened; activity means a visit in the last 30 days, not a completed trade.</p>
+        <div class="ref-table-scroll"><table class="ref-table"><thead><tr><th scope="col" data-i18n="ref_tbl_user">Wallet</th><th scope="col" data-i18n="ref_tbl_joined">Joined</th><th scope="col" data-i18n="ref_tbl_activity">Activity</th></tr></thead><tbody id="refRows"><tr><td colspan="3" class="ref-list-empty" data-i18n="ref_list_signin">Sign in to view your referrals.</td></tr></tbody></table></div>
       </div>
+      <details class="ref-conditions"><summary data-i18n="ref_new_details">How invitations work</summary><p data-i18n="ref_tracking_disclosure">Invite friends with your link. New wallet signups are counted once; rewards and payouts are not enabled.</p><p data-i18n="ref_how_sub">A new wallet is attributed once when it first signs in through your link. Existing accounts are never reassigned.</p><p data-i18n="ref_list_privacy">The 10 most recent invites. Wallet addresses are shortened; activity means a visit in the last 30 days, not a completed trade.</p><p data-i18n="ref_reward_disclosure">Invites are counted now. Fee rewards and on-chain payouts have not launched; no earnings are accrued yet.</p></details>
+      <dialog id="refShareDialog" aria-labelledby="refShareTitle">
+        <div class="ref-dialog-head"><h2 id="refShareTitle" data-i18n="ref_new_share">Share invitation</h2><button type="button" data-ref-share="close" aria-label="Close">×</button></div>
+        <div class="ref-poster"><div class="ref-poster-brand">GROM <span>FINANCE HUB</span></div><h3 data-i18n="ref_new_poster">Your next move starts in your wallet.</h3><p data-i18n="ref_new_join">Join me on GROM</p><div class="ref-poster-bottom"><span>grom.exchange</span><div id="refQr" aria-live="polite"></div></div></div>
+        <div class="ref-share-link mono"></div><div class="ref-dialog-actions"><button type="button" id="refShareTelegramBtn" disabled onclick="refShareTelegram()">Telegram ↗</button><button type="button" id="refShareXBtn" disabled onclick="refShareX()">X ↗</button><button type="button" data-ref-share="save" data-i18n="ref_new_save">Save card</button><button type="button" data-ref-share="native" data-i18n="ref_new_more">More…</button></div><p id="refShareStatus" role="status"></p>
+      </dialog>
     </section>
 
     <!-- BACKOFFICE — активность клиентов -->
@@ -7430,6 +7390,7 @@ if (window.GROM_LANDING) try { document.documentElement.classList.add('grom-land
 /* Product module loader: no requests until a route or a consumer needs one. */
 (function () {
   var modules = {
+    predictEvent: { src: '/grom-predict-event.js', ready: function () { return window.gromPredictEvent; } },
     predict: { src: '/grom-predict.js', ready: function () { return window.gromPredict; } },
     trade: { src: '/grom-hyperliquid.js', ready: function () { return window.gromHL; } },
     charts: { src: 'https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js', ready: function () { return window.LightweightCharts; } },
@@ -15664,7 +15625,7 @@ var GROM_XSTOCKS = [
         + '<button type="button" class="gtm-swap-btn" id="gtmWrapBtn" hidden>USDC.e → pUSD</button>'
         + '<button type="button" class="gtm-swap-btn" id="gtmUnwrapBtn" hidden>pUSD → USDC.e</button>'
         + '<button type="button" class="gtm-swap-btn" id="gtmRefreshBtn">' + tx('px_pm_refresh', 'Refresh balance') + '</button>'
-        + '<small>' + tx('px_pm_conversion_hint', 'Fund USDC.e on Polygon, then convert to pUSD. Conversion requires wallet confirmation and POL for gas.') + '</small></div>'
+        + '<details><summary>' + tx('px_pm_funding_help', 'How to fund predictions') + '</summary><p>' + tx('px_pm_conversion_hint', 'USDC.e is bridged USDC on Polygon, separate from native USDC. Swap for USDC.e, then convert it to pUSD here. You confirm each transaction in your wallet; POL pays network fees.') + '</p><p>' + tx('px_pm_refresh_help', 'Check balance only reads your wallet balance; it does not send funds or require a signature.') + '</p></details></div>'
         + '<div class="gtm-fund" id="gtmPending" hidden><small id="gtmPendingHint"></small>'
         + '<input id="gtmTxHash" type="text" autocomplete="off" spellcheck="false" placeholder="' + tx('px_pm_tx_hash', 'Transaction hash from wallet activity (0x…)') + '" hidden/>'
         + '<button type="button" class="gtm-swap-btn" id="gtmRecoverBtn">' + tx('px_pm_recover', 'Check previous request') + '</button>'
@@ -15732,7 +15693,7 @@ var GROM_XSTOCKS = [
     }
     if (live) {
       refreshLiveStatus();
-      refreshBtn.onclick = function () { refreshLiveStatus(true); };
+      refreshBtn.onclick = async function () { refreshBtn.textContent = tx('px_loading', 'Loading…'); try { await refreshLiveStatus(true); } finally { refreshBtn.textContent = tx('px_pm_refresh', 'Check balance'); } };
       recoverBtn.onclick = async function () {
         recoverBtn.disabled = true; rejectedBtn.disabled = true;
         try {
@@ -15961,10 +15922,10 @@ var GROM_XSTOCKS = [
       + ' data-slug="' + escA(r.slug || '') + '"'
       + ' data-condition="' + escA(r.conditionId || '') + '"';
   }
-  /** Share price 0.01–0.99 from button data-prob (already the clicked side's %). */
+  /** Preserve sub-cent outcomes; data-prob is already the clicked side's percentage. */
   function sidePriceFromBtn(btn) {
     var prob = parseFloat(btn && btn.dataset && btn.dataset.prob) || 50;
-    return Math.min(0.99, Math.max(0.01, prob / 100));
+    return prob > 0 && prob < 100 ? prob / 100 : 0.5;
   }
   function rowNoPct(r) {
     if (!r) return 50;
@@ -16014,7 +15975,7 @@ var GROM_XSTOCKS = [
     return '<div class="gwx-card" data-pm-id="' + escA(m.id || m.q) + '" data-pm-slug="' + escA(m.slug || '') + '" data-q="' + escA(m.q) + '" data-ends-at="' + escA(m.endsAt || '') + '"' + und + '>'
       + live
       + '<div class="gwx-card-head">' + imgHtml
-      + '<div class="gwx-card-title">' + esc(m.q) + '</div>'
+      + '<button type="button" class="gwx-card-title" data-event-id="' + escA(m.eventId || String(m.id || '').replace(/^pm_/, '')) + '">' + esc(m.q) + '</button>'
       + chanceHtml + '</div>'
       + '<div class="gwx-outcomes">' + ocs + '</div>'
       + '<div class="gwx-card-foot"><span>' + fmtVol(m.vol) + ' ' + esc(tx('px_vol', 'Vol')) + '</span>'
@@ -16077,7 +16038,7 @@ var GROM_XSTOCKS = [
   /* ---- page builders ---- */
   function buildPredict() {
     initPx();
-    var totalVol = GROM_PREDICT_MARKETS.reduce(function (a, m) { return a + m.vol; }, 0);
+    var totalVol = GROM_PREDICT_MARKETS.reduce(function (a, m) { return a + (Number(m.vol24) || 0); }, 0);
     return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
       + '<h1 class="gwx-h1"><span class="gwx-h1-ico" aria-hidden="true"><svg width="21" height="21"><use href="#i-predict"/></svg></span><span>' + tx('pg_predict_title', 'Prediction markets') + '</span></h1>'
       + '<div class="gwx-hero-aside"><div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">…</b><small>' + tx('px_poly_bal', 'pUSD · Polygon') + '</small></div><div><b>' + fmtVol(totalVol) + '</b><small>' + tx('px_vol_24h', '24h volume') + '</small></div><div><b>' + GROM_PREDICT_MARKETS.length + '</b><small>' + tx('px_markets_n', 'Markets') + '</small></div></div>'
@@ -16089,7 +16050,6 @@ var GROM_XSTOCKS = [
       + '</div>'
       + '<div class="gwx-toolbar"><div class="gwx-cats">' + catTabsHtml(GROM_PCATS, gwxState.pCat, true) + '</div>'
       + '<div class="gwx-search"><input type="search" id="gwxPredictSearch" autocomplete="off" spellcheck="false" placeholder="' + esc(tx('px_search_predict', 'Search markets…')) + '" /></div></div>'
-      + '<div class="gwx-seo"><p>' + esc((window.GROM_SEO_I18N && window.GROM_SEO_I18N.pageBlurb) ? window.GROM_SEO_I18N.pageBlurb('predict', (window.GROM_SEO_I18N.curLang ? window.GROM_SEO_I18N.curLang() : 'en')) : 'Prediction markets on GROM — live probabilities on crypto, sports, and politics.') + '</p><div class="gwx-seo-nav"><button type="button" onclick="show(\'markets\')">Crypto prices</button><button type="button" onclick="show(\'futures\')">Futures</button><button type="button" onclick="show(\'xstocks\')">Stocks</button><button type="button" onclick="show(\'help\')">Help</button></div></div>'
       + '<div class="gwx-grid"></div>'
       + '<div class="gwx-predict-more-wrap" id="gwxPredictMoreWrap" hidden style="padding:8px 0 16px">'
       + '<button type="button" class="gwx-load-more" id="gwxPredictLoadMore">' + tx('px_load_more', 'Load more') + '</button></div>'
@@ -16446,6 +16406,7 @@ var GROM_XSTOCKS = [
     page.classList.toggle('gwx-live-view', live);
     page.querySelectorAll('.gwx-view-tab[data-pview]').forEach(function (tab) {
       tab.classList.toggle('on', tab.dataset.pview === gwxState.pView);
+      tab.setAttribute('aria-selected', String(tab.dataset.pview === gwxState.pView));
     });
     if (live) renderPredictCalendar();
     else renderPredictGridContent(opts);
@@ -16726,8 +16687,8 @@ var GROM_XSTOCKS = [
       var vb = stats[1].querySelector('b');
       if (vb && src.length) {
         var vol = 0;
-        for (var i = 0; i < src.length; i++) vol += Number(src[i].vol || src[i].vol24 || 0) || 0;
-        if (vol > 0 && typeof fmtVol === 'function') vb.textContent = fmtVol(vol);
+        for (var i = 0; i < src.length; i++) vol += Number(src[i].vol24 || 0) || 0;
+        if (typeof fmtVol === 'function') vb.textContent = fmtVol(vol);
       }
     }
   }
@@ -17061,6 +17022,7 @@ var GROM_XSTOCKS = [
   // renders them on click AND on direct #predict / #xstocks URLs.
   function ensurePredictPage() {
     preparePredictWallet();
+    setTimeout(syncPredictEvent, 0);
     var anchor = document.getElementById('page-markets') || document.querySelector('main .page');
     if (!anchor || !anchor.parentNode) return;
     var sec = document.getElementById('page-predict');
@@ -17081,6 +17043,13 @@ var GROM_XSTOCKS = [
     delete sec.dataset.gwxForce;
     if (GWX_LIVE && GWX_LIVE.length) applyPredictView();
     else if (!predictGridHasCards() && !_predictFetch) paintPredictGridLoading();
+  }
+  function syncPredictEvent() {
+    if (!document.getElementById('page-predict')?.classList.contains('active')) return;
+    if (window.gromPredictEvent) { window.gromPredictEvent.sync(); return; }
+    if (/^[1-9][0-9]{0,19}$/.test(new URL(location.href).searchParams.get('event') || '')) {
+      window.gromEnsureProductModule('predictEvent').then(function (mod) { mod.sync(); }).catch(function () { notify(tx('px_trade_unavailable', 'Temporarily unavailable'), 'error'); });
+    }
   }
   function gwxCatalogReady() {
     try {
@@ -17551,11 +17520,11 @@ var GROM_XSTOCKS = [
     openModal({
       live: canLive,
       issueContext: { market: q, outcome: label, side: 'buy', amountAsset: 'pUSD' },
-      title: tx('px_bet_title', 'Bet:') + ' ' + label,
-      sub: q + modeTag,
+      title: esc(tx('px_bet_title', 'Bet:') + ' ' + label),
+      sub: esc(q + modeTag),
       confirmLabel: tx('gtm_buy_shares', 'Buy shares'),
       info: function (v) {
-        var pn = String(Math.round(p * 100));
+        var pn = String(Number((p * 100).toFixed(2)));
         if (!v) {
           return (canLive
             ? tx('px_pm_live_hint', 'Live order on Polygon · signed in your wallet.') + ' '
@@ -17603,6 +17572,13 @@ var GROM_XSTOCKS = [
     if (jump) { e.preventDefault(); e.stopPropagation(); scrollToGwxSection(jump.getAttribute('data-jump')); return; }
     var bet = e.target.closest('.gwx-bet');
     if (bet) { e.preventDefault(); e.stopPropagation(); onBet(bet); return; }
+    var eventButton = e.target.closest('#page-predict [data-event-id]');
+    var eventCard = !e.target.closest('button,a,input,select,summary') && e.target.closest('#page-predict .gwx-card[data-pm-id], #page-predict .gwx-cal-row[data-pm-id]');
+    if (eventButton || eventCard) {
+      e.preventDefault();
+      window.gromEnsureProductModule('predictEvent').then(function (mod) { mod.open(eventButton ? eventButton.dataset.eventId : eventCard.dataset.pmId); }).catch(function () { notify(tx('px_trade_unavailable', 'Temporarily unavailable'), 'error'); });
+      return;
+    }
     var tr = e.target.closest('.gwx-trade');
     if (tr) { e.preventDefault(); e.stopPropagation(); onStock(tr.closest('.gwx-row'), tr.dataset.side); return; }
     var mobRow = e.target.closest('#page-xstocks .gwx-row[data-sym]');

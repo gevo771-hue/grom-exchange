@@ -72,6 +72,7 @@ function predictionFixture() {
   const btn = { dataset: { side: 'yes', name: 'Yes' }, getAttribute: k => attrs[k] || '', closest: () => card };
   Object.assign(c, { sidePriceFromBtn: () => .5, predictIsFresh: () => true,
     tx: (_k, fb) => fb, notify: (...args) => messages.push(args), openModal: opts => modals.push(opts) });
+  vm.runInContext(src.split('\n').find(line => line.startsWith('  function esc(s)')), c);
   vm.runInContext(part(src, '  function tradeAttr(', "  document.addEventListener('grom:xstocks-focus'"), c);
   const api = { fetchConfig: async () => ({ enabled: true }), buyMarket() { assert.fail('no financial action during loading'); } };
   return { ...f, btn, modals, messages, api };
@@ -132,4 +133,12 @@ test('wallet module wait respects its time budget without cancelling the shared 
   const wait = c.gwWaitForGromHl(500); timeout(); assert.equal(await wait, false);
   const later = c.gwWaitForGromHl(); finish('trade', { balancesSnapshot() {} });
   assert.equal(await later, true); assert.equal(scripts.length, 1);
+});
+
+test('prediction modal escapes untrusted outcome text before rendering HTML', async () => {
+  const { context: c, finish, btn, modals, api } = predictionFixture();
+  btn.dataset.name = '<img src=x onerror=alert(1)>';
+  const click = c.onBet(btn); finish('predict', api); await click;
+  assert.ok(modals[0].title.includes('&lt;img'));
+  assert.ok(!modals[0].title.includes('<img'));
 });

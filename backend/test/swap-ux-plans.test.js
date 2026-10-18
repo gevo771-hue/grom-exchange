@@ -101,8 +101,8 @@ test('referral UI does not promise inactive payouts or commission rates',()=>{
  assert.match(landingHtml,/New wallet signups are counted once; rewards and payouts are not enabled/);
  assert.match(landingHtml,/Existing accounts are never reassigned/);
  const referral=landingHtml.slice(landingHtml.indexOf('id="page-referral"'),landingHtml.indexOf('<!-- BACKOFFICE'));
- assert.match(referral,/ref_total_earned[\s\S]*?ref-muted">—[\s\S]*?ref_rewards_inactive/);
- assert.match(referral,/ref_pending_payout[\s\S]*?ref-muted">—[\s\S]*?ref_paid_daily/);
+ assert.doesNotMatch(referral,/ref_total_earned|ref_pending_payout/);
+ assert.match(referral,/ref_new_rewards">Invite tracking is active\. Rewards and payouts have not launched/);
  assert.doesNotMatch(referral,/onclick="[^"]*(?:payout|withdraw)/i);
 });
 

@@ -1,4 +1,5 @@
 import express from 'express';
+import { registerPredictionEventRoutes } from './predict-event.js';
 import rateLimit from 'express-rate-limit';
 import axios from 'axios';
 import fs from 'fs';
@@ -1048,6 +1049,7 @@ function slicePredictPage(markets, offset, limit) {
 
 export function createMarketRouter() {
   const r = express.Router();
+  registerPredictionEventRoutes(r);
 
   // Read-only fixed-host recovery when Squid has not indexed an older route.
   r.get('/bridge/axelar/status', axelarStatusLimiter, async (req, res) => {

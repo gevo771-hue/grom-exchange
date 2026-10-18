@@ -17,9 +17,11 @@ export function normalizePredictionEvent(raw, now = Date.now()) {
   if (!raw || !ID.test(String(raw.id)) || !raw.title || !Array.isArray(raw.markets)) throw new Error('invalid_event');
   const rows = raw.markets.map(m => {
     const outcomes = list(m.outcomes), prices = list(m.outcomePrices), tokens = list(m.clobTokenIds);
-    const yes = outcomes.findIndex(v => /^(yes|up)$/i.test(String(v)));
-    const no = outcomes.findIndex(v => /^(no|down)$/i.test(String(v)));
-    const binary = outcomes.length === 2 && yes >= 0 && no >= 0;
+    const canonicalYes = outcomes.findIndex(v => /^(yes|up)$/i.test(String(v)));
+    const canonicalNo = outcomes.findIndex(v => /^(no|down)$/i.test(String(v)));
+    const binary = outcomes.length === 2 && outcomes.every(v => typeof v === 'string' && v.trim()) && outcomes[0] !== outcomes[1];
+    const yes = canonicalYes >= 0 && canonicalNo >= 0 ? canonicalYes : 0;
+    const no = canonicalYes >= 0 && canonicalNo >= 0 ? canonicalNo : 1;
     const py = binary ? price(prices[yes]) : null, pn = binary ? price(prices[no]) : null;
     const tokenYes = binary && TOKEN.test(String(tokens[yes] || '')) ? String(tokens[yes]) : '';
     const tokenNo = binary && TOKEN.test(String(tokens[no] || '')) ? String(tokens[no]) : '';
@@ -29,6 +31,7 @@ export function normalizePredictionEvent(raw, now = Date.now()) {
       id: text(String(m.id || ''), 80), n: text(m.groupItemTitle || m.question || raw.title, 500),
       question: text(m.question, 500), description: text(m.description), resolutionSource: https(m.resolutionSource || raw.resolutionSource),
       p: py == null ? null : py * 100, pNo: pn == null ? null : pn * 100,
+      labelYes: binary ? text(outcomes[yes], 160) : '', labelNo: binary ? text(outcomes[no], 160) : '',
       tokenYes, tokenNo, conditionId: text(m.conditionId, 80), slug: text(m.slug, 200),
       tickSize: ['0.1', '0.01', '0.001', '0.0001'].includes(String(m.orderPriceMinTickSize)) ? String(m.orderPriceMinTickSize) : '0.01',
       minSize: positive(m.orderMinSize), negRisk: !!(m.negRisk || raw.negRisk), vol: positive(m.volumeNum ?? m.volume), endsAt, closed,

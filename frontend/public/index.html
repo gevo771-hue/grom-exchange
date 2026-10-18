@@ -7832,7 +7832,7 @@ function updateRouteSeo(page) {
   var staticRoute = document.documentElement.getAttribute('data-grom-route');
   // Keep the translated, build-time metadata when JS hydrates that same route.
   if (staticLocale && staticRoute === key && canonical && canonical.getAttribute('href').replace(/\/$/, '') === 'https://grom.exchange' + (currentPath === '/' ? '' : currentPath)) {
-    document.documentElement.lang = staticLocale;
+    if (document.documentElement.lang !== staticLocale) document.documentElement.lang = staticLocale;
     return;
   }
   var lang = (window.GROM_SEO_I18N && window.GROM_SEO_I18N.curLang) ? window.GROM_SEO_I18N.curLang() : ((typeof getGromLang === 'function') ? getGromLang() : 'en');
@@ -7854,7 +7854,7 @@ function updateRouteSeo(page) {
   var canonicalUrl = 'https://grom.exchange' + (localePrefix ? '/' + localePrefix[1] : '') + (publicPaths[key] || '/');
   if (canonical) canonical.setAttribute('href', canonicalUrl);
   gromSeoSetProp('og:url', canonicalUrl);
-  try { document.documentElement.lang = lang === 'zh' ? 'zh-Hans' : lang; } catch (_) {}
+  try { var htmlLang = lang === 'zh' ? 'zh-Hans' : lang; if (document.documentElement.lang !== htmlLang) document.documentElement.lang = htmlLang; } catch (_) {}
 }
 window.gromSeoRefreshRouteMeta = updateRouteSeo;
 
@@ -8300,7 +8300,10 @@ window.gromSyncPrettyPath = function gromSyncPrettyPath(page) {
     var newHash = page === 'landing' ? '' : ('#' + page);
     var newPath = (locale ? '/' + locale : '') + (seg ? '/' + seg : '/');
     if (!newPath) newPath = '/';
-    var next = newPath + (location.search || '') + newHash;
+    var routeParams = new URLSearchParams(location.search);
+    if (page !== 'predict') routeParams.delete('event');
+    var routeQuery = routeParams.toString();
+    var next = newPath + (routeQuery ? '?' + routeQuery : '') + newHash;
     var cur = location.pathname + location.search + location.hash;
     if (cur !== next) history.replaceState(null, '', next);
   } catch (_) {}
@@ -14285,6 +14288,7 @@ function openHelpTopic(topic) {
 var GROM_PCATS = [
   ['all', 'i-globe', 'px_cat_all'], ['sport', 'i-cat-sport', 'px_cat_sport'], ['crypto', 'i-cat-crypto', 'px_cat_crypto'],
   ['esports', 'i-cat-esports', 'px_cat_esports'], ['politics', 'i-cat-politics', 'px_cat_politics'],
+  ['us-election', 'i-cat-politics', 'px_cat_us_election'],
   ['culture', 'i-cat-culture', 'px_cat_culture'], ['finance', 'i-cat-finance', 'px_cat_finance'], ['economy', 'i-cat-economy', 'px_cat_economy'],
 ];
 // Multi-outcome prediction markets. rows = [{ n: outcome, p: probability% }].
@@ -15568,25 +15572,28 @@ var GROM_XSTOCKS = [
   /* ---- modal ---- */
   function closeModal() { var m = document.getElementById('gromTradeModal'); if (m) m.remove(); }
 
-  /** Instant Swap (Advanced) → YOU RECEIVE USDC.e on Polygon for Predict stakes. */
-  function gwxOpenPolygonSwap(amountUsd) {
+  /** Funding uses the verified official pUSD token; USDC.e remains an explicit fallback. */
+  function gwxOpenPolygonSwap(amountUsd, asset) {
     closeModal();
     var wantUsd = Number(amountUsd) > 0 ? Number(amountUsd) : 25;
+    var usdce = asset === 'USDC.e';
+    if (!readPredictionFunding()) rememberPredictionFunding({ event: new URL(location.href).searchParams.get('event'), amount: wantUsd });
     var payload = {
-      toSym: 'USDC.e',
+      source: 'predict',
+      toSym: usdce ? 'USDC.e' : 'pUSD',
       toChainId: 137,
-      toAddress: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+      toAddress: usdce ? '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174' : '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB',
       toDecimals: 6,
       amountUsd: wantUsd,
       forceBridge: false,
-      hint: tx('px_pm_swap_hint', 'Advanced swap · YOU RECEIVE USDC.e on Polygon, then convert to pUSD in Predictions'),
+      hint: usdce ? tx('px_pm_fallback_hint', 'Receive USDC.e on Polygon, then convert it to pUSD in Predictions.') : tx('px_pm_swap_hint', 'Receive pUSD on Polygon, then return to your prediction.'),
     };
     var opened = false;
     var run = function () {
       if (opened) return true;
       if (typeof window.gwOpenTargetSwap === 'function') {
         opened = true;
-        window.gwOpenTargetSwap(payload);
+        Promise.resolve().then(function () { return window.gwOpenTargetSwap(payload); }).catch(function () { notify(tx('px_trade_unavailable', 'Temporarily unavailable'), 'error'); }).finally(renderPredictionFundingReturn);
         return true;
       }
       return false;
@@ -15608,6 +15615,35 @@ var GROM_XSTOCKS = [
     }
   }
 
+  function readPredictionFunding() {
+    try { var value = JSON.parse(sessionStorage.getItem('grom_predict_funding') || 'null');
+      return value && Date.now() - value.at < 7200000 ? value : null;
+    } catch (_) { return null; }
+  }
+  function rememberPredictionFunding(value) {
+    var eventId = String(value.event || '').replace(/^pm_/, '');
+    var entry = { event: /^[1-9][0-9]{0,19}$/.test(eventId) ? eventId : '', market: String(value.market || '').slice(0,80), side: value.side === 'no' ? 'no' : 'yes', amount: Number(value.amount) > 0 ? String(Number(value.amount)) : '', at: Date.now() };
+    try { sessionStorage.setItem('grom_predict_funding', JSON.stringify(entry)); } catch (_) {}
+  }
+  function renderPredictionFundingReturn() {
+    var saved = readPredictionFunding(), card = document.getElementById('gwDsCard');
+    if (!saved || !card) return;
+    var box = document.getElementById('gromPredictionFundingReturn');
+    if (!box) { box = document.createElement('div'); box.id = 'gromPredictionFundingReturn'; card.prepend(box); }
+    box.textContent = '';
+    var note = document.createElement('span'); note.textContent = tx('px_pm_return_hint', 'After the swap is confirmed, return to Predictions to check your pUSD balance.'); box.appendChild(note);
+    var link = document.createElement('a'), url = new URL('/predict', location.origin);
+    if (saved.event) url.searchParams.set('event', saved.event);
+    url.searchParams.set('lang', document.documentElement.lang || 'en'); url.hash = 'predict';
+    link.href = url.href; link.textContent = tx('px_pm_return', 'Return to Predictions'); box.appendChild(link);
+    var fallback = document.createElement('button'); fallback.type = 'button'; fallback.textContent = tx('px_pm_fallback', 'No route? Use USDC.e');
+    fallback.onclick = function () { gwxOpenPolygonSwap(Number(saved.amount) || 25, 'USDC.e'); }; box.appendChild(fallback);
+    var dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.textContent = '×'; dismiss.setAttribute('aria-label', tx('gtm_cancel','Close'));
+    dismiss.onclick = function () { box.remove(); try { sessionStorage.removeItem('grom_predict_funding'); } catch (_) {} }; box.appendChild(dismiss);
+  }
+  window.gromPredictionFunding = { open: gwxOpenPolygonSwap, read: readPredictionFunding, remember: rememberPredictionFunding };
+  if (readPredictionFunding()) { var fundingObserver = new MutationObserver(function () { if (document.getElementById('gwDsCard')) { renderPredictionFundingReturn(); fundingObserver.disconnect(); } }); fundingObserver.observe(document.body, { childList: true, subtree: true }); setTimeout(function () { fundingObserver.disconnect(); }, 15000); }
+
   function openModal(opts) {
     injectCss(); closeModal();
     var live = !!opts.live;
@@ -15620,7 +15656,7 @@ var GROM_XSTOCKS = [
       + (opts.sub ? '<div class="gtm-sub">' + opts.sub + '</div>' : '')
       + '<div class="gtm-bal" id="gtmBal">' + balLine + '</div>'
       + (live ? '<div class="gtm-fund" id="gtmFund" style="display:none">'
-        + '<button type="button" class="gtm-swap-btn" id="gtmFundBtn">'
+        + '<p id="gtmFundingNote" class="gpe-muted"></p><button type="button" class="gtm-swap-btn" id="gtmFundBtn">'
         + tx('px_pm_fund_poly', 'Get USDC.e on Polygon') + '</button>'
         + '<button type="button" class="gtm-swap-btn" id="gtmWrapBtn" hidden>USDC.e → pUSD</button>'
         + '<button type="button" class="gtm-swap-btn" id="gtmUnwrapBtn" hidden>pUSD → USDC.e</button>'
@@ -15642,6 +15678,7 @@ var GROM_XSTOCKS = [
     var unwrapBtn = ov.querySelector('#gtmUnwrapBtn'), refreshBtn = ov.querySelector('#gtmRefreshBtn');
     var pendingEl = ov.querySelector('#gtmPending'), pendingHint = ov.querySelector('#gtmPendingHint');
     var recoverBtn = ov.querySelector('#gtmRecoverBtn'), rejectedBtn = ov.querySelector('#gtmRejectedBtn'), txHashInput = ov.querySelector('#gtmTxHash');
+    if (Number(opts.initialAmount) > 0 && Number.isFinite(Number(opts.initialAmount))) amt.value = String(opts.initialAmount);
     var liveStatus = null, actionBusy = false;
     function controlsBusy(busy) {
       [confirmBtn, fundBtn, wrapBtn, unwrapBtn].forEach(function (el) { if (el) el.disabled = busy; });
@@ -15679,7 +15716,11 @@ var GROM_XSTOCKS = [
         }
         balEl.textContent = tx('px_pm_live_bal', 'pUSD · Polygon') + ': ' + (st.polyBal == null ? '—' : money(st.polyBal))
           + ' · USDC.e: ' + (st.polyUsdce == null ? '—' : money(st.polyUsdce));
+        ov.querySelector('#gtmFundingNote').textContent = st.polyBal > 0 ? tx('px_pm_ready', 'Your pUSD is available for predictions. No conversion is needed.') : tx('px_pm_add_funds', 'Add pUSD via swap, or convert existing USDC.e below.');
         wrapBtn.hidden = !(st.polyUsdce > 0);
+        wrapBtn.textContent = tx('px_pm_convert', 'Convert USDC.e to pUSD') + ' · ' + money(st.polyUsdce || 0);
+        if (st.polyUsdce > 0 && !(st.polyBal > 0)) fundWrap.insertBefore(wrapBtn, fundBtn);
+        else fundWrap.insertBefore(fundBtn, wrapBtn);
         unwrapBtn.hidden = !(st.polyBal > 0);
         controlsBusy(actionBusy || !!st.pending);
         if (st.pending) {
@@ -15714,6 +15755,7 @@ var GROM_XSTOCKS = [
       fundBtn.onclick = function () {
         var v = parseFloat(amt.value || '0') || 25;
         if (!gwxConnected()) { gwxOpenConnect(); return; }
+        rememberPredictionFunding(Object.assign({}, opts.fundingContext || {}, { amount: v }));
         gwxOpenPolygonSwap(v);
       };
       function convert(direction) {
@@ -16011,13 +16053,19 @@ var GROM_XSTOCKS = [
       + '<div class="gwx-row-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:100%;min-width:0;flex:1 0 100%;box-sizing:border-box">' + actions + '</div>'
       + '</div>';
   }
+  setInterval(function () {
+    if (Date.now() < Date.parse('2026-11-04T12:00:00Z')) return;
+    var shortcut = document.querySelector('#page-predict [data-cat="us-election"]');
+    if (shortcut) { if (gwxState.pCat === 'us-election') document.querySelector('#page-predict [data-cat="politics"]')?.click(); shortcut.remove(); }
+  }, 60000);
+
   function catTabsHtml(list, active, withIcon) {
-    return list.map(function (c) {
+    return list.filter(function(c) { return c[0] !== 'us-election' || Date.now() < Date.parse('2026-11-04T12:00:00Z'); }).map(function (c) {
       var on = (c[0] === active) ? ' on' : '';
       var label = withIcon
         ? ('<span class="gwx-pill-ico">' + gwxSvg(c[1], 13) + '</span>' + esc(tx(c[2], c[2])))
         : esc(tx(c[1], c[1]));
-      return '<button type="button" class="gwx-pill' + on + '" data-cat="' + c[0] + '">' + label + '</button>';
+      return '<button type="button" class="gwx-pill' + on + '" aria-pressed="' + (c[0] === active) + '" data-cat="' + c[0] + '">' + label + '</button>';
     }).join('');
   }
 
@@ -16037,6 +16085,7 @@ var GROM_XSTOCKS = [
 
   /* ---- page builders ---- */
   function buildPredict() {
+    if (gwxState.pCat === 'us-election' && Date.now() >= Date.parse('2026-11-04T12:00:00Z')) gwxState.pCat = 'politics';
     initPx();
     var totalVol = GROM_PREDICT_MARKETS.reduce(function (a, m) { return a + (Number(m.vol24) || 0); }, 0);
     return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
@@ -16278,7 +16327,7 @@ var GROM_XSTOCKS = [
   function predictFilterCat(list, cat) {
     var c = cat || 'all';
     if (!c || c === 'all') return (list || []).slice();
-    return (list || []).filter(function (m) { return m && m.cat === c; });
+    return (list || []).filter(function (m) { return m && (c === 'us-election' ? m.usElection : m.cat === c); });
   }
   function applyPredictCatalog(cat) {
     if (!GWX_CATALOG || !GWX_CATALOG.length) return false;
@@ -16541,7 +16590,7 @@ var GROM_XSTOCKS = [
     var q = gwxState.pQ.trim().toLowerCase();
     var remote = !!(q && GWX_LIVE_SEARCH && GWX_LIVE_SEARCH.length);
     var list = liveCalendarSource().filter(function (m) {
-      return (gwxState.pCat === 'all' || m.cat === gwxState.pCat)
+      return (gwxState.pCat === 'all' || (gwxState.pCat === 'us-election' ? m.usElection : m.cat === gwxState.pCat))
         && (remote || !q || (m.q || '').toLowerCase().indexOf(q) >= 0 || (m.slug || '').toLowerCase().indexOf(q) >= 0);
     });
     // Prefer higher volume within the day (Polymarket-like ranking)
@@ -16647,7 +16696,7 @@ var GROM_XSTOCKS = [
     var q = gwxState.pQ.trim().toLowerCase();
     var list = predictSource().filter(function (m) {
       if (!predictIsFresh(m)) return false;
-      return (gwxState.pCat === 'all' || m.cat === gwxState.pCat)
+      return (gwxState.pCat === 'all' || (gwxState.pCat === 'us-election' ? m.usElection : m.cat === gwxState.pCat))
         && (!q || (m.q || '').toLowerCase().indexOf(q) >= 0 || (m.slug || '').toLowerCase().indexOf(q) >= 0
           || (GWX_LIVE_SEARCH && GWX_LIVE_SEARCH.length)); // remote search already filtered
     });
@@ -17468,7 +17517,7 @@ var GROM_XSTOCKS = [
     return el.getAttribute(name) || '';
   }
   async function onBet(btn) {
-    var card = btn.closest('.gwx-card') || btn.closest('.gwx-cal-row');
+    var card = btn.closest('.gpe-market') || btn.closest('.gwx-card') || btn.closest('.gwx-cal-row');
     var endsAt = card && card.getAttribute('data-ends-at');
     if (endsAt && !predictIsFresh({ endsAt: endsAt })) {
       notify(tx('px_market_closed', 'Рынок закрыт — ставки недоступны.'), 'error');
@@ -17481,7 +17530,7 @@ var GROM_XSTOCKS = [
     var side = btn.dataset.side === 'no' ? 'no' : 'yes';
     // Each .gwx-bet stores ITS side's price in data-prob (Yes→p, No→pNo). Do not invert again.
     var p = sidePriceFromBtn(btn);
-    var label = name + ' · ' + (side === 'yes' ? tx('px_yes', 'Yes') : tx('px_no', 'No'));
+    var label = name + ' · ' + (btn.dataset.sideLabel || (side === 'yes' ? tx('px_yes', 'Yes') : tx('px_no', 'No')));
     // Tokens may live on the button (calendar multi-outcome) or parent (.gwx-oc / .gwx-yn / .gwx-cal-actions).
     var tokenYes = tradeAttr(btn, 'data-token-yes') || tradeAttr(oc, 'data-token-yes') || tradeAttr(card, 'data-token-yes');
     var tokenNo = tradeAttr(btn, 'data-token-no') || tradeAttr(oc, 'data-token-no') || tradeAttr(card, 'data-token-no');
@@ -17519,6 +17568,8 @@ var GROM_XSTOCKS = [
 
     openModal({
       live: canLive,
+      initialAmount: btn.dataset.amount,
+      fundingContext: { event: tradeAttr(card, 'data-pm-id') || new URL(location.href).searchParams.get('event'), market: btn.dataset.marketId || '', side: side },
       issueContext: { market: q, outcome: label, side: 'buy', amountAsset: 'pUSD' },
       title: esc(tx('px_bet_title', 'Bet:') + ' ' + label),
       sub: esc(q + modeTag),
@@ -17557,6 +17608,8 @@ var GROM_XSTOCKS = [
       } : null,
     });
   }
+
+  window.gromOpenPredictionOrder = onBet;
 
   document.addEventListener('grom:xstocks-focus', function (ev) {
     try {
@@ -17608,7 +17661,7 @@ var GROM_XSTOCKS = [
     var pill = e.target.closest('.gwx-cats .gwx-pill');
     if (pill) {
       e.preventDefault(); e.stopPropagation();
-      pill.parentNode.querySelectorAll('.gwx-pill').forEach(function (x) { x.classList.remove('on'); }); pill.classList.add('on');
+      pill.parentNode.querySelectorAll('.gwx-pill').forEach(function (x) { x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); }); pill.classList.add('on'); pill.setAttribute('aria-pressed', 'true');
       if (pill.closest('#page-predict')) {
         gwxState.pCat = pill.dataset.cat || 'all';
         gwxState.pShow = GWX_MOBILE_BATCH;

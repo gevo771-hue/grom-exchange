@@ -4703,6 +4703,8 @@ const ONCHAIN_TOKENS = {
   137: {
     USDT: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
     USDC: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
+    PUSD: '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB',
+    'USDC.E': '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
   },
   8453: {
     USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Circle native
@@ -8936,7 +8938,7 @@ function gwInjectSimpleModeCss() {
 const GW_SIM_SAME_CHAIN = {
   1:     ['ETH', 'USDC', 'USDT', 'WBTC', 'DAI', 'LINK', 'UNI', 'AAVE', 'MKR', 'CRV', 'LDO', 'PEPE', 'SHIB'],
   42161: ['ETH', 'USDC', 'USDT', 'WBTC', 'ARB', 'DAI', 'LINK', 'UNI', 'AAVE', 'GMX', 'MAGIC', 'JOE', 'GRAIL', 'RDNT', 'PENDLE'],
-  137:   ['POL', 'USDC', 'USDT', 'ETH', 'WBTC', 'DAI', 'LINK', 'AAVE'],
+  137:   ['POL', 'USDC', 'USDT', 'PUSD', 'USDC.E', 'ETH', 'WBTC', 'DAI', 'LINK', 'AAVE'],
   8453:  ['ETH', 'USDC', 'USDT', 'DAI', 'AERO', 'DEGEN', 'TOSHI', 'BRETT'],
   56:    ['BNB', 'USDT', 'USDC', 'BUSD', 'CAKE', 'ETH', 'BTC', 'DOGE', 'ADA', 'SHIB'],
   10:    ['ETH', 'USDC', 'USDT', 'OP', 'DAI', 'WBTC', 'LINK', 'SNX', 'VELO'],
@@ -8963,7 +8965,7 @@ const GW_SYM_DEFAULT_CHAIN = {
 /** Tokens that ONLY make sense on one EVM chain (BNB→BSC, not Arbitrum). */
 const GW_TOKEN_EXCLUSIVE_CHAIN = {
   BNB: 56, WBNB: 56, BUSD: 56, CAKE: 56, DOGE: 56, ADA: 56, XRP: 56,
-  MATIC: 137, POL: 137, WMATIC: 137,
+  MATIC: 137, POL: 137, WMATIC: 137, PUSD: 137, 'USDC.E': 137,
   AVAX: 43114, WAVAX: 43114, JOE: 43114, PNG: 43114,
   ARB: 42161, GMX: 42161, MAGIC: 42161, RDNT: 42161, PENDLE: 42161, GRAIL: 42161,
   OP: 10, SNX: 10, VELO: 10,
@@ -15745,7 +15747,6 @@ function gwDsBuildPanel() {
           <h3 class="gw-ds-title">${t.h}</h3>
           <span class="gw-ds-badge">LIVE</span>
         </div>
-        <p class="gw-ds-sub">${gwUxText("Сравниваем доступные маршруты", "Comparing available routes")}</p>
         <div class="gw-ds-head-actions"></div>
       </div>
       ${gwDsChainChipsHtml(null)}
@@ -15815,7 +15816,7 @@ function gwDsApplyI18nLabels() {
   const title = card.querySelector('.gw-ds-title');
   if (title) title.textContent = t.h;
   const sub = card.querySelector('.gw-ds-sub');
-  if (sub) sub.textContent = gwUxText("Сравниваем доступные маршруты", "Comparing available routes");
+  if (sub) sub.remove();
   const rows = card.querySelectorAll('.gw-ds-row');
   if (rows[0]) {
     const el = rows[0].querySelector('.gw-ds-row-top > span:first-child');
@@ -16705,10 +16706,10 @@ function gwUxCss() {
     .gw-ux-extra{grid-column:1/-1}.gw-ux-note{font-size:12px;color:#9eafc4;margin:8px 0;line-height:1.5}
     .gw-ux-order-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 0;border-top:1px solid #3b4d60}.gw-ux-order-row p{margin:0;flex:1;min-width:180px}
     .gw-ux-order-form{display:flex;flex-wrap:wrap;gap:10px}.gw-ux-order-form label{flex:1;min-width:150px}.gw-ux-order-form input,.gw-ux-order-form select{width:100%;box-sizing:border-box;background:#263445;color:#e7eef8;border:1px solid #506174;border-radius:8px;padding:10px}.gw-ux-order-form button,.gw-ux-order-row button{background:#88c0d0;color:#162c36;border:0;border-radius:9px;padding:10px;cursor:pointer}
-    .gw-swap-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:5px;border:1px solid rgba(151,178,199,.16);border-radius:15px;background:linear-gradient(145deg,rgba(20,30,43,.94),rgba(30,43,58,.86));box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 5px 14px -12px rgba(0,0,0,.9)}
-    .gw-swap-modes button{position:relative;min-height:40px;border:1px solid transparent;border-radius:10px;padding:8px 10px;background:transparent;color:#b8c5d4;font-weight:680;letter-spacing:.01em;cursor:pointer;transition:color .18s ease,background .18s ease,border-color .18s ease,box-shadow .18s ease}.gw-swap-modes button:hover{color:#edf6fb;background:rgba(145,180,197,.09);border-color:rgba(164,205,221,.15)}.gw-swap-modes button.on{color:#edf5f9;border-color:rgba(174,207,222,.18);background:linear-gradient(180deg,rgba(133,154,170,.28),rgba(83,103,122,.24));box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 3px 9px -7px rgba(0,0,0,.9)}.gw-swap-modes button.on:after{content:"";position:absolute;left:50%;bottom:3px;width:18px;height:2px;border-radius:2px;background:linear-gradient(90deg,#78c8d9,#a9dce5);transform:translateX(-50%);opacity:.9}
+    .gw-swap-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:3px;border:1px solid rgba(151,178,199,.16);border-radius:15px;background:linear-gradient(145deg,rgba(20,30,43,.94),rgba(30,43,58,.86));box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 5px 14px -12px rgba(0,0,0,.9)}
+    .gw-swap-modes button{position:relative;min-height:36px;font-size:13px;border:1px solid transparent;border-radius:10px;padding:8px 10px;background:transparent;color:#b8c5d4;font-weight:680;letter-spacing:.01em;cursor:pointer;transition:color .18s ease,background .18s ease,border-color .18s ease,box-shadow .18s ease}.gw-swap-modes button:hover{color:#edf6fb;background:rgba(145,180,197,.09);border-color:rgba(164,205,221,.15)}.gw-swap-modes button.on{color:#edf5f9;border-color:rgba(174,207,222,.18);background:linear-gradient(180deg,rgba(133,154,170,.28),rgba(83,103,122,.24));box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 3px 9px -7px rgba(0,0,0,.9)}.gw-swap-modes button.on:after{content:"";position:absolute;left:50%;bottom:3px;width:18px;height:2px;border-radius:2px;background:linear-gradient(90deg,#78c8d9,#a9dce5);transform:translateX(-50%);opacity:.9}
     .gw-order-mode-panel{margin-top:2px;padding:14px 0 2px;border-top:1px solid rgba(136,192,208,.14)}.gw-order-mode-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.gw-order-mode-head p{margin:0}.gw-order-create{width:100%;margin-top:10px;background:#88c0d0;color:#162c36;border:0;border-radius:11px;padding:12px;font-weight:800;cursor:pointer}
-    @media(max-width:600px){#gwDsCard{padding:16px!important}#gwDsCard .gw-ds-row-mid{flex-wrap:wrap!important}#gwDsCard .gw-ds-tkbtn .net{max-width:100px}#gwDsCard .gw-ds-route{font-size:12px}#gwDsCard .gw-ds-cta{min-height:48px}.gw-ux-picker-tabs{padding:8px}.gw-ux-picker-tabs button{padding:8px 6px;font-size:12px}.gw-ux-order-form{display:grid;grid-template-columns:1fr}.gw-ux-order-form label{min-width:0}.gw-swap-modes button{padding:9px 5px;font-size:12px}}
+    @media(max-width:600px){#gwDsCard{padding:16px!important}#gwDsCard .gw-ds-row-mid{flex-wrap:wrap!important}#gwDsCard .gw-ds-tkbtn .net{max-width:100px}#gwDsCard .gw-ds-route{font-size:12px}#gwDsCard .gw-ds-cta{min-height:48px}.gw-ux-picker-tabs{padding:8px}.gw-ux-picker-tabs button{padding:8px 6px;font-size:12px}.gw-ux-order-form{display:grid;grid-template-columns:1fr}.gw-ux-order-form label{min-width:0}.gw-swap-modes button{min-height:40px;padding:7px 5px;font-size:12px}}
   `; document.head.appendChild(s);
 }
 function gwUxAccount() {
@@ -18362,6 +18363,8 @@ const GW_OC_SWAP = {
     tokens: {
       USDT: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
       USDC: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
+    PUSD: '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB',
+    'USDC.E': '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
       DAI:  '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063',
       WBTC: '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6',
       WETH: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
@@ -18369,7 +18372,7 @@ const GW_OC_SWAP = {
       LINK: '0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39',
       AAVE: '0xD6DF932A45C0f255f85145f286eA0b292B21C90B',
     },
-    decimals: { POL: 18, MATIC: 18, USDT: 6, USDC: 6, DAI: 18, WBTC: 8, WETH: 18, ETH: 18, LINK: 18, AAVE: 18 },
+    decimals: { POL: 18, MATIC: 18, USDT: 6, USDC: 6, PUSD: 6, 'USDC.E': 6, DAI: 18, WBTC: 8, WETH: 18, ETH: 18, LINK: 18, AAVE: 18 },
   },
   10: { // Optimism · Velodrome V2 (Solidly-style, V2-compatible for basic pairs)
     router: '0x9c12939390052919aF3155f41Bf4160Fd3666A6f',
@@ -25083,8 +25086,12 @@ function gwSetupDashSwap() {
    *   3. `storage` event for `grom_lang` (cross-tab language change)
    * All three end up calling the same re-render, and the panel remembers the
    * user's current inputs (from/to/amount) via the DOM before wiping. */
+  let swapRenderedLang = localStorage.getItem('grom_lang') || document.documentElement.lang;
   const rerenderPanel = () => {
     try { gwDsApplyI18nLabels(); } catch (_) {}
+    const lang = localStorage.getItem('grom_lang') || document.documentElement.lang;
+    if (swapRenderedLang === lang) return;
+    swapRenderedLang = lang;
     const wrap = document.querySelector('.gw-ds-wrap');
     if (!wrap) return;
     if (window.GROM_STABLE_UI || window.GROM_MOBILE || window.GROM_SAFARI) return;
@@ -25607,7 +25614,11 @@ try {
     //   4. Same-tab localStorage.setItem('grom_lang', ...) — we monkeypatch
     //      setItem so we don't miss same-tab language switches.
     (function gwLangReactor() {
-      const fire = () => { try { window.dispatchEvent(new CustomEvent('grom:lang-change', { detail: { lang: localStorage.getItem('grom_lang') } })); } catch (_) {} };
+      const currentLang = () => { try { return localStorage.getItem('grom_lang') || document.documentElement.lang || 'en'; } catch (_) { return document.documentElement.lang || 'en'; } };
+      let lastLang = currentLang();
+      // SEO refreshes and boot hooks often write the same language. They are not a language switch.
+      const fire = () => { const lang = currentLang(); if (lang === lastLang) return; lastLang = lang; try { window.dispatchEvent(new CustomEvent('grom:lang-change', { detail: { lang } })); } catch (_) {} };
+      window.addEventListener('grom:lang-change', () => { lastLang = currentLang(); });
       const prev = window.gromRefreshI18nPages;
       window.gromRefreshI18nPages = function () {
         try { if (typeof prev === 'function') prev.apply(this, arguments); } catch (_) {}
@@ -28004,7 +28015,7 @@ function gwTrPaintList(list, rows, t, ctx) {
   }
   const netColor = (cid) => (typeof gwTkChainColor === 'function' ? gwTkChainColor(cid) : '#98a8c0');
   const netShort = (cid, fallback) => (typeof gwTkChainShort === 'function' ? gwTkChainShort(cid) : (fallback || ''));
-  list.innerHTML = rows.map((r, i) => {
+  const markup = rows.map((r, i) => {
     const chgCls = r.change24h >= 0 ? 'up' : 'dn';
     const chgTxt = (r.change24h >= 0 ? '+' : '') + Number(r.change24h).toFixed(2) + '%';
     const priceFmt = r.priceUsd > 1
@@ -28019,7 +28030,7 @@ function gwTrPaintList(list, rows, t, ctx) {
       ? `<div class="gw-tr-ico"><img src="${r.img}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;avatar&quot;>${initial}</span>'" />${badge}</div>`
       : `<div class="gw-tr-ico"><span class="avatar">${initial}</span>${badge}</div>`;
     const chainTxt = r.chainLabel || r.chain || short || '';
-    return `<div class="gw-tr-row" data-sym="${r.sym}" data-chain="${r.chain || ''}" data-cid="${r.chainId || ''}" data-addr="${r.tokenAddress || ''}" data-dec="${r.decimals != null ? r.decimals : ''}" role="button" tabindex="0" aria-label="${r.sym}">
+    return `<div class="gw-tr-row" data-img="${String(r.img || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" data-sym="${r.sym}" data-chain="${r.chain || ''}" data-cid="${r.chainId || ''}" data-addr="${r.tokenAddress || ''}" data-dec="${r.decimals != null ? r.decimals : ''}" role="button" tabindex="0" aria-label="${r.sym}">
       <div class="gw-tr-rank">${i + 1}</div>
       ${img}
       <div class="meta"><div class="name">${r.sym}</div><div class="chain">${chainTxt}</div></div>
@@ -28027,6 +28038,29 @@ function gwTrPaintList(list, rows, t, ctx) {
       <div class="chg ${chgCls}">${chgTxt}</div>
     </div>`;
   }).join('');
+  if (list.__gwTrMarkup === markup && list.querySelector('.gw-tr-row')) return;
+  list.__gwTrMarkup = markup;
+  const template = document.createElement('template'); template.innerHTML = markup;
+  const key = el => [el.dataset.cid, el.dataset.addr || el.dataset.sym].join(':');
+  const existing = new Map(Array.from(list.querySelectorAll('.gw-tr-row'), el => [key(el), el]));
+  let cursor = list.firstElementChild;
+  for (const next of Array.from(template.content.children)) {
+    const old = existing.get(key(next));
+    const row = old || next;
+    if (old) {
+      existing.delete(key(next));
+      for (const selector of ['.gw-tr-rank', '.name', '.chain', '.px', '.chg']) {
+        const a = old.querySelector(selector), b = next.querySelector(selector);
+        if (a.textContent !== b.textContent) a.textContent = b.textContent;
+        if (a.className !== b.className) a.className = b.className;
+      }
+      if (old.dataset.img !== next.dataset.img) old.querySelector('.gw-tr-ico').replaceWith(next.querySelector('.gw-tr-ico'));
+      for (const [name, value] of Object.entries(next.dataset)) if (old.dataset[name] !== value) old.dataset[name] = value;
+    }
+    if (row !== cursor) list.insertBefore(row, cursor); else cursor = cursor.nextElementSibling;
+  }
+  for (const old of existing.values()) old.remove();
+  list.querySelectorAll('.gw-tr-empty').forEach(el => el.remove());
   list.querySelectorAll('.gw-tr-row').forEach((el) => {
     el.onclick = () => {
       const sym = el.dataset.sym;
@@ -28198,7 +28232,8 @@ function gwSetupLandingTrending() {
     else tryRender();
   }, pollMs);
   window.addEventListener('grom:lang-change', () => {
-    document.getElementById('gwLandingTrendingCard')?.remove();
+    const wrap = document.getElementById('gwLandingTrendingCard'), text = gwTrLang();
+    if (wrap) { const title = wrap.querySelector('.gw-tr-title'), sub = wrap.querySelector('.gw-tr-sub'), all = wrap.querySelector('[data-net="all"]'); if (title) title.textContent = text.h; if (sub) sub.textContent = text.sub; if (all) all.textContent = text.all; }
     if (gwTrLandingActive()) tryRender();
   });
   if (typeof gwVisibleInterval === 'function') {

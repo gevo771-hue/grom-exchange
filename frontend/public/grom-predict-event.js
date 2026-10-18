@@ -1,147 +1,97 @@
-/* Read-only event exploration. Orders continue through the existing, explicit wallet flow. */
+/* Event exploration and order preparation. Wallet confirmation stays in the shared trading flow. */
 (function () {
   'use strict';
-  let host, event, selected = 0, range = '1w', generation = 0, chartGeneration = 0, controller, chartController, returnFocus, returnY = 0;
-  const copy = {
-    ru: { back: 'Все события', loading: 'Загружаем событие…', unavailable: 'Не удалось загрузить событие.', retry: 'Повторить', outcomes: 'Все исходы', rules: 'Правила и источник', probability: 'Вероятность', history: 'История вероятности', empty: 'За этот период нет истории цен.', chartError: 'История цен временно недоступна.', total: 'Общий объём', day: 'Объём за 24ч', end: 'Завершение', closed: 'Торговля закрыта', yes: 'Да', no: 'Нет', share: 'Скопировать ссылку', copied: 'Ссылка скопирована', copyError: 'Не удалось скопировать ссылку', source: 'Источник разрешения', noRules: 'Правила для этого исхода не предоставлены.', choose: 'Выберите исход, чтобы посмотреть график и правила.', all: 'Всё', d: '1Д', w: '1Н', m: '1М', updated: 'Данные Polymarket', original: 'Открыть источник', noTrade: 'Недоступно', chartHint: 'История выбранного исхода · не гарантия результата' },
-    en: { back: 'All events', loading: 'Loading event…', unavailable: 'Could not load this event.', retry: 'Retry', outcomes: 'All outcomes', rules: 'Rules and source', probability: 'Probability', history: 'Probability history', empty: 'No price history for this period.', chartError: 'Price history is temporarily unavailable.', total: 'Total volume', day: '24h volume', end: 'Ends', closed: 'Trading closed', yes: 'Yes', no: 'No', share: 'Copy link', copied: 'Link copied', copyError: 'Could not copy link', source: 'Resolution source', noRules: 'Rules were not provided for this outcome.', choose: 'Select an outcome to view its chart and rules.', all: 'All', d: '1D', w: '1W', m: '1M', updated: 'Polymarket data', original: 'View source', noTrade: 'Unavailable', chartHint: 'Selected outcome history · not a guarantee of results' }
+  let host, event, selected = 0, side = 'yes', range = '1w', generation = 0, chartGeneration = 0, statusGeneration = 0;
+  let controller, chartController, returnFocus, returnY = 0, status = null, chartSeries = [];
+  const histories = new Map(), colors = ['#8dc7ef', '#4d9cf5', '#e7bd60', '#c497e7'];
+  const words = {
+    ru: { back:'Все события', loading:'Загружаем…', unavailable:'Не удалось загрузить событие.', retry:'Повторить', outcomes:'Все исходы', rules:'Правила и источник', history:'История вероятностей', empty:'За этот период нет истории цен.', chartError:'История цен временно недоступна.', partial:'Для части исходов история недоступна.', total:'Общий объём', day:'За 24ч', end:'Завершение', closed:'Торговля закрыта', yes:'Да', no:'Нет', up:'Вверх', down:'Вниз', share:'Ссылка', copied:'Скопировано', copyError:'Не удалось скопировать', source:'Источник разрешения', noRules:'Правила не предоставлены.', all:'Всё', d:'1Д', w:'1Н', m:'1М', updated:'Данные Polymarket', original:'Открыть источник', noTrade:'Сейчас недоступно', chartHint:'До четырёх исходов · цены рынка, не гарантия результата', buy:'Купить доли', amount:'Сумма', balance:'Доступно', refresh:'Проверить баланс', review:'Продолжить', next:'На следующем шаге — проверка суммы и подтверждение в кошельке.', shares:'Примерно долей', estimate:'Оценка до комиссий; цена исполнения может измениться.', fund:'Пополнить pUSD', convert:'Конвертировать USDC.e', holdings:'Мои ставки', connect:'Подключите кошелёк для баланса', unknown:'Баланс временно недоступен', select:'Выбрать исход', price:'Цена', convertHint:'У вас есть USDC.e на Polygon. Его можно конвертировать в pUSD при подтверждении ставки.', fundingHint:'pUSD уже готов для прогнозов. Пополнение через своп получает pUSD на Polygon.', expired:'Обновите данные события перед продолжением.' },
+    en: { back:'All events', loading:'Loading…', unavailable:'Could not load this event.', retry:'Retry', outcomes:'All outcomes', rules:'Rules and source', history:'Probability history', empty:'No price history for this period.', chartError:'Price history is temporarily unavailable.', partial:'History is unavailable for some outcomes.', total:'Total volume', day:'24h volume', end:'Ends', closed:'Trading closed', yes:'Yes', no:'No', up:'Up', down:'Down', share:'Share link', copied:'Copied', copyError:'Could not copy', source:'Resolution source', noRules:'Rules were not provided.', all:'All', d:'1D', w:'1W', m:'1M', updated:'Polymarket data', original:'View source', noTrade:'Currently unavailable', chartHint:'Up to four outcomes · market prices, not a guarantee', buy:'Buy shares', amount:'Amount', balance:'Available', refresh:'Check balance', review:'Continue', next:'Next: review the amount and confirm in your wallet.', shares:'Estimated shares', estimate:'Before fees; execution price may change.', fund:'Add pUSD', convert:'Convert USDC.e', holdings:'My positions', connect:'Connect a wallet to see your balance', unknown:'Balance temporarily unavailable', select:'Select outcome', price:'Price', convertHint:'You have USDC.e on Polygon. You can convert it to pUSD in the order review.', fundingHint:'pUSD is ready to use for predictions. The funding swap receives pUSD on Polygon.', expired:'Refresh this event before continuing.' }
   };
-  function lang() { return document.documentElement.lang || 'en'; }
-  function t(k) { return (copy[lang().startsWith('ru') ? 'ru' : 'en'])[k]; }
-  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-  const pct = n => n == null ? '—' : (n > 0 && n < 1 ? '<1' : n > 99 && n < 100 ? '>99' : Number(n.toFixed(1))) + '%';
-  const money = n => n == null ? '—' : new Intl.NumberFormat(lang(), { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(n);
-  function time(s) { return s ? new Date(s).toLocaleString(lang(), { dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
-  function safeUrl(v) { try { const u = new URL(v); return u.protocol === 'https:' ? u.href : ''; } catch (_) { return ''; } }
-  function queryId() { const id = new URL(location.href).searchParams.get('event'); return /^[1-9][0-9]{0,19}$/.test(id || '') ? id : ''; }
-  function setUrl(id, push) {
-    const u = new URL(location.href);
-    if (id) u.searchParams.set('event', id); else u.searchParams.delete('event');
-    history[push ? 'pushState' : 'replaceState']({ ...history.state, gromPredictionDetail: !!push }, '', u);
+  function lang(){return document.documentElement.lang || 'en';}
+  function t(k){return words[lang().startsWith('ru')?'ru':'en'][k];}
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  const pct=n=>n==null?'—':(n>0&&n<1?'<1':n>99&&n<100?'>99':Number(n.toFixed(1)))+'%';
+  const cents=n=>n==null?'—':Number(n.toFixed(2))+'¢';
+  const money=n=>n==null?'—':new Intl.NumberFormat(lang(),{style:'currency',currency:'USD',notation:'compact',maximumFractionDigits:1}).format(n);
+  const exact=n=>n==null?'—':new Intl.NumberFormat(lang(),{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+  function time(s){return s?new Date(s).toLocaleString(lang(),{dateStyle:'medium',timeStyle:'short'}):'—';}
+  function safeUrl(v){try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password?u.href:'';}catch(_){return '';}}
+  function sideLabel(r,s){const label=s==='yes'?r.labelYes:r.labelNo;return /^(yes|no|up|down)$/i.test(label||'')?t(label.toLowerCase()):(label||t(s));}
+  function queryId(){const id=new URL(location.href).searchParams.get('event');return /^[1-9][0-9]{0,19}$/.test(id||'')?id:'';}
+  function setUrl(id,push){const u=new URL(location.href);if(id)u.searchParams.set('event',id);else u.searchParams.delete('event');history[push?'pushState':'replaceState']({...history.state,gromPredictionDetail:!!push},'',u);}
+  function close(update=true){++generation;++chartGeneration;++statusGeneration;controller?.abort();chartController?.abort();event=null;status=null;document.querySelector('#page-predict .gwx-wrap')?.classList.remove('gwx-detail-open');if(host)host.hidden=true;if(update)setUrl('',false);if(returnFocus?.isConnected)returnFocus.focus({preventScroll:true});window.scrollTo({top:returnY,behavior:'instant'});}
+  function back(){if(history.state?.gromPredictionDetail)history.back();else close();}
+  const nav=()=>'<div class="gpe-nav"><button type="button" data-pe="back">← '+t('back')+'</button><button type="button" data-pe="share">'+t('share')+' ↗</button></div>';
+  async function request(path,signal){const r=await fetch('/api/market/predict/'+path,{signal,credentials:'omit'});if(!r.ok)throw new Error('unavailable');return r.json();}
+  async function open(id,push=true){
+    id=String(id).replace(/^pm_/,'');if(!/^[1-9][0-9]{0,19}$/.test(id))return;
+    const wrap=document.querySelector('#page-predict .gwx-wrap');if(!wrap)return;
+    if(!wrap.classList.contains('gwx-detail-open')){returnFocus=document.activeElement;returnY=window.scrollY;}
+    host=wrap.querySelector('#gromPredictDetail');if(!host){host=document.createElement('div');host.id='gromPredictDetail';wrap.appendChild(host);host.addEventListener('click',click);host.addEventListener('input',e=>{if(e.target.id==='gpeAmount')updateEstimate();});}
+    host.hidden=false;wrap.classList.add('gwx-detail-open');const ticket=++generation;++chartGeneration;++statusGeneration;controller?.abort();chartController?.abort();controller=new AbortController();
+    if(push)setUrl(id,true);host.dataset.event=id;host.dataset.lang=lang();event=null;status=null;
+    host.innerHTML=nav()+'<div class="gpe-message" role="status">'+t('loading')+'</div>';host.scrollIntoView({block:'start'});
+    try{const data=await request('event/'+id+'?lang='+encodeURIComponent(lang().split('-')[0]),controller.signal);if(ticket!==generation||!host.isConnected)return;if(data.id!==id||!Array.isArray(data.rows))throw new Error('invalid_event');
+      event=data;selected=data.rows.reduce((best,r,i)=>r.tradeable&&(!data.rows[best]?.tradeable||r.p>data.rows[best].p)?i:best,0);side='yes';range='1w';
+      const resume=window.gromPredictionFunding?.read();if(resume?.event===id){const i=data.rows.findIndex(r=>r.id===resume.market);if(i>=0)selected=i;side=resume.side==='no'?'no':'yes';}
+      render();if(resume?.event===id&&Number(resume.amount)>0){host.querySelector('#gpeAmount').value=resume.amount;updateEstimate();}
+      host.querySelector('h1')?.focus({preventScroll:true});refreshBalance();
+    }catch(e){if(ticket!==generation||e.name==='AbortError')return;host.innerHTML=nav()+'<div class="gpe-message" role="status">'+t('unavailable')+' <button type="button" data-pe="retry">'+t('retry')+'</button></div>';}
   }
-  function close(update = true) {
-    ++generation; ++chartGeneration; controller?.abort(); chartController?.abort(); event = null;
-    const wrap = document.querySelector('#page-predict .gwx-wrap');
-    if (wrap) wrap.classList.remove('gwx-detail-open');
-    if (host) host.hidden = true;
-    if (update) setUrl('', false);
-    if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
-    window.scrollTo({ top: returnY, behavior: 'instant' });
-  }
-  function back() { if (history.state?.gromPredictionDetail) history.back(); else close(); }
-  function shell() {
-    const wrap = document.querySelector('#page-predict .gwx-wrap');
-    if (!wrap) return false;
-    host = wrap.querySelector('#gromPredictDetail');
-    if (!host) { host = document.createElement('div'); host.id = 'gromPredictDetail'; wrap.appendChild(host); host.addEventListener('click', click); }
-    host.hidden = false; wrap.classList.add('gwx-detail-open');
-    return true;
-  }
-  const top = () => '<div class="gpe-nav"><button type="button" data-pe="back">← ' + t('back') + '</button><button type="button" data-pe="share">' + t('share') + '</button></div>';
-  async function request(path, signal) {
-    const r = await fetch('/api/market/predict/' + path, { signal, credentials: 'omit' });
-    if (!r.ok) throw new Error('unavailable');
-    return r.json();
-  }
-  async function open(id, push = true) {
-    id = String(id).replace(/^pm_/, '');
-    if (!/^[1-9][0-9]{0,19}$/.test(id)) return;
-    const wasOpen = !!document.querySelector('.gwx-detail-open');
-    if (!wasOpen) { returnFocus = document.activeElement; returnY = window.scrollY; }
-    if (!shell()) return;
-    const ticket = ++generation; ++chartGeneration; controller?.abort(); chartController?.abort(); controller = new AbortController();
-    if (push) setUrl(id, true);
-    host.dataset.event = id; host.dataset.lang = lang(); event = null;
-    host.innerHTML = top() + '<div class="gpe-message" role="status">' + t('loading') + '</div>';
-    host.scrollIntoView({ block: 'start' });
-    try {
-      const data = await request('event/' + id + '?lang=' + encodeURIComponent(lang().split('-')[0]), controller.signal);
-      if (ticket !== generation || !host.isConnected) return;
-      if (data.id !== id || !Array.isArray(data.rows)) throw new Error('invalid_event');
-      event = data; selected = data.rows.reduce((best, r, i) => r.tradeable && (!data.rows[best]?.tradeable || r.p > data.rows[best].p) ? i : best, 0); range = '1w'; render();
-      host.querySelector('h1')?.focus({ preventScroll: true });
-    } catch (e) {
-      if (ticket !== generation || e.name === 'AbortError') return;
-      host.innerHTML = top() + '<div class="gpe-message" role="status">' + t('unavailable') + ' <button type="button" data-pe="retry">' + t('retry') + '</button></div>';
-    }
-  }
-  function render() {
-    const e = event;
-    host.innerHTML = top()
-      + '<header class="gpe-heading">' + (safeUrl(e.img) ? '<img src="' + esc(safeUrl(e.img)) + '" alt="" referrerpolicy="no-referrer">' : '')
-      + '<div><div class="gpe-eyebrow">' + esc(e.tags.join(' · ')) + '</div><h1 tabindex="-1">' + esc(e.q) + '</h1></div></header>'
-      + '<div class="gpe-metrics"><span>' + t('total') + ' <b>' + money(e.vol) + '</b></span><span>' + t('day') + ' <b>' + money(e.vol24) + '</b></span><span>' + t('end') + ' <b>' + esc(time(e.endsAt)) + '</b></span></div>'
-      + '<section class="gpe-chart-panel" aria-label="' + t('history') + '"><div class="gpe-chart-head"><div><span id="gpeSelected"></span><strong id="gpePrice"></strong></div><div class="gpe-ranges">'
-      + [['1d', 'd'], ['1w', 'w'], ['1m', 'm'], ['max', 'all']].map(([r, key]) => '<button type="button" data-range="' + r + '" aria-pressed="' + (r === range) + '">' + t(key) + '</button>').join('')
-      + '</div></div><div id="gpeChart" aria-live="polite"></div><div class="gpe-chart-note">' + t('chartHint') + '</div></section>'
-      + '<div class="gpe-body"><section class="gpe-outcomes"><h2>' + t('outcomes') + ' <small>' + e.rows.length + '</small></h2><p class="gpe-muted">' + t('choose') + '</p>'
-      + e.rows.map((r, i) => '<div class="gpe-outcome gwx-card" data-q="' + esc(e.q) + '" data-ends-at="' + esc(r.endsAt) + '"><div class="gwx-oc" data-token-yes="' + esc(r.tokenYes) + '" data-token-no="' + esc(r.tokenNo) + '" data-tick="' + esc(r.tickSize) + '" data-neg-risk="' + (r.negRisk ? '1' : '0') + '">'
-        + '<button type="button" class="gpe-select" data-select="' + i + '" aria-pressed="' + (i === selected) + '"><span class="gpe-selection-dot"></span><span>' + esc(r.n) + '<small>' + money(r.vol) + ' · ' + t('total') + '</small></span><b>' + pct(r.p) + '</b></button>'
-        + '<div class="gpe-order-buttons">' + (r.tradeable ? ['yes', 'no'].map(side => '<button type="button" class="gwx-bet gwx-' + side + '" data-side="' + side + '" data-name="' + esc(r.n) + '" data-prob="' + (side === 'yes' ? r.p : r.pNo) + '">' + t(side) + ' <b>' + pct(side === 'yes' ? r.p : r.pNo) + '</b></button>').join('') : '<span class="gpe-muted">' + t(r.closed ? 'closed' : 'noTrade') + '</span>') + '</div></div></div>').join('')
-      + '</section><aside class="gpe-rules"><h2>' + t('rules') + '</h2><div id="gpeRules"></div><div class="gpe-source">' + t('updated') + ' · ' + esc(time(e.fetchedAt)) + '</div>'
-      + (/^[a-z0-9-]+$/.test(e.slug) ? '<a href="https://polymarket.com/event/' + esc(e.slug) + '" target="_blank" rel="noopener noreferrer">' + t('original') + ' ↗</a>' : '') + '</aside></div>';
+  function render(){
+    const e=event;
+    host.innerHTML=nav()+'<header class="gpe-heading">'+(safeUrl(e.img)?'<img src="'+esc(safeUrl(e.img))+'" alt="" referrerpolicy="no-referrer">':'')+'<div><div class="gpe-eyebrow">'+esc(e.tags.slice(0,3).join(' · '))+'</div><h1 tabindex="-1">'+esc(e.q)+'</h1></div></header>'
+      +'<div class="gpe-metrics"><span>'+t('total')+' <b>'+money(e.vol)+'</b></span><span>'+t('day')+' <b>'+money(e.vol24)+'</b></span><span>'+t('end')+' <b>'+esc(time(e.endsAt))+'</b></span></div>'
+      +'<div class="gpe-layout"><div class="gpe-main"><section class="gpe-chart-panel" aria-label="'+t('history')+'"><div class="gpe-chart-head"><h2>'+t('history')+'</h2><div class="gpe-ranges">'+[['1d','d'],['1w','w'],['1m','m'],['max','all']].map(([r,k])=>'<button type="button" data-range="'+r+'" aria-pressed="'+(r===range)+'">'+t(k)+'</button>').join('')+'</div></div><div id="gpeLegend" class="gpe-legend"></div><div id="gpeChart" aria-live="polite"></div><div class="gpe-chart-note">'+t('chartHint')+'</div></section>'
+      +'<section class="gpe-outcomes"><h2>'+t('outcomes')+' <small>'+e.rows.length+'</small></h2><div class="gpe-outcome-list">'+e.rows.map((r,i)=>'<div class="gpe-outcome" data-row="'+i+'"><button type="button" class="gpe-select" data-select="'+i+'" aria-pressed="false"><span class="gpe-selection-dot" aria-hidden="true"></span><span class="gpe-outcome-name">'+esc(r.n)+'<small>'+money(r.vol)+' · '+t('total')+'</small></span><b>'+pct(r.p)+'</b></button><div class="gpe-order-buttons">'+(r.tradeable?['yes','no'].map(s=>'<button type="button" class="gpe-side gpe-'+s+'" data-order="'+i+'" data-side="'+s+'">'+esc(sideLabel(r,s))+' <b>'+cents(s==='yes'?r.p:r.pNo)+'</b></button>').join(''):'<span class="gpe-muted">'+t(r.closed?'closed':'noTrade')+'</span>')+'</div></div>').join('')+'</div></section>'
+      +'<details class="gpe-rules" open><summary>'+t('rules')+'</summary><div id="gpeRules"></div><div class="gpe-source">'+t('updated')+' · '+esc(time(e.fetchedAt))+'</div>'+(/^[a-z0-9-]+$/.test(e.slug)?'<a href="https://polymarket.com/event/'+esc(e.slug)+'" target="_blank" rel="noopener noreferrer">'+t('original')+' ↗</a>':'')+'</details></div>'
+      +'<details id="gpeTicket" class="gpe-ticket" '+(matchMedia('(min-width:901px)').matches?'open':'')+'><summary class="gpe-ticket-summary">'+t('buy')+' <span id="gpeTicketSummary"></span></summary><div class="gpe-ticket-inner"><h2>'+t('buy')+'</h2><label class="gpe-ticket-label" for="gpeMarket">'+t('select')+'</label><select id="gpeMarket">'+e.rows.map((r,i)=>'<option value="'+i+'">'+esc(r.n)+'</option>').join('')+'</select><div id="gpeSides" class="gpe-ticket-sides"></div><div class="gpe-ticket-balance"><span>'+t('balance')+' <b id="gpeBalance">—</b></span><button type="button" data-pe="balance" aria-label="'+t('refresh')+'" title="'+t('refresh')+'">↻</button></div><p id="gpeBalanceStatus" class="gpe-muted" role="status"></p>'
+      +'<label class="gpe-amount"><span>'+t('amount')+'</span><div><input id="gpeAmount" type="number" inputmode="decimal" min="1" step="0.01" placeholder="0.00"><span>pUSD</span></div></label><div class="gpe-presets">'+[5,25,100].map(n=>'<button type="button" data-amount="'+n+'">$'+n+'</button>').join('')+'<button type="button" data-amount="max">Max</button></div><div id="gpeEstimate" class="gpe-estimate"></div><button type="button" id="gpeReview" class="gpe-review" data-pe="review">'+t('review')+'</button><p id="gpeNext" class="gpe-muted">'+t('next')+'</p><div class="gpe-funding-actions"><button type="button" data-pe="fund">'+t('fund')+'</button><button type="button" data-pe="positions">'+t('holdings')+'</button></div><p id="gpeFundingHint" class="gpe-muted"></p></div></details></div>';
+    host.querySelector('#gpeMarket').addEventListener('change',e=>select(Number(e.target.value)));
     select(selected);
   }
-  function select(i) {
-    selected = i; const r = event?.rows[i]; if (!r) return;
-    host.querySelectorAll('[data-select]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.select) === i)));
-    host.querySelector('#gpeSelected').textContent = r.n;
-    host.querySelector('#gpePrice').textContent = pct(r.p);
-    const source = safeUrl(r.resolutionSource || event.resolutionSource);
-    host.querySelector('#gpeRules').innerHTML = '<h3>' + esc(r.question || r.n) + '</h3><p>' + esc(r.description || event.description || t('noRules')) + '</p>'
-      + (source ? '<a href="' + esc(source) + '" target="_blank" rel="noopener noreferrer">' + t('source') + ' ↗</a>' : '');
-    loadChart(r.tokenYes);
+  function select(i){
+    if(!event?.rows[i])return;selected=i;const r=event.rows[i];
+    host.querySelectorAll('[data-select]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.select)===i)));
+    host.querySelectorAll('[data-row]').forEach(el=>el.classList.toggle('is-selected',Number(el.dataset.row)===i));
+    host.querySelector('#gpeMarket').value=i;
+    const source=safeUrl(r.resolutionSource||event.resolutionSource);host.querySelector('#gpeRules').innerHTML='<h3>'+esc(r.question||r.n)+'</h3><p>'+esc(r.description||event.description||t('noRules'))+'</p>'+(source?'<a href="'+esc(source)+'" target="_blank" rel="noopener noreferrer">'+t('source')+' ↗</a>':'');
+    renderSides();loadChart();
   }
-  async function loadChart(token) {
-    const ticket = ++chartGeneration, chart = host.querySelector('#gpeChart');
-    chartController?.abort(); chartController = new AbortController();
-    chart.innerHTML = '<div class="gpe-message">' + t('loading') + '</div>';
-    if (!token) { chart.textContent = t('empty'); return; }
-    try {
-      const data = await request('history?token=' + encodeURIComponent(token) + '&range=' + range, chartController.signal);
-      if (ticket !== chartGeneration || !chart.isConnected) return;
-      draw(chart, data.history || []);
-    } catch (e) { if (ticket === chartGeneration && e.name !== 'AbortError') chart.innerHTML = '<div class="gpe-message">' + t('chartError') + ' <button type="button" data-pe="chartRetry">' + t('retry') + '</button></div>'; }
+  function renderSides(){const r=event.rows[selected];host.querySelector('#gpeTicketSummary').textContent=sideLabel(r,side)+' '+cents(side==='yes'?r.p:r.pNo);host.querySelector('#gpeSides').innerHTML=['yes','no'].map(s=>'<button type="button" class="gpe-side gpe-'+s+'" data-ticket-side="'+s+'" aria-pressed="'+(side===s)+'"'+(!r.tradeable?' disabled':'')+'>'+esc(sideLabel(r,s))+' <b>'+cents(s==='yes'?r.p:r.pNo)+'</b></button>').join('');host.querySelector('#gpeReview').disabled=!r.tradeable;host.querySelector('#gpeNext').textContent=r.tradeable?t('next'):t(r.closed?'closed':'noTrade');updateEstimate();}
+  function updateEstimate(){const r=event?.rows[selected];if(!r)return;const amount=Number(host.querySelector('#gpeAmount').value),p=(side==='yes'?r.p:r.pNo)/100;host.querySelector('#gpeEstimate').innerHTML=amount>0&&Number.isFinite(amount)&&p>0?'<span>'+t('shares')+' <b>'+exact(amount/p)+'</b></span><small>'+t('estimate')+'</small>':'';}
+  async function refreshBalance(force=false){const ticket=++statusGeneration,el=host?.querySelector('#gpeBalance');if(!el)return;el.textContent='…';status=null;try{await window.gromEnsureProductModule('predict');const st=await window.gromPredict.getStatus({force});if(ticket!==statusGeneration||!el.isConnected)return;status=st;el.textContent=st.connected&&st.polyBal!=null?exact(st.polyBal)+' pUSD':'—';host.querySelector('#gpeBalanceStatus').textContent=!st.connected?t('connect'):st.balanceUnavailable?t('unknown'):'';host.querySelector('#gpeFundingHint').textContent=st.polyUsdce>0?t('convertHint'):t('fundingHint');}catch(_){if(ticket===statusGeneration&&el.isConnected){el.textContent='—';host.querySelector('#gpeBalanceStatus').textContent=t('unknown');}}}
+  function rememberFunding(){window.gromPredictionFunding?.remember({event:event.id,market:event.rows[selected].id,side,amount:host.querySelector('#gpeAmount').value});}
+  async function review(){const r=event.rows[selected];if(!r?.tradeable)return;if(r.endsAt&&Date.parse(r.endsAt)<=Date.now()){host.querySelector('#gpeNext').textContent=t('expired');return;}
+    const btn=host.querySelector('#gpeReview'),wrap=host.querySelector('#gpeTicket');wrap.classList.add('gpe-market');wrap.dataset.q=event.q;wrap.dataset.endsAt=r.endsAt;
+    Object.assign(btn.dataset,{marketId:r.id,side,sideLabel:sideLabel(r,side),name:r.n,prob:String(side==='yes'?r.p:r.pNo),tokenYes:r.tokenYes,tokenNo:r.tokenNo,tick:r.tickSize,negRisk:r.negRisk?'1':'0',amount:host.querySelector('#gpeAmount').value});
+    rememberFunding();btn.disabled=true;try{await window.gromOpenPredictionOrder(btn);}finally{if(btn.isConnected)btn.disabled=!r.tradeable;}
   }
-  function draw(chart, points) {
-    if (points.length < 2) { chart.innerHTML = '<div class="gpe-message">' + t('empty') + '</div>'; return; }
-    const start = points[0].t, duration = points[points.length - 1].t - start;
-    if (!(duration > 0)) { chart.textContent = t('empty'); return; }
-    const width = Math.max(280, Math.min(960, chart.clientWidth || 960)), height = width < 600 ? 210 : 250;
-    const plotWidth = width - 60;
-    const x = p => 8 + (p.t - start) / duration * plotWidth, y = p => height - 25 - p.p * (height - 40);
-    const path = points.map((p, i) => (i ? 'L' : 'M') + x(p).toFixed(2) + ',' + y(p).toFixed(2)).join(' ');
-    chart.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + esc(t('history') + ': ' + event.rows[selected].n) + '">'
-      + [0, .25, .5, .75, 1].map(p => '<path class="gpe-gridline" d="M8 ' + y({ p }) + 'H' + (width - 50) + '"/><text x="' + (width - 40) + '" y="' + (y({ p }) + 4) + '">' + p * 100 + '%</text>').join('')
-      + '<path class="gpe-line" d="' + path + '"/><circle id="gpeCursor" r="5" fill="#88c0d0" cx="' + x(points[points.length - 1]) + '" cy="' + y(points[points.length - 1]) + '"/></svg>'
-      + '<div class="gpe-chart-dates"><span>' + esc(time(start * 1000)) + '</span><output id="gpePoint"></output><span>' + esc(time(points[points.length - 1].t * 1000)) + '</span></div>';
-    const svg = chart.querySelector('svg');
-    svg.addEventListener('pointermove', ev => {
-      const rect = svg.getBoundingClientRect(), target = start + Math.max(0, Math.min(1, ((ev.clientX - rect.left) / rect.width * width - 8) / plotWidth)) * duration;
-      let closest = points[0]; for (const p of points) if (Math.abs(p.t - target) < Math.abs(closest.t - target)) closest = p;
-      chart.querySelector('#gpeCursor').setAttribute('cx', x(closest)); chart.querySelector('#gpeCursor').setAttribute('cy', y(closest));
-      chart.querySelector('#gpePoint').textContent = pct(closest.p * 100) + ' · ' + time(closest.t * 1000);
-    });
+  function seriesRows(){const rows=event.rows.map((r,i)=>({...r,index:i})).filter(r=>r.tokenYes&&r.p!=null).sort((a,b)=>Number(b.tradeable)-Number(a.tradeable)||b.p-a.p);const chosen=rows.slice(0,4);if(!chosen.some(r=>r.index===selected)){const r=rows.find(r=>r.index===selected);if(r){chosen.splice(3,1);chosen.push(r);}}return chosen;}
+  async function loadChart(){const ticket=++chartGeneration,chart=host.querySelector('#gpeChart'),rows=seriesRows();chartController?.abort();chartController=new AbortController();
+    host.querySelector('#gpeLegend').innerHTML=rows.map((r,i)=>'<button type="button" data-select="'+r.index+'" aria-pressed="'+(r.index===selected)+'" style="--series:'+colors[i]+'"><i></i><span>'+esc(r.n)+'</span><b>'+pct(r.p)+'</b></button>').join('');
+    chart.innerHTML='<div class="gpe-message">'+t('loading')+'</div>';
+    const result=await Promise.all(rows.map(async(r,i)=>{const key=r.tokenYes+':'+range,cached=histories.get(key);try{let data=cached&&Date.now()-cached.at<30000?cached.data:await request('history?token='+encodeURIComponent(r.tokenYes)+'&range='+range,chartController.signal);if(ticket!==chartGeneration)return null;histories.set(key,{at:Date.now(),data});while(histories.size>32)histories.delete(histories.keys().next().value);return {...r,color:colors[i],points:Array.isArray(data.history)?data.history:[]};}catch(_){return {...r,color:colors[i],points:[],failed:true};}}));
+    if(ticket!==chartGeneration||!chart.isConnected)return;chartSeries=result.filter(Boolean);draw();
   }
-  async function click(e) {
-    const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.pe === 'back') { back(); return; }
-    if (b.dataset.pe === 'retry') { open(host.dataset.event, false); return; }
-    if (b.dataset.pe === 'chartRetry') { loadChart(event.rows[selected].tokenYes); return; }
-    if (b.dataset.pe === 'share') {
-      try { const u = new URL(location.href); u.searchParams.delete('_spa'); await navigator.clipboard.writeText(u.href); b.textContent = t('copied'); }
-      catch (_) { b.textContent = t('copyError'); }
-      return;
-    }
-    if (b.hasAttribute('data-select')) { select(Number(b.dataset.select)); return; }
-    if (b.dataset.range) { range = b.dataset.range; host.querySelectorAll('[data-range]').forEach(el => el.setAttribute('aria-pressed', String(el.dataset.range === range))); loadChart(event.rows[selected].tokenYes); }
+  function draw(){const chart=host?.querySelector('#gpeChart');if(!chart)return;const series=chartSeries.filter(s=>s.points.length>1),partial=chartSeries.some(s=>s.failed||s.points.length<2);if(!series.length){chart.innerHTML='<div class="gpe-message">'+t(chartSeries.some(s=>s.failed)?'chartError':'empty')+' <button type="button" data-pe="chartRetry">'+t('retry')+'</button></div>';return;}
+    const start=Math.min(...series.map(s=>s.points[0].t)),end=Math.max(...series.map(s=>s.points.at(-1).t)),duration=end-start;if(!(duration>0)){chart.textContent=t('empty');return;}
+    const width=Math.max(260,Math.min(960,chart.clientWidth||720)),height=width<500?210:270,pw=width-54,x=p=>8+(p.t-start)/duration*pw,y=p=>height-22-p.p*(height-36);
+    chart.innerHTML='<svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="'+t('history')+'">'+[0,.25,.5,.75,1].map(p=>'<path class="gpe-gridline" d="M8 '+y({p})+'H'+(width-42)+'"/><text x="'+(width-36)+'" y="'+(y({p})+4)+'">'+p*100+'%</text>').join('')+series.map(s=>'<path class="gpe-line" style="stroke:'+s.color+'" d="'+s.points.map((p,i)=>(i?'L':'M')+x(p).toFixed(2)+','+y(p).toFixed(2)).join(' ')+'"/><circle r="3.5" fill="'+s.color+'" cx="'+x(s.points.at(-1))+'" cy="'+y(s.points.at(-1))+'"/>').join('')+'</svg><div class="gpe-chart-dates"><span>'+esc(new Date(start*1000).toLocaleDateString(lang(),{month:'short',day:'numeric'}))+'</span><span>'+esc(new Date(end*1000).toLocaleDateString(lang(),{month:'short',day:'numeric'}))+'</span></div><output id="gpePoint" class="gpe-chart-point"></output>'+(partial?'<div class="gpe-chart-note">'+t('partial')+'</div>':'');
+    chart.querySelector('svg').addEventListener('pointermove',ev=>{const rect=ev.currentTarget.getBoundingClientRect(),target=start+Math.max(0,Math.min(1,((ev.clientX-rect.left)/rect.width*width-8)/pw))*duration;chart.querySelector('#gpePoint').textContent=time(target*1000)+' · '+series.map(s=>{if(target<s.points[0].t||target>s.points.at(-1).t)return s.n+': —';let closest=s.points[0];for(const p of s.points)if(Math.abs(p.t-target)<Math.abs(closest.t-target))closest=p;return s.n+': '+pct(closest.p*100);}).join(' · ');});
   }
-  function sync() {
-    const id = queryId(), page = document.getElementById('page-predict');
-    if (!page?.classList.contains('active')) return;
-    if (id && (!host?.isConnected || host.hidden || host.dataset.event !== id || host.dataset.lang !== lang())) open(id, false);
-    else if (!id && document.querySelector('.gwx-detail-open')) close(false);
+  async function click(e){const b=e.target.closest('button');if(!b)return;
+    const a=b.dataset.pe;if(a==='back'){back();return;}if(a==='retry'){open(host.dataset.event,false);return;}if(a==='chartRetry'){loadChart();return;}if(a==='balance'){refreshBalance(true);return;}if(a==='review'){review();return;}if(a==='positions'){close();document.getElementById('gromPredictPos')?.scrollIntoView({block:'start'});return;}if(a==='fund'){rememberFunding();window.gromPredictionFunding?.open(Number(host.querySelector('#gpeAmount').value)||25);return;}
+    if(a==='share'){try{const u=new URL(location.href);u.searchParams.delete('_spa');await navigator.clipboard.writeText(u.href);b.textContent=t('copied');}catch(_){b.textContent=t('copyError');}return;}
+    if(b.dataset.order!=null){side=b.dataset.side;select(Number(b.dataset.order));if(matchMedia('(max-width:900px)').matches){host.querySelector('#gpeTicket').open=true;host.querySelector('#gpeTicket').scrollIntoView({block:'start',behavior:'smooth'});}return;}
+    if(b.hasAttribute('data-select')){select(Number(b.dataset.select));return;}if(b.dataset.ticketSide){side=b.dataset.ticketSide;renderSides();return;}
+    if(b.dataset.amount){const amount=b.dataset.amount==='max'?status?.polyBal:b.dataset.amount;if(amount!=null&&Number.isFinite(Number(amount)))host.querySelector('#gpeAmount').value=amount;updateEstimate();return;}
+    if(b.dataset.range){range=b.dataset.range;host.querySelectorAll('[data-range]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.range===range)));loadChart();}
   }
-  window.addEventListener('popstate', () => setTimeout(sync, 0));
-  window.gromPredictEvent = { open, sync };
+  function sync(){const id=queryId(),page=document.getElementById('page-predict');if(!page?.classList.contains('active'))return;if(id&&(!host?.isConnected||host.hidden||host.dataset.event!==id||host.dataset.lang!==lang()))open(id,false);else if(!id&&document.querySelector('.gwx-detail-open'))close(false);}
+  let resizeTimer;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(event&&host&&!host.hidden){if(matchMedia('(min-width:901px)').matches)host.querySelector('#gpeTicket').open=true;draw();}},150);});
+  window.addEventListener('popstate',()=>setTimeout(sync,0));
+  for(const name of ['grom:wallet-connected','grom:wallet-disconnected','grom:account-changed'])document.addEventListener(name,()=>{if(event)refreshBalance(true);});
+  window.gromPredictEvent={open,sync};
 })();

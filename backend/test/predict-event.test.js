@@ -78,3 +78,13 @@ test('localized text cannot remap token sides or override canonical prices', asy
   assert.equal(result.body.q, 'Localized'); assert.equal(result.body.rows[0].question, 'Translated');
   assert.equal(result.body.rows[0].tokenYes, '111'); assert.equal(result.body.rows[0].p, .1); assert.equal(result.body.rows[0].tradeable, true);
 });
+
+test('named two-sided markets retain actual labels, prices and token identities', () => {
+  const raw = fixture(); Object.assign(raw.markets[0], { outcomes: '["Team Alpha","Team Beta"]', outcomePrices: '["0.63","0.38"]' });
+  const row = normalizePredictionEvent(raw).rows[0];
+  assert.equal(row.labelYes, 'Team Alpha'); assert.equal(row.labelNo, 'Team Beta');
+  assert.equal(row.tokenYes, '111'); assert.equal(row.tokenNo, '222'); assert.equal(row.pNo, 38); assert.equal(row.tradeable, true);
+});
+test('empty or duplicate outcomes are not tradeable', () => {
+  for (const outcomes of ['["","Beta"]', '["Alpha","Alpha"]']) { const raw = fixture(); raw.markets[0].outcomes = outcomes; assert.equal(normalizePredictionEvent(raw).rows[0].tradeable, false); }
+});

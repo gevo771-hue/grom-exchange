@@ -1695,7 +1695,7 @@
     };
     Object.keys(map).forEach(function (id) {
       var panel = hw.querySelector('.lv2-panel[data-panel="' + id + '"]');
-      if (panel) panel.innerHTML = map[id];
+      if (panel && panel.__lv2Html !== map[id]) { panel.innerHTML = map[id]; panel.__lv2Html = map[id]; }
     });
   }
 
@@ -1956,6 +1956,7 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
   window.addEventListener('grom:lang-change', function () {
+    if (_painted && _lang === lang()) return;
     _painted = false;
     _liveHeroPatched = false;
     _lang = '';

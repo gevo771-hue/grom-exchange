@@ -1,5 +1,6 @@
 import express from 'express';
 import { registerPredictionEventRoutes } from './predict-event.js';
+import { isUsElection2026 } from './predict-election.js';
 import rateLimit from 'express-rate-limit';
 import axios from 'axios';
 import fs from 'fs';
@@ -657,6 +658,7 @@ function normalizePolymarket(events, { maxEvents = PREDICT_MAX_EVENTS, maxOutcom
     out.push({
       id: 'pm_' + (ev.id || ev.slug || out.length),
       eventId: String(ev.id || ''),
+      usElection: isUsElection2026(ev),
       slug: String(ev.slug || ''),
       cat,
       ico: pmEmoji(cat),
@@ -1175,11 +1177,11 @@ export function createMarketRouter() {
 
   // Live prediction markets from Polymarket (server-side to bypass CORS).
   // Query: ?q= / ?slug= / ?lang= / ?locale= / ?cat= / ?offset=&limit= / ?page=
-  const PREDICT_CATS = new Set(['all', 'sport', 'crypto', 'esports', 'politics', 'culture', 'finance', 'economy']);
+  const PREDICT_CATS = new Set(['all', 'sport', 'crypto', 'esports', 'politics', 'culture', 'finance', 'economy', 'us-election']);
   function filterPredictCat(markets, cat) {
     const c = String(cat || 'all').toLowerCase();
     if (!c || c === 'all' || !PREDICT_CATS.has(c)) return markets || [];
-    return (markets || []).filter((m) => m && m.cat === c);
+    return (markets || []).filter((m) => m && (c === 'us-election' ? m.usElection : m.cat === c));
   }
 
   r.get('/predict', async (req, res) => {

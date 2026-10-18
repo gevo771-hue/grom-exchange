@@ -67,10 +67,10 @@ test('an asset without its expected export fails instead of being marked ready',
 });
 function predictionFixture() {
   const f = fixture(), c = f.context, modals = [], messages = [];
-  const attrs = { 'data-token-yes': 'yes-token', 'data-ends-at': 'future', 'data-q': 'Test market' };
+  const attrs = { 'data-token-yes': 'yes-token', 'data-token-no': 'no-token', 'data-ends-at': 'future', 'data-q': 'Test market' };
   const card = { getAttribute: k => attrs[k] || '' };
   const btn = { dataset: { side: 'yes', name: 'Yes' }, getAttribute: k => attrs[k] || '', closest: () => card };
-  Object.assign(c, { sidePriceFromBtn: () => .5, predictIsFresh: () => true,
+  Object.assign(c, { URL, location: { href: 'https://grom.exchange/predict?event=606422#predict' }, sidePriceFromBtn: () => .5, predictIsFresh: () => true,
     tx: (_k, fb) => fb, notify: (...args) => messages.push(args), openModal: opts => modals.push(opts) });
   vm.runInContext(src.split('\n').find(line => line.startsWith('  function esc(s)')), c);
   vm.runInContext(part(src, '  function tradeAttr(', "  document.addEventListener('grom:xstocks-focus'"), c);
@@ -141,4 +141,12 @@ test('prediction modal escapes untrusted outcome text before rendering HTML', as
   const click = c.onBet(btn); finish('predict', api); await click;
   assert.ok(modals[0].title.includes('&lt;img'));
   assert.ok(!modals[0].title.includes('<img'));
+});
+
+ test('event ticket retains the selected side and amount in order review and funding context', async () => {
+  const { context: c, finish, btn, modals, api } = predictionFixture();
+  Object.assign(btn.dataset,{side:'no',sideLabel:'Team B',name:'Match winner',amount:'25',marketId:'1234'});
+  const click=c.onBet(btn);finish('predict',api);await click;
+  assert.equal(modals[0].initialAmount,'25');assert.match(modals[0].title,/Team B/);
+  assert.equal(modals[0].fundingContext.event,'606422');assert.equal(modals[0].fundingContext.market,'1234');assert.equal(modals[0].fundingContext.side,'no');
 });

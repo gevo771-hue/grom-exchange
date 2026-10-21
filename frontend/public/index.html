@@ -970,6 +970,8 @@
     box-shadow: none !important;
     background: none !important;
   }
+  #gwDsCard { scroll-margin-top: calc(var(--topbar-total, 60px) + 16px); }
+
   .dash-banners .dash-banner,
   .dash-banners-wrap {
     transform-style: flat !important;
@@ -6622,29 +6624,29 @@
     <section class="page" id="page-dashboard">
       <div class="dash-banners-wrap" id="dashBannersWrap" hidden>
       <div class="dash-banners" id="dashBanners">
-        <a class="dash-banner banner-spot" href="#spot" data-banner-go="spot" onclick="event.preventDefault(); try{show('futures');}catch(_){try{document.querySelector('.gw-ds-wrap')?.scrollIntoView({behavior:'smooth',block:'center'});}catch(__){}}">
+        <a class="dash-banner banner-spot" href="#dashboard" data-banner-go="dashboard" data-banner-scroll="gwDsCard">
           <div class="banner-photo" aria-hidden="true"></div>
           <div class="banner-scrim" aria-hidden="true"></div>
           <div class="banner-content">
             <div class="banner-copy">
               <div class="banner-eyebrow" data-i18n="dash_banner_spot_eyebrow">INSTANT SWAP</div>
-              <h3 data-i18n="dash_banner_spot_h">10,000+ tokens · best DEX route</h3>
-              <p data-i18n="dash_banner_spot_p">Meta-aggregator across major routers. You sign in your wallet — settlement is on-chain.</p>
+              <h3 data-i18n="dash_banner_spot_h">Swap across networks</h3>
+              <p data-i18n="dash_banner_spot_p">Compare available routes. Sign in your wallet and settle on-chain.</p>
             </div>
           </div>
         </a>
-        <a class="dash-banner banner-futures" href="#futures" data-banner-go="futures" onclick="event.preventDefault(); try{show('futures');}catch(_){}">
+        <a class="dash-banner banner-futures" href="#futures" data-banner-go="futures">
           <div class="banner-photo" aria-hidden="true"></div>
           <div class="banner-scrim" aria-hidden="true"></div>
           <div class="banner-content">
             <div class="banner-copy">
               <div class="banner-eyebrow" data-i18n="dash_banner_fut_eyebrow">TRADE</div>
-              <h3 data-i18n="dash_banner_fut_h">Up to 100×. Perps and Spot.</h3>
-              <p data-i18n="dash_banner_fut_p">Cross / isolated. Depth from top venues.</p>
+              <h3 data-i18n="dash_banner_fut_h">Spot and perpetuals</h3>
+              <p data-i18n="dash_banner_fut_p">Trade on Hyperliquid. Leverage depends on the selected market.</p>
             </div>
           </div>
         </a>
-        <a class="dash-banner banner-predict" href="#predict" data-banner-go="predict" onclick="event.preventDefault(); try{show('predict');}catch(_){}">
+        <a class="dash-banner banner-predict" href="#predict" data-banner-go="predict">
           <div class="banner-photo" aria-hidden="true"></div>
           <div class="banner-scrim" aria-hidden="true"></div>
           <div class="banner-content">
@@ -7233,7 +7235,7 @@
         </div>
         <div class="support-card">
           <div class="t" data-i18n="help_card_markets_t">Four markets, one wallet</div>
-          <div class="d" data-i18n="help_card_markets_d">Swap 10k+ tokens, Perpetuals up to 100×, Predictions markets, and Tokenized Stocks — all from one connected wallet.</div>
+          <div class="d" data-i18n="help_card_markets_d">Swap, Spot and perpetuals, predictions and tokenized stocks — from one connected wallet.</div>
           <div class="foot">Swap · Perps · Predict · Stocks</div>
         </div>
         <div class="support-card">
@@ -7253,7 +7255,7 @@
       <div class="card">
         <div class="card-head"><h3 data-i18n="help_faq_title">Frequently asked questions</h3><span class="sub" data-i18n="help_faq_sub">DEX</span></div>
         <details class="faq"><summary data-i18n="help_faq_cust_q">GROM custodial?</summary><p data-i18n="help_faq_cust_a">No. This is a non-custodial DEX hub. Swaps go through aggregators (LiFi and others) straight to your wallet. Perpetuals margin sits on Hyperliquid. Predictions and Tokenized Stocks also settle to your address. We never hold user funds.</p></details>
-        <details class="faq"><summary data-i18n="help_faq_do_q">What can I do?</summary><p data-i18n="help_faq_do_a"><strong>Swap</strong> — best route across many networks and 10,000+ tokens.<br><strong>Perpetuals</strong> — up to 100× via Hyperliquid.<br><strong>Predictions</strong> — event markets, stake from your wallet.<br><strong>Tokenized Stocks</strong> — xStocks, 24/7, fractional shares.</p></details>
+        <details class="faq"><summary data-i18n="help_faq_do_q">What can I do?</summary><p data-i18n-html="help_faq_do_a"><strong>Swap</strong> — available routes between tokens and networks.<br><strong>Trade</strong> — Hyperliquid Spot and perpetuals; leverage depends on the market.<br><strong>Predictions</strong> — trade event outcomes.<br><strong>Stocks</strong> — tokenized xStocks.</p></details>
         <details class="faq"><summary data-i18n="help_faq_swap_q">How does Swap work?</summary><p data-i18n="help_faq_swap_a">Connect your wallet, pick tokens, compare quotes, and sign the transaction. Tokens arrive at your address — no internal GROM balance.</p></details>
         <details class="faq"><summary data-i18n="help_faq_funds_q">How do I add funds?</summary><p data-i18n="help_faq_funds_a">Send crypto to your wallet address from an external wallet. There is no deposit onto GROM — Receive shows your address.</p></details>
         <details class="faq"><summary data-i18n="help_faq_fee_q">What are the fees?</summary><p data-i18n="help_faq_fee_a">On Swap — a routing fee (shown in the quote) plus network gas. Hyperliquid, Predict, and xStocks have their own venue fees. GROM routes swaps on-chain and uses venue-native order books for supported trading products.</p></details>
@@ -19019,6 +19021,10 @@ function wireDashBannerCarousel() {
       try {
         if (typeof show === 'function') show(go);
         else location.hash = go;
+        var scrollId = a.getAttribute('data-banner-scroll');
+        if (scrollId) requestAnimationFrame(function () {
+          document.getElementById(scrollId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
       } catch (_) {
         try { location.hash = go; } catch (__) {}
       }

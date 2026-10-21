@@ -23,3 +23,23 @@ test('localized product navigation preserves its path prefix',()=>{
   const x=context({path:'/pt-BR/futures',canonicalUrl:'https://grom.exchange/pt-BR/'});
   x.ctx.updateRouteSeo('futures');assert.equal(x.canonical.value,'https://grom.exchange/pt-BR/futures');
 });
+
+test('leaving a slim landing preserves its content until the full app loads',()=>{
+  const start=source.indexOf('function show(page) {');
+  const handoff=source.slice(start,source.indexOf('  var prevPage = window.__gromLastPage;',start))+'}';
+  for(const page of ['markets','predict','futures']) {
+    let destination,notice;const stored={};
+    const doc={documentElement:{lang:'ru'},getElementById(){return null;},
+      querySelectorAll(){throw new Error('The current page must stay visible during navigation');},
+      createElement(){return {setAttribute(){}};},body:{appendChild(el){notice=el;}}};
+    const ctx={document:doc,window:{},URLSearchParams,Date,sessionStorage:{setItem(k,v){stored[k]=v;}},
+      location:{search:'?_spa=old&_spa=duplicate&event=32225&lang=ru',replace(url){destination=url;}}};
+    vm.createContext(ctx);vm.runInContext(handoff,ctx);ctx.show(page);
+    const url=new URL(destination,'https://grom.exchange');
+    assert.equal(url.pathname,'/app.html');assert.equal(url.hash,'#'+page);
+    assert.equal(url.searchParams.getAll('_spa').length,1);
+    assert.equal(url.searchParams.get('lang'),'ru');
+    assert.equal(url.searchParams.get('event'),page==='predict'?'32225':null);
+    assert.equal(stored.grom_spa_page,page);assert.equal(notice.textContent,'Открываем раздел…');
+  }
+});

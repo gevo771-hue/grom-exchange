@@ -3,7 +3,8 @@ import rateLimit from 'express-rate-limit';
 
 const ID = /^[1-9][0-9]{0,19}$/;
 const TOKEN = /^[0-9]{1,80}$/;
-const RANGES = Object.freeze({ '1d': 5, '1w': 30, '1m': 120, max: 360 });
+// Same public Data API v2 used by Polymarket charts. Long ranges choose their own resolution.
+const RANGES = Object.freeze({ '1h': 60, '6h': 60, '1d': 300, '1w': 1800, '1m': null, max: null });
 const text = (v, limit = 20000) => typeof v === 'string' ? v.slice(0, limit) : '';
 const list = v => { try { const a = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(a) ? a : []; } catch { return []; } };
 const number = v => v == null || v === '' || typeof v === 'boolean' || !Number.isFinite(Number(v)) ? null : Number(v);
@@ -67,7 +68,7 @@ export function registerPredictionEventRoutes(router, { get = axios.get, now = D
     if (pending.size >= 20) throw new Error('upstream_busy');
     const job = Promise.resolve().then(async () => {
       const response = await get(url, { params, timeout: 12000, maxRedirects: 0, maxContentLength: 4000000, headers: { 'User-Agent': 'grom-exchange/1.0' } });
-      const data = normalize(response.data);
+      const data = await normalize(response.data);
       cache.delete(key);
       while (cache.size >= maxEntries) cache.delete(cache.keys().next().value);
       cache.set(key, { at: now(), data });
@@ -107,7 +108,31 @@ export function registerPredictionEventRoutes(router, { get = axios.get, now = D
     const token = req.query.token, range = req.query.range || '1w';
     if (typeof token !== 'string' || !TOKEN.test(token) || typeof range !== 'string' || !Object.hasOwn(RANGES, range)) return res.status(400).json({ error: 'invalid_history_request' });
     try {
-      const data = await read(`history:${token}:${range}`, 'https://clob.polymarket.com/prices-history', { market: token, interval: range, fidelity: RANGES[range] }, raw => ({ history: normalizePredictionHistory(raw), fetchedAt: new Date(now()).toISOString() }));
+      const url = 'https://data-api.polymarket.com/v2/prices-history';
+      const params = { token_id: token, interval: range, ...(RANGES[range] ? { bucket_seconds: RANGES[range] } : {}) };
+      const data = await read(`history-v2:${token}:${range}`, url, params, async first => {
+        const points = [], cursors = new Set(), deadline = Date.now() + 20000;
+        let page = first;
+        for (let n = 0; n < 10; n++) {
+          if (!Array.isArray(page?.data) || typeof page.pagination?.has_more !== 'boolean') throw new Error('invalid_history_page');
+          points.push(...page.data);
+          if (!page.pagination.has_more) {
+            // Ignore old live ticks superseded by aggregate buckets, retaining the latest ticks.
+            const lastBucket = points.reduce((last, p) => p?.resolution_seconds > 0 ? Math.max(last, number(p.timestamp) || 0) : last, 0);
+            const history = normalizePredictionHistory({ history: points.filter(p => p?.resolution_seconds > 0 || number(p?.timestamp) > lastBucket)
+              .map(p => ({ t: p.timestamp, p: p.price })) });
+            return { history, fetchedAt: new Date(now()).toISOString(), source: 'Polymarket Data API v2' };
+          }
+          const cursor = page.pagination.next_cursor;
+          if (n === 9 || !page.data.length || typeof cursor !== 'string' || !cursor || cursor.length > 2048 || cursors.has(cursor)) throw new Error('incomplete_history');
+          cursors.add(cursor);
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) throw new Error('history_timeout');
+          const response = await get(url, { params: { ...params, cursor }, timeout: Math.min(12000, remaining), maxRedirects: 0, maxContentLength: 4000000, headers: { 'User-Agent': 'grom-exchange/1.0' } });
+          page = response.data;
+        }
+        throw new Error('incomplete_history');
+      });
       return res.json(data);
     } catch { return res.status(503).json({ error: 'history_unavailable' }); }
   });

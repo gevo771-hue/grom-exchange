@@ -59,7 +59,7 @@ test('coalesces concurrent reads and expires cache; network options are bounded 
   now += 31000; await call('/predict/event/:id', { id: '123' }); assert.equal(calls, 2);
 });
 test('upstream failures are not cached or misrepresented as empty success', async () => {
-  let calls = 0; const call = harness({ get: async () => { if (++calls === 1) throw new Error('timeout'); return { data: { history: [] } }; } });
+  let calls = 0; const call = harness({ get: async () => { if (++calls === 1) throw new Error('timeout'); return { data: { data: [], pagination: { has_more: false } } }; } });
   const req = () => call('/predict/history', {}, { token: '111', range: '1w' });
   assert.equal((await req()).statusCode, 503); assert.deepEqual((await req()).body.history, []); assert.equal(calls, 2);
 });
@@ -87,4 +87,39 @@ test('named two-sided markets retain actual labels, prices and token identities'
 });
 test('empty or duplicate outcomes are not tradeable', () => {
   for (const outcomes of ['["","Beta"]', '["Alpha","Alpha"]']) { const raw = fixture(); raw.markets[0].outcomes = outcomes; assert.equal(normalizePredictionEvent(raw).rows[0].tradeable, false); }
+});
+
+test('v2 full history preserves old observations and follows cursors without legacy fallback', async () => {
+  const calls = [];
+  const call = harness({ get: async (url, options) => {
+    calls.push(options.params);
+    assert.equal(url, 'https://data-api.polymarket.com/v2/prices-history');
+    assert.equal(options.maxRedirects, 0);
+    return { data: options.params.cursor ? { data: [{ timestamp: 200, price: .9, resolution_seconds: 43200 }, { timestamp: 201, price: .91, resolution_seconds: 0 }], pagination: { has_more: false } }
+      : { data: [{ timestamp: 100, price: .7, resolution_seconds: 43200 }, { timestamp: 150, price: .8, resolution_seconds: 0 }], pagination: { has_more: true, next_cursor: 'next' } } };
+  } });
+  const res = await call('/predict/history', {}, { token: '111', range: 'max' });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body.history, [{ t: 100, p: .7 }, { t: 200, p: .9 }, { t: 201, p: .91 }]);
+  assert.deepEqual(calls, [{ token_id: '111', interval: 'max' }, { token_id: '111', interval: 'max', cursor: 'next' }]);
+});
+test('incomplete v2 pagination fails closed rather than drawing a truncated full history', async () => {
+  for (const pagination of [{ has_more: true }, { has_more: true, next_cursor: 'repeat' }]) {
+    let calls = 0;
+    const call = harness({ get: async () => { calls++; return { data: { data: [{ timestamp: 1, price: .5, resolution_seconds: 60 }], pagination } }; } });
+    assert.equal((await call('/predict/history', {}, { token: '111', range: 'max' })).statusCode, 503);
+    assert.ok(calls <= 2);
+  }
+});
+test('v2 short ranges use explicit supported bucket seconds; long ranges use server resolution', async () => {
+  const call = harness({ get: async (_url, { params }) => {
+    assert.equal(params.bucket_seconds, { '1h': 60, '6h': 60, '1d': 300, '1w': 1800 }[params.interval]);
+    return { data: { data: [], pagination: { has_more: false } } };
+  } });
+  for (const range of ['1h', '6h', '1d', '1w', '1m', 'max']) assert.equal((await call('/predict/history', {}, { token: '111', range })).statusCode, 200);
+});
+test('v2 pagination stops at ten pages and does not cache partial responses', async () => {
+  let calls = 0;
+  const call = harness({ get: async () => ({ data: { data: [{ timestamp: ++calls, price: .5, resolution_seconds: 60 }], pagination: { has_more: true, next_cursor: String(calls) } } }) });
+  for (let n = 1; n <= 2; n++) { assert.equal((await call('/predict/history', {}, { token: '111', range: 'max' })).statusCode, 503); assert.equal(calls, n * 10); }
 });

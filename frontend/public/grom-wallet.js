@@ -5873,7 +5873,8 @@ function gwInjectOnchainCardCss() {
       letter-spacing: 0.01em; cursor: pointer; min-height: 28px;
     }
     .gw-oc-dust-btn:hover { color: #cfdfee; border-color: rgba(200,212,232,0.22); background: rgba(255,255,255,0.04); }
-    .gw-oc-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .gw-oc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: flex-end; }
+    .gw-oc-status { order: 3; flex-basis: 100%; color: #a7b8cc; font-size: 11px; line-height: 1.5; text-align: right; }
     .gw-oc-dust { color: #6b7a92 !important; }
     .gw-oc-list { display: flex; flex-direction: column; gap: 8px; }
     .gw-oc-chain { padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
@@ -5899,12 +5900,14 @@ function gwInjectOnchainCardCss() {
     .gw-oc-loading { padding: 18px; text-align: center; color: #98a8c0; font-size: 12.5px; }
     @media (max-width: 560px) {
       .gw-oc-head { flex-wrap: wrap; gap: 8px; align-items: center; }
-      .gw-oc-actions { width: 100%; justify-content: flex-start; gap: 8px; }
+      .gw-oc-actions { width: 100%; justify-content: space-between; gap: 8px; }
+      .gw-oc-actions .gw-oc-refresh { margin-left: auto; }
+      .gw-oc-status { text-align: left; }
       .gw-oc-dust-btn {
-        padding: 5px 10px; min-height: 30px; font-size: 11px; font-weight: 600;
+        padding: 8px 10px; min-height: 40px; font-size: 11px; font-weight: 600;
         border-radius: 8px; color: #9aabc0;
       }
-      .gw-oc-refresh { padding: 5px 10px; min-height: 30px; font-size: 11.5px; border-radius: 8px; }
+      .gw-oc-refresh { padding: 8px 10px; min-height: 40px; font-size: 11.5px; border-radius: 8px; }
     }
   `;
   let s = document.getElementById('gw-oc-card-css');
@@ -6298,7 +6301,7 @@ async function gwRenderOnchainCard(opts = {}) {
         </div>
         <div class="gw-oc-actions">
           ${toggle}
-          ${snapshot.incomplete && !snapshot.loading ? `<span style="font-size:11px;color:#98a8c0" title="${gwUxText('Не все сети ответили. Известные балансы сохранены; обновите, чтобы проверить остальные.', 'Some networks did not respond. Known balances are retained; refresh to check the others.')}">${gwUxText('Обновлено частично', 'Partially updated')}</span>` : ''}
+          ${snapshot.incomplete && !snapshot.loading ? `<span class="gw-oc-status" title="${gwUxText('Не все сети ответили. Известные балансы сохранены; обновите, чтобы проверить остальные.', 'Some networks did not respond. Known balances are retained; refresh to check the others.')}">${gwUxText('Обновлено частично', 'Partially updated')}</span>` : ''}
           <button type="button" class="gw-oc-refresh" id="gwOcRefresh">${gwOcT('refresh')}</button>
         </div>
       </div>

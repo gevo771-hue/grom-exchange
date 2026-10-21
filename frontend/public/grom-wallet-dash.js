@@ -491,15 +491,15 @@ const GW_DP_TR = {
   ru: {
     walletH: '⚡ DEX Quick Actions', walletSub: 'Всё что нужно — свап, мост, обзор on-chain',
     walletA1: 'Мгновенный своп', walletA1s: 'несколько сетей', walletA2: 'Bridge между сетями', walletA2s: 'LiFi + Squid', walletA3: 'Открыть в explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Свап через wallet', walletA4s: 'Non-custodial',
-    setH: '⚙ DEX Preferences', setSub: 'Настройки маршрутизации и защиты от MEV',
-    setSlip: 'Slippage по умолчанию', setSlipS: 'Максимальное проскальзывание для свапов', setMev: 'MEV protection', setMevS: 'Приоритет CoWSwap batch, если доступно', setAgg: 'Основной агрегатор', setAggS: 'Сравниваем доступные маршруты', setRpc: 'Свой RPC (опционально)', setRpcS: 'Для приватного нод-провайдера',
+    setH: '⚙ DEX Preferences', setSub: 'Допустимое проскальзывание при обмене',
+    setSlip: 'Slippage по умолчанию', setSlipS: 'Максимальное проскальзывание для свапов',
     saved: 'Сохранено',
   },
   en: {
     walletH: '⚡ DEX Quick Actions', walletSub: 'Everything you need — swap, bridge, on-chain review',
     walletA1: 'Instant Swap', walletA1s: 'multiple chains', walletA2: 'Cross-chain Bridge', walletA2s: 'LiFi + Squid', walletA3: 'View on explorer', walletA3s: 'Etherscan/BscScan', walletA4: 'Swap via wallet', walletA4s: 'Non-custodial',
-    setH: '⚙ DEX Preferences', setSub: 'Routing settings and MEV protection',
-    setSlip: 'Default slippage', setSlipS: 'Maximum slippage tolerated on swaps', setMev: 'MEV protection', setMevS: 'Prefer CoWSwap batch when available', setAgg: 'Preferred aggregator', setAggS: 'Our meta-agg compares available sources', setRpc: 'Custom RPC (optional)', setRpcS: 'For private node providers',
+    setH: '⚙ DEX Preferences', setSub: 'Slippage tolerance for swaps',
+    setSlip: 'Default slippage', setSlipS: 'Maximum slippage tolerated on swaps',
     saved: 'Saved',
   },
 };
@@ -552,10 +552,8 @@ function gwRenderDexSettings() {
   }
   const t = gwDpLang();
   const prefs = gwDpPrefLoad();
-  const slip = prefs.slippage ?? '0.5';
-  const mev = prefs.mev !== false;
-  const agg = prefs.agg || 'auto';
-  const rpc = prefs.rpc || '';
+  const savedSlip = Number(prefs.slippage);
+  const slip = Number.isFinite(savedSlip) && savedSlip > 0 ? Math.max(0.05, Math.min(10, savedSlip)) : 0.5;
   wrap.innerHTML = `<div class="gw-dp-card">
     <div class="gw-dp-head"><div>
       <h3 class="gw-dp-h">${t.setH}</h3>
@@ -565,39 +563,15 @@ function gwRenderDexSettings() {
       <div class="k">${t.setSlip}<small>${t.setSlipS}</small></div>
       <div><input type="number" step="0.1" min="0.05" max="10" class="gw-dp-inp" id="gwDpSlippage" value="${slip}" style="width:80px" /> %</div>
     </div>
-    <div class="gw-dp-row">
-      <div class="k">${t.setMev}<small>${t.setMevS}</small></div>
-      <label class="gw-dp-toggle"><input type="checkbox" id="gwDpMev" ${mev ? 'checked' : ''} /><span class="slider"></span></label>
-    </div>
-    <div class="gw-dp-row">
-      <div class="k">${t.setAgg}<small>${t.setAggS}</small></div>
-      <select class="gw-dp-sel" id="gwDpAgg">
-        <option value="auto" ${agg === 'auto' ? 'selected' : ''}>Auto (best rate)</option>
-        <option value="lifi" ${agg === 'lifi' ? 'selected' : ''}>LiFi</option>
-        <option value="cow" ${agg === 'cow' ? 'selected' : ''}>CoWSwap (MEV-safe)</option>
-        <option value="squid" ${agg === 'squid' ? 'selected' : ''}>Squid (Axelar)</option>
-        <option value="paraswap" ${agg === 'paraswap' ? 'selected' : ''}>Paraswap</option>
-        <option value="kyber" ${agg === 'kyber' ? 'selected' : ''}>KyberSwap</option>
-        <option value="odos" ${agg === 'odos' ? 'selected' : ''}>Odos</option>
-      </select>
-    </div>
-    <div class="gw-dp-row">
-      <div class="k">${t.setRpc}<small>${t.setRpcS}</small></div>
-      <input type="text" class="gw-dp-inp" id="gwDpRpc" placeholder="https://…" value="${rpc}" style="width:220px;text-align:left" />
-    </div>
   </div>`;
-  const save = () => {
-    gwDpPrefSave({
-      slippage: Number(document.getElementById('gwDpSlippage').value) || 0.5,
-      mev: document.getElementById('gwDpMev').checked,
-      agg: document.getElementById('gwDpAgg').value,
-      rpc: document.getElementById('gwDpRpc').value.trim(),
-    });
+  const input = document.getElementById('gwDpSlippage');
+  if (input) input.addEventListener('change', () => {
+    let pct = Number(String(input.value).replace(',', '.'));
+    if (!Number.isFinite(pct) || pct <= 0) pct = 0.5;
+    pct = Math.max(0.05, Math.min(10, pct));
+    input.value = String(pct);
+    gwDpPrefSave({ ...gwDpPrefLoad(), slippage: pct });
     try { gwToast(t.saved, 'success'); } catch (_) {}
-  };
-  ['gwDpSlippage', 'gwDpMev', 'gwDpAgg', 'gwDpRpc'].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', save);
   });
 }
 

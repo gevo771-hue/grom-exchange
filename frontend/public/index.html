@@ -370,6 +370,7 @@
   html:not(.grom-js-ready)[data-grom-route="xstocks"] #page-xstocks { display: block !important; }
   /* Never paint crawl-only SEO accordion above product/admin UI (2026-09-22). */
   html.grom-js-ready:not([data-grom-route="landing"]) #gromSeoRouteCopy { display: none !important; }
+  #gromRouteLoading{position:fixed;top:calc(var(--header-h,64px) + 16px);left:50%;transform:translateX(-50%);z-index:100000;padding:12px 20px;border:1px solid #5bd8ff;border-radius:12px;background:#172733;color:#fff;box-shadow:0 8px 30px #0005;font-size:14px;pointer-events:none;}
   /* Landing v2 default — hide pre-v2 chrome BEFORE landing-v2.css/js arrive */
   html.lv2-on #page-landing .lp-hero-right .landing-hero-icon,
   html.lv2-on #page-landing .lp-hero .lp-eyebrow,
@@ -970,6 +971,8 @@
     box-shadow: none !important;
     background: none !important;
   }
+  #gwDsCard { scroll-margin-top: calc(var(--topbar-total, 60px) + 16px); }
+
   .dash-banners .dash-banner,
   .dash-banners-wrap {
     transform-style: flat !important;
@@ -5616,13 +5619,6 @@
       padding-right: 2px;
       scroll-snap-type: none;
     }
-    /* Safari iOS: nested scrollers inside main fight touch scroll — use page scroll only */
-    html.grom-safari #page-futures #futList,
-    html.grom-stable-ui #page-futures #futList {
-      max-height: none !important;
-      overflow: visible !important;
-      -webkit-overflow-scrolling: auto !important;
-    }
     #page-futures #wlList .wl-item {
       display: grid !important;
       grid-template-columns: 24px 1fr auto;
@@ -6130,6 +6126,30 @@
     }
     .page-subtitle { overflow-wrap: anywhere; }
   }
+
+/* Compact Trade navigation and an eight-row market viewport, shared by touch and desktop. */
+#tradeModeSwitch{padding:4px;gap:4px;border-radius:12px;border:1px solid #83cce33d;background:#192433;box-shadow:inset 0 1px #ffffff08}
+#tradeModeSwitch button{min-height:36px;min-width:76px;padding:8px 14px;border-radius:8px;font-size:12px;color:#becddd;letter-spacing:.04em}
+#tradeModeSwitch button.active{background:#67d4ef;color:#092a39;box-shadow:0 2px 6px #0002}
+#tradeModeSwitch button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+#page-futures #futCats{flex-wrap:nowrap!important;gap:18px;margin:4px 0 10px!important;max-width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;border-bottom:1px solid #c8d4e82b;border-radius:0;background:none;padding:0}
+#page-futures #futCats::-webkit-scrollbar{display:none;width:0;height:0}
+#page-futures #futCats .cat-pill{flex:none;min-height:44px;padding:10px 0!important;border:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;color:#d4dfed;font-size:12px;font-weight:600}
+#page-futures #futCats .cat-pill.active{border-bottom-color:#5bd8ff!important;color:#fff}
+#page-futures aside.wl{max-height:none}
+#page-futures #futList{flex:0 1 auto;min-height:0;max-height:352px;overflow-y:auto;overflow-x:hidden;padding:0;margin-bottom:0;scrollbar-gutter:stable;overscroll-behavior-y:auto;-webkit-overflow-scrolling:touch}
+#page-futures #futList .wl-item{box-sizing:border-box;height:44px;min-height:44px;margin:0;padding:8px 6px!important;border-radius:7px}
+#page-futures #futList #futListMore{display:flex!important;align-items:center;justify-content:center}
+#futList:focus-visible{outline:2px solid #5bd8ff;outline-offset:3px}
+.grom-socials{display:flex;align-items:center;gap:8px}
+.grom-socials a{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:8px 12px;border:1px solid #9bbbd82b;border-radius:10px;background:#14233738;color:#d8e8f5;font-size:12px;font-weight:600;text-decoration:none}
+.grom-socials svg{width:17px;height:17px;flex:none;fill:currentColor}
+.grom-socials a[data-social="telegram"] svg{color:#42c7ff}
+.grom-socials a:hover{background:#66c9ed1a;border-color:#66c9ed80;color:#fff}
+.grom-socials a:focus-visible{outline:2px solid #5bd8ff;outline-offset:3px}
+.sidebar>.grom-socials{padding:16px 10px;margin-top:12px;border-top:1px solid #9bbbd820;flex-wrap:wrap}
+.grom-community-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-top:32px;padding:24px 0;border-top:1px solid #9bbbd82b}
+.grom-community-footer>span{font-size:13px;font-weight:700;letter-spacing:.12em;color:#a9bed2}
 </style>
 <link rel="stylesheet" href="/grom-explore.css">
 <link rel="stylesheet" href="/grom-referral.css">
@@ -6330,6 +6350,11 @@
     <div class="nav-item" data-page="settings"><span class="ico"><svg width="18" height="18"><use href="#i-settings"/></svg></span><span class="nav-label" data-i18n="nav_settings">Settings</span></div>
     <div class="nav-item" data-page="help"><span class="ico"><svg width="18" height="18"><use href="#i-help"/></svg></span><span class="nav-label" data-i18n="nav_help">Help</span></div>
     <div class="nav-item" data-page="backoffice" id="navBackoffice" style="display:none"><span class="ico"><svg width="18" height="18"><use href="#i-shield"/></svg></span><span class="nav-label">Админка</span><span class="badge new">ADMIN</span></div>
+
+    <nav class="grom-socials" aria-label="GROM social media">
+      <a href="https://x.com/GromExchange" target="_blank" rel="noopener noreferrer" aria-label="GROM on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.6 5.5 22H2.3l7.9-9L2.5 2H9l4.5 6.8L18.9 2ZM17.8 20h1.8L8 3.9H6.1L17.8 20Z"/></svg><span>X</span></a>
+      <a href="https://t.me/grom_finence_hub" data-social="telegram" target="_blank" rel="noopener noreferrer" aria-label="GROM on Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.7 3.5-3.2 16.1c-.2 1.1-.9 1.4-1.8.9l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.4-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.1 13.4l-4.8-1.5c-1-.3-1-1 .2-1.4L20.2 3.3c.9-.3 1.7.2 1.5 1.2Z"/></svg><span>Telegram</span></a>
+    </nav>
 
     <div id="sidebarLogout" data-authed-only="1" style="display:none;margin-top:12px;padding:10px 12px;border-top:1px solid rgba(136,192,208,.15)">
       <button type="button" onclick="gromFullLogout()" style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(232,87,107,.08);border:1px solid rgba(232,87,107,.2);color:#ff7a7a;border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:600">
@@ -6614,37 +6639,40 @@
           <section class="lp-seo-multilang" id="lpSeoMultilang" aria-label="Multilingual SEO guides"></section>
         </details>
 
+      <footer class="grom-community-footer"><span>GROM FINANCE HUB</span><nav class="grom-socials" aria-label="GROM social media">
+      <a href="https://x.com/GromExchange" target="_blank" rel="noopener noreferrer" aria-label="GROM on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.6 5.5 22H2.3l7.9-9L2.5 2H9l4.5 6.8L18.9 2ZM17.8 20h1.8L8 3.9H6.1L17.8 20Z"/></svg><span>X</span></a>
+      <a href="https://t.me/grom_finence_hub" data-social="telegram" target="_blank" rel="noopener noreferrer" aria-label="GROM on Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.7 3.5-3.2 16.1c-.2 1.1-.9 1.4-1.8.9l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.4-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.1 13.4l-4.8-1.5c-1-.3-1-1 .2-1.4L20.2 3.3c.9-.3 1.7.2 1.5 1.2Z"/></svg><span>Telegram</span></a>
+    </nav></footer>
       </div>
-
     </section>
 
     <!-- DASHBOARD -->
     <section class="page" id="page-dashboard">
       <div class="dash-banners-wrap" id="dashBannersWrap" hidden>
       <div class="dash-banners" id="dashBanners">
-        <a class="dash-banner banner-spot" href="#spot" data-banner-go="spot" onclick="event.preventDefault(); try{show('futures');}catch(_){try{document.querySelector('.gw-ds-wrap')?.scrollIntoView({behavior:'smooth',block:'center'});}catch(__){}}">
+        <a class="dash-banner banner-spot" href="#dashboard" data-banner-go="dashboard" data-banner-scroll="gwDsCard">
           <div class="banner-photo" aria-hidden="true"></div>
           <div class="banner-scrim" aria-hidden="true"></div>
           <div class="banner-content">
             <div class="banner-copy">
               <div class="banner-eyebrow" data-i18n="dash_banner_spot_eyebrow">INSTANT SWAP</div>
-              <h3 data-i18n="dash_banner_spot_h">10,000+ tokens · best DEX route</h3>
-              <p data-i18n="dash_banner_spot_p">Meta-aggregator across major routers. You sign in your wallet — settlement is on-chain.</p>
+              <h3 data-i18n="dash_banner_spot_h">Swap across networks</h3>
+              <p data-i18n="dash_banner_spot_p">Compare available routes. Sign in your wallet and settle on-chain.</p>
             </div>
           </div>
         </a>
-        <a class="dash-banner banner-futures" href="#futures" data-banner-go="futures" onclick="event.preventDefault(); try{show('futures');}catch(_){}">
+        <a class="dash-banner banner-futures" href="#futures" data-banner-go="futures">
           <div class="banner-photo" aria-hidden="true"></div>
           <div class="banner-scrim" aria-hidden="true"></div>
           <div class="banner-content">
             <div class="banner-copy">
               <div class="banner-eyebrow" data-i18n="dash_banner_fut_eyebrow">TRADE</div>
-              <h3 data-i18n="dash_banner_fut_h">Up to 100×. Perps and Spot.</h3>
-              <p data-i18n="dash_banner_fut_p">Cross / isolated. Depth from top venues.</p>
+              <h3 data-i18n="dash_banner_fut_h">Spot and perpetuals</h3>
+              <p data-i18n="dash_banner_fut_p">Trade on Hyperliquid. Leverage depends on the selected market.</p>
             </div>
           </div>
         </a>
-        <a class="dash-banner banner-predict" href="#predict" data-banner-go="predict" onclick="event.preventDefault(); try{show('predict');}catch(_){}">
+        <a class="dash-banner banner-predict" href="#predict" data-banner-go="predict">
           <div class="banner-photo" aria-hidden="true"></div>
           <div class="banner-scrim" aria-hidden="true"></div>
           <div class="banner-content">
@@ -6837,8 +6865,8 @@
     <section class="page trade-mode-perp" id="page-futures">
       <h1 class="page-title"><span class="spot-pair-wrap"><button type="button" class="spot-pair-btn" id="futPairBtn"><span id="futPairTitle">BTCUSDT</span> ▾</button><div class="spot-pair-pop" id="futPairPop" hidden><input class="spot-pair-search" id="futPairSearch" placeholder="Search…" autocomplete="off" /><div class="spot-pair-list" id="futPairList"></div></div></span>
         <div class="trade-mode-switch" id="tradeModeSwitch" role="tablist" aria-label="Trade mode">
-          <button type="button" role="tab" data-trade-mode="perp" class="active" aria-selected="true">Perp</button>
-          <button type="button" role="tab" data-trade-mode="spot" aria-selected="false">Spot</button>
+          <button type="button" role="tab" data-trade-mode="perp" class="active" aria-selected="true">PERPS</button>
+          <button type="button" role="tab" data-trade-mode="spot" aria-selected="false">SPOT</button>
         </div>
       </h1>
       <p class="page-subtitle">Perps and Spot · non-custodial.</p>
@@ -6874,7 +6902,7 @@
             <button class="active" data-filter="all">All</button>
             <button data-filter="top">Top vol</button>
           </div>
-          <div id="futList"></div>
+          <div id="futList" tabindex="0" role="region" aria-label="Trade markets"></div>
         </aside>
 
         <!-- Center: chart + positions -->
@@ -6885,7 +6913,7 @@
                 <div class="bo-asset" id="futAssetTag">
                   <span class="bo-asset-ico" id="futAssetIco"><span class="coin-ico btc" style="width:22px;height:22px;font-size:10px">₿</span></span>
                   <span class="fut-asset-label" id="futAssetLabel">BTCUSDT</span>
-                  <span class="pay" id="futKindBadge" style="background:rgba(77,158,255,0.18);color:var(--steel1);padding:1px 6px;border-radius:4px">PERP</span>
+                  <span class="pay" id="futKindBadge" style="background:rgba(77,158,255,0.18);color:var(--steel1);padding:1px 6px;border-radius:4px">PERPS</span>
                 </div>
                 <div class="bo-price">
                   <span class="big mono" id="futPrice">—</span>
@@ -7233,7 +7261,7 @@
         </div>
         <div class="support-card">
           <div class="t" data-i18n="help_card_markets_t">Four markets, one wallet</div>
-          <div class="d" data-i18n="help_card_markets_d">Swap 10k+ tokens, Perpetuals up to 100×, Predictions markets, and Tokenized Stocks — all from one connected wallet.</div>
+          <div class="d" data-i18n="help_card_markets_d">Swap, Spot and perpetuals, predictions and tokenized stocks — from one connected wallet.</div>
           <div class="foot">Swap · Perps · Predict · Stocks</div>
         </div>
         <div class="support-card">
@@ -7253,7 +7281,7 @@
       <div class="card">
         <div class="card-head"><h3 data-i18n="help_faq_title">Frequently asked questions</h3><span class="sub" data-i18n="help_faq_sub">DEX</span></div>
         <details class="faq"><summary data-i18n="help_faq_cust_q">GROM custodial?</summary><p data-i18n="help_faq_cust_a">No. This is a non-custodial DEX hub. Swaps go through aggregators (LiFi and others) straight to your wallet. Perpetuals margin sits on Hyperliquid. Predictions and Tokenized Stocks also settle to your address. We never hold user funds.</p></details>
-        <details class="faq"><summary data-i18n="help_faq_do_q">What can I do?</summary><p data-i18n="help_faq_do_a"><strong>Swap</strong> — best route across many networks and 10,000+ tokens.<br><strong>Perpetuals</strong> — up to 100× via Hyperliquid.<br><strong>Predictions</strong> — event markets, stake from your wallet.<br><strong>Tokenized Stocks</strong> — xStocks, 24/7, fractional shares.</p></details>
+        <details class="faq"><summary data-i18n="help_faq_do_q">What can I do?</summary><p data-i18n-html="help_faq_do_a"><strong>Swap</strong> — available routes between tokens and networks.<br><strong>Trade</strong> — Hyperliquid Spot and perpetuals; leverage depends on the market.<br><strong>Predictions</strong> — trade event outcomes.<br><strong>Stocks</strong> — tokenized xStocks.</p></details>
         <details class="faq"><summary data-i18n="help_faq_swap_q">How does Swap work?</summary><p data-i18n="help_faq_swap_a">Connect your wallet, pick tokens, compare quotes, and sign the transaction. Tokens arrive at your address — no internal GROM balance.</p></details>
         <details class="faq"><summary data-i18n="help_faq_funds_q">How do I add funds?</summary><p data-i18n="help_faq_funds_a">Send crypto to your wallet address from an external wallet. There is no deposit onto GROM — Receive shows your address.</p></details>
         <details class="faq"><summary data-i18n="help_faq_fee_q">What are the fees?</summary><p data-i18n="help_faq_fee_a">On Swap — a routing fee (shown in the quote) plus network gas. Hyperliquid, Predict, and xStocks have their own venue fees. GROM routes swaps on-chain and uses venue-native order books for supported trading products.</p></details>
@@ -8364,6 +8392,26 @@ function show(page) {
       return;
     }
   }
+  const el = document.getElementById('page-' + page);
+  if (!el && page !== 'landing') {
+    /* ALWAYS hard-load the full SPA when the slim landing lacks product panels.
+     * Keep the current page visible until the full
+     * document arrives; clearing .active first left only the SEO accordion. */
+    try { sessionStorage.setItem('grom_spa_page', page); } catch (_) {}
+    var spaParams = new URLSearchParams(location.search);
+    spaParams.set('_spa', String(Date.now()));
+    if (page !== 'predict') spaParams.delete('event');
+    var notice = document.getElementById('gromRouteLoading');
+    if (!notice) {
+      notice = document.createElement('div');
+      notice.id = 'gromRouteLoading';
+      notice.setAttribute('role', 'status');
+      document.body.appendChild(notice);
+    }
+    notice.textContent = /^ru/i.test(document.documentElement.lang) ? 'Открываем раздел…' : 'Opening page…';
+    location.replace('/app.html?' + spaParams.toString() + '#' + page);
+    return;
+  }
   var prevPage = window.__gromLastPage;
   var pageChanged = prevPage !== page;
   if (pageChanged) gromRouteScrollTop();
@@ -8374,19 +8422,8 @@ function show(page) {
   } else if (pageChanged) {
     gromResetScroll();
   }
-  const el = document.getElementById('page-' + page);
   if (el) {
     el.classList.add('active');
-  } else if (page !== 'landing') {
-    /* Slim SEO shell (or broken deploy) is missing this panel.
-     * ALWAYS hard-load the full SPA — never fall back to landing (traps users). */
-    try { sessionStorage.setItem('grom_spa_page', page); } catch (_) {}
-    var spaQ = '_spa=' + Date.now();
-    var spaSearch = location.search && location.search.length > 1
-      ? (location.search + '&' + spaQ)
-      : ('?' + spaQ);
-    location.replace('/app.html' + spaSearch + '#' + page);
-    return;
   } else {
     const land = document.getElementById('page-landing');
     if (land) land.classList.add('active');
@@ -9807,7 +9844,7 @@ function applyTradeModeUi(opts) {
     });
   }
   var badge = document.getElementById('futKindBadge');
-  if (badge) badge.textContent = spot ? 'SPOT' : 'PERP';
+  if (badge) badge.textContent = spot ? 'SPOT' : 'PERPS';
   var est = document.getElementById('futEstLbl');
   if (est) est.textContent = spot ? 'Est. cost' : 'Est. margin';
   var posH = document.querySelector('#page-futures .fut-positions-card h3');
@@ -13008,7 +13045,7 @@ function updateFuturesAssetTag(sym) {
       : (base + quote);
   }
   var badge = document.getElementById('futKindBadge');
-  if (badge) badge.textContent = (window.futDeskState && futDeskState.tradeMode === 'spot') ? 'SPOT' : 'PERP';
+  if (badge) badge.textContent = (window.futDeskState && futDeskState.tradeMode === 'spot') ? 'SPOT' : 'PERPS';
   var icoHost = document.getElementById('futAssetIco');
   if (icoHost) icoHost.innerHTML = futuresRowIcoHtml(sym);
 }
@@ -13152,7 +13189,11 @@ function renderFuturesList(filter) {
     html += '<button type="button" class="wl-item" id="futListMore" style="justify-content:center;opacity:.85;cursor:pointer;width:100%;border:0;background:transparent;color:inherit;font:inherit">' +
       'Show more (+' + (rows.length - showN) + ')</button>';
   }
+  var listKey = [isTradeSpot() ? 'spot' : 'perp', cat, listUiState.futuresFilter, q].join('|');
+  var keepScroll = host.dataset.listKey === listKey ? host.scrollTop : 0;
+  host.dataset.listKey = listKey;
   host.innerHTML = html;
+  host.scrollTop = keepScroll;
   var moreBtn = document.getElementById('futListMore');
   if (moreBtn) {
     moreBtn.onclick = function (e) {
@@ -13188,8 +13229,10 @@ function wireListSearches() {
     futCats.addEventListener('click', function (e) {
       var b = e.target.closest('button[data-cat]');
       if (!b) return;
-      futCats.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+      e.stopPropagation();
+      futCats.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); x.setAttribute('aria-pressed', 'false'); });
       b.classList.add('active');
+      b.setAttribute('aria-pressed', 'true');
       listUiState.futuresCat = b.dataset.cat || 'all';
       window.__futListShow = 0;
       renderFuturesList(document.querySelector('#page-futures .wl-search input')?.value || '');
@@ -16100,9 +16143,9 @@ var GROM_XSTOCKS = [
       + '<div class="gwx-toolbar"><div class="gwx-cats">' + catTabsHtml(GROM_PCATS, gwxState.pCat, true) + '</div>'
       + '<div class="gwx-search"><input type="search" id="gwxPredictSearch" autocomplete="off" spellcheck="false" placeholder="' + esc(tx('px_search_predict', 'Search markets…')) + '" /></div></div>'
       + '<div class="gwx-grid"></div>'
+      + '<div class="gwx-cal" id="gwxPredictCal" hidden></div>'
       + '<div class="gwx-predict-more-wrap" id="gwxPredictMoreWrap" hidden style="padding:8px 0 16px">'
       + '<button type="button" class="gwx-load-more" id="gwxPredictLoadMore">' + tx('px_load_more', 'Load more') + '</button></div>'
-      + '<div class="gwx-cal" id="gwxPredictCal" hidden></div>'
       + '<div class="gxp" id="gromPredictPos"><div class="gxp-h">' + tx('px_my_bets', 'My bets') + '</div><div class="gxp-list"></div></div>'
       + '</div>';
   }
@@ -16435,10 +16478,10 @@ var GROM_XSTOCKS = [
     var list = predictSource();
     var showN = gwxState.pShow || GWX_MOBILE_BATCH;
     var localMore = list.length > showN;
-    var show = !liveCal && list.length > 0 && (localMore || !!gwxState.pHasMore);
+    var show = list.length > 0 && (liveCal ? !!gwxState.pHasMore : (localMore || !!gwxState.pHasMore));
     wrap.hidden = !show;
     if (show) {
-      var shown = Math.min(showN, list.length);
+      var shown = liveCal ? list.length : Math.min(showN, list.length);
       var total = Math.max(Number(gwxState.pTotal) || 0, list.length);
       var left = Math.max(0, (list.length - shown) + (gwxState.pHasMore ? Math.max(0, total - list.length) : 0));
       btn.textContent = tx('px_load_more', 'Load more')
@@ -16457,7 +16500,7 @@ var GROM_XSTOCKS = [
       tab.classList.toggle('on', tab.dataset.pview === gwxState.pView);
       tab.setAttribute('aria-selected', String(tab.dataset.pview === gwxState.pView));
     });
-    if (live) renderPredictCalendar();
+    if (live) { renderPredictCalendar(); updatePredictMoreBtn(); }
     else renderPredictGridContent(opts);
   }
   function predictWhen(m) { return m.starts || m.ends || ''; }
@@ -16595,7 +16638,7 @@ var GROM_XSTOCKS = [
     });
     // Prefer higher volume within the day (Polymarket-like ranking)
     list = list.slice().sort(function (a, b) { return (b.vol24 || b.vol || 0) - (a.vol24 || a.vol || 0); });
-    if (gwxMobile() && list.length > 80) list = list.slice(0, 80);
+    // Keep every date accessible; only the selected day is rendered in small batches.
     var buckets = Object.create(null);
     list.forEach(function (m) {
       var k = calDayKey(m);
@@ -17645,7 +17688,7 @@ var GROM_XSTOCKS = [
       e.preventDefault();
       var listMore = predictSource();
       var showCur = gwxState.pShow || GWX_MOBILE_BATCH;
-      if (listMore.length > showCur) {
+      if (gwxState.pView !== 'live' && listMore.length > showCur) {
         gwxState.pShow = showCur + GWX_MOBILE_BATCH;
         renderPredictGrid();
         return;
@@ -17683,8 +17726,9 @@ var GROM_XSTOCKS = [
     if (viewTab && viewTab.closest('#page-predict')) {
       e.preventDefault(); e.stopPropagation();
       gwxState.pView = viewTab.dataset.pview || 'all';
-      if (gwxState.pView === 'live') loadPredictLive(!predictDomHasCards(), { soft: predictDomHasCards() });
-      else applyPredictView();
+      // Switch immediately using available data; a slow request must not block the tab.
+      applyPredictView();
+      if (gwxState.pView === 'live') loadPredictLive(false, { soft: true });
       return;
     }
     var calDay = e.target.closest('.gwx-cal-day[data-day]');
@@ -19019,6 +19063,10 @@ function wireDashBannerCarousel() {
       try {
         if (typeof show === 'function') show(go);
         else location.hash = go;
+        var scrollId = a.getAttribute('data-banner-scroll');
+        if (scrollId) requestAnimationFrame(function () {
+          document.getElementById(scrollId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
       } catch (_) {
         try { location.hash = go; } catch (__) {}
       }
@@ -19572,8 +19620,9 @@ window.addEventListener('grom:hl-ready', function () {
 document.addEventListener('click', function (e) {
   var futCatBtn = e.target.closest('#futCats button[data-cat]');
   if (futCatBtn) {
-    document.querySelectorAll('#futCats button').forEach(function (x) { x.classList.remove('active'); });
+    document.querySelectorAll('#futCats button').forEach(function (x) { x.classList.remove('active'); x.setAttribute('aria-pressed', 'false'); });
     futCatBtn.classList.add('active');
+    futCatBtn.setAttribute('aria-pressed', 'true');
     listUiState.futuresCat = futCatBtn.dataset.cat || 'all';
     window.__futListShow = 0;
     if (typeof renderFuturesList === 'function') {

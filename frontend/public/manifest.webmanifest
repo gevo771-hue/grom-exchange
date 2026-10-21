@@ -23,7 +23,7 @@
     },
     {
       "src": "/assets/grom-mark-nord.png?v=20260921o",
-      "sizes": "1024x1024",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }

@@ -370,7 +370,6 @@
   html:not(.grom-js-ready)[data-grom-route="xstocks"] #page-xstocks { display: block !important; }
   /* Never paint crawl-only SEO accordion above product/admin UI (2026-09-22). */
   html.grom-js-ready:not([data-grom-route="landing"]) #gromSeoRouteCopy { display: none !important; }
-  #gromRouteLoading{position:fixed;top:calc(var(--header-h,64px) + 16px);left:50%;transform:translateX(-50%);z-index:100000;padding:12px 20px;border:1px solid #5bd8ff;border-radius:12px;background:#172733;color:#fff;box-shadow:0 8px 30px #0005;font-size:14px;pointer-events:none;}
   /* Landing v2 default — hide pre-v2 chrome BEFORE landing-v2.css/js arrive */
   html.lv2-on #page-landing .lp-hero-right .landing-hero-icon,
   html.lv2-on #page-landing .lp-hero .lp-eyebrow,
@@ -6128,9 +6127,9 @@
   }
 
 /* Compact Trade navigation; eight rows on touch, full card height on desktop. */
-#tradeModeSwitch{padding:3px;gap:3px;border-radius:9px;border:1px solid #83cce33d;background:#192433;box-shadow:inset 0 1px #ffffff08}
+#tradeModeSwitch{padding:3px;gap:3px;border-radius:9px;border:1px solid rgba(136,192,208,0.16);background:linear-gradient(180deg,#303642,#252d3a);box-shadow:inset 0 1px #ffffff08}
 #tradeModeSwitch button{min-height:28px;min-width:58px;padding:5px 10px;border-radius:6px;font-size:11.5px;color:#becddd;letter-spacing:.04em}
-#tradeModeSwitch button.active{background:#67d4ef;color:#092a39;box-shadow:0 2px 6px #0002}
+#tradeModeSwitch button.active{background:transparent;color:#eceff4;box-shadow:inset 0 -2px #67d4ef}
 #tradeModeSwitch button:focus-visible{outline:2px solid #fff;outline-offset:2px}
 #page-futures #futCats{flex-wrap:nowrap!important;gap:18px;margin:4px 0 10px!important;max-width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;border-bottom:1px solid #c8d4e82b;border-radius:0;background:none;padding:0}
 #page-futures #futCats::-webkit-scrollbar{display:none;width:0;height:0}
@@ -6185,9 +6184,11 @@
     if (left > 0) setTimeout(hide, left);
     else hide();
   }
-  if (document.readyState === 'complete') maybe();
-  else window.addEventListener('load', maybe);
-  setTimeout(hide, 3500);
+  window.gromDismissSplash = hide;
+  if (document.readyState !== 'loading') maybe();
+  else document.addEventListener('DOMContentLoaded', maybe, { once: true });
+  window.addEventListener('pageshow', hide);
+  setTimeout(hide, 1500);
 })();
 </script>
 
@@ -6614,6 +6615,11 @@
           <p class="lp-final-tiny" data-i18n="lp_final_tiny">multiple chains · 10 000+ tokens · available aggregators · Wallet-only access</p>
         </div>
 
+      <footer class="grom-community-footer"><span>GROM FINANCE HUB</span><nav class="grom-socials" aria-label="GROM social media">
+      <a href="https://x.com/GromExchange" target="_blank" rel="noopener noreferrer" aria-label="GROM on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.6 5.5 22H2.3l7.9-9L2.5 2H9l4.5 6.8L18.9 2ZM17.8 20h1.8L8 3.9H6.1L17.8 20Z"/></svg><span>X</span></a>
+      <a href="https://t.me/grom_finence_hub" data-social="telegram" target="_blank" rel="noopener noreferrer" aria-label="GROM on Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.7 3.5-3.2 16.1c-.2 1.1-.9 1.4-1.8.9l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.4-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.1 13.4l-4.8-1.5c-1-.3-1-1 .2-1.4L20.2 3.3c.9-.3 1.7.2 1.5 1.2Z"/></svg><span>Telegram</span></a>
+    </nav></footer>
+
         <!-- SEO GUIDES (collapsed — bottom of page, crawlable) -->
         <details class="lp-seo-details lp-seo-details-primary" id="lpSeoPrimaryWrap">
           <summary class="lp-seo-details-sum" id="lpSeoPrimarySum">Guides: crypto, futures, predictions &amp; stocks</summary>
@@ -6640,10 +6646,7 @@
           <section class="lp-seo-multilang" id="lpSeoMultilang" aria-label="Multilingual SEO guides"></section>
         </details>
 
-      <footer class="grom-community-footer"><span>GROM FINANCE HUB</span><nav class="grom-socials" aria-label="GROM social media">
-      <a href="https://x.com/GromExchange" target="_blank" rel="noopener noreferrer" aria-label="GROM on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.6 5.5 22H2.3l7.9-9L2.5 2H9l4.5 6.8L18.9 2ZM17.8 20h1.8L8 3.9H6.1L17.8 20Z"/></svg><span>X</span></a>
-      <a href="https://t.me/grom_finence_hub" data-social="telegram" target="_blank" rel="noopener noreferrer" aria-label="GROM on Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.7 3.5-3.2 16.1c-.2 1.1-.9 1.4-1.8.9l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.4-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.1 13.4l-4.8-1.5c-1-.3-1-1 .2-1.4L20.2 3.3c.9-.3 1.7.2 1.5 1.2Z"/></svg><span>Telegram</span></a>
-    </nav></footer>
+
       </div>
     </section>
 
@@ -8400,17 +8403,12 @@ function show(page) {
      * document arrives; clearing .active first left only the SEO accordion. */
     try { sessionStorage.setItem('grom_spa_page', page); } catch (_) {}
     var spaParams = new URLSearchParams(location.search);
-    spaParams.set('_spa', String(Date.now()));
+    spaParams.delete('_spa');
     if (page !== 'predict') spaParams.delete('event');
-    var notice = document.getElementById('gromRouteLoading');
-    if (!notice) {
-      notice = document.createElement('div');
-      notice.id = 'gromRouteLoading';
-      notice.setAttribute('role', 'status');
-      document.body.appendChild(notice);
-    }
-    notice.textContent = /^ru/i.test(document.documentElement.lang) ? 'Открываем раздел…' : 'Opening page…';
-    location.replace('/app.html?' + spaParams.toString() + '#' + page);
+    // Keep the rendered landing visible while the app document loads.
+    // A splash plus a permanent 'Opening page' notice hid usable content on Safari.
+    try { if (typeof window.gromDismissSplash === 'function') window.gromDismissSplash(); } catch (_) {}
+    location.replace('/app.html' + (spaParams.size ? '?' + spaParams.toString() : '') + '#' + page);
     return;
   }
   var prevPage = window.__gromLastPage;
@@ -8618,6 +8616,7 @@ if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefau
   var fromPath = Object.prototype.hasOwnProperty.call(PATH, seg) ? PATH[seg] : '';
   var pending = '';
   try { pending = sessionStorage.getItem('grom_spa_page') || ''; sessionStorage.removeItem('grom_spa_page'); } catch (_) {}
+  if (seg !== 'app.html') pending = '';
   var fromHash = (location.hash || '').replace(/^#/, '').split('?')[0];
   if (fromHash === 'spot') fromHash = 'dashboard';
   if (fromHash === 'trade') fromHash = 'futures';
@@ -8642,7 +8641,7 @@ if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefau
   if (!pending && !fromHash && !fromPath) {
     start = home;
   }
-  if (document.getElementById('page-' + start)) {
+  if (document.getElementById('page-' + start) || Object.values(PATH).includes(start)) {
     show(start);
   } else if (start === 'backoffice') {
     show('backoffice');
@@ -10126,7 +10125,7 @@ function futuresChg24ForPair(sym, coinHint, modeHint) {
   var mode = modeHint || (window.futDeskState && futDeskState.tradeMode === 'spot' ? 'spot' : 'perp');
   var spot = mode === 'spot';
   try {
-    if (window.__gromHlActive && coin) {
+    if ((window.__gromHlQuotesReady || window.__gromHlActive) && coin) {
       var contexts = spot ? window.__hlSpotCtx : window.__hlCtx;
       var markets = spot ? window.__hlSpotMarkets : window.__hlMarkets;
       var ctx = contexts && contexts[coin];
@@ -11990,7 +11989,16 @@ function spark(up) {
 }
 
 function sparkPlaceholderHtml() {
-  return sparkFromChg(0);
+  return sparkHtmlFromCloses([]);
+}
+
+// A net daily change is not a price history. Show direction without inventing a curve.
+function marketTrendHtml(chg) {
+  if (chg == null || !Number.isFinite(Number(chg))) return sparkPlaceholderHtml();
+  var pct = Number(chg);
+  var sign = pct > 0 ? '↗' : pct < 0 ? '↘' : '→';
+  var color = pct > 0 ? '#16c784' : pct < 0 ? '#ea3943' : '#a9bed2';
+  return '<span style="color:' + color + ';font-size:26px" role="img" aria-label="24h: ' + pct.toFixed(2) + '%">' + sign + '</span>';
 }
 
 function hydrateMarketSparks() { /* no-op: sparks are sync from 24h % */ }
@@ -19372,7 +19380,7 @@ function getMarketRowsFromHlLive() {
   return source.map(function (m, idx) {
     var sym = m.sym;
     var coin = m.coin || (sym ? String(sym).split('/')[0] : '');
-    var px = window.__gromHlActive ? gromHlPriceForPair(sym, coin, 'perp') : NaN;
+    var px = (window.__gromHlQuotesReady || window.__gromHlActive) ? gromHlPriceForPair(sym, coin, 'perp') : NaN;
     if (!(px > 0)) px = NaN;
     var chg = futuresChg24ForPair(sym, coin, 'perp');
     var volN = Number(m.dayNtlVlm);
@@ -19471,7 +19479,7 @@ function updateMarketsLiveRows() {
     var sym = row.dataset.sym;
     var coin = row.dataset.coin || '';
     if (!sym) return;
-    var px = window.__gromHlActive
+    var px = (window.__gromHlQuotesReady || window.__gromHlActive)
       ? gromHlPriceForPair(sym, coin, 'perp')
       : (typeof window.gromLivePrice === 'function' ? Number(window.gromLivePrice(sym)) : NaN);
     if (!(px > 0) || !Number.isFinite(px)) px = NaN;
@@ -19497,7 +19505,7 @@ function updateMarketsLiveRows() {
         sparkEl.innerHTML = sparkPlaceholderHtml();
       } else if (!Number.isFinite(prev) || Math.abs(prev - chg) > 0.05) {
         sparkEl.setAttribute('data-spark-chg', String(chg));
-        sparkEl.innerHTML = sparkFromChg(chg);
+        sparkEl.innerHTML = marketTrendHtml(chg);
       }
     }
   });
@@ -19567,7 +19575,7 @@ function renderMarketsEnhanced() {
     var hasPx = Number.isFinite(Number(p.price)) && Number(p.price) > 0;
     var hasChg = p.chg != null && Number.isFinite(Number(p.chg));
     var chg = hasChg ? Number(p.chg) : NaN;
-    var sparkHtml = hasChg ? sparkFromChg(chg) : sparkPlaceholderHtml();
+    var sparkHtml = marketTrendHtml(chg);
     return '<div class="mkt-row" data-sym="' + p.sym + '" data-coin="' + (p.coin || '') + '" data-vol="' + (p.dayNtlVlm || '') + '" role="button" tabindex="0" onclick="openSpotPair(\'' + p.sym + '\')"><div class="star ' + (p.fav ? 'on' : '') + '" onclick="event.stopPropagation();toggleFav(\'' + p.sym + '\')">★</div><div class="name">' + instrumentIcoHtmlLive(p) + '<span class="pair-copy"><span class="pair-symbol">' + (p.name || p.sym) + '</span><span class="pair-meta">' + p.sym + ' · ' + typeLbl + lev + '</span></span></div><div class="mono" data-mkt-price style="text-align:right;color:var(--silver1);font-weight:600">' + (hasPx ? ('$' + marketFmt(p.price)) : '—') + '</div><div data-mkt-chg style="text-align:right" class="' + (hasChg ? (chg >= 0 ? 'chg up' : 'chg down') : 'chg') + '">' + (hasChg ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—') + '</div><div class="mono" data-mkt-vol style="text-align:right;color:var(--silver4)">$' + p.vol + '</div><div data-mkt-spark ' + (hasChg ? ('data-spark-chg="' + chg + '"') : '') + '>' + sparkHtml + '</div><button class="trade-btn" onclick="event.stopPropagation(); openSpotPair(\'' + p.sym + '\')">' + (typeof t === 'function' ? t('mkt_trade') : 'Trade') + '</button></div>';
   }).join('');
   requestAnimationFrame(function () {

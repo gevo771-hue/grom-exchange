@@ -65,7 +65,7 @@ test('visible share prices load without swap routes; requests coalesce at three 
   await new Promise(setImmediate);
   assert.equal(waits.length, 4);
   assert.equal(stocks[0].listPrice, 130);
-  assert.equal(cells.get('S0').textContent, '≈ $130.00');
+  assert.equal(cells.get('S0').textContent, '$130.00');
   assert.match(cells.get('S0').title, /Indicative price per share/);
   waits[1].resolve({ price: 0 });
   await new Promise(setImmediate);

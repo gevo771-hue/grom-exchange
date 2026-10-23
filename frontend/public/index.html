@@ -6127,9 +6127,9 @@
     .page-subtitle { overflow-wrap: anywhere; }
   }
 
-/* Compact Trade navigation and an eight-row market viewport, shared by touch and desktop. */
-#tradeModeSwitch{padding:4px;gap:4px;border-radius:12px;border:1px solid #83cce33d;background:#192433;box-shadow:inset 0 1px #ffffff08}
-#tradeModeSwitch button{min-height:36px;min-width:76px;padding:8px 14px;border-radius:8px;font-size:12px;color:#becddd;letter-spacing:.04em}
+/* Compact Trade navigation; eight rows on touch, full card height on desktop. */
+#tradeModeSwitch{padding:3px;gap:3px;border-radius:9px;border:1px solid #83cce33d;background:#192433;box-shadow:inset 0 1px #ffffff08}
+#tradeModeSwitch button{min-height:28px;min-width:58px;padding:5px 10px;border-radius:6px;font-size:11.5px;color:#becddd;letter-spacing:.04em}
 #tradeModeSwitch button.active{background:#67d4ef;color:#092a39;box-shadow:0 2px 6px #0002}
 #tradeModeSwitch button:focus-visible{outline:2px solid #fff;outline-offset:2px}
 #page-futures #futCats{flex-wrap:nowrap!important;gap:18px;margin:4px 0 10px!important;max-width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;border-bottom:1px solid #c8d4e82b;border-radius:0;background:none;padding:0}
@@ -6140,6 +6140,7 @@
 #page-futures #futList{flex:0 1 auto;min-height:0;max-height:352px;overflow-y:auto;overflow-x:hidden;padding:0;margin-bottom:0;scrollbar-gutter:stable;overscroll-behavior-y:auto;-webkit-overflow-scrolling:touch}
 #page-futures #futList .wl-item{box-sizing:border-box;height:44px;min-height:44px;margin:0;padding:8px 6px!important;border-radius:7px}
 #page-futures #futList #futListMore{display:flex!important;align-items:center;justify-content:center}
+@media(min-width:1181px){#page-futures aside.wl{align-self:stretch;overflow:hidden}#page-futures #futList{height:0;flex:1 1 0;max-height:none}#page-futures aside.wl>.wl-head,#page-futures aside.wl>.wl-search,#page-futures aside.wl>#futCats,#page-futures aside.wl>.wl-tabs{flex-shrink:0}}
 #futList:focus-visible{outline:2px solid #5bd8ff;outline-offset:3px}
 .grom-socials{display:flex;align-items:center;gap:8px}
 .grom-socials a{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:8px 12px;border:1px solid #9bbbd82b;border-radius:10px;background:#14233738;color:#d8e8f5;font-size:12px;font-weight:600;text-decoration:none}
@@ -14837,7 +14838,7 @@ var GROM_XSTOCKS = [
   }
   function gwxPriceText(stock) {
     var price = gwxListPrice(stock);
-    return price > 0 ? '≈ $' + price.toLocaleString('en-US', { minimumFractionDigits: price < 1 ? 4 : 2, maximumFractionDigits: price < 1 ? 4 : 2 }) : '—';
+    return price > 0 ? '$' + price.toLocaleString('en-US', { minimumFractionDigits: price < 1 ? 4 : 2, maximumFractionDigits: price < 1 ? 4 : 2 }) : '—';
   }
   function gwxPriceHelp(stock) {
     var text = tx('px_reference_help', 'Indicative price per share. The final trade price is calculated for your amount.');
@@ -16154,14 +16155,13 @@ var GROM_XSTOCKS = [
     var balTxt = gwxConnected() && gwxStableFunds ? money(gwxStableFunds.usdt + gwxStableFunds.usdc) : '—';
     var balSm = gwxConnected() ? tx('px_stable_balance', 'USDC + USDT · across networks') : tx('px_connect_for_bal', 'Connect wallet');
     return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
-      + '<div><h1 class="gwx-h1"><span class="gwx-h1-ico" aria-hidden="true"><svg width="21" height="21"><use href="#i-xstocks"/></svg></span><span>' + tx('pg_xstocks_title', 'Tokenized stocks') + '</span></h1>'
-      + '<p class="gwx-sub">' + tx('pg_xstocks_sub', 'Real S&P 500 / NASDAQ stocks tokenized on-chain.') + '</p></div>'
-      + '<div class="gwx-hero-aside"><div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + balTxt + '</b><small class="live">' + balSm + '</small></div><div><b id="gwxTickerCount">' + GROM_XSTOCKS.length + '</b><small>' + tx('px_tickers', 'Tickers') + '</small></div><div><b>24/7</b><small>' + tx('px_trading', 'Trading') + '</small></div></div>'
+      + '<div class="gwx-stock-heading"><div class="gwx-stock-eyebrow">RWA · xStocks</div><h1 class="gwx-h1"><span class="gwx-h1-ico" aria-hidden="true"><svg width="21" height="21"><use href="#i-xstocks"/></svg></span><span>' + tx('px_stock_title', 'Stocks') + '</span></h1>'
+      + '<p class="gwx-stock-intro">' + tx('px_stock_intro', 'Tokenized stocks and ETFs. Trade from your wallet.') + '</p></div>'
+      + '<div class="gwx-hero-aside"><div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + balTxt + '</b><small class="live">' + balSm + '</small></div><div><b id="gwxTickerCount">' + GROM_XSTOCKS.length + '</b><small>' + tx('px_tickers', 'Tickers') + '</small></div></div>'
       + heroJumpBtn('gromStockPos', 'px_my_positions', 'My positions') + '</div></div></div>'
-      + '<div class="gwx-toolbar"><div class="gwx-cats">' + catTabsHtml(GROM_SCATS, gwxState.sCat, false) + '</div>'
-      + '<div class="gwx-search"><input type="text" placeholder="' + esc(tx('px_search_stocks', 'Search ticker…')) + '" /></div></div>'
-      + '<div class="gwx-seo"><p>' + esc((window.GROM_SEO_I18N && window.GROM_SEO_I18N.pageBlurb) ? window.GROM_SEO_I18N.pageBlurb('xstocks', (window.GROM_SEO_I18N.curLang ? window.GROM_SEO_I18N.curLang() : 'en')) : 'Tokenized stocks and xStocks on GROM.') + '</p><div class="gwx-seo-nav"><button type="button" onclick="show(\'markets\')">Crypto markets</button><button type="button" onclick="show(\'futures\')">Futures</button><button type="button" onclick="show(\'predict\')">Predictions</button><button type="button" onclick="show(\'help\')">Help</button></div></div>'
-      + '<div class="gwx-table"><div class="gwx-thead"><div>' + tx('px_col_ticker', 'Ticker') + '</div><div title="' + escA(tx('px_reference_help', 'Indicative price per share. The final trade price is calculated for your amount.')) + '">' + tx('px_reference_price', 'Indicative price') + '</div><div>' + tx('px_col_chg', '24h %') + '</div><div class="gwx-col-vol">' + tx('px_col_vol', '24h vol') + '</div><div class="gwx-col-mc">' + tx('px_col_mc', 'Market cap') + '</div><div></div></div><div class="gwx-rows"></div></div>'
+      + '<div class="gwx-toolbar"><div class="gwx-search"><input type="search" aria-label="' + escA(tx('px_search_stocks', 'Search ticker…')) + '" placeholder="' + escA(tx('px_search_stocks', 'Search ticker…')) + '" /></div>'
+      + '<div class="gwx-cats">' + catTabsHtml(GROM_SCATS, gwxState.sCat, false) + '</div></div>'
+      + '<div class="gwx-table"><div class="gwx-thead"><div>' + tx('px_col_ticker', 'Ticker') + '</div><div><span class="gwx-price-label" tabindex="0" title="' + escA(tx('px_reference_help', 'Indicative price per share. The final trade price is calculated for your amount.')) + '">' + tx('px_col_price', 'Price') + ' <span aria-hidden="true">ⓘ</span></span></div><div>' + tx('px_col_chg', '24h %') + '</div><div class="gwx-col-vol">' + tx('px_col_vol', '24h vol') + '</div><div class="gwx-col-mc">' + tx('px_col_mc', 'Market cap') + '</div><div></div></div><div class="gwx-rows"></div></div>'
       + '<div class="gxp" id="gromStockPos"><div class="gxp-h">' + tx('px_my_positions', 'My positions') + '</div><div class="gxp-list"></div></div>'
       + '<div class="gwx-foot">' + tx('px_foot_xstocks', 'Powered by Backed xStocks · fee 0.20% · non-custodial via LiFi') + '</div></div>';
   }

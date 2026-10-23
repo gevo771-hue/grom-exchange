@@ -52,3 +52,14 @@ test('missing Hyperliquid change never falls back to a seeded registry percentag
   c.window.__gromHlActive = false;
   assert.equal(Number.isNaN(c.futuresChg24ForPair('ETH/USDT', 'ETH', 'spot')), true);
 });
+
+
+test('public quotes render before trading activation, with the real 24h baseline', () => {
+  const c = makeContext();
+  c.window.__gromHlActive = false;
+  c.window.__gromHlQuotesReady = true;
+  c.window.__hlCtx.ETH.prevDayPx = 80;
+  assert.equal(c.gromHlPriceForPair('ETH/USDT', 'ETH', 'perp'), 100);
+  assert.equal(c.futuresChg24ForPair('ETH/USDT', 'ETH', 'perp'), 25);
+  assert.equal(Number.isNaN(c.futuresChg24ForPair('MISSING/USDT', 'MISSING', 'perp')), true);
+});

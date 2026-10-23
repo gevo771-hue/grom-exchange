@@ -14,6 +14,7 @@
 
   let _cfg = null;
   let _meta = null;
+  let _metaInflight = null;
   let _spotMeta = null;
   let _sdk = null;
   let _booted = false;
@@ -69,6 +70,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(12000),
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || ('HL info ' + r.status));
@@ -578,19 +580,19 @@
    * Strategy: main first (publish), then xyz alone, then other HIP-3 one-by-one.
    */
   async function ensureMeta(force) {
+    if (_metaInflight) return _metaInflight;
     if (_meta && _meta.assetByCoin && _meta.assetByCoin.size > 0 && !force) return _meta;
+    _metaInflight = loadMeta().finally(() => { _metaInflight = null; });
+    return _metaInflight;
+  }
+
+  async function loadMeta() {
 
     const prevHip = (window.__hlMarkets || []).filter((m) => m && m.hip3);
     const prevMids = window.__hlMids || Object.create(null);
     const prevCtx = window.__hlCtx || Object.create(null);
 
     let dexList = [null];
-    try {
-      const raw = await hlInfo({ type: 'perpDexs' });
-      if (Array.isArray(raw) && raw.length) dexList = raw;
-    } catch (e) {
-      console.warn('[GROM HL] perpDexs', e);
-    }
 
     const assetByCoin = new Map();
     const markets = [];
@@ -651,6 +653,8 @@
       window.__hlCtx = ctxMap;
       window.__hlMarkets = markets;
       window.__hlAssetByCoin = assetByCoin;
+      // Public prices can render now; trading still waits for complete metadata.
+      window.__gromHlQuotesReady = true;
       try {
         if (typeof window.renderMarketsEnhanced === 'function'
           && document.getElementById('page-markets')?.classList.contains('active')) {
@@ -661,9 +665,14 @@
     };
 
     /* Main crypto first — Markets "All/Crypto" must never wait on HIP-3. */
-    const mainEntry = dexList.find((e) => !(e && e.name)) ?? null;
-    await loadOne(mainEntry);
+    await loadOne(null);
     publish();
+
+    // Discovery of additional venues must not delay the first crypto quotes.
+    try {
+      const raw = await hlInfo({ type: 'perpDexs' });
+      if (Array.isArray(raw) && raw.length) dexList = raw;
+    } catch (e) { console.warn('[GROM HL] perpDexs', e); }
 
     /* HIP-3: xyz (TradFi) alone first — parallel batches were 429ing Chrome. */
     await loadHip3Dexes(dexList, { loadOne, publish, assetByCoin });
@@ -2950,6 +2959,7 @@
   }
 
   async function backfillHip3() {
+    if (_metaInflight) return false;
     const hip = (window.__hlMarkets || []).filter((m) => m && m.hip3).length;
     if (hip >= 20) return true;
     if (_hip3BackfillInflight) return false;

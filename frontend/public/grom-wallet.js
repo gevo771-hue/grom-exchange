@@ -27628,8 +27628,8 @@ async function gwRenderYield() {
  * Per-network Top-20 movers (GeckoTerminal) + logos + chain chips.
  * ========================================================================== */
 const GW_TR_TR = {
-  ru: { h: 'Trending на DEX', sub: 'Топ-20 движущихся токенов · выбери сеть', empty: 'Загружаем свежие данные…', cta: 'Свап →', all: 'Все' },
-  en: { h: 'Trending on DEXs', sub: 'Top-20 hot tokens · pick a network', empty: 'Fetching fresh data…', cta: 'Swap →', all: 'All' },
+  ru: { h: 'Trending на DEX', sub: 'Изменение цены за 24 ч · GeckoTerminal', young: 'Пулу <24 ч', empty: 'Загружаем свежие данные…', cta: 'Свап →', all: 'Все', unavailable: 'Свежие данные пока недоступны. Повторяем загрузку…' },
+  en: { h: 'Trending on DEXs', sub: '24h price change · GeckoTerminal', young: 'Pool <24h', empty: 'Fetching fresh data…', cta: 'Swap →', all: 'All' },
   es: { h: 'Trending en DEX', sub: 'Top-20 tokens · elige red', empty: 'Cargando…', cta: 'Swap →', all: 'Todas' },
   ar: { h: 'الأكثر رواجاً على DEX', sub: 'أفضل 20 · اختر الشبكة', empty: 'جارٍ التحميل…', cta: 'مبادلة ←', all: 'الكل' },
   zh: { h: 'DEX 热门', sub: '热门 top-20 · 选择网络', empty: '加载中…', cta: '兑换 →', all: '全部' },
@@ -27750,8 +27750,13 @@ function gwInjectTrendingCss() {
       .gw-tr-card { padding: 16px 14px 14px; border-radius: 18px;
         box-shadow: 0 12px 28px -18px rgba(0,0,0,0.5); }
       .gw-tr-title { font-size: 17px; }
-      .gw-tr-list { --gw-tr-row-h: 56px; }
-      .gw-tr-row { grid-template-columns: 24px 34px minmax(0, 1fr) auto auto; padding: 11px 10px; gap: 6px 8px; }
+      .gw-tr-list { --gw-tr-row-h: 76px; }
+      .gw-tr-row { grid-template-columns: 18px 34px minmax(0, 1fr) auto; padding: 10px; gap: 4px 8px; }
+      .gw-tr-row .gw-tr-rank { grid-column:1; grid-row:1 / 3; }
+      .gw-tr-row .gw-tr-ico { grid-column:2; grid-row:1 / 3; }
+      .gw-tr-row .meta { grid-column:3 / 5; grid-row:1; }
+      .gw-tr-row .px { grid-column:3; grid-row:2; text-align:left; }
+      .gw-tr-row .chg { grid-column:4; grid-row:2; }
       .gw-tr-row .px { font-size: 12px; }
       .gw-tr-row .chg { font-size: 10.5px; min-width: 52px; padding: 3px 6px; }
     }
@@ -27864,114 +27869,50 @@ function gwDsPickToken(sym, which, meta) {
 }
 window.gwDsPickToken = gwDsPickToken;
 
-function gwTrMoverScore(r) {
-  const chg = Math.abs(Number(r.change24h) || 0);
-  const vol = Math.max(0, Number(r.volumeUsd) || 0);
-  return chg * Math.sqrt(vol + 1);
+const GW_TR_CACHE_TTL = 60_000;
+const GW_TR_MAX_AGE = 10 * 60_000;
+function gwTrCacheUsable(entry) {
+  return !!(entry?.rows?.length && Number(entry.at) > 0 && Date.now() - entry.at < GW_TR_MAX_AGE);
 }
-
-function gwTrParseGtNetwork(gtNet, json, chainId, chainLabel) {
-  const included = json?.included || [];
-  const byId = new Map(included.map((x) => [x.id, x]));
-  const rows = [];
-  const seen = new Set();
-  for (const p of (json?.data || [])) {
-    const bid = p.relationships?.base_token?.data?.id;
-    const tok = bid ? byId.get(bid) : null;
-    const attrs = tok?.attributes || {};
-    let sym = String(attrs.symbol || '').toUpperCase();
-    if (!sym) {
-      const nm = String(p.attributes?.name || '');
-      sym = (nm.split('/')[0] || '').trim().toUpperCase() || '?';
-    }
-    const addr = String(attrs.address || '').toLowerCase();
-    const key = (addr || sym) + ':' + chainId;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    /* Skip pure wrapped gas as “mover” noise when it’s the base of every pool. */
-    if (['WETH', 'WBNB', 'WAVAX', 'WMATIC', 'WPOL'].includes(sym) && rows.length > 3) continue;
-    rows.push({
-      sym,
-      name: attrs.name || sym,
-      chain: gtNet,
-      chainId,
-      chainLabel,
-      priceUsd: Number(p.attributes?.base_token_price_usd) || 0,
-      change24h: Number(p.attributes?.price_change_percentage?.h24) || 0,
-      volumeUsd: Number(p.attributes?.volume_usd?.h24) || 0,
-      img: attrs.image_url || '',
-      tokenAddress: attrs.address || '',
-      decimals: attrs.decimals != null ? Number(attrs.decimals) : null,
-    });
-  }
-  rows.sort((a, b) => gwTrMoverScore(b) - gwTrMoverScore(a));
-  const lim = (window.GROM_STABLE_UI || window.GROM_MOBILE) ? 8 : 20;
-  return rows.slice(0, lim);
+function gwTrCached(netKey) {
+  const mem = window.__gwTrMemCache || (window.__gwTrMemCache = new Map());
+  const hit = mem.get(netKey);
+  if (gwTrCacheUsable(hit)) return hit;
+  try {
+    const cached = JSON.parse(localStorage.getItem('grom:trending:v4:' + netKey));
+    if (gwTrCacheUsable(cached)) { mem.set(netKey, cached); return cached; }
+  } catch (_) {}
+  mem.delete(netKey);
+  return null;
 }
-
 async function gwFetchTrendingNetwork(net) {
   if (!net?.key) return [];
-  const CACHE_KEY = 'grom:trending:v3:' + net.key;
-  const TTL = 180_000;
-  const STALE_TTL = 24 * 60 * 60_000;
-  const mem = window.__gwTrMemCache || (window.__gwTrMemCache = new Map());
-  const hit = mem.get(net.key);
-  if (hit && Array.isArray(hit.rows) && hit.rows.length && (Date.now() - (hit.at || 0)) < TTL) return hit.rows;
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (raw) {
-      const cached = JSON.parse(raw);
-      if (cached && Array.isArray(cached.rows) && cached.rows.length) {
-        const age = Date.now() - (cached.at || 0);
-        if (age < STALE_TTL) {
-          mem.set(net.key, { at: cached.at, rows: cached.rows });
-          if (age < TTL) return cached.rows;
-          /* Stale-while-revalidate: return cache immediately, refresh in bg */
-          if (!window.__gwTrRefreshing) window.__gwTrRefreshing = {};
-          if (!window.__gwTrRefreshing[net.key]) {
-            window.__gwTrRefreshing[net.key] = true;
-            (async () => {
-              try {
-                const url = `/api/market/trending?net=${encodeURIComponent(net.key)}`;
-                const r = await fetch(url, { headers: { accept: 'application/json' } });
-                if (!r.ok) return;
-                const j = await r.json();
-                const rows = Array.isArray(j.rows) ? j.rows : [];
-                if (!rows.length) return;
-                const at = Date.now();
-                mem.set(net.key, { at, rows });
-                try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at, rows })); } catch (_) {}
-              } catch (_) {}
-              finally { try { delete window.__gwTrRefreshing[net.key]; } catch (_) {} }
-            })();
-          }
-          return cached.rows;
-        }
-      }
-    }
-  } catch (_) {}
-  try {
-    const url = `/api/market/trending?net=${encodeURIComponent(net.key)}`;
-    const r = await fetch(url, { headers: { accept: 'application/json' } });
-    if (!r.ok) throw new Error('trending ' + r.status);
-    const j = await r.json();
-    const rows = Array.isArray(j.rows) ? j.rows : [];
-    const at = Date.now();
-    mem.set(net.key, { at, rows });
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at, rows })); } catch (_) {}
-    return rows;
-  } catch (e) {
-    console.warn('[GROM] trending', net.key, e?.message || e);
-    if (hit?.rows?.length) return hit.rows;
+  const hit = gwTrCached(net.key);
+  if (hit && Date.now() - hit.at < GW_TR_CACHE_TTL) return hit.rows;
+  const requests = window.__gwTrRequests || (window.__gwTrRequests = new Map());
+  if (requests.has(net.key)) return requests.get(net.key);
+  const request = (async () => {
     try {
-      const raw = localStorage.getItem(CACHE_KEY);
-      if (raw) {
-        const cached = JSON.parse(raw);
-        if (cached?.rows?.length) return cached.rows;
-      }
-    } catch (_) {}
-    return [];
-  }
+      const r = await fetch(`/api/market/trending?net=${encodeURIComponent(net.key)}`, {
+        headers: { accept: 'application/json' }, signal: AbortSignal.timeout(30000),
+      });
+      if (!r.ok) throw new Error('trending ' + r.status);
+      const j = await r.json();
+      const at = Number(j.updatedAt);
+      const rows = (Array.isArray(j.rows) ? j.rows : [])
+        .filter((row) => Number(row.observedAt) > 0 && Date.now() - row.observedAt < GW_TR_MAX_AGE);
+      const entry = { at, rows };
+      if (!gwTrCacheUsable(entry)) throw new Error('trending expired');
+      window.__gwTrMemCache.set(net.key, entry);
+      try { localStorage.setItem('grom:trending:v4:' + net.key, JSON.stringify(entry)); } catch (_) {}
+      return rows;
+    } catch (e) {
+      console.warn('[GROM] trending', net.key, e?.message || e);
+      return gwTrCacheUsable(hit) ? hit.rows : [];
+    }
+  })().finally(() => requests.delete(net.key));
+  requests.set(net.key, request);
+  return request;
 }
 
 async function gwFetchTrending(netKey) {
@@ -27997,9 +27938,9 @@ async function gwTrLoadNet(netKey, opts) {
   if (!list) return;
   const t = gwTrLang();
   const reqId = (window[ctx.reqIdKey] = (window[ctx.reqIdKey] || 0) + 1);
-  const mem = (window.__gwTrMemCache || new Map()).get(key);
+  const mem = gwTrCached(key);
   const hasMem = !!(mem?.rows?.length);
-  if (!hasMem && !opts?.keepList) {
+  if (!hasMem) {
     list.innerHTML = `<div class="gw-tr-empty">${t.empty}</div>`;
   } else if (hasMem) {
     gwTrPaintList(list, mem.rows, t, ctx);
@@ -28013,14 +27954,21 @@ function gwTrPaintList(list, rows, t, ctx) {
   ctx = ctx || gwTrCtx('dash');
   if (!list) return;
   if (!rows.length) {
-    list.innerHTML = `<div class="gw-tr-empty">${t.empty}</div>`;
+    list.innerHTML = `<div class="gw-tr-empty">${t.unavailable || 'Fresh data unavailable. Retrying…'}</div>`;
     return;
   }
   const netColor = (cid) => (typeof gwTkChainColor === 'function' ? gwTkChainColor(cid) : '#98a8c0');
   const netShort = (cid, fallback) => (typeof gwTkChainShort === 'function' ? gwTkChainShort(cid) : (fallback || ''));
   const markup = rows.map((r, i) => {
-    const chgCls = r.change24h >= 0 ? 'up' : 'dn';
-    const chgTxt = (r.change24h >= 0 ? '+' : '') + Number(r.change24h).toFixed(2) + '%';
+    const hasChange = r.change24h != null && r.change24h !== '' && Number.isFinite(Number(r.change24h));
+    const chgCls = hasChange ? (r.change24h >= 0 ? 'up' : 'dn') : '';
+    const chgTxt = hasChange ? (r.change24h >= 0 ? '+' : '') + Number(r.change24h).toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + '%' : '—';
+    const created = Date.parse(r.poolCreatedAt || '');
+    const young = Number.isFinite(created) && r.observedAt >= created && r.observedAt - created < 86400000;
+    const period = young ? (t.young || 'Pool <24h') : '24h';
+    const age = Math.max(0, Math.floor((Date.now() - r.observedAt) / 60000));
+    const freshness = age >= 2 ? ' · ' + age + ' min' : '';
+    const quoteTitle = 'GeckoTerminal · ' + (r.observedAt ? new Date(r.observedAt).toISOString() : '—');
     const priceFmt = r.priceUsd > 1
       ? '$' + r.priceUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })
       : '$' + r.priceUsd.toFixed(Math.min(8, 4 + Math.max(0, -Math.log10(Math.max(r.priceUsd, 1e-9)) | 0)));
@@ -28032,13 +27980,13 @@ function gwTrPaintList(list, rows, t, ctx) {
     const img = r.img
       ? `<div class="gw-tr-ico"><img src="${r.img}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;avatar&quot;>${initial}</span>'" />${badge}</div>`
       : `<div class="gw-tr-ico"><span class="avatar">${initial}</span>${badge}</div>`;
-    const chainTxt = r.chainLabel || r.chain || short || '';
+    const chainTxt = (r.chainLabel || r.chain || short || '') + ' · ' + period + freshness;
     return `<div class="gw-tr-row" data-img="${String(r.img || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" data-sym="${r.sym}" data-chain="${r.chain || ''}" data-cid="${r.chainId || ''}" data-addr="${r.tokenAddress || ''}" data-dec="${r.decimals != null ? r.decimals : ''}" role="button" tabindex="0" aria-label="${r.sym}">
       <div class="gw-tr-rank">${i + 1}</div>
       ${img}
       <div class="meta"><div class="name">${r.sym}</div><div class="chain">${chainTxt}</div></div>
       <div class="px">${priceFmt}</div>
-      <div class="chg ${chgCls}">${chgTxt}</div>
+      <div class="chg ${chgCls}" title="${quoteTitle}">${chgTxt}</div>
     </div>`;
   }).join('');
   if (list.__gwTrMarkup === markup && list.querySelector('.gw-tr-row')) return;
@@ -28056,6 +28004,7 @@ function gwTrPaintList(list, rows, t, ctx) {
         const a = old.querySelector(selector), b = next.querySelector(selector);
         if (a.textContent !== b.textContent) a.textContent = b.textContent;
         if (a.className !== b.className) a.className = b.className;
+        if (a.title !== b.title) a.title = b.title;
       }
       if (old.dataset.img !== next.dataset.img) old.querySelector('.gw-tr-ico').replaceWith(next.querySelector('.gw-tr-ico'));
       for (const [name, value] of Object.entries(next.dataset)) if (old.dataset[name] !== value) old.dataset[name] = value;
@@ -28211,9 +28160,7 @@ function gwSetupTrending() {
     document.getElementById('gwTrendingCard')?.remove();
     if (gwDashActive()) tryRender();
   });
-  if (!window.GROM_STABLE_UI && !window.GROM_MOBILE) {
-    setInterval(() => { if (gwDashActive() && document.getElementById('gwTrendingCard')) gwRenderTrending(); }, 5 * 60_000);
-  }
+  setInterval(() => { if (!document.hidden && gwDashActive() && document.getElementById('gwTrendingCard')) gwRenderTrending(); }, 60_000);
 }
 
 function gwSetupLandingTrending() {
@@ -28241,13 +28188,14 @@ function gwSetupLandingTrending() {
   });
   if (typeof gwVisibleInterval === 'function') {
     gwVisibleInterval(() => {
-      if (gwTrLandingActive() && document.getElementById('gwLandingTrendingCard')) gwRenderTrending({ instance: 'landing' });
-    }, 5 * 60_000, { bgMs: 10 * 60_000 });
+      if (!document.hidden && gwTrLandingActive() && document.getElementById('gwLandingTrendingCard')) gwRenderTrending({ instance: 'landing' });
+    }, 60_000, { bgMs: 10 * 60_000 });
   } else {
     setInterval(() => {
-      if (gwTrLandingActive() && document.getElementById('gwLandingTrendingCard')) gwRenderTrending({ instance: 'landing' });
-    }, 5 * 60_000);
+      if (!document.hidden && gwTrLandingActive() && document.getElementById('gwLandingTrendingCard')) gwRenderTrending({ instance: 'landing' });
+    }, 60_000);
   }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) boot(); });
   boot();
 }
 

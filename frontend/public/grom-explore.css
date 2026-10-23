@@ -87,3 +87,75 @@ body:not(:has(#gw-ai-fab)) .gpe-ai{display:none}
 @media(max-width:600px){.gpe-chart-head{flex-wrap:wrap;gap:10px}.gpe-chart-head .gpe-ranges{margin-left:auto}.gpe-ticket-event{margin-bottom:14px}.gpe-ticket .gpe-ticket-mode{display:block}}
 
 @media(max-width:600px){.gpe-chart-head{flex-wrap:wrap}.gpe-chart-head h2{flex-basis:100%}.gpe-ranges{width:100%}.gpe-ranges button{flex:1;min-height:40px}}
+
+
+/* Stocks: a compact header, clear categories and strong trading actions. */
+#page-xstocks .gwx-wrap{max-width:1440px;min-width:0}
+#page-xstocks .gwx-hero{margin:0 0 22px;padding-bottom:22px;border-bottom:1px solid #c8d4e825}
+#page-xstocks .gwx-hero-row{align-items:center;gap:20px;margin:0;flex-wrap:nowrap}
+#page-xstocks .gwx-stock-heading{min-width:0}
+#page-xstocks .gwx-stock-eyebrow{color:#f1ca7c;font-size:10px;letter-spacing:.12em;font-weight:700;margin:0 0 8px}
+#page-xstocks .gwx-h1{font-size:30px;letter-spacing:-.035em;gap:10px;line-height:1.2}
+#page-xstocks .gwx-h1-ico{width:34px;height:34px;border-radius:9px;box-shadow:none;background:#ecc16e12;border-color:#ecc16e40}
+#page-xstocks .gwx-stock-intro{font-size:12px;line-height:1.6;color:#bac9da;margin:10px 0 0}
+#page-xstocks .gwx-hero-aside{flex:none;gap:12px}
+#page-xstocks .gwx-stats{gap:22px}
+#page-xstocks .gwx-stats>div+div{border-left:1px solid #c8d4e825;padding-left:22px}
+#page-xstocks .gwx-stats b{font-size:17px;font-weight:650}
+#page-xstocks .gwx-stats small{font-size:10px;color:#afc0d4;margin-top:3px}
+#page-xstocks .gwx-jump{border:1px solid #62cbe17d;border-radius:8px;background:#183c50;color:#a6eaff;min-height:36px;padding:7px 12px;box-shadow:none}
+#page-xstocks .gwx-jump:hover{background:#21546c;transform:none}
+#page-xstocks .gwx-toolbar{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:0 0 20px}
+#page-xstocks .gwx-search{width:100%;min-width:0}
+#page-xstocks .gwx-search input{min-height:46px;border-radius:10px;background:#1d293a88;border-color:#a9c6df38;padding-left:38px;font-size:13px}
+#page-xstocks .gwx-search input::placeholder{color:#a5b7cc;opacity:1}
+#page-xstocks .gwx-search:before{left:14px;color:#b9ccde}
+#page-xstocks .gwx-cats{width:100%;flex:0 0 auto;display:flex;flex-wrap:nowrap;gap:24px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;border-bottom:1px solid #c8d4e82b;padding:0;min-height:44px;-webkit-overflow-scrolling:touch}
+#page-xstocks .gwx-cats::-webkit-scrollbar{display:none;width:0;height:0}
+#page-xstocks .gwx-cats .gwx-pill{flex:none;min-height:44px;padding:10px 0;border:0!important;border-bottom:2px solid transparent!important;border-radius:0;background:transparent!important;box-shadow:none;color:#d2deec!important;font-size:12px;font-weight:600;transition:color .15s}
+#page-xstocks .gwx-cats .gwx-pill:hover{color:#fff!important}
+#page-xstocks .gwx-cats .gwx-pill.on{color:#7ee4ff!important;border-bottom-color:#59daff!important}
+#page-xstocks .gwx-pill:focus-visible,#page-xstocks .gwx-trade:focus-visible,#page-xstocks .gwx-jump:focus-visible{outline:2px solid #92eaff;outline-offset:3px}
+#page-xstocks .gwx-table{border:1px solid #c8d4e825;border-radius:12px;background:#20293855;overflow:hidden}
+#page-xstocks .gwx-thead,#page-xstocks .gwx-row{grid-template-columns:minmax(140px,1.4fr) minmax(76px,.7fr) minmax(64px,.6fr) minmax(88px,.8fr) minmax(96px,.9fr) 152px;gap:12px}
+#page-xstocks .gwx-thead{background:#18243380;padding:14px 18px;color:#afbed0;font-size:10px;letter-spacing:.05em}
+#page-xstocks .gwx-price-label{cursor:help;white-space:nowrap}
+#page-xstocks .gwx-price-label>span{color:#92b4cb;font-size:12px;margin-left:3px}
+#page-xstocks .gwx-row{padding:13px 18px;min-height:76px;border-bottom-color:#c8d4e81a;background:transparent;transition:background .15s}
+#page-xstocks .gwx-row:hover{background:#7ac9ed08}
+#page-xstocks .gwx-tick{font-size:15px;letter-spacing:-.015em}
+#page-xstocks .gwx-name{color:#a4b7cd;font-size:11px}
+#page-xstocks .gwx-price{font-size:14px;color:#f1f6ff}
+#page-xstocks .gwx-chg{font-size:12px}
+#page-xstocks .gwx-col-vol,#page-xstocks .gwx-col-mc{font-size:12px;min-width:0}
+#page-xstocks .gwx-row-actions{min-width:0;width:100%}
+#page-xstocks .gwx-trade{min-height:34px;padding:7px 12px;border-radius:7px;font-size:12px;font-weight:700;border:1px solid transparent;box-shadow:none}
+#page-xstocks .gwx-buy{background:#12d77d;color:#042b19;border-color:#4bf0a3}
+#page-xstocks .gwx-sell{background:#f04c65;color:#fff;border-color:#ff788c}
+#page-xstocks .gwx-trade:hover{filter:brightness(1.1);transform:none}
+#page-xstocks .gwx-trade:disabled{filter:none;opacity:.45}
+@media(min-width:761px) and (max-width:1100px){
+  #page-xstocks .gwx-table{overflow-x:hidden}
+  #page-xstocks .gwx-thead,#page-xstocks .gwx-row{min-width:0!important;grid-template-columns:minmax(150px,1fr) 100px 76px 160px;gap:12px}
+  #page-xstocks .gwx-thead>.gwx-col-vol,#page-xstocks .gwx-thead>.gwx-col-mc,#page-xstocks .gwx-row>.gwx-col-vol,#page-xstocks .gwx-row>.gwx-col-mc{display:none}
+}
+@media(max-width:760px){
+  #page-xstocks .gwx-hero{padding-bottom:16px;margin-bottom:16px}
+  #page-xstocks .gwx-hero-row{flex-wrap:wrap;gap:16px}
+  #page-xstocks .gwx-h1{font-size:27px}
+  #page-xstocks .gwx-stock-intro{font-size:12px;margin-top:8px}
+  #page-xstocks .gwx-hero-aside{width:100%;flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+  #page-xstocks .gwx-stats{gap:14px;min-width:0}
+  #page-xstocks .gwx-stats>div+div{padding-left:14px}
+  #page-xstocks .gwx-stats b{font-size:15px}
+  #page-xstocks .gwx-stats small{font-size:9px;max-width:135px;overflow-wrap:anywhere}
+  #page-xstocks .gwx-jump{font-size:11px;padding:7px 10px;min-height:38px}
+  #page-xstocks .gwx-jump svg{display:none}
+  #page-xstocks .gwx-toolbar{gap:8px;margin-bottom:14px}
+  #page-xstocks .gwx-cats{gap:22px}
+  #page-xstocks .gwx-search input{font-size:16px}
+  #page-xstocks .gwx-thead{padding:12px}
+  #page-xstocks .gwx-row{padding:14px 12px;row-gap:12px}
+  #page-xstocks .gwx-row-actions{gap:10px!important}
+  #page-xstocks .gwx-trade{min-height:40px;font-size:12px}
+}

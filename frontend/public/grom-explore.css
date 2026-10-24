@@ -27,8 +27,6 @@
 .gpe-nav{display:flex;justify-content:space-between;gap:12px;margin:0 0 22px}
 .gpe-nav-actions{display:flex;gap:8px;flex:none}
 /* Keep the assistant available without covering the order ticket or outcome buttons. */
-body:has(#page-predict.active .gwx-detail-open) #gw-ai-fab{visibility:hidden;pointer-events:none}
-body:not(:has(#gw-ai-fab)) .gpe-ai{display:none}
 .gpe-nav button,.gpe-message button{border:1px solid #a8bed42b;border-radius:9px;background:#1d263840;color:#b9dfe9;min-height:40px;padding:8px 12px;font:inherit;font-size:12px;cursor:pointer}
 .gpe-heading{display:flex;gap:14px;align-items:center;margin-bottom:16px}.gpe-heading>div{min-width:0}.gpe-heading img{width:52px;height:52px;border-radius:12px;object-fit:cover;flex:none}
 .gpe-heading h1{font-size:clamp(21px,2vw,29px);line-height:1.3;margin:4px 0;letter-spacing:-.025em;overflow-wrap:anywhere}.gpe-heading h1:focus{outline:none}.gpe-eyebrow{font-size:11px;color:#a5b4c7}
@@ -159,3 +157,22 @@ body:not(:has(#gw-ai-fab)) .gpe-ai{display:none}
   #page-xstocks .gwx-row-actions{gap:10px!important}
   #page-xstocks .gwx-trade{min-height:40px;font-size:12px}
 }
+
+/* Shared GROM AI mark: a single accessible launcher in each product header. */
+body .grom-ai-launcher.grom-ai-launcher{display:inline-flex;align-items:center;justify-content:center;position:relative;isolation:isolate;flex:0 0 44px;width:44px;height:44px;min-height:44px;min-width:44px;box-sizing:border-box;padding:4px;border:1px solid #81d9f866;border-radius:14px;background:radial-gradient(ellipse at 32% 15%,#609bba40,transparent 66%),linear-gradient(145deg,#263e55,#172638 75%);color:#b8efff;box-shadow:inset 0 1px #d6f5ff33,inset 0 -1px #06182780,0 4px 16px -7px #0e111ccc;cursor:pointer;text-decoration:none;transition:border-color .18s,box-shadow .18s,background-color .18s;-webkit-tap-highlight-color:transparent}
+body .grom-ai-launcher.grom-ai-launcher svg{display:block;width:34px;height:34px;flex:none;overflow:visible;filter:drop-shadow(0 0 4px #39c8fa66);pointer-events:none}
+body .grom-ai-launcher.grom-ai-launcher::before{content:"";position:absolute;inset:3px;border:1px solid #8bcde914;border-radius:10px;pointer-events:none}
+body .grom-ai-launcher.grom-ai-launcher:hover{border-color:#a7eeff;box-shadow:inset 0 1px #e3fbff55,0 0 22px -7px #65d8ff88}
+body .grom-ai-launcher.grom-ai-launcher:focus-visible{outline:2px solid #a7eeff;outline-offset:4px}
+body .grom-ai-launcher.grom-ai-launcher:active{background-color:#2a5069}
+body:not(:has(#gw-ai-fab)) .grom-ai-launcher{display:none}
+body:has(#page-futures.active,#page-markets.active,#page-predict.active,#page-xstocks.active) #gw-ai-fab{visibility:hidden;pointer-events:none}
+#page-markets .markets-hero,#page-predict .gwx-hero,#page-xstocks .gwx-hero{position:relative;padding-right:62px}
+.markets-hero>.grom-ai-launcher,.gwx-hero>.grom-ai-launcher{position:absolute!important;right:0;top:0}
+@media(max-width:760px){
+  #page-markets .markets-hero,#page-predict .gwx-hero,#page-xstocks .gwx-hero{padding-right:0}
+  #page-markets .markets-heading{padding-right:56px;min-height:44px}
+  #page-predict .gwx-hero-row>.gwx-h1{padding-right:52px;min-height:44px;box-sizing:border-box;width:100%}
+  #page-xstocks .gwx-stock-heading{padding-right:56px;width:100%;box-sizing:border-box}
+}
+@media(prefers-reduced-motion:reduce){body .grom-ai-launcher.grom-ai-launcher{transition:none}}

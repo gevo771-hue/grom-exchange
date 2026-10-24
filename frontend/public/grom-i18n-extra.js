@@ -759,6 +759,7 @@
 
   var SHARED = {
     ru: {
+      mkt_intro: "Котировки и изменение цен за 24 часа.", mkt_search: "Поиск тикера или названия…", mkt_favorites: "Избранное", mkt_gainers: "Растут", mkt_losers: "Падают",
       auth_login: 'Connect Wallet', lang_switched: 'Язык', mkt_trade: 'Торговать',
       set_regional_title: 'Регион', set_theme_title: 'Тема', set_theme_dark: 'Тёмная', set_theme_system: 'Системная',
       set_notif_fills: 'Исполнения и выигрыши', set_notif_transfers: 'Депозиты и выводы', set_notif_digest: 'Еженедельный дайджест', set_notif_product: 'Обновления продукта',
@@ -769,6 +770,7 @@
       set_enabled: 'Включено', set_strict: 'Строго', set_edit: 'Изменить', set_policy: 'Политика', set_review: 'Проверить'
     },
     en: {
+      mkt_intro: "Live prices and 24-hour market moves.", mkt_search: "Search ticker or name…", mkt_favorites: "Favorites", mkt_gainers: "Gainers", mkt_losers: "Losers",
       auth_login: 'Connect Wallet', lang_switched: 'Language', mkt_trade: 'Trade',
       set_regional_title: 'Regional', set_theme_title: 'Theme', set_theme_dark: 'Dark', set_theme_system: 'System',
       set_notif_fills: 'Order fills & wins', set_notif_transfers: 'Deposits & withdrawals', set_notif_digest: 'Weekly digest', set_notif_product: 'Product updates',
@@ -779,6 +781,7 @@
       set_enabled: 'Enabled', set_strict: 'Strict', set_edit: 'Edit', set_policy: 'Policy', set_review: 'Review'
     },
     es: {
+      mkt_intro: "Cotizaciones y cambios de precio en 24 horas.", mkt_search: "Buscar símbolo o nombre…", mkt_favorites: "Favoritos", mkt_gainers: "Al alza", mkt_losers: "A la baja",
       auth_login: 'Connect Wallet', lang_switched: 'Idioma', mkt_trade: 'Operar',
       set_regional_title: 'Regional', set_theme_title: 'Tema', set_theme_dark: 'Oscuro', set_theme_system: 'Sistema',
       set_notif_fills: 'Ejecuciones y ganancias', set_notif_transfers: 'Depósitos y retiros', set_notif_digest: 'Resumen semanal', set_notif_product: 'Actualizaciones',
@@ -789,6 +792,7 @@
       set_enabled: 'Activo', set_strict: 'Estricto', set_edit: 'Editar', set_policy: 'Política', set_review: 'Revisar'
     },
     ar: {
+      mkt_intro: "أسعار مباشرة وتغيرات السوق خلال 24 ساعة.", mkt_search: "ابحث بالرمز أو الاسم…", mkt_favorites: "المفضلة", mkt_gainers: "الرابحون", mkt_losers: "الخاسرون",
       auth_login: 'Connect Wallet', lang_switched: 'اللغة', mkt_trade: 'تداول',
       set_regional_title: 'الإعدادات الإقليمية', set_theme_title: 'المظهر', set_theme_dark: 'داكن', set_theme_system: 'النظام',
       set_notif_fills: 'تنفيذات وانتصارات', set_notif_transfers: 'إيداعات وسحوبات', set_notif_digest: 'ملخص أسبوعي', set_notif_product: 'تحديثات المنتج',
@@ -799,6 +803,7 @@
       set_enabled: 'مفعّل', set_strict: 'صارم', set_edit: 'تعديل', set_policy: 'السياسة', set_review: 'مراجعة'
     },
     zh: {
+      mkt_intro: "实时价格与 24 小时市场涨跌。", mkt_search: "搜索代码或名称…", mkt_favorites: "自选", mkt_gainers: "涨幅", mkt_losers: "跌幅",
       auth_login: 'Connect Wallet', lang_switched: '语言', mkt_trade: '交易',
       set_regional_title: '区域', set_theme_title: '主题', set_theme_dark: '深色', set_theme_system: '跟随系统',
       set_notif_fills: '成交与盈利', set_notif_transfers: '充值与提现', set_notif_digest: '每周摘要', set_notif_product: '产品更新',
@@ -809,6 +814,7 @@
       set_enabled: '已启用', set_strict: '严格', set_edit: '编辑', set_policy: '政策', set_review: '审核'
     },
     hi: {
+      mkt_intro: "लाइव कीमतें और 24 घंटे का बदलाव।", mkt_search: "टिकर या नाम खोजें…", mkt_favorites: "पसंदीदा", mkt_gainers: "बढ़ने वाले", mkt_losers: "गिरने वाले",
       auth_login: 'Connect Wallet', lang_switched: 'भाषा', mkt_trade: 'ट्रेड',
       set_regional_title: 'क्षेत्र', set_theme_title: 'थीम', set_theme_dark: 'डार्क', set_theme_system: 'सिस्टम',
       set_notif_fills: 'ऑर्डर फिल और जीत', set_notif_transfers: 'जमा और निकासी', set_notif_digest: 'साप्ताहिक सार', set_notif_product: 'उत्पाद अपडेट',
@@ -819,6 +825,7 @@
       set_enabled: 'सक्रिय', set_strict: 'सख्त', set_edit: 'संपादित', set_policy: 'नीति', set_review: 'समीक्षा'
     },
     tr: {
+      mkt_intro: "Canlı fiyatlar ve 24 saatlik değişimler.", mkt_search: "Sembol veya ad ara…", mkt_favorites: "Favoriler", mkt_gainers: "Yükselenler", mkt_losers: "Düşenler",
       auth_login: 'Connect Wallet', lang_switched: 'Dil', mkt_trade: 'İşlem',
       set_regional_title: 'Bölgesel', set_theme_title: 'Tema', set_theme_dark: 'Koyu', set_theme_system: 'Sistem',
       set_notif_fills: 'Emir gerçekleşmeleri ve kazançlar', set_notif_transfers: 'Yatırma ve çekme', set_notif_digest: 'Haftalık özet', set_notif_product: 'Ürün güncellemeleri',

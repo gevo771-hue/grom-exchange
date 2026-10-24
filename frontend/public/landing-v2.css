@@ -194,7 +194,7 @@ html.lv2-on #page-landing .lp-h1 .lv2-h1-line:not(.lv2-accent) .lv2-h1-typed {
 }
 
 html.lv2-on #page-landing .lp-h1-sub {
-  font-size: 17px !important;
+  font-size: 15px !important;
   line-height: 1.55 !important;
   color: var(--lv2-text-dim) !important;
   max-width: 520px !important;
@@ -729,6 +729,9 @@ html.lv2-on #landing-v2-root > .gw-tr-wrap {
   line-height: 1.55;
 }
 
+.lv2-diagram-sec .lv2-sec-title { font-size: clamp(24px, 2.6vw, 32px); }
+.lv2-diagram-sec .lv2-sec-sub { font-size: 14px; }
+
 .lv2-diagram {
   background: var(--lv2-panel);
   border: 1px solid var(--lv2-border);
@@ -1122,7 +1125,7 @@ html.lv2-on #landing-v2-cmp,
     line-height: 1.08 !important;
   }
   html.lv2-on #page-landing .lp-h1-sub {
-    font-size: 14.5px !important;
+    font-size: 13.5px !important;
     line-height: 1.45 !important;
     margin-bottom: 16px !important;
     max-width: 36em !important;
@@ -1300,6 +1303,8 @@ html.lv2-on #landing-v2-cmp,
   .lv2-sec-sub {
     font-size: 14px;
   }
+  .lv2-diagram-sec .lv2-sec-title { font-size: 23px; }
+  .lv2-diagram-sec .lv2-sec-sub { font-size: 13px; }
   .lv2-diagram {
     padding: 18px 14px 16px;
     border-radius: 20px;

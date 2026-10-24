@@ -27750,15 +27750,16 @@ function gwInjectTrendingCss() {
       .gw-tr-card { padding: 16px 14px 14px; border-radius: 18px;
         box-shadow: 0 12px 28px -18px rgba(0,0,0,0.5); }
       .gw-tr-title { font-size: 17px; }
-      .gw-tr-list { --gw-tr-row-h: 76px; }
-      .gw-tr-row { grid-template-columns: 18px 34px minmax(0, 1fr) auto; padding: 10px; gap: 4px 8px; }
+      .gw-tr-list { --gw-tr-row-h: 60px; }
+      .gw-tr-row { grid-template-columns: 18px 28px minmax(0, 1fr) auto; padding: 8px; gap: 4px 7px; }
       .gw-tr-row .gw-tr-rank { grid-column:1; grid-row:1 / 3; }
       .gw-tr-row .gw-tr-ico { grid-column:2; grid-row:1 / 3; }
-      .gw-tr-row .meta { grid-column:3 / 5; grid-row:1; }
-      .gw-tr-row .px { grid-column:3; grid-row:2; text-align:left; }
-      .gw-tr-row .chg { grid-column:4; grid-row:2; }
-      .gw-tr-row .px { font-size: 12px; }
-      .gw-tr-row .chg { font-size: 10.5px; min-width: 52px; padding: 3px 6px; }
+      .gw-tr-row .gw-tr-ico, .gw-tr-row img, .gw-tr-row .avatar { width:28px; height:28px; }
+      .gw-tr-row .meta { grid-column:3; grid-row:1 / 3; }
+      .gw-tr-row .name { font-size:12.5px; }
+      .gw-tr-row .chain { font-size:9.5px; }
+      .gw-tr-row .px { grid-column:4; grid-row:1; font-size:11.5px; }
+      .gw-tr-row .chg { grid-column:4; grid-row:2; justify-self:end; font-size:10.5px; min-width:52px; padding:2px 6px; }
     }
   `;
   let s = document.getElementById('gw-tr-css');

@@ -208,7 +208,7 @@
       lp_final_sub: "Некастодиально. Кросс-чейн. Лучшая цена каждый раз. Подключите кошелёк — первый своп за 60 секунд.",
       lp_final_cta1: "Подключить кошелёк →",
       lp_final_cta2: "Открыть дашборд",
-      lp_final_tiny: "несколько сетей · 10 000+ токенов · агрегаторы · Без email · Только кошелёк · Self-custody",
+      lp_final_tiny: "11 сетей · 10 000+ токенов · агрегаторы · Без email · Только кошелёк · Self-custody",
       dash_banner_spot_eyebrow: "SWAP",
       dash_banner_spot_h: "Своп между сетями",
       dash_banner_spot_p: "Сравниваем доступные маршруты. Подпись в кошельке, расчёт в блокчейне.",
@@ -753,7 +753,7 @@
       lp_final_sub: "Non-custodial. Cross-chain. Best price every time. Connect your wallet — first swap in 60 seconds.",
       lp_final_cta1: "Connect wallet →",
       lp_final_cta2: "Explore dashboard",
-      lp_final_tiny: "multiple chains · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody",
+      lp_final_tiny: "11 networks · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody",
       dash_banner_spot_eyebrow: "SWAP",
       dash_banner_spot_h: "Swap across networks",
       dash_banner_spot_p: "Compare available routes. Sign in your wallet and settle on-chain.",
@@ -880,7 +880,7 @@
       lp_final_sub: "Híbrido CEX/DEX. Liquidez real. Seguridad de nivel bancario. Abre tu cuenta en 30 segundos — primera operación en 60.",
       lp_final_cta1: "Empezar a operar →",
       lp_final_cta2: "Entrar / Registrarse",
-      lp_final_tiny: "multiple chains · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
+      lp_final_tiny: "11 networks · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
     },
     ar: {
       wc_toast_confirm_wallet: "أكد في {wallet} ثم عد إلى المتصفح",
@@ -990,7 +990,7 @@
       lp_final_sub: "هجين CEX/DEX. سيولة حقيقية. أمان بمستوى البنوك. افتح حسابك في 30 ثانية — أول صفقة خلال 60.",
       lp_final_cta1: "ابدأ التداول →",
       lp_final_cta2: "دخول / تسجيل",
-      lp_final_tiny: "multiple chains · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
+      lp_final_tiny: "11 networks · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
     },
     zh: {
       wc_toast_confirm_wallet: "请在 {wallet} 中确认，然后返回浏览器",
@@ -1100,7 +1100,7 @@
       lp_final_sub: "CEX/DEX 混合。真实流动性。银行级安全。30 秒开户——60 秒内完成首笔交易。",
       lp_final_cta1: "开始交易 →",
       lp_final_cta2: "登录 / 注册",
-      lp_final_tiny: "multiple chains · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
+      lp_final_tiny: "11 networks · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
     },
     hi: {
       wc_toast_confirm_wallet: "{wallet} में पुष्टि करें, फिर ब्राउज़र पर वापस आएँ",
@@ -1210,7 +1210,7 @@
       lp_final_sub: "हाइब्रिड CEX/DEX। असली लिक्विडिटी। बैंक-ग्रेड सुरक्षा। 30 सेकंड में अकाउंट खोलें — 60 में पहली ट्रेड।",
       lp_final_cta1: "ट्रेडिंग शुरू करें →",
       lp_final_cta2: "साइन इन / साइन अप",
-      lp_final_tiny: "multiple chains · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
+      lp_final_tiny: "11 networks · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
     },
     tr: {
       wc_toast_confirm_wallet: "{wallet} içinde onayla, sonra tarayıcıya dön",
@@ -1320,7 +1320,7 @@
       lp_final_sub: "Hibrit CEX/DEX. Gerçek likidite. Banka düzeyinde güvenlik. 30 saniyede hesap açın — 60 saniyede ilk işlem.",
       lp_final_cta1: "İşleme başla →",
       lp_final_cta2: "Giriş / Kayıt",
-      lp_final_tiny: "multiple chains · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
+      lp_final_tiny: "11 networks · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
     }
   };
 

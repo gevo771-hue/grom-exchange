@@ -3636,8 +3636,6 @@
     background: linear-gradient(180deg, rgba(32, 39, 55, 0.2), rgba(32, 39, 55, 0.92));
     border-radius: 0 0 10px 10px;
   }
-  #page-markets > .page-title,
-  #page-markets > .page-subtitle,
   #page-futures > .page-subtitle,
   #page-futures > .page-subtitle { display: none !important; }
   #page-futures .bo-title-row {
@@ -6058,40 +6056,6 @@
   #page-landing .lp-trust-strip { max-width: 100%; }
   #page-landing .lp-trust-strip > * { min-width: 0; flex: 0 1 auto; }
   @media (max-width: 900px) {
-    #page-markets .markets-cat-row {
-      flex-direction: column;
-      align-items: stretch !important;
-      gap: 10px !important;
-      padding: 10px 12px 12px !important;
-      background: linear-gradient(180deg, rgba(31,42,56,0.2), rgba(31,42,56,0.45));
-      border-bottom: 1px solid rgba(200,212,232,0.06);
-    }
-    #page-markets .markets-cat-pills {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      padding-bottom: 2px;
-      scrollbar-width: none;
-    }
-    #page-markets .markets-cat-pills::-webkit-scrollbar { display: none; }
-    #page-markets .markets-cat-pills .cat-pill {
-      flex: 0 0 auto;
-      padding: 9px 14px;
-      font-size: 12px;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-    #page-markets .markets-cat-row input {
-      margin-left: 0 !important;
-      min-width: 0 !important;
-      max-width: none !important;
-      width: 100% !important;
-      min-height: 42px;
-      font-size: 16px;
-    }
-    #page-markets .card { overflow: hidden; }
-    #page-markets .card-head .tf-pills { width: 100%; flex-wrap: wrap; }
     .mkt-head > *:nth-child(4) { font-size: 10px; letter-spacing: 0.04em; }
     .mkt-row .pair-meta { display: none; }
     .topbar .right { min-width: 0; flex-shrink: 1; gap: 6px; }
@@ -6126,10 +6090,45 @@
     .page-subtitle { overflow-wrap: anywhere; }
   }
 
+/* Markets share the search-first layout and underlined categories of Stocks/Predictions. */
+#page-markets .markets-hero{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:22px;padding-bottom:20px;border-bottom:1px solid #c8d4e825}
+#page-markets .markets-hero .page-title{font-size:30px;line-height:1.2;letter-spacing:-.035em;margin:0}
+#page-markets .markets-hero .page-title-ico{width:34px;height:34px;border-radius:9px;box-shadow:none}
+#page-markets .markets-hero .page-subtitle{margin:10px 0 0;font-size:12px;line-height:1.6;color:#bac9da}
+#page-markets .markets-view-tabs{display:flex;align-items:center;gap:20px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+#page-markets .markets-view-tabs button{flex:none;min-height:44px;padding:12px 0;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;box-shadow:none;color:#b1bccd;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer}
+#page-markets .markets-view-tabs button.active{color:#e9f5ff;border-bottom-color:#7fd7e8}
+#page-markets .markets-toolbar{display:flex;flex-direction:column;gap:12px;margin-bottom:20px;min-width:0}
+#page-markets .markets-search{position:relative;display:block;width:100%;min-width:0}
+#page-markets .markets-search svg{position:absolute;left:14px;top:15px;pointer-events:none;color:#b9ccde}
+#page-markets #marketsSearch{display:block;box-sizing:border-box;width:100%;max-width:none;min-width:0;min-height:46px;padding:12px 14px 12px 40px;border:1px solid #a9c6df38;border-radius:10px;font:inherit;font-size:13px;outline:none}
+#page-markets #marketsSearch::placeholder{color:#a5b7cc;opacity:1}
+#page-markets .markets-cat-pills{display:flex;flex-wrap:nowrap;gap:24px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;border-bottom:1px solid #c8d4e82b;min-height:44px;-webkit-overflow-scrolling:touch}
+#page-markets .markets-cat-pills::-webkit-scrollbar,#page-markets .markets-view-tabs::-webkit-scrollbar{display:none}
+#page-markets .markets-cat-pills .cat-pill{flex:none;min-height:44px;padding:10px 0;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;box-shadow:none;color:#d2deec;font-size:12px;font-weight:600;white-space:nowrap}
+#page-markets .markets-cat-pills .cat-pill.active{color:#7ee4ff;border-bottom-color:#59daff}
+#page-markets .markets-cat-pills .cat-pill:hover,#page-markets .markets-view-tabs button:hover{color:#fff}
+#page-markets .markets-cat-pills button:focus-visible,#page-markets .markets-view-tabs button:focus-visible,#page-markets #marketsSearch:focus-visible{outline:2px solid #92eaff;outline-offset:-2px}
+#page-markets .markets-table{border-radius:12px;overflow:hidden;border-color:#c8d4e825}
+#page-markets .mkt-head{background:#18243380;color:#afbed0;min-height:46px}
+@media(max-width:760px){
+  #page-markets .markets-hero{gap:12px;margin-bottom:16px;padding-bottom:0}
+  #page-markets .markets-hero .page-title{font-size:27px}
+  #page-markets .markets-view-tabs{width:100%;gap:22px}
+  #page-markets .markets-toolbar{gap:8px;margin-bottom:14px}
+  #page-markets #marketsSearch{font-size:16px}
+  #page-markets .markets-cat-pills{gap:22px}
+}
 /* Compact Trade navigation; eight rows on touch, full card height on desktop. */
 #tradeModeSwitch{padding:3px;gap:3px;border-radius:9px;border:1px solid rgba(136,192,208,0.16);background:linear-gradient(180deg,#303642,#252d3a);box-shadow:inset 0 1px #ffffff08}
-#tradeModeSwitch button{min-height:28px;min-width:58px;padding:5px 10px;border-radius:6px;font-size:11.5px;color:#becddd;letter-spacing:.04em}
-#tradeModeSwitch button.active{background:transparent;color:#eceff4;box-shadow:inset 0 -2px #67d4ef}
+#tradeModeSwitch button{position:relative;min-height:28px;min-width:58px;padding:5px 10px;border-radius:6px;font-size:11.5px;color:#becddd;letter-spacing:.04em}
+#tradeModeSwitch button.active{background:transparent;color:#eceff4;box-shadow:none}
+#tradeModeSwitch button.active::after{content:"";position:absolute;left:8px;right:8px;bottom:0;height:2px;border-radius:0;background:#67d4ef}
+#page-futures .trade-ai-btn{margin-left:auto;flex:none;min-height:36px;padding:6px 12px;border:1px solid #9bbbd83b;border-radius:9px;background:#252d3a;color:#a8dce9;font-size:12px;font-weight:700;cursor:pointer}
+#page-futures .trade-ai-btn:hover{background:#364759;color:#fff}
+#page-futures .trade-ai-btn:focus-visible{outline:2px solid #67d4ef;outline-offset:3px}
+body:has(#page-futures.active) #gw-ai-fab{visibility:hidden;pointer-events:none}
+body:not(:has(#gw-ai-fab)) .trade-ai-btn{display:none}
 #tradeModeSwitch button:focus-visible{outline:2px solid #fff;outline-offset:2px}
 #page-futures #futCats{flex-wrap:nowrap!important;gap:18px;margin:4px 0 10px!important;max-width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;border-bottom:1px solid #c8d4e82b;border-radius:0;background:none;padding:0}
 #page-futures #futCats::-webkit-scrollbar{display:none;width:0;height:0}
@@ -6612,7 +6611,7 @@
             <button class="lp-btn-primary" onclick="openConnectModal()" data-i18n="lp_final_cta1">Connect wallet →</button>
             <button class="lp-btn-secondary" onclick="show('dashboard')" data-i18n="lp_final_cta2">Explore dashboard</button>
           </div>
-          <p class="lp-final-tiny" data-i18n="lp_final_tiny">multiple chains · 10 000+ tokens · available aggregators · Wallet-only access</p>
+          <p class="lp-final-tiny" data-i18n="lp_final_tiny">11 networks · 10 000+ tokens · available aggregators · Wallet-only access</p>
         </div>
 
       <footer class="grom-community-footer"><span>GROM FINANCE HUB</span><nav class="grom-socials" aria-label="GROM social media">
@@ -6744,27 +6743,33 @@
 
     <!-- MARKETS -->
     <section class="page" id="page-markets">
-      <h1 class="page-title"><span class="page-title-ico" aria-hidden="true"><svg width="20" height="20"><use href="#i-markets"/></svg></span><span data-i18n="pg_markets_title">All markets</span></h1>
-      <p class="page-subtitle" data-i18n="pg_markets_sub">Live Hyperliquid markets — same pairs as Trade. Crypto, TradFi, HIP-3, trending and pre-launch.</p>
-
-      <div class="card">
-        <div class="card-head" style="flex-wrap:wrap;gap:10px">
-          <h3>Trading pairs</h3>
-          <div class="tf-pills" id="marketsFilter">
-            <button type="button" class="active" data-filter="all">All</button><button type="button" data-filter="favorites">★</button><button type="button" data-filter="gainers">Gainers</button><button type="button" data-filter="losers">Losers</button>
-          </div>
+      <header class="markets-hero">
+        <div>
+          <h1 class="page-title"><span class="page-title-ico" aria-hidden="true"><svg width="20" height="20"><use href="#i-markets"/></svg></span><span data-i18n="nav_markets">Markets</span></h1>
+          <p class="page-subtitle" data-i18n="mkt_intro">Live prices and 24-hour market moves.</p>
         </div>
-        <div class="markets-cat-row" style="display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 10px;align-items:center">
-          <div class="markets-cat-pills" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <button type="button" class="cat-pill active" data-cat="all" data-i18n="hist_f_all">All</button>
-          <button type="button" class="cat-pill" data-cat="crypto" data-i18n="ms_cat_crypto">Crypto</button>
-          <button type="button" class="cat-pill" data-cat="tradfi" data-i18n="ms_cat_tradfi">TradFi</button>
-          <button type="button" class="cat-pill" data-cat="hip3" data-i18n="ms_cat_hip3">HIP-3</button>
-          <button type="button" class="cat-pill" data-cat="trending" data-i18n="ms_cat_trending">Trending</button>
-          <button type="button" class="cat-pill" data-cat="prelaunch" data-i18n="ms_cat_prelaunch">Pre-launch</button>
-          </div>
-          <input id="marketsSearch" type="search" placeholder="Search ticker or name…" autocomplete="off" style="margin-left:auto;flex:1;min-width:160px;max-width:280px;background:rgba(37,45,58,.6);border:1px solid rgba(136,192,208,.2);border-radius:10px;padding:8px 12px;color:#e8f1fa;font:inherit;outline:none"/>
+        <div id="marketsFilter" class="markets-view-tabs" role="group" aria-label="Market filters">
+          <button type="button" class="active" data-filter="all" aria-pressed="true" data-i18n="hist_f_all">All</button>
+          <button type="button" data-filter="favorites" aria-pressed="false"><span aria-hidden="true">☆</span> <span data-i18n="mkt_favorites">Favorites</span></button>
+          <button type="button" data-filter="gainers" aria-pressed="false" data-i18n="mkt_gainers">Gainers</button>
+          <button type="button" data-filter="losers" aria-pressed="false" data-i18n="mkt_losers">Losers</button>
         </div>
+      </header>
+      <div class="markets-toolbar">
+        <label class="markets-search">
+          <svg width="16" height="16" aria-hidden="true"><use href="#i-search"/></svg>
+          <input id="marketsSearch" type="search" placeholder="Search ticker or name…" data-i18n-placeholder="mkt_search" aria-label="Search ticker or name" data-i18n-tip="mkt_search" autocomplete="off"/>
+        </label>
+        <div class="markets-cat-pills" role="group" aria-label="Market categories">
+          <button type="button" class="cat-pill active" data-cat="all" aria-pressed="true" data-i18n="hist_f_all">All</button>
+          <button type="button" class="cat-pill" data-cat="crypto" aria-pressed="false" data-i18n="ms_cat_crypto">Crypto</button>
+          <button type="button" class="cat-pill" data-cat="tradfi" aria-pressed="false" data-i18n="ms_cat_tradfi">TradFi</button>
+          <button type="button" class="cat-pill" data-cat="hip3" aria-pressed="false" data-i18n="ms_cat_hip3">HIP-3</button>
+          <button type="button" class="cat-pill" data-cat="trending" aria-pressed="false" data-i18n="ms_cat_trending">Trending</button>
+          <button type="button" class="cat-pill" data-cat="prelaunch" aria-pressed="false" data-i18n="ms_cat_prelaunch">Pre-launch</button>
+        </div>
+      </div>
+      <div class="card markets-table">
         <div class="mkt-head">
           <div></div><div>Pair</div>
           <div style="text-align:right">Price</div>
@@ -6872,6 +6877,7 @@
           <button type="button" role="tab" data-trade-mode="perp" class="active" aria-selected="true">PERPS</button>
           <button type="button" role="tab" data-trade-mode="spot" aria-selected="false">SPOT</button>
         </div>
+        <button type="button" class="trade-ai-btn" aria-label="AI assistant" aria-haspopup="dialog" onclick="document.getElementById('gw-ai-fab')?.click()">AI</button>
       </h1>
       <p class="page-subtitle">Perps and Spot · non-custodial.</p>
       <div id="hlFundBanner" class="hl-fund-banner" hidden>
@@ -12988,8 +12994,9 @@ function initMarketsFilter() {
   host.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-filter]');
     if (!b) return;
-    host.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+    host.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); x.setAttribute('aria-pressed', 'false'); });
     b.classList.add('active');
+    b.setAttribute('aria-pressed', 'true');
     marketsPage = 1;
     renderMarkets();
   });
@@ -19639,8 +19646,9 @@ document.addEventListener('click', function (e) {
   }
   var catBtn = e.target.closest('#page-markets .cat-pill[data-cat]');
   if (catBtn) {
-    document.querySelectorAll('#page-markets .cat-pill').forEach(function (x) { x.classList.remove('active'); });
+    document.querySelectorAll('#page-markets .cat-pill').forEach(function (x) { x.classList.remove('active'); x.setAttribute('aria-pressed', 'false'); });
     catBtn.classList.add('active');
+    catBtn.setAttribute('aria-pressed', 'true');
     marketsCat = catBtn.dataset.cat || 'all';
     window.marketsCat = marketsCat;
     marketsPage = 1;

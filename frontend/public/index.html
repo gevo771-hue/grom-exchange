@@ -6148,12 +6148,14 @@
 @media(min-width:1181px){#page-futures aside.wl{align-self:stretch;overflow:hidden}#page-futures #futList{height:0;flex:1 1 0;max-height:none}#page-futures aside.wl>.wl-head,#page-futures aside.wl>.wl-search,#page-futures aside.wl>#futCats,#page-futures aside.wl>.wl-tabs{flex-shrink:0}}
 #futList:focus-visible{outline:2px solid #5bd8ff;outline-offset:3px}
 .grom-socials{display:flex;align-items:center;gap:8px}
-.grom-socials a{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:8px 12px;border:1px solid #9bbbd82b;border-radius:10px;background:#14233738;color:#d8e8f5;font-size:12px;font-weight:600;text-decoration:none}
-.grom-socials svg{width:17px;height:17px;flex:none;fill:currentColor}
-.grom-socials a[data-social="telegram"] svg{color:#42c7ff}
-.grom-socials a:hover{background:#66c9ed1a;border-color:#66c9ed80;color:#fff}
+.grom-socials a{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:96px;padding:8px 12px;border:1px solid #9bbbd833;border-radius:12px;background:linear-gradient(145deg,#2a374b,#1b2838);color:#e3effa;font-size:12px;font-weight:650;text-decoration:none;box-shadow:inset 0 1px #e0f3ff0a,0 3px 9px #10172418;transition:background .16s,border-color .16s}
+.grom-socials svg{width:17px;height:17px;flex:none;fill:currentColor;box-sizing:content-box;padding:5px;border-radius:8px;background:#d7e7ff0c}
+.grom-socials a[data-social="telegram"] svg{color:#69d4ff;background:#48baff18}
+.grom-socials a:hover{background:linear-gradient(145deg,#33475f,#25364c);border-color:#82b9dd88;color:#fff}
 .grom-socials a:focus-visible{outline:2px solid #5bd8ff;outline-offset:3px}
-.sidebar>.grom-socials{padding:16px 10px;margin-top:12px;border-top:1px solid #9bbbd820;flex-wrap:wrap}
+.sidebar>.grom-socials{display:grid;grid-template-columns:1fr 1fr;padding:16px 8px;margin-top:12px;border-top:1px solid #9bbbd820}
+.sidebar>.grom-socials a{min-width:0;padding:8px;gap:6px}
+@media(prefers-reduced-motion:reduce){.grom-socials a{transition:none}}
 .grom-community-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-top:32px;padding:24px 0;border-top:1px solid #9bbbd82b}
 .grom-community-footer>span{font-size:13px;font-weight:700;letter-spacing:.12em;color:#a9bed2}
 </style>
@@ -6202,15 +6204,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" class="grom-svg-sprite" aria-hidden="true" focusable="false">
   <defs>
     <linearGradient id="gromAiLight" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f3fdff"/><stop offset=".42" stop-color="#8deaff"/><stop offset="1" stop-color="#3895ed"/>
+      <stop offset="0" stop-color="#d4fbff"/><stop offset=".48" stop-color="#75d9f3"/><stop offset="1" stop-color="#9c91ff"/>
     </linearGradient>
     <symbol id="i-grom-ai" viewBox="0 0 36 36">
-      <path d="M23 4.5 30 8.5 33 17 29 26.5 20 31.5 10 29 4 21 5 11 12 5" fill="none" stroke="#72cde8" stroke-width="1" opacity=".45"/>
-      <path d="M6.5 22.5A13 13 0 0 1 22 5.8M14 30.2A13 13 0 0 0 30 14" fill="none" stroke="url(#gromAiLight)" stroke-width="1.5" stroke-linecap="round"/>
-      <path d="m17.3 8.2 2.8 6.7 6.7 2.8-6.7 2.8-2.8 6.7-2.8-6.7-6.7-2.8 6.7-2.8Z" fill="url(#gromAiLight)"/>
-      <path d="m17.3 12.3 1.6 3.8 3.8 1.6-3.8 1.6-1.6 3.8-1.6-3.8-3.8-1.6 3.8-1.6Z" fill="#103b60" opacity=".85"/>
-      <path d="m28 3 1.2 3.4L32.5 7l-3.3 1.1L28 11l-1.1-2.9L24 7l2.9-.6Z" fill="#d6f9ff"/>
-      <circle cx="6.6" cy="25.5" r="1.6" fill="#81e8ff"/>
+      <path d="M18 5v5" stroke="#b2eeff" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="18" cy="4.5" r="2.5" fill="url(#gromAiLight)"/>
+      <rect x="2" y="16" width="5" height="10" rx="2.5" fill="#7bbde7"/>
+      <rect x="29" y="16" width="5" height="10" rx="2.5" fill="#9e9bea"/>
+      <rect x="5" y="9" width="26" height="23" rx="8" fill="url(#gromAiLight)"/>
+      <path d="M10 13c2-2 14-2 16 0" fill="none" stroke="#fff" stroke-opacity=".48" stroke-width="1.5" stroke-linecap="round"/>
+      <rect x="11" y="16" width="4" height="6" rx="2" fill="#182c49"/>
+      <rect x="21" y="16" width="4" height="6" rx="2" fill="#182c49"/>
+      <path d="M13 26q5 4 10 0" fill="none" stroke="#263b5e" stroke-width="2" stroke-linecap="round"/>
     </symbol>
     <!-- Chrome outer bevel gradient — bright top-left, dark bottom-right -->
     <linearGradient id="chromeBevel" x1="15%" y1="0%" x2="85%" y2="100%">

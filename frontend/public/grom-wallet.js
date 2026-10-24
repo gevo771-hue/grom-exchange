@@ -25762,90 +25762,12 @@ if (document.readyState === 'loading') {
  * ============================================================================ */
 function gwInjectAiCoachCss() {
   const prev = document.getElementById('gw-ai-css');
-  if (prev?.dataset?.v === 'coach8') return;
+  if (prev?.dataset?.v === 'coach10') return;
   prev?.remove();
   const css = `
-    #gw-ai-fab {
-      --gw-ai-fab-glow: rgba(56,189,248,0.35);
-      position: fixed; right: 18px; bottom: 20px;
-      z-index: 61;
-      display: inline-flex; align-items: center; gap: 10px;
-      padding: 10px 16px 10px 10px; border-radius: 999px;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 55%),
-        linear-gradient(145deg, #2a3444 0%, #1c2433 55%, #171e2b 100%);
-      color: #e8f4ff !important; font-weight: 800; font-size: 13px;
-      letter-spacing: 0.01em;
-      text-decoration: none; cursor: pointer;
-      border: 1px solid rgba(136,192,208,0.32);
-      box-shadow:
-        0 12px 28px -10px rgba(0,0,0,0.55),
-        0 0 0 1px rgba(0,0,0,0.25) inset,
-        0 0 24px -6px var(--gw-ai-fab-glow);
-      transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
-      animation: gwAiFabFloat 4.5s ease-in-out infinite;
-      -webkit-tap-highlight-color: transparent;
-    }
-    #gw-ai-fab:hover {
-      transform: translateY(-3px);
-      border-color: rgba(125,211,252,0.55);
-      --gw-ai-fab-glow: rgba(56,189,248,0.55);
-      box-shadow:
-        0 16px 36px -10px rgba(0,0,0,0.6),
-        0 0 0 1px rgba(0,0,0,0.2) inset,
-        0 0 32px -4px var(--gw-ai-fab-glow);
-    }
-    #gw-ai-fab:active { transform: translateY(-1px); animation: none; }
-    @keyframes gwAiFabFloat {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-3px); }
-    }
-    #gw-ai-fab .gw-ai-orb {
-      position: relative; width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
-      display: inline-flex; align-items: center; justify-content: center;
-      background:
-        radial-gradient(circle at 35% 30%, #e0f7ff 0%, #7dd3fc 35%, #38bdf8 70%, #0284c7 100%);
-      box-shadow:
-        0 0 0 2px rgba(56,189,248,0.25),
-        0 0 14px rgba(56,189,248,0.45);
-    }
-    #gw-ai-fab .gw-ai-orb::before {
-      content: ""; position: absolute; inset: -4px; border-radius: 50%;
-      border: 1px solid rgba(125,211,252,0.35);
-      animation: gwAiOrbRing 2.4s ease-out infinite;
-      pointer-events: none;
-    }
-    @keyframes gwAiOrbRing {
-      0% { transform: scale(0.85); opacity: 0.7; }
-      100% { transform: scale(1.35); opacity: 0; }
-    }
-    #gw-ai-fab .gw-ai-orb svg {
-      width: 14px; height: 14px; color: #042f2e; position: relative; z-index: 1;
-      filter: drop-shadow(0 1px 0 rgba(255,255,255,0.35));
-    }
-    #gw-ai-fab .dot { display: none !important; }
-    #gw-ai-fab .gw-ai-ico { display: none !important; }
-    #gw-ai-fab .gw-ai-kicker { display: none !important; }
-    #gw-ai-fab .gw-ai-label { display: flex; flex-direction: column; gap: 1px; line-height: 1.15; }
-    #gw-ai-fab .gw-ai-name { color: #f0f7ff; font: inherit; font-weight: 800; }
-    #gw-ai-fab .gw-ai-sub {
-      font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-      color: #88c0d0; opacity: 0.9;
-    }
-    @media (max-width: 600px) {
-      #gw-ai-fab {
-        right: 12px;
-        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-        padding: 9px 13px 9px 9px;
-        font-size: 12.5px;
-        animation: none;
-      }
-      #gw-ai-fab .gw-ai-sub { display: none; }
-      #page-dashboard .gw-ds-chains,
-      .gw-ds-wrap .gw-ds-chains { padding-right: 118px !important; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      #gw-ai-fab, #gw-ai-fab .gw-ai-orb::before { animation: none !important; }
+    #gw-ai-fab { position:fixed;right:18px;bottom:20px;z-index:61;width:48px;height:48px; }
+    @media (max-width:600px) {
+      #gw-ai-fab {right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px))}
     }
 
     #gw-ai-overlay {
@@ -25986,11 +25908,45 @@ function gwInjectAiCoachCss() {
       #gw-ai-input { padding: 10px 16px max(14px, env(safe-area-inset-bottom)); }
       #gw-ai-log .gw-ai-product { padding: 12px; }
     }
+    #gw-ai-panel { background: radial-gradient(ellipse at 12% 0%,#34446666,transparent 45%),linear-gradient(160deg,#202738,#151e2c); border-color:#7790bb55; }
+    #gw-ai-panel .head { background:linear-gradient(110deg,#78bdff0d,#9d78ff0d); gap:12px; }
+    #gw-ai-panel .head h3 { background:none;-webkit-text-fill-color:initial;color:#d9ebff;white-space:nowrap;gap:9px;font-size:19px;letter-spacing:.01em; }
+    #gw-ai-panel .head h3 svg { width:34px;height:34px;flex:none;filter:drop-shadow(0 0 8px #7d9aff55); }
+    #gw-ai-panel .head h3 b { color:#b399ff;font-weight:650; }
+    #gw-ai-panel .head .gw-ai-head-actions button.gw-ai-tool { display:grid;place-items:center;width:34px;height:34px;padding:6px;border-radius:10px;background:#839bc414;border:1px solid #91a6c326;color:#c4d4ef; }
+    #gw-ai-panel .gw-ai-tool svg { width:19px;height:19px; }
+    #gw-ai-log .gw-ai-eyebrow { color:#b1a2ee; }
+    #gw-ai-log .gw-ai-welcome h4 { font-size:28px;letter-spacing:-.5px; }
+    #gw-ai-log .gw-ai-products { grid-template-columns:1fr;gap:9px; }
+    #gw-ai-log .gw-ai-product { display:flex;align-items:center;gap:13px;padding:13px 15px;min-height:66px;background:#9ba9c30b;border-color:#a7b8d218;position:relative; }
+    #gw-ai-log .gw-ai-product::after { content:'›';margin-left:auto;color:#7b8ba5;font-size:23px; }
+    #gw-ai-log .gw-ai-product strong { font-size:14px;margin:0 0 3px; }
+    #gw-ai-log .gw-ai-product span { font-size:11.5px; }
+    #gw-ai-log .gw-ai-product .gw-ai-product-icon { display:grid;place-items:center;width:36px;height:36px;flex:none;border-radius:11px;color:#62dec2;background:#62dec212; }
+    #gw-ai-log .gw-ai-product-icon svg { width:22px;height:22px; }
+    #gw-ai-log [data-product=perps] .gw-ai-product-icon { color:#e5bb64;background:#e5bb6412; }
+    #gw-ai-log [data-product=predict] .gw-ai-product-icon { color:#b899ff;background:#b899ff12; }
+    #gw-ai-log [data-product=stocks] .gw-ai-product-icon { color:#72bcff;background:#72bcff12; }
+    #gw-ai-input textarea { background:#c2cde50a;border-color:#a6bbd433;border-radius:16px; }
+    #gw-ai-input button { display:grid;place-items:center;flex:none;width:44px;height:44px;min-height:44px;padding:10px;border-radius:14px;background:linear-gradient(140deg,#8cdaef,#a4a7fc);color:#142035;box-shadow:0 4px 16px #89a7f222; }
+    #gw-ai-input button svg { width:22px;height:22px; }
+    @media(max-width:600px){
+      #gw-ai-panel .head {padding:12px 14px}
+      #gw-ai-panel .head h3 {font-size:17px;gap:6px}
+      #gw-ai-panel .head .gw-ai-head-actions {gap:4px}
+      #gw-ai-log .gw-ai-welcome h4 {font-size:25px}
+      #gw-ai-log .gw-ai-welcome p {font-size:13px;margin-bottom:16px}
+      #gw-ai-log .gw-ai-product {min-height:62px;padding:10px 12px}
+      #gw-ai-connect-row {flex-wrap:wrap;gap:8px;font-size:11px}
+      #gw-ai-connect-row button {padding:7px 10px}
+      #gw-ai-suggest {flex-wrap:nowrap;overflow-x:auto;flex-shrink:0;scrollbar-width:none}
+      #gw-ai-suggest button {flex:none;font-size:11px}
+    }
     @media (prefers-reduced-motion: reduce) { #gw-ai-overlay.open { animation: none; } }
     body.gw-ai-open { overflow: hidden !important; position: fixed; width: 100%; left: 0; right: 0; }
     body.gw-ai-open #gw-ai-overlay { overscroll-behavior: contain; }
   `;
-  const s = document.createElement('style'); s.id = 'gw-ai-css'; s.dataset.v = 'coach8'; s.textContent = css; document.head.appendChild(s);
+  const s = document.createElement('style'); s.id = 'gw-ai-css'; s.dataset.v = 'coach10'; s.textContent = css; document.head.appendChild(s);
 }
 
 const GW_AI_TR = {
@@ -27268,11 +27224,21 @@ async function gwAiOpen() {
   // Refresh chrome for current language + personalized FAQ chips
   try {
     const head = overlay.querySelector('#gw-ai-panel .head h3');
-    if (head) head.textContent = t.h;
+    if (head) {
+      head.innerHTML = '<svg viewBox="0 0 36 36" aria-hidden="true"><use href="#i-grom-ai"/></svg><span>GROM <b>AI</b></span>';
+      head.title = t.h;
+    }
+    for (const [id,label,icon] of [
+      ['gwAiNewChat',t.newChat || 'New chat','<path d="M12 5v14M5 12h14"/>'],
+      ['gwAiMemoryBtn',t.memoryBtn || 'Memory','<path d="M5 4h14v16H5zM9 4v16M12 8h4M12 12h4"/>']
+    ]) {
+      const tool = document.getElementById(id);
+      if (tool) {tool.setAttribute('aria-label',label);tool.title=label;tool.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+icon+'</svg>';}
+    }
     const ta = document.getElementById('gwAiText');
     if (ta) ta.placeholder = t.ph;
     const send = document.getElementById('gwAiSend');
-    if (send) send.textContent = t.send;
+    if (send) {send.setAttribute('aria-label', t.send);send.title=t.send;send.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>';}
   } catch (_) {}
   gwAiRefreshSuggest();
   try { gwAiMemoryPull(); } catch (_) {}
@@ -27328,7 +27294,12 @@ function gwAiRenderLog() {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'gw-ai-product';
       const strong = document.createElement('strong'); strong.textContent = product[1];
       const desc = document.createElement('span'); desc.textContent = product[2];
-      button.append(strong, desc); button.onclick = () => gwAiShowGuide(product[1]); grid.appendChild(button);
+      button.dataset.product = product[0];
+      const icon = document.createElement('span'); icon.className = 'gw-ai-product-icon'; icon.setAttribute('aria-hidden','true');
+      const paths = {swap:'<path d="M4 7h15m-4-4 4 4-4 4M20 17H5m4-4-4 4 4 4"/>',perps:'<path d="m4 17 5-5 4 3 7-9m-6 0h6v6"/>',predict:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',stocks:'<path d="M5 19V9m7 10V4m7 15v-7M3 20h18"/>'};
+      icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(paths[product[0]] || paths.swap)+'</svg>';
+      const copy = document.createElement('span'); copy.className='gw-ai-product-copy'; copy.append(strong,desc);
+      button.append(icon,copy); button.onclick = () => gwAiShowGuide(product[1]); grid.appendChild(button);
     }
     welcome.append(label, title, subtitle, grid); log.appendChild(welcome);
   } else {
@@ -27340,7 +27311,7 @@ function gwAiRenderLog() {
       if (m.role === 'assistant' && m.action) gwAiAppendActionCard(m.action, log);
     }
   }
-  log.scrollTop = log.scrollHeight;
+  log.scrollTop = hist.length ? log.scrollHeight : 0;
 }
 // Re-render if JWT arrives/disappears while the panel is open.
 window.addEventListener('storage', (e) => {
@@ -27360,11 +27331,21 @@ window.addEventListener('grom:lang-change', () => {
     try {
       const t = gwAiLang();
       const head = document.querySelector('#gw-ai-panel .head h3');
-      if (head) head.textContent = t.h;
+      if (head) {
+      head.innerHTML = '<svg viewBox="0 0 36 36" aria-hidden="true"><use href="#i-grom-ai"/></svg><span>GROM <b>AI</b></span>';
+      head.title = t.h;
+    }
+    for (const [id,label,icon] of [
+      ['gwAiNewChat',t.newChat || 'New chat','<path d="M12 5v14M5 12h14"/>'],
+      ['gwAiMemoryBtn',t.memoryBtn || 'Memory','<path d="M5 4h14v16H5zM9 4v16M12 8h4M12 12h4"/>']
+    ]) {
+      const tool = document.getElementById(id);
+      if (tool) {tool.setAttribute('aria-label',label);tool.title=label;tool.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+icon+'</svg>';}
+    }
       const ta = document.getElementById('gwAiText');
       if (ta) ta.placeholder = t.ph;
       const send = document.getElementById('gwAiSend');
-      if (send) send.textContent = t.send;
+      if (send) {send.setAttribute('aria-label', t.send);send.title=t.send;send.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>';}
     } catch (_) {}
     gwAiRenderLog();
   }
@@ -27478,27 +27459,24 @@ function gwSetupAiCoach() {
     const t = gwAiLang();
     let fab = document.getElementById('gw-ai-fab');
     if (!fab) {
-      fab = document.createElement('a');
+      fab = document.createElement('button');
       fab.id = 'gw-ai-fab';
-      fab.href = 'javascript:void(0)';
+      fab.type = 'button';
       fab.onclick = gwAiOpen;
       fab.setAttribute('aria-label', t.fab);
       document.body.appendChild(fab);
     }
-    fab.innerHTML = `
-      <span class="gw-ai-orb" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
-          <circle cx="12" cy="12" r="4.2"/>
-          <path d="M7.8 7.8l1.6 1.6M14.6 14.6l1.6 1.6M16.2 7.8l-1.6 1.6M9.4 14.6l-1.6 1.6"/>
-        </svg>
-      </span>
-      <span class="gw-ai-label">
-        <span class="gw-ai-name">${t.fab}</span>
-        <span class="gw-ai-sub">GROM</span>
-      </span>`;
+    fab.classList.add('grom-ai-launcher');
+    fab.setAttribute('role', 'button');
+    fab.setAttribute('aria-haspopup', 'dialog');
+    fab.setAttribute('aria-label', t.h);
+    fab.setAttribute('title', t.h);
+    fab.innerHTML = '<svg viewBox="0 0 36 36" aria-hidden="true"><use href="#i-grom-ai"/></svg>';
   };
   renderFab();
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-grom-ai]')) gwAiOpen();
+  });
   window.addEventListener('grom:lang-change', renderFab);
 }
 

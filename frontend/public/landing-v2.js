@@ -32,6 +32,8 @@
   var I18N = {
     ru: {
       quote_example: "Пример расчёта · не котировка",
+      compare_estimate: "Расчёт",
+      compare_note: "Модель, не котировка: условный результат 1inch на 0,67% ниже. Газ и комиссии не учтены.",
       kicker: 'Non-custodial · Swap · Futures · Прогнозы · Акции',
       kicker_m: 'Non-custodial · Swap · Futures · Predictions · Stocks',
       h1: H1_EN,
@@ -111,6 +113,8 @@
     },
     en: {
       quote_example: "Illustration · not a quote",
+      compare_estimate: "Estimate",
+      compare_note: "Model, not a quote: assumes 1inch returns 0.67% less. Gas and fees excluded.",
       kicker: 'Non-custodial · Swap · Futures · Predictions · Stocks',
       kicker_m: 'Non-custodial · Swap · Futures · Predictions · Stocks',
       h1: H1_EN,
@@ -190,6 +194,8 @@
     },
     ua: {
       quote_example: "Приклад розрахунку · не котирування",
+      compare_estimate: "Розрахунок",
+      compare_note: "Модель, не котирування: умовний результат 1inch на 0,67% нижчий. Газ і комісії не враховані.",
       kicker: 'Non-custodial · Swap · Ф\'ючерси · Прогнози · Акції',
       kicker_m: 'Non-custodial · Swap · Futures · Predictions · Stocks',
       h1: H1_EN,
@@ -280,6 +286,8 @@
     var packs = {
       es: {
       quote_example: "Ejemplo · no es una cotización",
+      compare_estimate: "Estimación",
+      compare_note: "Modelo, no cotización: supone un resultado de 1inch un 0,67% menor. No incluye gas ni comisiones.",
         kicker: 'Non-custodial · Swap · Futures · Predicciones · Acciones',
         kicker_m: 'Non-custodial · Swap · Futures · Predictions · Stocks',
         sub: 'Haz swap de más de 10 000 tokens, opera Futures, apuesta en eventos y compra acciones tokenizadas — todo desde tu billetera. Sin registro, sin KYC, sin depósitos en GROM.',
@@ -320,6 +328,8 @@
       },
       ar: {
       quote_example: "مثال توضيحي · ليس عرض سعر",
+      compare_estimate: "تقدير",
+      compare_note: "نموذج وليس عرض سعر: يفترض عائداً أقل بنسبة 0.67% لدى 1inch. لا يشمل رسوم الشبكة والعمولات.",
         kicker: 'Non-custodial · Swap · Futures · التنبؤات · الأسهم',
         kicker_m: 'Non-custodial · Swap · Futures · Predictions · Stocks',
         sub: 'بادل أكثر من 10 000 رمز، تداول Futures، راهن على الأحداث واشترِ أسهماً مرمّزة — كل ذلك من محفظتك. بلا تسجيل، بلا KYC، بلا إيداع في GROM.',
@@ -360,6 +370,8 @@
       },
       zh: {
       quote_example: "示例计算 · 非报价",
+      compare_estimate: "估算",
+      compare_note: "模型而非实时报价：假设 1inch 的输出低 0.67%。不含燃气费及手续费。",
         kicker: 'Non-custodial · Swap · Futures · 预测 · 股票',
         kicker_m: 'Non-custodial · Swap · Futures · Predictions · Stocks',
         sub: '兑换 10 000+ 代币、交易 Futures、押注事件、购买代币化股票——全部来自你的钱包。无需注册、无需 KYC、无需向 GROM 充值。',
@@ -400,6 +412,8 @@
       },
       hi: {
       quote_example: "उदाहरण · वास्तविक कोट नहीं",
+      compare_estimate: "अनुमान",
+      compare_note: "मॉडल, वास्तविक कोट नहीं: 1inch का परिणाम 0.67% कम माना गया है। गैस और शुल्क शामिल नहीं हैं।",
         kicker: 'Non-custodial · Swap · Futures · प्रेडिक्शन्स · स्टॉक्स',
         kicker_m: 'Non-custodial · Swap · Futures · Predictions · Stocks',
         sub: '10 000+ टोकन स्वैप करें, Futures ट्रेड करें, इवेंट्स पर दांव लगाएँ और टोकनाइज़्ड स्टॉक्स खरीदें — सब अपने वॉलेट से। कोई रजिस्ट्रेशन नहीं, कोई KYC नहीं, GROM पर कोई डिपॉजिट नहीं।',
@@ -440,6 +454,8 @@
       },
       tr: {
       quote_example: "Örnek hesaplama · kotasyon değildir",
+      compare_estimate: "Tahmin",
+      compare_note: "Modeldir, fiyat teklifi değildir: 1inch getirisinin %0,67 daha düşük olduğu varsayılır. Gas ve ücretler hariçtir.",
         kicker: 'Non-custodial · Swap · Futures · Tahminler · Hisse',
         kicker_m: 'Non-custodial · Swap · Futures · Predictions · Stocks',
         sub: '10 000+ token swap’le, Futures işle, olaylara bahis yap, tokenize hisse al — hepsi cüzdanından. Kayıt yok, KYC yok, GROM’a yatırma yok.',
@@ -913,14 +929,14 @@
   }
 
   function fetchEthUsd() {
-    return cached('ethusd3', 60_000, function () {
+    return cached('ethusd4', 60_000, function () {
       /* HL mid only — faster than waiting on /api/market/quotes. */
       return hlInfo({ type: 'allMids' })
         .then(function (mids) {
           var px = Number(mids && mids.ETH) || 0;
-          return px > 0 ? px : 2500;
+          return Number.isFinite(px) && px > 0 ? px : null;
         })
-        .catch(function () { return 2500; });
+        .catch(function () { return null; });
     });
   }
 
@@ -1096,9 +1112,15 @@
   }
 
   function renderSwap(eth) {
-    eth = eth || 2500;
+    eth = Number(eth);
+    var hasPrice = Number.isFinite(eth) && eth > 0;
     var pay = 0.5;
-    var get = pay * eth;
+    var get = hasPrice ? pay * eth : null;
+    // Explicit illustrative assumption; this is not a fetched 1inch quote.
+    var modelDifference = hasPrice ? get * 0.0067 : null;
+    var valueText = hasPrice ? get.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : '—';
+    var usdText = hasPrice ? '≈ ' + fmtUsd(get) : '—';
+    var rateText = hasPrice ? eth.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : '—';
     return (
       '<div class="lv2-swap-demo" data-lv2-act="connect" role="button" tabindex="0" aria-label="' + esc(t('connect')) + '">' +
         '<div class="lv2-swap-field">' +
@@ -1107,19 +1129,20 @@
             '<input class="lv2-swap-amt" value="' + String(pay).replace('.', ',') + '" readonly tabindex="-1" />' +
             '<span class="lv2-pill">' + coinBadge('ETH', COIN_LOGO.ETH, COIN_TINT.ETH) + 'ETH</span>' +
           '</div>' +
-          '<div class="lv2-swap-meta"><span>≈ ' + fmtUsd(pay * eth) + '</span></div>' +
+          '<div class="lv2-swap-meta"><span>' + usdText + '</span></div>' +
         '</div>' +
         '<div class="lv2-flip-wrap"><div class="lv2-flip">' + ICON.flip + '</div></div>' +
         '<div class="lv2-swap-field">' +
           '<div class="lv2-swap-lbl">' + esc(t('get')) + '</div>' +
           '<div class="lv2-swap-body">' +
-            '<input class="lv2-swap-amt" value="' + get.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) + '" readonly tabindex="-1" />' +
+            '<input class="lv2-swap-amt" value="' + valueText + '" readonly tabindex="-1" />' +
             '<span class="lv2-pill">' + coinBadge('U', 'https://assets.coingecko.com/coins/images/6319/small/usdc.png', '#2775ca') + 'USDC</span>' +
           '</div>' +
-          '<div class="lv2-swap-meta"><span>≈ ' + fmtUsd(get) + '</span></div>' +
+          '<div class="lv2-swap-meta"><span>' + usdText + '</span></div>' +
         '</div>' +
-        '<div class="lv2-swap-info"><span>' + esc(t('rate')) + ': 1 ETH = ' + eth.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) + ' USDC</span>' +
-          '<span class="save">' + esc(t('quote_example')) + '</span></div>' +
+        '<div class="lv2-swap-info"><span>' + esc(t('rate')) + ': 1 ETH = ' + rateText + ' USDC</span>' +
+          '<span class="save">' + esc(t('compare_estimate')) + ': ' + (hasPrice ? '+' + fmtUsd(modelDifference) : '—') + ' vs 1inch</span></div>' +
+        '<p class="lv2-swap-model">' + esc(t('compare_note')) + '</p>' +
         '<div class="lv2-swap-route">' + esc(t('route')) +
           ' ' +
           esc(t('route_best')) + '</div>' +

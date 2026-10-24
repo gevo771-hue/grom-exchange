@@ -399,6 +399,7 @@ html.lv2-on #page-landing .lv2-trust .ok {
   color: var(--lv2-text-dim);
 }
 .lv2-swap-info .save { color: var(--lv2-accent-2); font-weight: 700; }
+.lv2-swap-model { margin: 8px 2px 0; font-size: 11px; line-height: 1.5; color: var(--lv2-text-dim); }
 .lv2-swap-route {
   font-size: 11px;
   color: var(--lv2-text-muted);

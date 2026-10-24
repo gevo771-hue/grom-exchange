@@ -2161,12 +2161,12 @@
   #page-help > .breadcrumb,
   #page-futures > .breadcrumb,
   #page-futures > .breadcrumb { display: none !important; }
-  h1.page-title {
+  .page-title {
     margin: 0 0 4px; font-size: 24px; font-weight: 700; color: var(--silver1);
     display: flex; align-items: center; gap: 10px;
     letter-spacing: -0.02em;
   }
-  h1.page-title .page-title-ico,
+  .page-title .page-title-ico,
   .gwx-h1 .gwx-h1-ico {
     display: inline-flex;
     align-items: center;
@@ -2183,7 +2183,7 @@
       0 8px 22px -12px rgba(0, 194, 255, 0.55),
       0 1px 0 rgba(255, 255, 255, 0.1) inset;
   }
-  h1.page-title .page-title-ico svg,
+  .page-title .page-title-ico svg,
   .gwx-h1 .gwx-h1-ico svg {
     width: 20px;
     height: 20px;
@@ -2210,19 +2210,19 @@
     border-radius: 10px;
   }
   @media (max-width: 760px) {
-    h1.page-title .page-title-ico,
+    .page-title .page-title-ico,
     .gwx-h1 .gwx-h1-ico {
       width: 34px;
       height: 34px;
       border-radius: 10px;
     }
-    h1.page-title .page-title-ico svg,
+    .page-title .page-title-ico svg,
     .gwx-h1 .gwx-h1-ico svg {
       width: 17px;
       height: 17px;
     }
   }
-  h1.page-title .tag {
+  .page-title .tag {
     font-size: 10.5px; letter-spacing: 0.12em; font-weight: 700;
     padding: 3px 8px; border-radius: 6px;
     background: rgba(0, 194, 255, 0.16); color: var(--steel1);
@@ -3686,6 +3686,16 @@
   }
   .acct-switch button.active { background: linear-gradient(135deg, rgba(77,158,255,0.22), rgba(77,158,255,0.08)); color: var(--silver1); box-shadow: inset 0 0 0 1px rgba(77,158,255,0.32); }
   .acct-switch button .bal { font-size: 12.5px; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  /* Spot has one balance tile, not the two-column margin selector. */
+  #page-futures .bo-panel-v2 > #futSpotBalSwitch {
+    grid-template-columns: minmax(0, 1fr);
+    width: fit-content !important;
+    max-width: 100%;
+    align-self: flex-start;
+    padding: 3px;
+  }
+  #page-futures #futSpotBalSwitch button { min-width: 148px; padding: 9px 18px; }
+
 
   .countdown-v2 {
     background: linear-gradient(135deg, rgba(245,185,77,0.14), rgba(245,185,77,0.04));
@@ -5037,7 +5047,8 @@
   .mkt-row .pair-symbol { color: var(--silver1); font-weight: 700; letter-spacing: -0.01em; }
   .mkt-row .pair-meta { color: var(--silver5); font-weight: 500; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mkt-row .spark { height: 28px; width: 100%; max-width: 120px; overflow: visible; shape-rendering: geometricPrecision; display: block; }
-  .mkt-row [data-mkt-spark] { min-width: 100px; display: flex; align-items: center; justify-content: flex-end; }
+  .mkt-row [data-mkt-spark] { min-width: 0; display: flex; align-items: center; justify-content: center; }
+  .mkt-head > :nth-child(6) { text-align: center; white-space: nowrap; }
   .mkt-row .trade-btn { padding: 6px 10px; border-radius: 8px; font-size: 11.5px; font-weight: 700; background: rgba(0,194,255,0.16); color: var(--steel1); }
   .mkt-row .trade-btn:hover { background: var(--steel3); color: #fff; }
 
@@ -6124,11 +6135,7 @@
 #tradeModeSwitch button{position:relative;min-height:28px;min-width:58px;padding:5px 10px;border-radius:6px;font-size:11.5px;color:#becddd;letter-spacing:.04em}
 #tradeModeSwitch button.active{background:transparent;color:#eceff4;box-shadow:none}
 #tradeModeSwitch button.active::after{content:"";position:absolute;left:8px;right:8px;bottom:0;height:2px;border-radius:0;background:#67d4ef}
-#page-futures .trade-ai-btn{margin-left:auto;flex:none;min-height:36px;padding:6px 12px;border:1px solid #9bbbd83b;border-radius:9px;background:#252d3a;color:#a8dce9;font-size:12px;font-weight:700;cursor:pointer}
-#page-futures .trade-ai-btn:hover{background:#364759;color:#fff}
-#page-futures .trade-ai-btn:focus-visible{outline:2px solid #67d4ef;outline-offset:3px}
-body:has(#page-futures.active) #gw-ai-fab{visibility:hidden;pointer-events:none}
-body:not(:has(#gw-ai-fab)) .trade-ai-btn{display:none}
+#page-futures .trade-ai-btn{margin-left:auto}
 #tradeModeSwitch button:focus-visible{outline:2px solid #fff;outline-offset:2px}
 #page-futures #futCats{flex-wrap:nowrap!important;gap:18px;margin:4px 0 10px!important;max-width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;border-bottom:1px solid #c8d4e82b;border-radius:0;background:none;padding:0}
 #page-futures #futCats::-webkit-scrollbar{display:none;width:0;height:0}
@@ -6194,6 +6201,17 @@ body:not(:has(#gw-ai-fab)) .trade-ai-btn{display:none}
 <!-- SVG defs: logo + icons -->
 <svg xmlns="http://www.w3.org/2000/svg" class="grom-svg-sprite" aria-hidden="true" focusable="false">
   <defs>
+    <linearGradient id="gromAiLight" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f3fdff"/><stop offset=".42" stop-color="#8deaff"/><stop offset="1" stop-color="#3895ed"/>
+    </linearGradient>
+    <symbol id="i-grom-ai" viewBox="0 0 36 36">
+      <path d="M23 4.5 30 8.5 33 17 29 26.5 20 31.5 10 29 4 21 5 11 12 5" fill="none" stroke="#72cde8" stroke-width="1" opacity=".45"/>
+      <path d="M6.5 22.5A13 13 0 0 1 22 5.8M14 30.2A13 13 0 0 0 30 14" fill="none" stroke="url(#gromAiLight)" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="m17.3 8.2 2.8 6.7 6.7 2.8-6.7 2.8-2.8 6.7-2.8-6.7-6.7-2.8 6.7-2.8Z" fill="url(#gromAiLight)"/>
+      <path d="m17.3 12.3 1.6 3.8 3.8 1.6-3.8 1.6-1.6 3.8-1.6-3.8-3.8-1.6 3.8-1.6Z" fill="#103b60" opacity=".85"/>
+      <path d="m28 3 1.2 3.4L32.5 7l-3.3 1.1L28 11l-1.1-2.9L24 7l2.9-.6Z" fill="#d6f9ff"/>
+      <circle cx="6.6" cy="25.5" r="1.6" fill="#81e8ff"/>
+    </symbol>
     <!-- Chrome outer bevel gradient — bright top-left, dark bottom-right -->
     <linearGradient id="chromeBevel" x1="15%" y1="0%" x2="85%" y2="100%">
       <stop offset="0%"  stop-color="#ffffff"/>
@@ -6744,7 +6762,8 @@ body:not(:has(#gw-ai-fab)) .trade-ai-btn{display:none}
     <!-- MARKETS -->
     <section class="page" id="page-markets">
       <header class="markets-hero">
-        <div>
+        <button type="button" class="grom-ai-launcher" data-grom-ai aria-label="GROM AI" title="GROM AI" aria-haspopup="dialog"><svg viewBox="0 0 36 36" aria-hidden="true"><use href="#i-grom-ai"/></svg></button>
+        <div class="markets-heading">
           <h1 class="page-title"><span class="page-title-ico" aria-hidden="true"><svg width="20" height="20"><use href="#i-markets"/></svg></span><span data-i18n="nav_markets">Markets</span></h1>
           <p class="page-subtitle" data-i18n="mkt_intro">Live prices and 24-hour market moves.</p>
         </div>
@@ -6877,7 +6896,7 @@ body:not(:has(#gw-ai-fab)) .trade-ai-btn{display:none}
           <button type="button" role="tab" data-trade-mode="perp" class="active" aria-selected="true">PERPS</button>
           <button type="button" role="tab" data-trade-mode="spot" aria-selected="false">SPOT</button>
         </div>
-        <button type="button" class="trade-ai-btn" aria-label="AI assistant" aria-haspopup="dialog" onclick="document.getElementById('gw-ai-fab')?.click()">AI</button>
+        <button type="button" class="grom-ai-launcher trade-ai-btn" data-grom-ai aria-label="GROM AI" title="GROM AI" aria-haspopup="dialog"><svg viewBox="0 0 36 36" aria-hidden="true"><use href="#i-grom-ai"/></svg></button>
       </h1>
       <p class="page-subtitle">Perps and Spot · non-custodial.</p>
       <div id="hlFundBanner" class="hl-fund-banner" hidden>
@@ -9309,7 +9328,7 @@ document.addEventListener('input', e => {
   }
 });
 function updateFuturesBoard() {
-  var px = window.__gromHlActive
+  var px = (window.__gromHlQuotesReady || window.__gromHlActive)
     ? gromHlPriceForPair(futDeskState.pair, null, isTradeSpot() ? 'spot' : 'perp')
     : NaN;
   var futBase = String(futDeskState.pair || 'BTC/USDT').split('/')[0] || 'BTC';
@@ -10253,7 +10272,7 @@ function binaryMatchesCat(sym, cat) {
 
 function rebuildFuturesPairs() {
   // Hyperliquid desk: live perps (main + HIP-3) or full USDC CLOB spot. Never OTC/FX from instruments.
-  if (window.__gromHlActive) {
+  if (window.__gromHlQuotesReady || window.__gromHlActive) {
     if (window.futDeskState && futDeskState.tradeMode === 'spot') {
       futuresPairs = (window.__hlSpotMarkets || []).slice();
       window.futuresPairs = futuresPairs;
@@ -13170,7 +13189,7 @@ function renderFuturesList(filter) {
   var visible = rows.slice(0, showN);
   var html = visible.map(function (row) {
     var mode = row.spot || isTradeSpot() ? 'spot' : 'perp';
-    var px = window.__gromHlActive ? gromHlPriceForPair(row.sym, row.coin, mode) : NaN;
+    var px = (window.__gromHlQuotesReady || window.__gromHlActive) ? gromHlPriceForPair(row.sym, row.coin, mode) : NaN;
     if (!(px > 0)) px = NaN;
     var chg = futuresChg24ForPair(row.sym, row.coin, mode);
     var nameLbl = row.label
@@ -16128,6 +16147,9 @@ var GROM_XSTOCKS = [
     }).join('');
   }
 
+  function heroAiBtn() {
+    return '<button type="button" class="grom-ai-launcher" data-grom-ai aria-label="GROM AI" title="GROM AI" aria-haspopup="dialog"><svg viewBox="0 0 36 36" aria-hidden="true"><use href="#i-grom-ai"/></svg></button>';
+  }
   function heroJumpBtn(targetId, labelKey, fb) {
     return '<button type="button" class="gwx-jump" data-jump="' + targetId + '" aria-label="' + esc(tx(labelKey, fb)) + '">'
       + esc(tx(labelKey, fb)) + ' <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7"/></svg></button>';
@@ -16147,7 +16169,7 @@ var GROM_XSTOCKS = [
     if (gwxState.pCat === 'us-election' && Date.now() >= Date.parse('2026-11-04T12:00:00Z')) gwxState.pCat = 'politics';
     initPx();
     var totalVol = GROM_PREDICT_MARKETS.reduce(function (a, m) { return a + (Number(m.vol24) || 0); }, 0);
-    return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
+    return '<div class="gwx-wrap"><div class="gwx-hero">' + heroAiBtn() + '<div class="gwx-hero-row">'
       + '<h1 class="gwx-h1"><span class="gwx-h1-ico" aria-hidden="true"><svg width="21" height="21"><use href="#i-predict"/></svg></span><span>' + tx('pg_predict_title', 'Prediction markets') + '</span></h1>'
       + '<div class="gwx-hero-aside"><div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">…</b><small>' + tx('px_poly_bal', 'pUSD · Polygon') + '</small></div><div><b>' + fmtVol(totalVol) + '</b><small>' + tx('px_vol_24h', '24h volume') + '</small></div><div><b>' + GROM_PREDICT_MARKETS.length + '</b><small>' + tx('px_markets_n', 'Markets') + '</small></div></div>'
       + '</div></div></div>'
@@ -16169,7 +16191,7 @@ var GROM_XSTOCKS = [
     initPx();
     var balTxt = gwxConnected() && gwxStableFunds ? money(gwxStableFunds.usdt + gwxStableFunds.usdc) : '—';
     var balSm = gwxConnected() ? tx('px_stable_balance', 'USDC + USDT · across networks') : tx('px_connect_for_bal', 'Connect wallet');
-    return '<div class="gwx-wrap"><div class="gwx-hero"><div class="gwx-hero-row">'
+    return '<div class="gwx-wrap"><div class="gwx-hero">' + heroAiBtn() + '<div class="gwx-hero-row">'
       + '<div class="gwx-stock-heading"><div class="gwx-stock-eyebrow">RWA · xStocks</div><h1 class="gwx-h1"><span class="gwx-h1-ico" aria-hidden="true"><svg width="21" height="21"><use href="#i-xstocks"/></svg></span><span>' + tx('px_stock_title', 'Stocks') + '</span></h1>'
       + '<p class="gwx-stock-intro">' + tx('px_stock_intro', 'Tokenized stocks and ETFs. Trade from your wallet.') + '</p></div>'
       + '<div class="gwx-hero-aside"><div class="gwx-stats"><div class="gwx-bal"><b class="gwx-bal-v">' + balTxt + '</b><small class="live">' + balSm + '</small></div><div><b id="gwxTickerCount">' + GROM_XSTOCKS.length + '</b><small>' + tx('px_tickers', 'Tickers') + '</small></div></div>'

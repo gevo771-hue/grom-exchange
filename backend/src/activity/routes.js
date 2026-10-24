@@ -12,7 +12,7 @@ const PRODUCTS = ['swap', 'spot', 'futures', 'predict', 'xstocks', 'wallet', 'au
 const logSchema = z.object({
   product: z.enum(PRODUCTS),
   action: z.string().trim().min(1).max(64),
-  detail: z.record(z.unknown()).optional(),
+  detail: z.record(z.string(), z.unknown()).optional(),
   tx_hash: z.string().trim().max(128).optional(),
   amount: z.number().finite().optional(),
   asset: z.string().trim().max(32).optional(),
@@ -35,7 +35,7 @@ const issueSchema = z.object({
   action: z.string().trim().min(1).max(64),
   message: z.string().trim().max(800).optional(),
   code: z.union([z.string(), z.number()]).optional(),
-  detail: z.record(z.unknown()).optional(),
+  detail: z.record(z.string(), z.unknown()).optional(),
   page: z.string().trim().max(64).optional(),
   wallet: z.string().trim().max(64).optional(),
 }).strict();

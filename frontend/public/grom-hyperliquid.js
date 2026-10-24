@@ -579,6 +579,20 @@
    * HIP-3 dex at once → shared-proxy 429 → crypto OK, TradFi/HIP-3 empty.
    * Strategy: main first (publish), then xyz alone, then other HIP-3 one-by-one.
    */
+  function paintPublicQuotes() {
+    // Quote availability is separate from the order-ready metadata gate.
+    window.__gromHlQuotesReady = true;
+    try {
+      if (document.getElementById('page-markets')?.classList.contains('active')) {
+        window.renderMarketsEnhanced?.();
+      }
+      if (document.getElementById('page-futures')?.classList.contains('active')) {
+        window.renderFuturesList?.(document.querySelector('#page-futures .wl-search input')?.value || '');
+        if (window.futDeskState) window.updateFuturesBoard?.();
+      }
+    } catch (_) {}
+  }
+
   async function ensureMeta(force) {
     if (_metaInflight) return _metaInflight;
     if (_meta && _meta.assetByCoin && _meta.assetByCoin.size > 0 && !force) return _meta;
@@ -653,14 +667,7 @@
       window.__hlCtx = ctxMap;
       window.__hlMarkets = markets;
       window.__hlAssetByCoin = assetByCoin;
-      // Public prices can render now; trading still waits for complete metadata.
-      window.__gromHlQuotesReady = true;
-      try {
-        if (typeof window.renderMarketsEnhanced === 'function'
-          && document.getElementById('page-markets')?.classList.contains('active')) {
-          window.renderMarketsEnhanced();
-        }
-      } catch (_) {}
+      paintPublicQuotes();
       return _meta;
     };
 
@@ -932,6 +939,7 @@
     window.__hlSpotMarkets = markets;
     window.__hlSpotAssetBySym = assetBySym;
     window.__hlSpotAssetLookup = assetLookup;
+    if (markets.length) paintPublicQuotes();
     return _spotMeta;
   }
 

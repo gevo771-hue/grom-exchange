@@ -194,12 +194,44 @@ body .grom-ai-launcher.grom-ai-launcher:hover{box-shadow:0 0 26px -6px #5ff4ffaa
 
 /* compact round button + "AI" chip: phones, and the hero corners on Markets / Predictions / Stocks (absolute-positioned, no room for a pill) */
 .gwx-hero>.grom-ai-launcher.grom-ai-launcher,.markets-hero>.grom-ai-launcher.grom-ai-launcher{width:44px;padding:3px;gap:0}
-.gwx-hero>.grom-ai-launcher.grom-ai-launcher::after,.markets-hero>.grom-ai-launcher.grom-ai-launcher::after{position:absolute;right:-6px;bottom:-5px;font-size:10px;letter-spacing:.04em;padding:2px 5px;border-radius:7px;
+.gwx-hero>.grom-ai-launcher.grom-ai-launcher::after,.markets-hero>.grom-ai-launcher.grom-ai-launcher::after{position:absolute;right:0;bottom:0;font-size:10px;letter-spacing:.04em;padding:2px 5px;border-radius:7px;
   background:linear-gradient(90deg,#5ff4ff,#a26bff);-webkit-background-clip:border-box;background-clip:border-box;-webkit-text-fill-color:#061024;color:#061024;box-shadow:0 0 0 2px #0b1226}
 @media (max-width:600px){
   body .grom-ai-launcher.grom-ai-launcher{width:44px;padding:3px;gap:0}
-  body .grom-ai-launcher.grom-ai-launcher::after{position:absolute;right:-6px;bottom:-5px;font-size:9.5px;letter-spacing:.04em;padding:2px 5px;border-radius:7px;
+  body .grom-ai-launcher.grom-ai-launcher::after{position:absolute;right:0;bottom:0;font-size:9.5px;letter-spacing:.04em;padding:2px 5px;border-radius:7px;
     background:linear-gradient(90deg,#5ff4ff,#a26bff);-webkit-background-clip:border-box;background-clip:border-box;-webkit-text-fill-color:#061024;color:#061024;box-shadow:0 0 0 2px #0b1226}
   #gw-ai-fab.grom-ai-launcher{width:52px;height:52px;padding:3px}
   #gw-ai-fab.grom-ai-launcher .gai-vid{width:44px;height:44px}
+}
+
+/* Keep the compact AI badge inside its hit area; leave breathing room above Trade cards. */
+#page-futures>.page-title{margin-bottom:16px}
+@media(max-width:600px){
+  #page-futures>.page-title{gap:8px}
+  #page-futures>.page-title .spot-pair-wrap{min-width:0;flex-shrink:1}
+  #page-futures #futPairBtn{max-width:100%;min-width:0;gap:4px}
+  #page-futures #futPairTitle{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #page-futures #tradeModeSwitch{flex-shrink:0}
+}
+@media(max-width:760px){
+  #page-futures .bo-hud-top .grp{flex-wrap:wrap;gap:8px}
+  #page-futures .bo-hud-top .bo-asset{flex-shrink:0;max-width:100%}
+  #page-futures .bo-hud-top .fut-asset-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #page-futures .bo-hud-top .bo-price{flex-shrink:0;max-width:100%;flex-wrap:wrap}
+}
+
+/* Main dashboard: preserve the floating launcher, closer to the desktop edge. */
+@media(min-width:901px){
+  body:has(#page-dashboard.active) #gw-ai-fab.grom-ai-launcher{right:max(20px,calc((100vw - 1240px)/2 + 4px))}
+}
+
+/* Stocks: align the title, AI and desktop statistics below the eyebrow. */
+#page-xstocks .gwx-hero{--stock-title-offset:22px}
+#page-xstocks .gwx-stock-eyebrow{line-height:14px}
+#page-xstocks .gwx-hero-row{align-items:flex-start}
+#page-xstocks .gwx-h1{min-height:44px}
+#page-xstocks .gwx-hero>.grom-ai-launcher{top:var(--stock-title-offset)}
+@media(min-width:761px){
+  #page-xstocks .gwx-hero-aside{padding-top:var(--stock-title-offset)}
+  #page-xstocks .gwx-stats{min-height:44px}
 }

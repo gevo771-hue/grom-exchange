@@ -176,3 +176,30 @@ body:has(#page-futures.active,#page-markets.active,#page-predict.active,#page-xs
   #page-xstocks .gwx-stock-heading{padding-right:56px;width:100%;box-sizing:border-box}
 }
 @media(prefers-reduced-motion:reduce){body .grom-ai-launcher.grom-ai-launcher{transition:none}}
+
+/* ===== GROM AI launcher: animated Gromi avatar + "AI" label ===== */
+body .grom-ai-launcher.grom-ai-launcher{width:auto;min-width:44px;flex:0 0 auto;gap:7px;padding:4px 13px 4px 4px;border-radius:999px;border:1px solid transparent;
+  background:linear-gradient(145deg,#141f3b,#0b1226) padding-box,linear-gradient(135deg,#5ff4ff,#2f9bff 50%,#a26bff) border-box;
+  box-shadow:0 6px 20px -8px #2f9bffaa,inset 0 1px #d6f5ff1f}
+body .grom-ai-launcher.grom-ai-launcher::before{display:none}
+body .grom-ai-launcher.grom-ai-launcher .gai-vid{display:block;width:36px;height:36px;border-radius:50%;object-fit:cover;background:#070d1f;
+  box-shadow:0 0 0 1.5px #5ff4ffcc,0 0 10px 1px #5ff4ff66,0 0 16px 2px #a26bff44;pointer-events:none}
+body .grom-ai-launcher.grom-ai-launcher.gai-has-vid svg{display:none}
+body .grom-ai-launcher.grom-ai-launcher::after{content:"AI";font:800 14px/1 Inter,system-ui,sans-serif;letter-spacing:.06em;
+  background:linear-gradient(90deg,#9ff7ff,#7aa8ff 55%,#c39bff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+body .grom-ai-launcher.grom-ai-launcher:hover{box-shadow:0 0 26px -6px #5ff4ffaa,inset 0 1px #e3fbff33}
+#gw-ai-fab.grom-ai-launcher{width:auto;height:52px;padding:4px 16px 4px 4px}
+#gw-ai-fab.grom-ai-launcher .gai-vid{width:42px;height:42px}
+#gw-ai-fab.grom-ai-launcher::after{font-size:15px}
+
+/* compact round button + "AI" chip: phones, and the hero corners on Markets / Predictions / Stocks (absolute-positioned, no room for a pill) */
+.gwx-hero>.grom-ai-launcher.grom-ai-launcher,.markets-hero>.grom-ai-launcher.grom-ai-launcher{width:44px;padding:3px;gap:0}
+.gwx-hero>.grom-ai-launcher.grom-ai-launcher::after,.markets-hero>.grom-ai-launcher.grom-ai-launcher::after{position:absolute;right:-6px;bottom:-5px;font-size:10px;letter-spacing:.04em;padding:2px 5px;border-radius:7px;
+  background:linear-gradient(90deg,#5ff4ff,#a26bff);-webkit-background-clip:border-box;background-clip:border-box;-webkit-text-fill-color:#061024;color:#061024;box-shadow:0 0 0 2px #0b1226}
+@media (max-width:600px){
+  body .grom-ai-launcher.grom-ai-launcher{width:44px;padding:3px;gap:0}
+  body .grom-ai-launcher.grom-ai-launcher::after{position:absolute;right:-6px;bottom:-5px;font-size:9.5px;letter-spacing:.04em;padding:2px 5px;border-radius:7px;
+    background:linear-gradient(90deg,#5ff4ff,#a26bff);-webkit-background-clip:border-box;background-clip:border-box;-webkit-text-fill-color:#061024;color:#061024;box-shadow:0 0 0 2px #0b1226}
+  #gw-ai-fab.grom-ai-launcher{width:52px;height:52px;padding:3px}
+  #gw-ai-fab.grom-ai-launcher .gai-vid{width:44px;height:44px}
+}

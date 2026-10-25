@@ -1,6 +1,6 @@
 # Gromi assistant UI review
 
-Branch: `codex/ai-gromi-launcher`. Prepared 25 October 2026. Owner merges/deploys after review; this change has not been deployed.
+Branch: `codex/ai-gromi-launcher`. Prepared 25 October 2026. This report records validation before publication; deployment is authorized by the owner after successful checks.
 
 The four media files and chat sprite come from the supplied `marketing/ai-assistant` package. The launcher styling follows its desktop/mobile previews. Launchers retain their existing accessible names and chat handlers. No API, quote calculation, wallet signing, swap or order execution changes.
 

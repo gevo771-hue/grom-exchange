@@ -98,7 +98,9 @@ export function registerXstocksChartRoute(router, {
 
   router.get('/xstocks/chart', limiter, async (req, res) => {
     try {
-      const resolved = resolveXstocksChartRequest(req.query, await getCatalog());
+      const catalog = await getCatalog();
+      if (!catalog?.length) return res.status(503).json({ points: [], error: 'chart_unavailable' });
+      const resolved = resolveXstocksChartRequest(req.query, catalog);
       if (resolved.error) return res.status(resolved.status).json({ points: [], error: resolved.error });
 
       const key = `${resolved.symbol}|${resolved.yahoo}|${resolved.range}|${resolved.interval}`;

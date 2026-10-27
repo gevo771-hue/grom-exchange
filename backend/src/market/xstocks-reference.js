@@ -56,7 +56,9 @@ export function registerXstocksReferenceRoute(router, {
 
   router.get('/xstocks/reference-price', limiter, async (req, res) => {
     try {
-      const resolved = resolveXstockReferenceRequest(req.query, await getCatalog());
+      const catalog = await getCatalog();
+      if (!catalog?.length) return res.status(503).json({ error: 'reference_unavailable' });
+      const resolved = resolveXstockReferenceRequest(req.query, catalog);
       if (resolved.error) return res.status(resolved.status).json({ error: resolved.error });
 
       const cached = cache.get(resolved.symbol);

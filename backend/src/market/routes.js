@@ -1,6 +1,7 @@
 import express from 'express';
 import { registerPredictionEventRoutes } from './predict-event.js';
 import { isUsElection2026 } from './predict-election.js';
+import { selectFeaturedPredictions } from './predict-featured.js';
 import rateLimit from 'express-rate-limit';
 import axios from 'axios';
 import fs from 'fs';
@@ -8,7 +9,7 @@ import config from '../config/index.js';
 import { isCurrentPmEnd } from './predict-freshness.js';
 import { registerXstocksChartRoute } from './xstocks-chart.js';
 import { registerXstocksReferenceRoute } from './xstocks-reference.js';
-import { fetchXstocksCatalogPages } from './xstocks-catalog-fetch.js';
+import { createXstocksCatalogLoader, fetchXstocksCatalogPages } from './xstocks-catalog-fetch.js';
 import { fetchAxelarGmpStatus } from './axelar-gmp.js';
 
 const CG_IDS = {
@@ -81,7 +82,6 @@ const axelarStatusLimiter = rateLimit({
 
 // ---- Backed xStocks catalog proxy (public, cached) — browser can't call api.backed.fi (no CORS) ----
 let _xstocksCache = { ts: 0, data: null };
-let _xstocksRefreshPromise = null;
 let _xstocksEnrichPromise = null;
 const XSTOCKS_TTL = 5 * 60_000;
 const XSTOCKS_DISK = '/tmp/grom-xstocks-cache.json';
@@ -105,6 +105,15 @@ function saveXstocksDiskCache(items) {
   } catch (_) {}
 }
 loadXstocksDiskCache();
+
+const xstocksCatalog = createXstocksCatalogLoader({
+  readCache: () => _xstocksCache.data,
+  fetchCatalog: fetchBackedXstocksCatalog,
+  writeCache: (items) => {
+    _xstocksCache = { ts: Date.now(), data: items };
+    saveXstocksDiskCache(items);
+  },
+});
 
 function xstocksMetricsMostlyBlank(items) {
   const sample = (items || []).slice(0, 50);
@@ -1071,7 +1080,7 @@ export function createMarketRouter() {
   // Public xStock indicative-price + multiplier proxy. Symbols are resolved
   // only against the canonical Backed catalog before upstream requests.
   registerXstocksReferenceRoute(r, {
-    getCatalog: () => _xstocksCache.data || [],
+    getCatalog: () => xstocksCatalog.get(),
     fetchPriceData: ({ tokenSym }) => axios.get(
       `https://api.xstocks.fi/api/v2/public/assets/${encodeURIComponent(tokenSym)}/price-data`,
       { timeout: 8000, headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' } },
@@ -1084,7 +1093,7 @@ export function createMarketRouter() {
 
   // Public chart proxy is restricted to the canonical xStock catalog and fixed chart presets.
   registerXstocksChartRoute(r, {
-    getCatalog: () => _xstocksCache.data || [],
+    getCatalog: () => xstocksCatalog.get(),
     getSession: () => ensureYahooSession(),
     fetchChartData: ({ yahoo, range, interval, session }) => {
       const headers = { 'User-Agent': YF_UA, Accept: 'application/json' };
@@ -1117,37 +1126,12 @@ export function createMarketRouter() {
       if (xstocksMetricsMostlyBlank(stale)) {
         try { scheduleXstocksEnrich(stale); } catch (_) {}
       }
-      if (!_xstocksRefreshPromise) {
-        _xstocksRefreshPromise = (async () => {
-          try {
-            const items = await fetchBackedXstocksCatalog();
-            if (items?.length) {
-              _xstocksCache = { ts: Date.now(), data: items };
-              saveXstocksDiskCache(items);
-            }
-          } catch (_) {}
-          finally { _xstocksRefreshPromise = null; }
-        })();
-      }
+      void xstocksCatalog.refresh().catch(() => {});
       return send({ items: stale, cached: true, source: 'backed', refreshing: true }, 30);
     }
     // Cold path: coalesce concurrent browsers (landing + stocks + gwx) into one Backed crawl.
     try {
-      if (!_xstocksRefreshPromise) {
-        _xstocksRefreshPromise = (async () => {
-          try {
-            const items = await fetchBackedXstocksCatalog();
-            if (items?.length) {
-              _xstocksCache = { ts: Date.now(), data: items };
-              saveXstocksDiskCache(items);
-            }
-            return items || [];
-          } finally {
-            _xstocksRefreshPromise = null;
-          }
-        })();
-      }
-      const items = await _xstocksRefreshPromise;
+      const items = await xstocksCatalog.get();
       if (items?.length) {
         return send({ items, source: 'backed', count: items.length }, 60);
       }
@@ -1195,6 +1179,7 @@ export function createMarketRouter() {
       Math.max(1, parseInt(String(req.query.limit || String(PREDICT_DEFAULT_LIMIT)), 10) || PREDICT_DEFAULT_LIMIT),
     );
     const searchPage = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+    const featured = String(req.query.featured || '') === '1';
     const wantAll = String(req.query.all || '') === '1'; // legacy: return full browse catalog
 
     try {
@@ -1291,6 +1276,10 @@ export function createMarketRouter() {
 
       // 3) Browse catalog (volume-ranked), paginated for mobile-friendly UI
       const catalog = await ensurePredictCatalog(locale);
+      if (featured) {
+        return res.json({ markets: selectFeaturedPredictions(catalog.markets), source: 'polymarket',
+          mode: 'featured', locale, cached: catalog.cached, ...(catalog.meta || {}) });
+      }
       const filtered = filterPredictCat(catalog.markets, catParam);
       if (wantAll) {
         return res.json({
@@ -1321,6 +1310,11 @@ export function createMarketRouter() {
     } catch (e) {
       const fallback = _predictCacheByLocale.get(locale) || _predictCacheByLocale.get('en');
       if (fallback?.data?.length && !qRaw && !slugParam) {
+        if (featured) {
+          return res.json({ markets: selectFeaturedPredictions(fallback.data), source: 'polymarket',
+            mode: 'featured', locale, cached: true, error: 'upstream', ...(fallback.meta || {}) });
+        }
+
         const page = slicePredictPage(filterPredictCat(fallback.data, catParam), offset, limit);
         return res.json({
           ...page,

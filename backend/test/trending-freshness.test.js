@@ -54,3 +54,7 @@ test('expired browser cache is not returned after a failed request', async () =>
   c.fetch=async()=>{throw Error('offline');};
   assert.equal((await c.gwFetchTrendingNetwork({key:'bsc'})).length,0);
 });
+
+test('missing or invalid pool price stays unavailable instead of zero dollars',()=>{
+ for(const price of [null,undefined,'',0,'bad',-1,'Infinity']){const data=payload();data.data[0].attributes.base_token_price_usd=price;assert.equal(parseGtNetwork('bsc',data,56,'BSC')[0].priceUsd,null);}
+});

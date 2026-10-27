@@ -4693,6 +4693,12 @@
     align-items: center; width: 100%; text-align: left;
     padding: 8px 9px; border-radius: 8px;
   }
+  .spot-pair-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:8px;position:sticky;bottom:0;background:#252d3a}
+  .spot-pair-actions button{min-height:44px;padding:8px;border:1px solid #89bedc44;border-radius:8px;color:#b6e5f4;background:#31425a;font-size:12px;font-weight:600}
+  .spot-pair-actions button:focus-visible{outline:2px solid #8ee7ff;outline-offset:-3px}
+  .spot-pair-empty,.wl-empty{padding:18px 10px;color:#adbbcc;font-size:13px;font-weight:500}
+  .wl-empty small{display:block;margin-top:6px}
+  #futListMore{width:100%;justify-content:center;border:0;background:transparent;color:#acd7e8;font:inherit;cursor:pointer}
   .spot-pair-item:hover { background: rgba(77,158,255,0.12); }
   /* Desktop: never lock body scroll — overflow:hidden breaks sticky sidebar (jumps down). */
   .spot-pair-pop { z-index: 80; }
@@ -6156,8 +6162,11 @@
 .sidebar>.grom-socials{display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);padding:16px 8px;margin-top:12px;border-top:1px solid #9bbbd820}
 .sidebar>.grom-socials a{min-width:0;padding:8px 6px;gap:6px;white-space:nowrap}
 @media(max-width:760px){
-  #page-futures .bo-panel-v2>.acct-switch.fut-perp-only{width:fit-content!important;max-width:100%;align-self:flex-start;grid-template-columns:repeat(2,minmax(0,1fr))}
-  #page-futures .acct-switch.fut-perp-only button{min-width:112px;padding:9px 14px}
+  #page-futures .bo-panel-v2>.acct-switch.fut-perp-only{width:min(100%,292px)!important;max-width:100%;align-self:flex-start;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:4px;border:1px solid #9bbbd830;border-radius:14px;background:linear-gradient(145deg,#253346,#1d2838);box-shadow:inset 0 1px #ffffff08}
+  #page-futures .acct-switch.fut-perp-only button{min-width:0;min-height:50px;padding:8px 12px;gap:4px;border-radius:10px;font-size:12px;letter-spacing:0;color:#bccbdd;justify-content:center}
+  #page-futures .acct-switch.fut-perp-only button.active{color:#edfbff;background:linear-gradient(135deg,#34566e,#2a405a);box-shadow:inset 0 0 0 1px #7bdfff80,0 2px 6px #0002}
+  #page-futures .acct-switch.fut-perp-only button .bal{font-family:inherit;font-size:11px!important;line-height:1.2;color:#a8bfd3!important;white-space:nowrap}
+  #page-futures .acct-switch.fut-perp-only button:focus-visible{outline:2px solid #8ee7ff;outline-offset:2px}
 }
 @media(prefers-reduced-motion:reduce){.grom-socials a{transition:none}}
 .grom-community-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-top:32px;padding:24px 0;border-top:1px solid #9bbbd82b}
@@ -12870,9 +12879,18 @@ function initDeskPairPicker(cfg) {
   var inp = document.getElementById(cfg.searchId);
   var list = document.getElementById(cfg.listId);
   if (!btn || !pop || !inp || !list) return;
-  function setOpen(open) {
+  var limit = 120;
+  var lastFilter = '';
+  function closeAll() {
     document.querySelectorAll('.spot-pair-pop').forEach(function (el) { el.hidden = true; });
+    document.querySelectorAll('.spot-pair-btn[aria-controls]').forEach(function (el) { el.setAttribute('aria-expanded', 'false'); });
+    document.body.classList.remove('desk-pair-open', 'spot-pair-open');
+  }
+  function setOpen(open) {
+    closeAll();
     pop.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    if (open) limit = 120;
     /* Scroll lock only on mobile sheet; desktop overflow:hidden drops sticky sidebar. */
     var lock = !!open && window.innerWidth <= 640;
     document.body.classList.toggle('desk-pair-open', lock);
@@ -12898,7 +12916,8 @@ function initDeskPairPicker(cfg) {
       return false;
     });
     /* Cap DOM — 300+ buttons freezes Chrome when opening the pop. */
-    var cap = 120;
+    if (f !== lastFilter) { limit = 120; lastFilter = f; }
+    var cap = limit;
     var clipped = shown.length > cap;
     var slice = clipped ? shown.slice(0, cap) : shown;
     list.innerHTML = slice.map(function (s) {
@@ -12908,11 +12927,15 @@ function initDeskPairPicker(cfg) {
       var extra = cfg.formatExtra ? cfg.formatExtra(s) : '';
       return '<button type="button" class="spot-pair-item" data-sym="' + s + '"><span>' + label + extra + '</span><span class="mono">' + (Number.isFinite(px) && px > 0 ? ('$' + marketFmt(px)) : '—') + '</span></button>';
     }).join('') + (clipped
-      ? '<div class="spot-pair-item" style="opacity:.65;cursor:default;justify-content:center">Type to search · ' + (shown.length - cap) + ' more</div>'
-      : '');
+      ? '<div class="spot-pair-actions"><button type="button" data-pair-search>Search all ' + options.length + ' markets</button><button type="button" data-pair-more>Show more (+' + (shown.length - cap) + ')</button></div>'
+      : (!shown.length ? '<div class="spot-pair-empty" role="status">No matching markets</div>' : ''));
+
   }
   if (btn.dataset.pickerWired) return;
   btn.dataset.pickerWired = '1';
+  btn.setAttribute('aria-expanded', 'false');
+  btn.setAttribute('aria-controls', cfg.popId);
+  inp.setAttribute('aria-label', 'Search markets');
   btn.addEventListener('click', function (e) {
     e.preventDefault();
     e.stopPropagation();
@@ -12920,6 +12943,12 @@ function initDeskPairPicker(cfg) {
   });
   inp.addEventListener('input', function () { render(inp.value); });
   list.addEventListener('click', function (e) {
+    if (e.target.closest('[data-pair-more]')) {
+      e.preventDefault(); limit += 120; var scroll = list.scrollTop; render(inp.value); list.scrollTop = scroll; return;
+    }
+    if (e.target.closest('[data-pair-search]')) {
+      e.preventDefault(); inp.focus({ preventScroll: true }); return;
+    }
     var b = e.target.closest('.spot-pair-item[data-sym]');
     if (!b) return;
     cfg.onSelect(b.dataset.sym);
@@ -12930,13 +12959,13 @@ function initDeskPairPicker(cfg) {
     /* pointerdown outside — avoid same-tick click race that closed the pop instantly */
     document.addEventListener('pointerdown', function (e) {
       if (e.target.closest('.spot-pair-pop') || e.target.closest('.spot-pair-btn')) return;
-      document.querySelectorAll('.spot-pair-pop').forEach(function (el) { el.hidden = true; });
-      document.body.classList.remove('desk-pair-open', 'spot-pair-open');
+      closeAll();
     }, true);
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
-        document.querySelectorAll('.spot-pair-pop').forEach(function (el) { el.hidden = true; });
-        document.body.classList.remove('desk-pair-open', 'spot-pair-open');
+        var active = document.querySelector('.spot-pair-btn[aria-expanded="true"]');
+        closeAll();
+        if (active) active.focus({ preventScroll: true });
       }
     });
     window.addEventListener('resize', function () {
@@ -12947,6 +12976,7 @@ function initDeskPairPicker(cfg) {
       }
     });
   }
+  pop.addEventListener('grom:pairs-updated', function () { if (!pop.hidden) render(inp.value); });
   try { render(''); } catch (_) {}
 }
 
@@ -13125,15 +13155,22 @@ function refreshTradingWatchlists() {
   }
 }
 
-// Quote-only refreshes preserve row nodes, focus and the user's scroll position.
+// Reconcile by pair even when progressive venue discovery changes order/count.
+// Existing prices, focus and rows remain mounted while new markets arrive.
 function patchFuturesListRows(host, updates) {
-  var nodes = host.querySelectorAll('.wl-item[data-pair]');
-  if (nodes.length !== updates.length) return false;
-  for (var i = 0; i < updates.length; i++) {
-    if (nodes[i].dataset.pair !== updates[i].pair || nodes[i].children.length !== 4) return false;
-  }
-  updates.forEach(function (item, i) {
-    var node = nodes[i];
+  var nodes = new Map(Array.from(host.querySelectorAll('.wl-item[data-pair]'), function (node) {
+    return [node.dataset.pair, node];
+  }));
+  var cursor = host.firstElementChild;
+  updates.forEach(function (item) {
+    var node = nodes.get(item.pair);
+    if (!node || node.children.length !== 4) {
+      if (node) { if (node === cursor) cursor = node.nextElementSibling; node.remove(); }
+      node = host.ownerDocument.createElement('div');
+      node.dataset.pair = item.pair;
+      item.cells.forEach(function () { node.appendChild(host.ownerDocument.createElement('span')); });
+    }
+    nodes.delete(item.pair);
     var cls = 'wl-item' + (item.active ? ' active' : '');
     if (node.className !== cls) node.className = cls;
     if (node.dataset.coin !== item.coin) node.dataset.coin = item.coin;
@@ -13141,13 +13178,21 @@ function patchFuturesListRows(host, updates) {
       if (node.children[j].textContent !== cell.text) node.children[j].textContent = cell.text;
       if (node.children[j].className !== cell.cls) node.children[j].className = cell.cls;
     });
+    if (node !== cursor) host.insertBefore(node, cursor);
+    else cursor = cursor.nextElementSibling;
   });
+  nodes.forEach(function (node) { node.remove(); });
+  host.querySelectorAll('.wl-empty').forEach(function (node) { node.remove(); });
   return true;
 }
 
 function renderFuturesList(filter) {
   var host = document.getElementById('futList');
   if (!host) return;
+  if (!window.__gromHlQuotesReady && !window.__gromHlActive) {
+    if (!host.querySelector('.wl-empty')) host.innerHTML = '<div class="wl-empty" role="status">Loading markets…</div>';
+    return;
+  }
   if (typeof rebuildFuturesPairs === 'function') rebuildFuturesPairs();
   var q = String(filter || '').trim().toUpperCase();
   var cat = listUiState.futuresCat || 'all';
@@ -13202,7 +13247,8 @@ function renderFuturesList(filter) {
         }
       } catch (_) {}
     }
-    host.innerHTML = '<div class="wl-item" style="opacity:0.65;cursor:default"><div><div class="nm">' + emptyHint + '</div><div class="px">' + emptySub + '</div></div></div>';
+    var emptyHtml = '<div class="wl-empty" role="status"><div>' + emptyHint + '</div><small>' + emptySub + '</small></div>';
+    if (host.innerHTML !== emptyHtml) host.innerHTML = emptyHtml;
     return;
   }
   /* Cap DOM — uncapped HL list (300+) inside nested scroll kills Safari/mobile */
@@ -13222,7 +13268,7 @@ function renderFuturesList(filter) {
   var showN = Math.min(rows.length, window.__futListShow || batch);
   var visible = rows.slice(0, showN);
   var updates = [];
-  var html = visible.map(function (row) {
+  visible.forEach(function (row) {
     var mode = row.spot || isTradeSpot() ? 'spot' : 'perp';
     var px = (window.__gromHlQuotesReady || window.__gromHlActive) ? gromHlPriceForPair(row.sym, row.coin, mode) : NaN;
     if (!(px > 0)) px = NaN;
@@ -13239,40 +13285,37 @@ function renderFuturesList(filter) {
       }
       lev = Number(window.__hlCtx[c2] && window.__hlCtx[c2].maxLeverage) || 0;
     }
-    var rightHtml;
-    if (row.spot || isTradeSpot()) {
-      var vol = Number(row.dayNtlVlm || 0);
-      var volLbl = vol >= 1e6 ? (vol / 1e6).toFixed(1) + 'M' : vol >= 1e3 ? (vol / 1e3).toFixed(0) + 'K' : (vol > 0 ? String(Math.round(vol)) : '—');
-      rightHtml = '<div class="pay fut-vol">' + volLbl + '</div>';
-    } else {
-      /* Always leverage (or —). Never fake funding % — that yellow flash on refresh. */
-      rightHtml = '<div class="pay fut-max-lev">' + (lev > 0 ? (lev + '×') : '—') + '</div>';
-    }
+    var vol = Number(row.dayNtlVlm || 0);
+    var volLbl = vol >= 1e6 ? (vol / 1e6).toFixed(1) + 'M' : vol >= 1e3 ? (vol / 1e3).toFixed(0) + 'K' : (vol > 0 ? String(Math.round(vol)) : '—');
     updates.push({pair:row.sym, coin:String(row.coin || '').replace(/"/g, ''), active:row.sym === futDeskState.pair, cells:[
       {cls:'nm', text:String(nameLbl)},
       {cls:'chg ' + (Number.isFinite(chg) ? (chg >= 0 ? 'up' : 'down') : ''), text:Number.isFinite(chg) ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—'},
       {cls:'px mono', text:Number.isFinite(px) && px > 0 ? ('$' + futuresListPriceFmt(px)) : '—'},
       {cls:'pay ' + (row.spot || isTradeSpot() ? 'fut-vol' : 'fut-max-lev'), text:row.spot || isTradeSpot() ? volLbl : (lev > 0 ? (lev + '×') : '—')}
     ]});
-    /* One row: name · change · price · max lev (no stacked lines / logos). */
-    return '<div class="wl-item' + (row.sym === futDeskState.pair ? ' active' : '') + '" data-pair="' + row.sym + '" data-coin="' + String(row.coin || '').replace(/"/g, '') + '">' +
-      '<div class="nm">' + nameLbl + '</div>' +
-      '<span class="chg ' + (Number.isFinite(chg) ? (chg >= 0 ? 'up' : 'down') : '') + '">' + (Number.isFinite(chg) ? ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%') : '—') + '</span>' +
-      '<div class="px mono">' + (Number.isFinite(px) && px > 0 ? ('$' + futuresListPriceFmt(px)) : '—') + '</div>' +
-      rightHtml + '</div>';
-  }).join('');
-  if (rows.length > showN) {
-    html += '<button type="button" class="wl-item" id="futListMore" style="justify-content:center;opacity:.85;cursor:pointer;width:100%;border:0;background:transparent;color:inherit;font:inherit">' +
-      'Show more (+' + (rows.length - showN) + ')</button>';
-  }
+  });
   var listKey = [isTradeSpot() ? 'spot' : 'perp', cat, listUiState.futuresFilter, q].join('|');
   var keepScroll = host.dataset.listKey === listKey ? host.scrollTop : 0;
   var sameList = host.dataset.listKey === listKey;
-  var sameMore = !!host.querySelector('#futListMore') === (rows.length > showN);
-  if (!sameList || !sameMore || !patchFuturesListRows(host, updates)) host.innerHTML = html;
+  var anchor = sameList && keepScroll > 0 ? Array.from(host.querySelectorAll('.wl-item[data-pair]')).find(function (node) {
+    return node.getBoundingClientRect().bottom > host.getBoundingClientRect().top;
+  }) : null;
+  var anchorTop = anchor ? anchor.getBoundingClientRect().top : 0;
+  patchFuturesListRows(host, updates);
   host.dataset.listKey = listKey;
-  host.scrollTop = keepScroll;
-  var moreBtn = document.getElementById('futListMore');
+  var catalogKey = source.map(function (row) { return row.sym; }).join('|');
+  if (host.dataset.catalogKey !== catalogKey) {
+    host.dataset.catalogKey = catalogKey;
+    document.getElementById('futPairPop')?.dispatchEvent(new Event('grom:pairs-updated'));
+  }
+  host.scrollTop = anchor && host.contains(anchor) ? keepScroll + anchor.getBoundingClientRect().top - anchorTop : keepScroll;
+  var moreBtn = host.querySelector('#futListMore');
+  if (rows.length <= showN && moreBtn) { moreBtn.remove(); moreBtn = null; }
+  if (rows.length > showN && !moreBtn) {
+    moreBtn = document.createElement('button');
+    moreBtn.type = 'button'; moreBtn.id = 'futListMore'; moreBtn.className = 'wl-item';
+    host.appendChild(moreBtn);
+  }
   if (moreBtn) {
     var moreLabel = 'Show more (+' + (rows.length - showN) + ')';
     if (moreBtn.textContent !== moreLabel) moreBtn.textContent = moreLabel;

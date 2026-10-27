@@ -59,7 +59,7 @@ export function parseGtNetwork(gtNet, json, chainId, chainLabel) {
       chain: gtNet,
       chainId,
       chainLabel,
-      priceUsd: Number(p.attributes?.base_token_price_usd) || 0,
+      priceUsd: Number(p.attributes?.base_token_price_usd) > 0 ? finiteNumber(p.attributes.base_token_price_usd) : null,
       change24h: finiteNumber(p.attributes?.price_change_percentage?.h24),
       poolAddress: p.attributes?.address || '',
       poolCreatedAt: p.attributes?.pool_created_at || null,

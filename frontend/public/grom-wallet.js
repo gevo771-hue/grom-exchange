@@ -27948,7 +27948,7 @@ function gwTrPaintList(list, rows, t, ctx) {
     const age = Math.max(0, Math.floor((Date.now() - r.observedAt) / 60000));
     const freshness = age >= 2 ? ' · ' + age + ' min' : '';
     const quoteTitle = 'GeckoTerminal · ' + (r.observedAt ? new Date(r.observedAt).toISOString() : '—');
-    const priceFmt = r.priceUsd > 1
+    const priceFmt = !(Number.isFinite(r.priceUsd) && r.priceUsd > 0) ? '—' : r.priceUsd > 1
       ? '$' + r.priceUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })
       : '$' + r.priceUsd.toFixed(Math.min(8, 4 + Math.max(0, -Math.log10(Math.max(r.priceUsd, 1e-9)) | 0)));
     const initial = (r.sym || '?').slice(0, 3).toUpperCase();

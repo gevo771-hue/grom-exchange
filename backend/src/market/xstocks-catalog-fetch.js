@@ -17,3 +17,25 @@ export async function fetchXstocksCatalogPages(fetchPage, { concurrency = 4, max
   }
   throw new Error('xStocks catalog pagination limit reached');
 }
+
+/** Shared cold-start loader for catalog, reference and chart requests. */
+export function createXstocksCatalogLoader({ readCache, fetchCatalog, writeCache }) {
+  let pending = null;
+  function refresh() {
+    if (!pending) {
+      pending = Promise.resolve().then(fetchCatalog).then((items) => {
+        if (!Array.isArray(items) || !items.length) throw new Error('xstocks_catalog_unavailable');
+        writeCache(items);
+        return items;
+      }).finally(() => { pending = null; });
+    }
+    return pending;
+  }
+  return {
+    refresh,
+    get() {
+      const items = readCache();
+      return items?.length ? Promise.resolve(items) : refresh();
+    },
+  };
+}

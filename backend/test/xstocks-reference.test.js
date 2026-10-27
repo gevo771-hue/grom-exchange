@@ -130,3 +130,44 @@ test('recent USD Yahoo fallback is allowed; stale fallback and unknown symbols f
   assert.equal(unknown.statusCode, 404);
   assert.equal(calls, 2);
 });
+
+test('empty server catalog is temporary unavailability, not an unknown ticker', async () => {
+  const handler = registerRoute({
+    getCatalog: async () => [],
+    fetchPriceData: async () => { throw new Error('Must not call upstream before catalog validation'); },
+  });
+  const result = await invoke(handler, { symbol: 'AAPLx' });
+  assert.equal(result.statusCode, 503);
+  assert.equal(result.body.error, 'reference_unavailable');
+});
+
+test('first reference request loads the canonical catalog without a prior catalog page visit', async () => {
+  const { createXstocksCatalogLoader } = await import('../src/market/xstocks-catalog-fetch.js');
+  let cache = null, catalogCalls = 0;
+  const loader = createXstocksCatalogLoader({
+    readCache: () => cache,
+    fetchCatalog: async () => { catalogCalls++; await new Promise(r => setTimeout(r, 10)); return catalog; },
+    writeCache: items => { cache = items; },
+  });
+  const handler = registerRoute({ getCatalog: loader.get, fetchPriceData: async () => ({ quote: 228.41 }) });
+  const [reference, browsing] = await Promise.all([invoke(handler, { symbol: 'AAPLx' }), loader.get()]);
+  assert.equal(reference.statusCode, 200);
+  assert.equal(reference.body.fairPrice, 228.41);
+  assert.equal(browsing, cache);
+  assert.equal(catalogCalls, 1);
+  assert.equal((await invoke(handler, { symbol: 'UNLISTEDx' })).statusCode, 404);
+});
+
+test('failed catalog initialization stays closed and recovers on retry', async () => {
+  const { createXstocksCatalogLoader } = await import('../src/market/xstocks-catalog-fetch.js');
+  let cache = null, attempts = 0;
+  const loader = createXstocksCatalogLoader({
+    readCache: () => cache,
+    fetchCatalog: async () => { if (++attempts === 1) throw new Error('offline'); return catalog; },
+    writeCache: items => { cache = items; },
+  });
+  const handler = registerRoute({ getCatalog: loader.get, fetchPriceData: async () => ({ quote: 228.41 }) });
+  assert.equal((await invoke(handler, { symbol: 'AAPL' })).statusCode, 503);
+  assert.equal((await invoke(handler, { symbol: 'AAPL' })).statusCode, 200);
+  assert.equal(attempts, 2);
+});

@@ -16007,20 +16007,7 @@ var GROM_XSTOCKS = [
     }, 8000);
   }
   function gwxWarmPredictCache() {
-    if (GWX_LIVE != null && GWX_LIVE.length) {
-      renderPredictWidgets({ force: true });
-      return;
-    }
-    if (_predictFetch) {
-      /* Attach a paint when in-flight fetch settles */
-      try {
-        _predictFetch.then(function () {
-          if (GWX_LIVE && GWX_LIVE.length) renderPredictWidgets({ force: true });
-        }).catch(function () {});
-      } catch (_) {}
-      return;
-    }
-    loadPredictLive(false, { warm: true, soft: true });
+    return loadFeaturedPredictions();
   }
   window.gromWarmPredictCache = gwxWarmPredictCache;
   function gwxTickMs() {
@@ -16491,12 +16478,43 @@ var GROM_XSTOCKS = [
     if (GWX_LIVE != null) return GWX_LIVE.slice();
     return [];
   }
-  /** Dashboard / landing cards: live Polymarket only (demo catalog is RU-hardcoded). */
-  function predictWidgetSource() {
-    if (GWX_LIVE && GWX_LIVE.length) return GWX_LIVE.slice();
-    if (GWX_CATALOG && GWX_CATALOG.length) return GWX_CATALOG.slice();
-    return [];
+  // Dashboard cards have their own canonical selection. Browsing/search/pagination
+  // must never change the homepage set or make desktop and mobile disagree.
+  var gwxFeatured = { lang: '', markets: [], at: 0, attemptAt: 0 };
+  var gwxFeaturedPending = null;
+  function loadFeaturedPredictions() {
+    var lang = gwxCurrentLang();
+    if (gwxFeaturedPending) return gwxFeaturedPending;
+    if (gwxFeatured.lang === lang && Date.now() - gwxFeatured.at < 90000) return Promise.resolve();
+    if (gwxFeatured.lang === lang && Date.now() - gwxFeatured.attemptAt < 15000) return Promise.resolve();
+    if (gwxFeatured.lang !== lang) gwxFeatured = { lang: lang, markets: [], at: 0, attemptAt: 0 };
+    gwxFeatured.attemptAt = Date.now();
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, 22000);
+    gwxFeaturedPending = fetch('/api/market/predict?featured=1&lang=' + encodeURIComponent(lang), {
+      headers: { Accept: 'application/json' }, cache: 'no-store', signal: ctrl.signal
+    }).then(function (r) { if (!r.ok) throw new Error('featured unavailable'); return r.json(); })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.markets)) throw new Error('invalid featured markets');
+        if (gwxCurrentLang() !== lang) return;
+        gwxFeatured.markets = data.markets;
+        gwxFeatured.at = Date.now();
+      }).catch(function () { /* Keep the last observed cards; never insert demo odds. */ })
+      .finally(function () {
+        clearTimeout(timer);
+        gwxFeaturedPending = null;
+        if (gwxCurrentLang() !== lang) { loadFeaturedPredictions(); return; }
+        renderPredictWidgets({ force: true });
+      });
+    return gwxFeaturedPending;
   }
+  function predictWidgetSource() {
+    return gwxFeatured.lang === gwxCurrentLang() ? gwxFeatured.markets.slice() : [];
+  }
+  setInterval(function () {
+    if (document.hidden) return;
+    if (document.querySelector('#page-dashboard.active, #page-landing.active')) loadFeaturedPredictions();
+  }, 90000);
   function prefetchPredictCatalog(lang) {
     if (_predictCatalogFetch) return _predictCatalogFetch;
     var L = lang || 'en';
@@ -17032,19 +17050,7 @@ var GROM_XSTOCKS = [
   window.gromPaintPredictLoading = paintPredictGridLoading;
   window.gromPredictHasLive = function () { return !!(GWX_LIVE && GWX_LIVE.length); };
   function featuredMarkets(n) {
-    var src = predictWidgetSource().slice().sort(function (a, b) { return (b.vol || 0) - (a.vol || 0); });
-    var out = [], seen = {};
-    src.forEach(function (m) {
-      if (out.length >= n) return;
-      if (seen[m.cat]) return;
-      seen[m.cat] = 1; out.push(m);
-    });
-    src.forEach(function (m) {
-      if (out.length >= n) return;
-      if (out.indexOf(m) >= 0) return;
-      out.push(m);
-    });
-    return out.slice(0, n);
+    return predictWidgetSource().slice(0, n);
   }
   function previewYesPct(m) {
     var r = (m && m.rows && m.rows[0]) || { p: 50 };
@@ -17096,39 +17102,22 @@ var GROM_XSTOCKS = [
   function renderPredictWidgets(opts) {
     opts = opts || {};
     injectCss();
+    loadFeaturedPredictions();
     var loading = '<div class="grom-pv-loading" style="opacity:.65;cursor:default;padding:12px 0">'
       + '<div class="grom-pv-q">' + esc(tx('px_loading', 'Loading markets…')) + '</div></div>';
     var empty = '<div class="grom-pv-empty" style="opacity:.65;cursor:default;padding:12px 0">'
       + '<div class="grom-pv-q">' + esc(tx('px_none', 'Nothing found')) + '</div></div>';
     var dash = document.getElementById('dashPredictSpot');
     if (dash) {
-      /* Don't thrash loading placeholder while a fetch is already in flight */
-      if (!opts.force && _predictFetch && dash.querySelector('.grom-pv-loading')) return;
-      var hasLive = !!(GWX_LIVE && GWX_LIVE.length);
-      var freezeDash = !opts.force && (window.GROM_SAFARI || gwxMobile()) && dash.dataset.gwxPvLive === '1';
-      if (opts.force) delete dash.dataset.gwxPvLive;
-      if (opts.soft && freezeDash && dash.querySelector('.grom-pv-item[data-pm-id], .grom-pv-item[onclick]')) return;
       var d = featuredMarkets(3);
-      if (d.length) {
-        dash.innerHTML = d.map(dashPreviewHtml).join('');
-      } else if (GWX_LIVE !== null && !(_predictFetch)) {
-        /* Loaded empty (or failed to []) — don't stick on Loading forever */
-        dash.innerHTML = empty;
-      } else {
-        dash.innerHTML = loading;
-      }
-      if (hasLive && d.length) dash.dataset.gwxPvLive = '1';
-      else delete dash.dataset.gwxPvLive;
+      var dashHtml = d.length ? d.map(dashPreviewHtml).join('') : (gwxFeaturedPending ? loading : empty);
+      if (dash.innerHTML !== dashHtml) dash.innerHTML = dashHtml;
     }
     var lp = document.getElementById('lpPredictGrid');
     if (lp) {
-      if (!opts.force && _predictFetch && lp.querySelector('.grom-pv-loading')) { /* keep */ }
-      else {
-        var l = featuredMarkets(4);
-        if (l.length) lp.innerHTML = l.map(lpPreviewHtml).join('');
-        else if (GWX_LIVE !== null && !_predictFetch) lp.innerHTML = empty;
-        else lp.innerHTML = loading;
-      }
+      var l = featuredMarkets(4);
+      var lpHtml = l.length ? l.map(lpPreviewHtml).join('') : (gwxFeaturedPending ? loading : empty);
+      if (lp.innerHTML !== lpHtml) lp.innerHTML = lpHtml;
     }
     if (typeof window.gromHydrateLogos === 'function') {
       if (dash) gwxDeferHydrateLogos(dash);
@@ -18075,7 +18064,7 @@ var GROM_XSTOCKS = [
     var loadLpPredict = function () {
       if (window.__gromLpPredictLoaded) return;
       window.__gromLpPredictLoaded = true;
-      loadPredictLive(false);
+      loadFeaturedPredictions();
       renderPredictWidgets();
     };
     var lpSec = document.getElementById('lpPredictSec');

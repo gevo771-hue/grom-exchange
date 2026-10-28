@@ -1,7 +1,8 @@
 import express from 'express';
 import { registerPredictionEventRoutes } from './predict-event.js';
 import { isUsElection2026 } from './predict-election.js';
-import { selectFeaturedPredictions } from './predict-featured.js';
+import { createFeaturedPredictionLoader } from './predict-featured.js';
+import { pmCategory } from './predict-category.js';
 import rateLimit from 'express-rate-limit';
 import axios from 'axios';
 import fs from 'fs';
@@ -427,93 +428,6 @@ async function enrichXstocksMetrics(items) {
 
 function safeJson(str, def) { try { return JSON.parse(str); } catch { return def; } }
 
-/** Classify Polymarket events — tags are localized (en/ru/…), so match both. */
-function pmCategory(ev) {
-  const tags = (Array.isArray(ev.tags) ? ev.tags : [])
-    .map((t) => String(t?.label || t?.slug || '').toLowerCase().trim())
-    .filter(Boolean);
-  const title = String(ev.title || ev.question || '').toLowerCase();
-  const series = String(ev.seriesSlug || (Array.isArray(ev.series) && ev.series[0]?.slug) || '').toLowerCase();
-  const hay = [String(ev.category || ''), title, series, ...tags].join(' ').toLowerCase();
-  const has = (...ks) => ks.some((k) => k && hay.includes(String(k).toLowerCase()));
-  const tagHas = (...ks) => tags.some((t) => ks.some((k) => {
-    const n = String(k).toLowerCase();
-    return t === n || t.includes(n);
-  }));
-
-  // Esports BEFORE sport — RU "киберспорт" contains "спорт"
-  if (
-    tagHas('esport', 'киберспорт', 'gaming', 'игры', 'games')
-    || has(
-      'esport', 'киберспорт', 'league of legends', 'лига легенд', 'lol:', 'dota', 'counter-strike',
-      'cs2', 'cs:go', 'valorant', 'valorant:', 'overwatch', 'call of duty', 'mobile legends',
-      'lck', 'lpl', 'lec', 'lcs', 'worlds', 'asgard', 'epl masters',
-    )
-  ) return 'esports';
-
-  if (
-    tagHas('crypto', 'крипто', 'bitcoin', 'биткоин', 'ethereum', 'эфириум')
-    || has(
-      'crypto', 'крипто', 'bitcoin', 'btc', 'биткоин', 'ethereum', 'eth', 'эфириум', 'solana', 'sol ',
-      'memecoin', 'dogecoin', 'ripple', 'xrp', 'altcoin', 'defi', 'up or down', 'вверх или вниз',
-    )
-  ) return 'crypto';
-
-  if (
-    tagHas(
-      'mlb', 'nba', 'nfl', 'nhl', 'soccer', 'футбол', 'tennis', 'теннис', 'ufc', 'hockey', 'хоккей',
-      'cricket', 'baseball', 'basketball', 'баскетбол', 'sport', 'спорт',
-    )
-    || has(
-      'nfl', 'nba', 'mlb', 'nhl', 'wnba', 'soccer', 'football', 'футбол', 'tennis', 'теннис',
-      'baseball', 'бейсбол', 'basketball', 'баскетбол', 'hockey', 'хоккей', 'ufc', 'mma', 'f1',
-      'golf', 'world cup', 'champions league', 'premier league', 'la liga', 'serie a', 'bundesliga',
-      'olympic', 'олимпи', 'cricket', 'atp ', 'wta ', 'grand slam',
-    )
-  ) return 'sport';
-
-  // Fed / macro → economy (even if also tagged Politics)
-  if (
-    tagHas('economy', 'экономи', 'fed', 'фрс', 'fomc', 'inflation', 'инфляц', 'gdp', 'cpi')
-    || has(
-      'fed decision', 'fed rate', 'fomc', 'rate cut', 'interest rate', 'inflation', 'инфляц',
-      'cpi', 'gdp', 'recession', 'рецесс', 'jobs report', 'безработиц', 'econom', 'экономи',
-      'фрс', 'ставк',
-    )
-  ) return 'economy';
-
-  if (
-    tagHas('finance', 'финанс', 'stock', 'акци', 'ipo', 'earnings', 'nasdaq', 'commodit', 'сырь')
-    || has(
-      'stock', 'акци', 'earnings', 'отчётн', 'nasdaq', 's&p', 'ipo', 'market cap', 'капитализац',
-      'tesla', 'nvidia', 'apple', 'gold', 'золот', 'silver', 'серебр', 'oil', 'нефть', 'crude',
-      'wti', 'commodit', 'финанс', 'finance',
-    )
-  ) return 'finance';
-
-  if (
-    tagHas('politic', 'политик', 'election', 'выбор', 'geopolit', 'геополит', 'iran', 'иран')
-    || has(
-      'politic', 'политик', 'election', 'выбор', 'president', 'президент', 'senate', 'сенат',
-      'congress', 'конгресс', 'geopolit', 'геополит', 'trump', 'трамп', 'biden', 'байден',
-      'iran', 'иран', 'war', 'войн', 'ceasefire', 'перемири', 'prime minister', 'премьер',
-      'governor', 'губернатор', 'парламент', 'демократ', 'республик',
-    )
-  ) return 'politics';
-
-  if (
-    tagHas('culture', 'культур', 'entertainment', 'развлеч', 'movie', 'music', 'музык', 'ai', 'ии')
-    || has(
-      'culture', 'культур', 'movie', 'фильм', 'music', 'музык', 'tv ', 'celebrit', 'award',
-      'oscar', 'оскар', 'grammy', 'грамми', 'entertain', 'развлеч', 'pop culture',
-      'anthropic', 'openai', 'gemini', 'gpt-', 'claude', 'искусственн', 'ai model', 'ai lab',
-      'ии-модел', 'модель ии',
-    )
-  ) return 'culture';
-
-  // Weather / natural events stay in "all" (shown under Все)
-  return 'all';
-}
 function pmEmoji(cat) {
   return { sport: '⚽', crypto: '🪙', esports: '🎮', politics: '🏛️', culture: '🎬', finance: '💹', economy: '📊' }[cat] || '🌐';
 }
@@ -1035,6 +949,21 @@ async function ensurePredictCatalog(locale = 'en') {
   return pack(rebuilt.markets, rebuilt.meta, { cached: rebuilt.cached });
 }
 
+// Select once from the canonical catalog. Localization only supplies labels;
+// independently filled/translated catalogs must never choose different events.
+const loadFeaturedPredictions = createFeaturedPredictionLoader({
+  getCatalog: () => ensurePredictCatalog('en'),
+  translate: async (selected, locale) => {
+    const ids = new Set(selected.map((m) => String(m.id)));
+    const cached = (_predictCacheByLocale.get(locale)?.data || []).filter((m) => ids.has(String(m.id)));
+    const found = new Set(cached.map((m) => String(m.id)));
+    const missing = selected.filter((m) => !found.has(String(m.id)));
+    if (!missing.length) return cached;
+    const events = await localizePmEvents(missing.map((m) => ({ id: m.eventId })), locale);
+    return cached.concat(normalizePolymarket(events, { maxEvents: 4, locale }));
+  },
+});
+
 /** Warm EN+RU catalogs so first visitor after deploy isn't cold. */
 setTimeout(() => {
   ensurePredictCatalog('en').catch(() => {});
@@ -1274,12 +1203,13 @@ export function createMarketRouter() {
         return res.json(payload);
       }
 
+      if (featured) {
+        const catalog = await loadFeaturedPredictions(locale);
+        return res.json({ ...(catalog.meta || {}), markets: catalog.markets, source: 'polymarket',
+          mode: 'featured', locale, cached: catalog.cached });
+      }
       // 3) Browse catalog (volume-ranked), paginated for mobile-friendly UI
       const catalog = await ensurePredictCatalog(locale);
-      if (featured) {
-        return res.json({ markets: selectFeaturedPredictions(catalog.markets), source: 'polymarket',
-          mode: 'featured', locale, cached: catalog.cached, ...(catalog.meta || {}) });
-      }
       const filtered = filterPredictCat(catalog.markets, catParam);
       if (wantAll) {
         return res.json({
@@ -1311,8 +1241,7 @@ export function createMarketRouter() {
       const fallback = _predictCacheByLocale.get(locale) || _predictCacheByLocale.get('en');
       if (fallback?.data?.length && !qRaw && !slugParam) {
         if (featured) {
-          return res.json({ markets: selectFeaturedPredictions(fallback.data), source: 'polymarket',
-            mode: 'featured', locale, cached: true, error: 'upstream', ...(fallback.meta || {}) });
+          return res.status(502).json({ markets: [], source: 'polymarket', mode: 'featured', locale, error: 'upstream' });
         }
 
         const page = slicePredictPage(filterPredictCat(fallback.data, catParam), offset, limit);

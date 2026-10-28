@@ -80,3 +80,57 @@ test('failed featured request does not loop or publish demo odds and can retry l
   await retry;
   assert.equal(h.ctx.predictWidgetSource().length, all.length);
 });
+
+test('localized labels cannot change featured identities, categories, order, prices or token sides', async () => {
+  const { localizeFeaturedPredictions } = await import('../src/market/predict-featured.js');
+  const canonical = [{ id: 'p1', cat: 'politics', q: 'Election', vol: 10, rows: [
+    { marketId: 'm1', n: 'Alice', p: 60, tokenYes: 'a', tokenNo: 'b' },
+    { marketId: 'm2', n: 'Bob', p: 40, tokenYes: 'c', tokenNo: 'd' },
+  ] }, { id: 's1', q: 'Sport' }];
+  const localized = [{ id: 'p1', cat: 'esports', q: 'Выборы', vol: 99, rows: [
+    { marketId: 'm2', n: 'Боб', p: 80, tokenYes: 'wrong' },
+    { marketId: 'm1', n: 'Алиса', p: 20, tokenNo: 'wrong' },
+  ] }, { id: 'unrelated', q: 'Other event' }];
+  const result = localizeFeaturedPredictions(canonical, localized);
+  assert.deepEqual(result.map(m => m.id), ['p1', 's1']);
+  assert.equal(result[0].cat, 'politics');
+  assert.equal(result[0].q, 'Выборы');
+  assert.deepEqual(result[0].rows, [
+    { marketId: 'm1', n: 'Алиса', p: 60, tokenYes: 'a', tokenNo: 'b' },
+    { marketId: 'm2', n: 'Боб', p: 40, tokenYes: 'c', tokenNo: 'd' },
+  ]);
+  assert.equal(result[1], canonical[1]);
+});
+
+test('all locales share one coalesced snapshot during progressive catalog loading', async () => {
+  const { createFeaturedPredictionLoader } = await import('../src/market/predict-featured.js');
+  let stamp = 1_800_000_000_000, loads = 0, translations = 0, resolve;
+  const load = createFeaturedPredictionLoader({ now: () => stamp, ttl: 100,
+    getCatalog: () => { loads++; return new Promise(r => { resolve = r; }); },
+    translate: async () => { translations++; return [{ id: 'p2', q: 'Разница', cat: 'economy', vol: 1000 }]; },
+  });
+  const en = load('en'), ru = load('ru'), ru2 = load('ru');
+  assert.equal(loads, 1);
+  resolve({ markets: all });
+  const results = await Promise.all([en, ru, ru2]);
+  assert.deepEqual(results.map(r => r.markets.map(m => m.id)), Array(3).fill(['p1', 's1', 'c1', 'e1']));
+  assert.equal(translations, 1);
+  await load('es');
+  assert.equal(loads, 1);
+  stamp += 101;
+  const refresh = load('en');
+  resolve({ markets: [all[1]] });
+  assert.deepEqual((await refresh).markets.map(m => m.id), ['p2']);
+});
+
+test('failed translation keeps canonical cards and expired cards are removed even within the snapshot', async () => {
+  const { createFeaturedPredictionLoader } = await import('../src/market/predict-featured.js');
+  let stamp = Date.parse('2026-10-28T00:00:00Z');
+  const load = createFeaturedPredictionLoader({ now: () => stamp,
+    getCatalog: async () => ({ markets: [{ ...all[0], endsAt: new Date(stamp + 1000).toISOString() }] }),
+    translate: async () => { throw new Error('upstream'); },
+  });
+  assert.equal((await load('ru')).markets[0].id, 'p1');
+  stamp += 1001;
+  assert.deepEqual((await load('ru')).markets, []);
+});

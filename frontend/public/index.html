@@ -6173,6 +6173,7 @@
 .grom-community-footer>span{font-size:13px;font-weight:700;letter-spacing:.12em;color:#a9bed2}
 </style>
 <link rel="stylesheet" href="/grom-explore.css">
+<link rel="stylesheet" href="/grom-dashboard-shell.css">
 <link rel="stylesheet" href="/grom-referral.css">
 <script defer src="/grom-referral-share.js"></script>
 </head>
@@ -6726,6 +6727,28 @@
       </div>
 
 
+      <!-- First-paint mounts: wallet code hydrates these in place, before live data. -->
+      <div id="gwDsWrap" class="gw-ds-wrap" data-gw-ds-pending aria-busy="true">
+        <div class="gw-boot-swap" role="status" aria-label="Loading swap">
+          <div class="gw-boot-head"><b>Swap</b><span class="gw-boot-line"></span></div>
+          <div class="gw-boot-tabs" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="gw-boot-chips" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="gw-boot-field" aria-hidden="true"><span class="gw-boot-line"></span><div><b>ETH</b><span class="gw-boot-line"></span></div><div class="gw-boot-tabs"><i></i><i></i><i></i><i></i></div></div>
+          <div class="gw-boot-flip" aria-hidden="true">⇅</div>
+          <div class="gw-boot-field" aria-hidden="true"><span class="gw-boot-line"></span><div><b>USDC</b><span class="gw-boot-line"></span></div></div>
+          <div class="gw-boot-rate gw-boot-line" aria-hidden="true"></div>
+          <div class="gw-boot-cta" aria-hidden="true"></div>
+        </div>
+      </div>
+      <div id="gwTrendingCard" class="gw-tr-wrap" data-gw-tr-pending aria-busy="true">
+        <div class="gw-boot-trending" role="status" aria-label="Loading trending tokens">
+          <div class="gw-boot-head"><b>Trending</b><span class="gw-boot-line"></span></div>
+          <div class="gw-boot-line gw-boot-sub" aria-hidden="true"></div>
+          <div class="gw-boot-chips" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="gw-boot-rows" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+
       <div class="stats-grid" data-authed-only="1">
         <div class="stat-card has-tip" data-tip="Total value of all assets in your connected wallet">
           <div class="label" data-i18n="dash_stat_portfolio">Portfolio value</div>
@@ -6836,6 +6859,13 @@
         <div class="actions">
           <button type="button" class="btn-primary" id="walletSwapBtn" onclick="show('dashboard'); setTimeout(function(){ try{ document.querySelector('.gw-ds-wrap')?.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){} }, 200);">Swap</button>
         </div>
+      </div>
+
+      <div id="gwOnchainCard" class="gw-oc-card" data-gw-balance-pending aria-busy="true">
+        <div class="gw-boot-line" aria-hidden="true"></div><div class="gw-boot-balance-lines" role="status" aria-label="Loading wallet balances"><i></i><i></i></div>
+      </div>
+      <div id="gwTradingHubCard" class="gw-oc-card" data-gw-balance-pending aria-busy="true">
+        <div class="gw-boot-line" aria-hidden="true"></div><div class="gw-boot-balance-lines" role="status" aria-label="Loading trading balances"><i></i></div>
       </div>
 
       <div class="card wallet-empty-card" style="margin-top:14px">

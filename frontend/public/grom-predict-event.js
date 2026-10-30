@@ -23,6 +23,11 @@
   function close(update=true){++generation;++chartGeneration;++statusGeneration;controller?.abort();chartController?.abort();event=null;status=null;document.querySelector('#page-predict .gwx-wrap')?.classList.remove('gwx-detail-open');if(host)host.hidden=true;if(update)setUrl('',false);if(returnFocus?.isConnected)returnFocus.focus({preventScroll:true});window.scrollTo({top:returnY,behavior:'instant'});}
   function back(){if(history.state?.gromPredictionDetail)history.back();else close();}
   const nav=()=>'<div class="gpe-nav"><button type="button" data-pe="back">← '+t('back')+'</button><div class="gpe-nav-actions"><button type="button" class="gpe-ai grom-ai-launcher" data-pe="assistant" aria-label="'+t('assistant')+'" title="'+t('assistant')+'" aria-haspopup="dialog"><svg viewBox="0 0 36 36" aria-hidden="true"><use href="#i-grom-ai"/></svg></button><button type="button" data-pe="share">'+t('share')+' ↗</button></div></div>';
+  function loadingSkeleton(){
+    return '<div class="gpe-loading" role="status" aria-label="'+t('loading')+'"><div aria-hidden="true">'
+      +'<div class="gpe-loading-heading"><i></i><div><i></i><i></i></div></div><div class="gpe-loading-metrics"><i></i><i></i><i></i></div>'
+      +'<div class="gpe-layout"><div class="gpe-loading-chart"><i></i><div></div></div><div class="gpe-loading-ticket"><i></i><i></i><i></i></div></div></div></div>';
+  }
   async function request(path,signal){const r=await fetch('/api/market/predict/'+path,{signal,credentials:'omit'});if(!r.ok)throw new Error('unavailable');return r.json();}
   async function open(id,push=true){
     id=String(id).replace(/^pm_/,'');if(!/^[1-9][0-9]{0,19}$/.test(id))return;
@@ -31,7 +36,7 @@
     host=wrap.querySelector('#gromPredictDetail');if(!host){host=document.createElement('div');host.id='gromPredictDetail';wrap.appendChild(host);host.addEventListener('click',click);host.addEventListener('input',e=>{if(e.target.id==='gpeAmount')updateEstimate();});}
     host.hidden=false;wrap.classList.add('gwx-detail-open');const ticket=++generation;++chartGeneration;++statusGeneration;controller?.abort();chartController?.abort();controller=new AbortController();
     if(push)setUrl(id,true);host.dataset.event=id;host.dataset.lang=lang();event=null;status=null;
-    host.innerHTML=nav()+'<div class="gpe-message" role="status">'+t('loading')+'</div>';host.scrollIntoView({block:'start'});
+    host.innerHTML=nav()+loadingSkeleton();host.scrollIntoView({block:'start'});
     try{const data=await request('event/'+id+'?lang='+encodeURIComponent(lang().split('-')[0]),controller.signal);if(ticket!==generation||!host.isConnected)return;if(data.id!==id||!Array.isArray(data.rows))throw new Error('invalid_event');
       event=data;selected=data.rows.reduce((best,r,i)=>r.tradeable&&(!data.rows[best]?.tradeable||r.p>data.rows[best].p)?i:best,0);side='yes';range='max';
       const resume=window.gromPredictionFunding?.read();if(resume?.event===id){const i=data.rows.findIndex(r=>r.id===resume.market);if(i>=0)selected=i;side=resume.side==='no'?'no':'yes';}

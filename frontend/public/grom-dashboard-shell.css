@@ -1,0 +1,61 @@
+/* Match the loaded cards before the deferred wallet module arrives. */
+#page-dashboard > #gwDsWrap,
+#page-dashboard #gwDsCard { min-height: 556px; }
+#page-dashboard > #gwTrendingCard { margin: 12px 0 4px; }
+#gwDsWrap[data-gw-ds-pending],
+#gwTrendingCard[data-gw-tr-pending] { pointer-events: none; }
+.gw-boot-swap, .gw-boot-trending {
+  box-sizing: border-box; overflow: hidden; padding: 22px 22px 20px;
+  border-radius: 24px; color: #e7eef8;
+  background: linear-gradient(160deg,#2f3543 0%,#202737 55%,#1f2a38 100%);
+  outline: 1px solid #88c0d024; outline-offset: -1px;
+}
+.gw-boot-swap { min-height: 556px; display: flex; flex-direction: column; gap: 10px; }
+.gw-boot-head { display:flex; justify-content:space-between; align-items:center; gap:20px; min-height:26px; }
+.gw-boot-head b { font-size:18px; letter-spacing:-.02em; }
+.gw-boot-line { display:block; border-radius:5px; background:#c8d9e412; height:12px; width:76px; }
+.gw-boot-head > .gw-boot-line { width:48px; height:22px; border-radius:20px; }
+.gw-boot-tabs { display:flex; gap:6px; padding:4px; border:1px solid #a3c8da20; border-radius:12px; }
+.gw-boot-tabs i { flex:1; height:31px; border-radius:8px; background:#a3c8da0c; }
+.gw-boot-tabs i:first-child { background:#88c0d01c; }
+.gw-boot-chips { display:flex; gap:6px; padding:2px 0 6px; overflow:hidden; flex-shrink:0; }
+.gw-boot-chips i { flex:0 0 48px; height:30px; border-radius:20px; border:1px solid #c8d9e418; background:#c8d9e409; }
+.gw-boot-field { padding:14px; border-radius:16px; border:1px solid #ffffff0f; background:#ffffff08; }
+.gw-boot-field > div { display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
+.gw-boot-field b { font-size:14px; padding:10px 16px; border-radius:10px; background:#ffffff0a; color:#c4d1e1; }
+.gw-boot-field .gw-boot-tabs { padding:0; border:0; }
+.gw-boot-field .gw-boot-tabs i { height:24px; }
+.gw-boot-flip { align-self:center; display:grid; place-items:center; width:38px; height:38px; border-radius:50%; background:#88c0d033; color:#aecbd6; font-size:20px; }
+.gw-boot-rate { width:100%; min-height:35px; margin-top:6px; }
+.gw-boot-cta { min-height:48px; border-radius:12px; background:#88c0d027; margin-top:auto; }
+.gw-boot-trending { height:430px; }
+.gw-boot-sub { width:180px; margin:4px 0 10px; }
+.gw-boot-trending .gw-boot-chips { margin-bottom:12px; }
+.gw-boot-rows { display:grid; gap:6px; }
+.gw-boot-rows i { height:54px; border-radius:12px; border:1px solid #ffffff0d; background:#ffffff06; }
+/* Reserve data regions so prices fill the existing layout rather than move it. */
+#dashPredictSpot { min-height:520px; }
+#page-markets #marketList:empty { min-height:480px; }
+#page-xstocks .gwx-rows:empty { min-height:480px; }
+@media(max-width:640px) {
+  #page-dashboard > #gwTrendingCard { margin:6px 0 4px; }
+  .gw-boot-trending { height:447px; padding:16px 14px 14px; border-radius:18px; }
+  .gw-boot-swap { padding:16px; border-radius:18px; }
+  .gw-boot-head b { font-size:17px; }
+  .gw-boot-rows i { height:60px; }
+}
+
+/* Wallet mounts keep the connected-wallet card in place during module loading. */
+#gwOnchainCard { min-height:167px; }
+#gwTradingHubCard { min-height:132px; }
+[data-gw-balance-pending] {
+  box-sizing:border-box; margin:14px 0 20px; padding:18px; border-radius:18px;
+  background:radial-gradient(120% 140% at 0% 0%,#00c2ff14,transparent 55%),linear-gradient(155deg,#252d3ab8,#202737eb);
+  border:1px solid #00c2ff24;
+}
+.gw-boot-balance-lines { display:grid; gap:22px; padding:24px 0; }
+.gw-boot-balance-lines i { height:16px; width:min(70%,480px); border-radius:5px; background:#c8d9e412; }
+@media(max-width:640px) {
+  #gwOnchainCard { min-height:234px; }
+  #gwTradingHubCard { min-height:154px; }
+}

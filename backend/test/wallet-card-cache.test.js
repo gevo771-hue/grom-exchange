@@ -48,13 +48,15 @@ test('another wallet has isolated data, including late responses from previous a
  assert.equal(current.entry.chains[0].data.tokens.USDC,5);assert.equal(old.entry.chains[0].data.tokens.USDC,20);
 });
 test('renderer never blanks known same-account amounts during refresh and ignores old wallet responses',async()=>{
- const h=setup();let owner=addr,callback,resolve;const done=new Promise(yes=>resolve=yes);let html='known $20.00';const writes=[];
- const card={dataset:{gwAccount:addr+'|'},querySelector:()=>({}),appendChild(){},get innerHTML(){return html;},set innerHTML(value){html=value;writes.push(value);}};
+ const h=setup();let owner=addr,callback,resolve;const done=new Promise(yes=>resolve=yes);let html='known $20.00';const writes=[],removed=[];
+ const card={dataset:{gwAccount:addr+'|'},removeAttribute:name=>removed.push(name),querySelector:()=>({}),appendChild(){},get innerHTML(){return html;},set innerHTML(value){html=value;writes.push(value);}};
  Object.assign(h.ctx,{gwOcConnectedAddress:()=>owner,gwTronSavedAddr:()=>'',gwInjectOnchainCardCss(){},gwOcT:key=>key,
  document:{getElementById:id=>id==='page-wallet'?{}:id==='gwOnchainCard'?card:null},
  gwOcCardRead:(a,t,f,p)=>{callback=p;p({known:false,loading:true});return {done,unsubscribe(){}};},gwRefreshCombinedPortfolioTotals:async()=>{},
  });vm.runInContext(fn('gwRenderOnchainCard'),h.ctx);
  const pending=h.ctx.gwRenderOnchainCard({force:true});assert.equal(html,'known $20.00');assert.equal(writes.length,0);
+ assert.deepEqual(removed,['data-gw-balance-pending','aria-busy']);
+ assert.equal(typeof callback,'function');
  owner=other;callback({known:false,loading:false});assert.equal(writes.length,0);resolve();await pending;
 });
 test('empty successful Tron balance is cached; concurrent requests do not repeat proxy reads',async()=>{

@@ -6159,6 +6159,8 @@ async function gwRenderOnchainCard(opts = {}) {
     const hero = page.querySelector('.wallet-hero');
     if (hero && hero.parentNode) hero.after(card); else page.prepend(card);
   }
+  card.removeAttribute('data-gw-balance-pending');
+  card.removeAttribute('aria-busy');
   const rawAddr = gwOcConnectedAddress();
   const rawTron = typeof gwTronSavedAddr === 'function' ? gwTronSavedAddr() : '';
   const addr = /^0x[a-fA-F0-9]{40}$/.test(rawAddr || '') ? rawAddr : '';
@@ -6505,6 +6507,9 @@ async function gwRenderTradingHubCard(opts) {
       else page.prepend(card);
     }
   }
+
+  card.removeAttribute('data-gw-balance-pending');
+  card.removeAttribute('aria-busy');
 
   if (!window.gromHL || typeof window.gromHL.balancesSnapshot !== 'function') {
     if (seq !== _gwHubRenderSeq) return;
@@ -7180,12 +7185,17 @@ function gwMpDexEnsureSlot() {
 function gwMpDexPaint(data, loading) {
   const slot = gwMpDexEnsureSlot();
   if (!slot) return;
+  const connected = gwMpDexConnected();
+  slot.hidden = !connected;
+  if (!connected) {
+    document.getElementById('gwMetaPortfolio')?.remove();
+    return;
+  }
   gwInjectMetaPortfolioCss();
   let wrap = document.getElementById('gwMetaPortfolio');
   if (!wrap) { wrap = document.createElement('div'); wrap.id = 'gwMetaPortfolio'; wrap.className = 'gw-mp-wrap'; slot.appendChild(wrap); }
   const t = gwMpDexLang();
   const d = data || gwMpDexZero();
-  const connected = gwMpDexConnected();
   const tradeSub = [d.trade.perp > .005 ? `Perp ${gwMpDexFmt(d.trade.perp)}` : '', d.trade.spot > .005 ? `Spot ${gwMpDexFmt(d.trade.spot)}` : ''].filter(Boolean).join(' · ') || '—';
   const cats = [
     ['onchain', t.on, d.onchain.usd, d.onchain.chainsN ? `${d.onchain.chainsN} ${t.chains}` : '—', '#22c17c'],
@@ -25694,7 +25704,8 @@ try {
         if (si >= steps.length) return;
         try { steps[si++](); } catch (e) { console.error('[GROM] dash setup step', e); }
         const gap = si <= 2 ? 0 : (si <= 4 ? 120 : 400);
-        if (typeof requestIdleCallback === 'function') requestIdleCallback(runStep, { timeout: gap + 1200 });
+        if (si <= 2) setTimeout(runStep, 0);
+        else if (typeof requestIdleCallback === 'function') requestIdleCallback(runStep, { timeout: gap + 1200 });
         else setTimeout(runStep, gap);
       };
       setTimeout(runStep, 0);
@@ -27606,8 +27617,8 @@ async function gwRenderYield() {
  * Per-network Top-20 movers (GeckoTerminal) + logos + chain chips.
  * ========================================================================== */
 const GW_TR_TR = {
-  ru: { h: 'Trending на DEX', sub: 'Изменение цены за 24 ч · GeckoTerminal', young: 'Пулу <24 ч', empty: 'Загружаем свежие данные…', cta: 'Свап →', all: 'Все', unavailable: 'Свежие данные пока недоступны. Повторяем загрузку…' },
-  en: { h: 'Trending on DEXs', sub: '24h price change · GeckoTerminal', young: 'Pool <24h', empty: 'Fetching fresh data…', cta: 'Swap →', all: 'All' },
+  ru: { h: 'Trending на DEX', sub: 'Изменение цены за 24 ч', young: 'Пулу <24 ч', empty: 'Загружаем свежие данные…', cta: 'Свап →', all: 'Все', unavailable: 'Свежие данные пока недоступны. Повторяем загрузку…' },
+  en: { h: 'Trending on DEXs', sub: '24h price change', young: 'Pool <24h', empty: 'Fetching fresh data…', cta: 'Swap →', all: 'All' },
   es: { h: 'Trending en DEX', sub: 'Top-20 tokens · elige red', empty: 'Cargando…', cta: 'Swap →', all: 'Todas' },
   ar: { h: 'الأكثر رواجاً على DEX', sub: 'أفضل 20 · اختر الشبكة', empty: 'جارٍ التحميل…', cta: 'مبادلة ←', all: 'الكل' },
   zh: { h: 'DEX 热门', sub: '热门 top-20 · 选择网络', empty: '加载中…', cta: '兑换 →', all: '全部' },
@@ -27697,6 +27708,7 @@ function gwInjectTrendingCss() {
       --gw-tr-gap: 6px;
       position: relative; z-index: 1;
       display: flex; flex-direction: column; gap: var(--gw-tr-gap);
+      min-height: calc(var(--gw-tr-row-h) * 5 + var(--gw-tr-gap) * 4);
       max-height: calc(var(--gw-tr-row-h) * 5 + var(--gw-tr-gap) * 4);
       overflow-y: auto; overflow-x: hidden; padding-right: 2px;
       overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
@@ -27867,7 +27879,7 @@ function gwTrCached(netKey) {
 async function gwFetchTrendingNetwork(net) {
   if (!net?.key) return [];
   const hit = gwTrCached(net.key);
-  if (hit && Date.now() - hit.at < GW_TR_CACHE_TTL) return hit.rows;
+  if (hit && !hit.refreshing && Date.now() - hit.at < GW_TR_CACHE_TTL) return hit.rows;
   const requests = window.__gwTrRequests || (window.__gwTrRequests = new Map());
   if (requests.has(net.key)) return requests.get(net.key);
   const request = (async () => {
@@ -27880,13 +27892,14 @@ async function gwFetchTrendingNetwork(net) {
       const at = Number(j.updatedAt);
       const rows = (Array.isArray(j.rows) ? j.rows : [])
         .filter((row) => Number(row.observedAt) > 0 && Date.now() - row.observedAt < GW_TR_MAX_AGE);
-      const entry = { at, rows };
+      const entry = { at, rows, refreshing: !!j.refreshing };
       if (!gwTrCacheUsable(entry)) throw new Error('trending expired');
       window.__gwTrMemCache.set(net.key, entry);
       try { localStorage.setItem('grom:trending:v4:' + net.key, JSON.stringify(entry)); } catch (_) {}
       return rows;
     } catch (e) {
       console.warn('[GROM] trending', net.key, e?.message || e);
+      if (hit) hit.refreshing = false;
       return gwTrCacheUsable(hit) ? hit.rows : [];
     }
   })().finally(() => requests.delete(net.key));
@@ -27911,6 +27924,7 @@ async function gwTrLoadNet(netKey, opts) {
   opts = opts || {};
   const ctx = gwTrCtx(opts.instance === 'landing' ? 'landing' : 'dash');
   const key = String(netKey || 'all');
+  clearTimeout(window[ctx.reqIdKey + 'Timer']);
   ctx.setNet(key);
   gwTrSetNetActive(key, ctx);
   const list = document.getElementById(ctx.listId);
@@ -27927,6 +27941,16 @@ async function gwTrLoadNet(netKey, opts) {
   const rows = await gwFetchTrending(key);
   if (reqId !== window[ctx.reqIdKey] || ctx.getNet() !== key) return;
   gwTrPaintList(list, rows, t, ctx);
+  const attempts = Number(opts.attempts) || 0;
+  const pending = gwTrCached(key)?.refreshing;
+  if ((pending || !rows.length) && attempts < 10) {
+    window[ctx.reqIdKey + 'Timer'] = setTimeout(() => {
+      const active = ctx.instance === 'landing' ? gwTrLandingActive() : gwDashActive();
+      if (!document.hidden && active && ctx.getNet() === key && reqId === window[ctx.reqIdKey]) {
+        gwTrLoadNet(key, { instance: ctx.instance, attempts: attempts + 1 });
+      }
+    }, pending ? 2500 : 10000);
+  }
 }
 
 function gwTrPaintList(list, rows, t, ctx) {
@@ -28071,6 +28095,8 @@ async function gwRenderTrending(opts) {
     try { gwDashReconcileOrder(); } catch (_) {}
   }
 
+  wrap.removeAttribute('data-gw-tr-pending');
+  wrap.removeAttribute('aria-busy');
   if (!isRefresh) {
     const allLbl = t.all || 'ALL';
     const chips = GW_TR_NETS.map((n) => {

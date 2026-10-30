@@ -235,3 +235,21 @@ body .grom-ai-launcher.grom-ai-launcher:hover{box-shadow:0 0 26px -6px #5ff4ffaa
   #page-xstocks .gwx-hero-aside{padding-top:var(--stock-title-offset)}
   #page-xstocks .gwx-stats{min-height:44px}
 }
+
+/* Reserve the event layout while its public market data is loading. */
+.gpe-loading i{display:block;background:#c8d9e412;border-radius:5px;height:14px}
+.gpe-loading-heading{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.gpe-loading-heading>i{width:52px;height:52px;border-radius:10px;flex:none}
+.gpe-loading-heading>div{display:grid;gap:12px;flex:1}
+.gpe-loading-heading>div>i:first-child{width:35%}
+.gpe-loading-heading>div>i:last-child{width:85%;height:26px}
+.gpe-loading-metrics{display:flex;gap:20px;padding:12px 0 24px}
+.gpe-loading-metrics i{width:120px;max-width:28%}
+.gpe-loading-chart{min-width:0;width:100%;border-top:1px solid #b6c7df26;padding-top:24px}
+.gpe-loading-chart>i{width:160px;height:18px;margin-bottom:24px}
+.gpe-loading-chart>div{height:330px;border-radius:12px;background:#c8d9e409}
+.gpe-loading-ticket{min-height:490px;width:100%;padding:20px;border:1px solid #b6c7df26;border-radius:14px;background:#252e3c}
+.gpe-loading-ticket i{margin-bottom:24px;height:44px}
+.gpe-loading-ticket i:first-child{height:60px}
+@media(max-width:900px){.gpe-loading-ticket{min-height:66px;max-width:520px;align-self:center}.gpe-loading-ticket i{display:none}.gpe-loading-ticket i:first-child{display:block;width:45%;height:18px;margin:3px 0}.gpe-loading-chart>div{height:280px}}
+@media(max-width:600px){.gpe-loading-heading>i{width:42px;height:42px}.gpe-loading-heading>div>i:last-child{height:22px}.gpe-loading-chart>div{height:240px}}

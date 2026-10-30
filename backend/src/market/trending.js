@@ -21,7 +21,7 @@ export const TRENDING_NETS = [
 
 const TTL = 90_000;
 const STALE_TTL = 10 * 60_000;
-const FETCH_GAP_MS = 420;
+const FETCH_GAP_MS = 2100;
 
 function finiteNumber(value) {
   if (value == null || value === '') return null;
@@ -73,60 +73,104 @@ export function parseGtNetwork(gtNet, json, chainId, chainLabel) {
   return rows.slice(0, 20);
 }
 
-// Keep timestamps from the actual provider fetch; cache reads must not renew them.
+// Keep provider timestamps: serving cached rows must never make quotes look newer.
 export function createTrendingService({ get = axios.get, now = Date.now,
   pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), nets = TRENDING_NETS } = {}) {
   const cache = new Map();
   const inflight = new Map();
-  const usable = (hit) => hit && now() - hit.at < STALE_TTL;
+  const failures = new Map();
+  const networks = nets.filter((net) => net.gt);
+  const usable = (hit) => hit?.rows?.length && now() - hit.at < STALE_TTL;
+  const queue = [];
+  let draining = false;
+  let lastStart = null;
+  let providerRetryAt = 0;
+  async function drain() {
+    if (draining) return;
+    draining = true;
+    try {
+      while (queue.length) {
+        if (lastStart != null) await pause(Math.max(0, lastStart + FETCH_GAP_MS - now()));
+        lastStart = now();
+        queue.shift().start();
+      }
+    } finally { draining = false; }
+  }
 
-  function refresh(net) {
-    if (inflight.has(net.key)) return inflight.get(net.key);
+  function refresh(net, priority = false) {
+    if (inflight.has(net.key)) {
+      // A clicked network takes the next slot ahead of background "All" warming.
+      const i = priority ? queue.findIndex((job) => job.key === net.key) : -1;
+      if (i > 0) queue.unshift(queue.splice(i, 1)[0]);
+      return inflight.get(net.key);
+    }
     const hit = cache.get(net.key);
-    if (hit && now() - hit.at < TTL) return Promise.resolve(hit);
-    const request = (async () => {
+    if (usable(hit) && now() - hit.at < TTL) return Promise.resolve(hit);
+    const failure = failures.get(net.key);
+    if (failure && now() < failure.retryAt) {
+      return usable(hit) ? Promise.resolve(hit) : Promise.reject(failure.error);
+    }
+    // At most one provider request starts every 2.1s, including concurrent users.
+    // Do not hold the queue while awaiting the provider's response.
+    const turn = new Promise((start) => {
+      const job = { key: net.key, start };
+      if (priority) queue.unshift(job); else queue.push(job);
+    });
+    void drain();
+    const request = turn.then(async () => {
       try {
-        let entry;
-        if (net.key === 'all') {
-          const entries = [];
-          let partial = false;
-          for (const child of nets.filter((n) => n.gt)) {
-            if (entries.length) await pause(FETCH_GAP_MS);
-            try { entries.push(await refresh(child)); } catch (_) { partial = true; }
-          }
-          const rows = entries.flatMap((e) => e.rows)
-            .filter((r) => now() - r.observedAt < STALE_TTL)
-            .sort((a, b) => moverScore(b) - moverScore(a)).slice(0, 20);
-          if (!rows.length) throw new Error('Trending data unavailable');
-          entry = { at: Math.min(...rows.map((r) => r.observedAt)), rows, partial };
-        } else {
-          const url = `${GT}/networks/${encodeURIComponent(net.gt)}/trending_pools?page=1&include=base_token`;
-          const { data } = await get(url, { timeout: 12000, headers: UA });
-          const at = now();
-          const rows = parseGtNetwork(net.gt, data, net.chainId, net.label)
-            .map((row) => ({ ...row, observedAt: at }));
-          if (!rows.length) throw new Error('Trending data unavailable');
-          entry = { at, rows };
-        }
+        if (now() < providerRetryAt) throw new Error('Trending provider cooling down');
+        const url = `${GT}/networks/${encodeURIComponent(net.gt)}/trending_pools?page=1&include=base_token`;
+        const { data } = await get(url, { timeout: 6000, headers: UA });
+        const at = now();
+        const rows = parseGtNetwork(net.gt, data, net.chainId, net.label)
+          .map((row) => ({ ...row, observedAt: at }));
+        if (!rows.length) throw new Error('Trending data unavailable');
+        const entry = { at, rows };
         cache.set(net.key, entry);
+        failures.delete(net.key);
         return entry;
       } catch (error) {
+        const retryHeader = error.response?.headers?.['retry-after'];
+        const seconds = Number(retryHeader);
+        const retryDelay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryHeader) - now();
+        const retryAt = Math.max(providerRetryAt, now() + Math.max(60_000, retryDelay || 0));
+        if (error.response?.status === 429) providerRetryAt = retryAt;
+        failures.set(net.key, { error, retryAt });
         if (usable(hit)) return hit;
         throw error;
       }
-    })().finally(() => inflight.delete(net.key));
+    }).finally(() => inflight.delete(net.key));
     inflight.set(net.key, request);
     return request;
   }
 
+  function snapshot(selected, cached) {
+    const entries = selected.map((net) => cache.get(net.key)).filter(usable);
+    const rows = entries.flatMap((entry) => entry.rows)
+      .filter((row) => now() - row.observedAt < STALE_TTL)
+      .sort((a, b) => moverScore(b) - moverScore(a)).slice(0, 20);
+    if (!rows.length) throw new Error('Trending data unavailable');
+    const updatedAt = Math.min(...rows.map((row) => row.observedAt));
+    return { rows, cached, updatedAt, stale: now() - updatedAt >= TTL,
+      partial: entries.length < selected.length,
+      refreshing: selected.some((net) => inflight.has(net.key)), source: 'GeckoTerminal' };
+  }
+
   return async function getTrending(netKey) {
     const net = nets.find((n) => n.key === String(netKey || 'all').toLowerCase()) || nets[0];
-    const before = cache.get(net.key);
-    const entry = await refresh(net);
-    const rows = entry.rows.filter((r) => now() - r.observedAt < STALE_TTL);
-    if (!rows.length) throw new Error('Trending data expired');
-    return { net: net.key, rows, cached: entry === before, updatedAt: entry.at,
-      stale: now() - entry.at >= TTL, partial: !!entry.partial, source: 'GeckoTerminal' };
+    const selected = net.key === 'all' ? networks : [net];
+    const hasRows = selected.some((child) => usable(cache.get(child.key)));
+    const requests = selected.map((child) => refresh(child, net.key !== 'all'));
+    // Attach handlers immediately, including requests that finish after the response.
+    const first = Promise.any(requests);
+    first.catch(() => {});
+    if (!hasRows) {
+      try { await first; } catch (_) { throw new Error('Trending data unavailable'); }
+    }
+    // Cold "All" paints the first available network; subsequent reads include all
+    // completed networks. Warm responses never wait for provider revalidation.
+    return { net: net.key, ...snapshot(selected, hasRows) };
   };
 }
 

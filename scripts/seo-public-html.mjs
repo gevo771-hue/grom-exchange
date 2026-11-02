@@ -10,6 +10,7 @@ export const ALL_PAGE_IDS = [
   'page-predict',
   'page-xstocks',
   'page-wallet',
+  'page-earn',
   'page-history',
   'page-futures',
   'page-spot',

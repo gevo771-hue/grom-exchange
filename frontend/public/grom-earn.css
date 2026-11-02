@@ -1,35 +1,166 @@
-#page-earn .earn-wrap { max-width:1100px; margin-inline:auto; padding:8px 0 48px; color:#e7eef7; }
-#page-earn .earn-head { border-bottom:1px solid #445063; padding-bottom:20px; }
-#page-earn .earn-head small { color:#95d8e9; letter-spacing:.13em; font-weight:700; }
-#page-earn h1 { font-size:clamp(28px,4vw,44px); margin:6px 0; }
-#page-earn h2 { overflow-wrap:anywhere; margin:8px 0 18px; }
-#page-earn p { color:#bdccdc; margin:8px 0 14px; }
-#page-earn .earn-nav, #page-earn .earn-actions { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0; }
-#page-earn button,#page-earn input,#page-earn select { font:inherit; color:inherit; min-height:44px; border:1px solid #46576a; background:#253244; padding:8px 12px; border-radius:9px; }
-#page-earn button { cursor:pointer; }
-#page-earn button:hover,#page-earn .sel { border-color:#82c4d8; background:#30495c; }
-#page-earn button:focus-visible,#page-earn a:focus-visible { outline:2px solid #8bd7ef; outline-offset:2px; }
-#page-earn .primary { background:#9ad5e6; border-color:transparent; color:#142735; font-weight:700; }
-#page-earn .earn-filters,#page-earn .earn-order-form,#page-earn .earn-custom { display:flex; flex-wrap:wrap; align-items:end; gap:8px; }
-#page-earn .earn-custom[hidden] { display:none; }
-#page-earn label { color:#bfcede; font-size:13px; display:grid; gap:4px; flex:1 1 110px; min-width:0; }
-#page-earn label input,#page-earn select { width:100%; min-width:0; }
-#page-earn .earn-list,#page-earn .earn-detail { background:#222d3c; border:1px solid #415064; border-radius:14px; overflow:hidden; margin:14px 0; }
-#page-earn .earn-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(68px,.22fr) minmax(62px,.22fr); gap:12px; padding:14px 16px; color:inherit; align-items:center; border-bottom:1px solid #394658; text-decoration:none; }
-#page-earn .earn-row:last-child { border:0; }
-#page-earn .earn-row:hover { background:#2a3749; }
-#page-earn .earn-row span,#page-earn .earn-metrics div { min-width:0; display:grid; gap:4px; }
-#page-earn .earn-row b { overflow-wrap:anywhere; }
-#page-earn small { color:#acbed2; }
-#page-earn .earn-yield b { color:#8ddac2; }
-#page-earn .earn-detail { padding:clamp(14px,3vw,26px); }
-#page-earn .earn-metrics { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(105px,1fr)); padding:14px 0; }
-#page-earn .earn-review { display:grid; gap:8px; overflow-wrap:anywhere; margin-top:12px; }
-#page-earn .earn-review button { justify-self:start; }
-#page-earn a { color:#9ed8e9; }
-@media(max-width:600px) {
-  #page-earn .earn-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
-  #page-earn .earn-filters button { grid-column:1/-1; }
-  #page-earn .earn-row { gap:6px; padding:12px 8px; font-size:13px; }
-  #page-earn .earn-order-form { display:grid; grid-template-columns:minmax(0,1fr); }
+#page-earn .earn-wrap {
+  max-width: 1100px;
+  margin-inline: auto;
+  padding: 8px 0 48px;
+  color: #e7eef7;
+}
+#page-earn .earn-head {
+  border-bottom: 1px solid #445063;
+  padding-bottom: 20px;
+}
+#page-earn .earn-head small {
+  color: #95d8e9;
+  letter-spacing: 0.13em;
+  font-weight: 700;
+}
+#page-earn h1 {
+  font-size: clamp(28px, 4vw, 44px);
+  margin: 6px 0;
+}
+#page-earn h2 {
+  overflow-wrap: anywhere;
+  margin: 8px 0 18px;
+}
+#page-earn p {
+  color: #bdccdc;
+  margin: 8px 0 14px;
+}
+#page-earn .earn-nav,
+#page-earn .earn-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+#page-earn button,
+#page-earn input,
+#page-earn select {
+  font: inherit;
+  color: inherit;
+  min-height: 44px;
+  border: 1px solid #46576a;
+  background: #253244;
+  padding: 8px 12px;
+  border-radius: 9px;
+}
+#page-earn button {
+  cursor: pointer;
+}
+#page-earn button:hover,
+#page-earn .sel {
+  border-color: #82c4d8;
+  background: #30495c;
+}
+#page-earn button:focus-visible,
+#page-earn a:focus-visible {
+  outline: 2px solid #8bd7ef;
+  outline-offset: 2px;
+}
+#page-earn .primary {
+  background: #9ad5e6;
+  border-color: transparent;
+  color: #142735;
+  font-weight: 700;
+}
+#page-earn .earn-filters,
+#page-earn .earn-order-form,
+#page-earn .earn-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+#page-earn .earn-custom[hidden] {
+  display: none;
+}
+#page-earn label {
+  color: #bfcede;
+  font-size: 13px;
+  display: grid;
+  gap: 4px;
+  flex: 1 1 110px;
+  min-width: 0;
+}
+#page-earn label input,
+#page-earn select {
+  width: 100%;
+  min-width: 0;
+}
+#page-earn .earn-list,
+#page-earn .earn-detail {
+  background: #222d3c;
+  border: 1px solid #415064;
+  border-radius: 14px;
+  overflow: hidden;
+  margin: 14px 0;
+}
+#page-earn .earn-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(68px, 0.22fr) minmax(62px, 0.22fr);
+  gap: 12px;
+  padding: 14px 16px;
+  color: inherit;
+  align-items: center;
+  border-bottom: 1px solid #394658;
+  text-decoration: none;
+}
+#page-earn .earn-row:last-child {
+  border: 0;
+}
+#page-earn .earn-row:hover {
+  background: #2a3749;
+}
+#page-earn .earn-row span,
+#page-earn .earn-metrics div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+#page-earn .earn-row b {
+  overflow-wrap: anywhere;
+}
+#page-earn small {
+  color: #acbed2;
+}
+#page-earn .earn-yield b {
+  color: #8ddac2;
+}
+#page-earn .earn-detail {
+  padding: clamp(14px, 3vw, 26px);
+}
+#page-earn .earn-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+  padding: 14px 0;
+}
+#page-earn .earn-review {
+  display: grid;
+  gap: 8px;
+  overflow-wrap: anywhere;
+  margin-top: 12px;
+}
+#page-earn .earn-review button {
+  justify-self: start;
+}
+#page-earn a {
+  color: #9ed8e9;
+}
+@media (max-width: 600px) {
+  #page-earn .earn-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  #page-earn .earn-filters button {
+    grid-column: 1/-1;
+  }
+  #page-earn .earn-row {
+    gap: 6px;
+    padding: 12px 8px;
+    font-size: 13px;
+  }
+  #page-earn .earn-order-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

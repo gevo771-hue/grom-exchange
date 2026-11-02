@@ -1396,11 +1396,15 @@ function openWalletWcApp(walletKey, wcUri) {
 function gwHideTrustWcModal() { gwHideWcModal(); }
 
 /* ----- chains (Arbitrum по умолчанию, остальные как optional) ----- */
+const GW_EXTRA_EVM_CHAINS = window.GromSwapNetworks?.chains || [];
+const GW_EXTRA_EVM_BY_ID = window.GromSwapNetworks?.byId || {};
+const GW_EXTRA_EVM_IDS = GW_EXTRA_EVM_CHAINS.map(c => c.id);
+
 const CHAINS = {
   required: [42161],                      // Arbitrum One
   /* 1337 = Hyperliquid L1 EIP-712 domain — Trust rejects HL signs unless this
    * chain is in the WC session (optional is enough; never put it in required). */
-  optional: [1, 8453, 137, 56, 10, 43114, 59144, 1337] // ETH, Base, Polygon, BNB, OP, AVAX, Linea, HL L1
+  optional: [1, 8453, 137, 56, 10, 43114, 59144, 1337, ...GW_EXTRA_EVM_IDS] // ETH, Base, Polygon, BNB, OP, AVAX, Linea, HL L1
 };
 
 /* ----- state ----- */
@@ -4672,6 +4676,7 @@ Issued At: ${issuedAt}`;
  * the balance flickered $3.81 → $0.81 on refresh (arb1.arbitrum.io/rpc
  * silently fails, USDT read returns 0). */
 const ONCHAIN_RPC = {
+  ...Object.fromEntries(GW_EXTRA_EVM_CHAINS.map(c => [c.id, c.wallet.rpcUrls[0]])),
   1: 'https://ethereum.publicnode.com',
   42161: 'https://arb1.arbitrum.io/rpc',
   137: 'https://polygon-bor-rpc.publicnode.com',
@@ -4682,6 +4687,7 @@ const ONCHAIN_RPC = {
   59144: 'https://rpc.linea.build',
 };
 const ONCHAIN_RPC_FALLBACK = {
+  ...Object.fromEntries(GW_EXTRA_EVM_CHAINS.map(c => [c.id, c.wallet.rpcUrls.slice(1)])),
   1:     ['https://rpc.ankr.com/eth',          'https://eth.llamarpc.com'],
   42161: ['https://arbitrum.publicnode.com',   'https://rpc.ankr.com/arbitrum',   'https://arbitrum.llamarpc.com'],
   137:   ['https://polygon-rpc.com',           'https://rpc.ankr.com/polygon'],
@@ -4692,6 +4698,7 @@ const ONCHAIN_RPC_FALLBACK = {
   59144: ['https://linea.publicnode.com',      'https://rpc.ankr.com/linea'],
 };
 const ONCHAIN_TOKENS = {
+  ...Object.fromEntries(GW_EXTRA_EVM_CHAINS.map(c => [c.id, Object.fromEntries(c.tokens.filter(t => t.address !== c.nativeToken.address).map(t => [t.symbol.toUpperCase(), t.address]))])),
   1: {
     USDT: '0xdac17f958d2ee523a2206206994597c13d831ec7',
     USDC: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
@@ -4732,6 +4739,8 @@ const TOKEN_DECIMALS = { USDT: 6, USDC: 6 };
 /** BSC USDT/USDC use 18 decimals — global 6 would hide balances (e.g. 3 USDT → dust). */
 function gwTokenDecimals(chainId, sym) {
   const id = Number(chainId);
+  const token = GW_EXTRA_EVM_BY_ID[id]?.tokens.find(t => t.symbol.toUpperCase() === String(sym).toUpperCase());
+  if (token) return token.decimals;
   if (id === 56 && (sym === 'USDT' || sym === 'USDC')) return 18;
   return TOKEN_DECIMALS[sym] || 18;
 }
@@ -5775,6 +5784,7 @@ function gwSetupKillDemoNumbers() {
  * the Wallet page. Falls back to a clean "Nothing on-chain yet" state on
  * empty addresses so it never looks broken. */
 const GW_OC_CHAIN_META = {
+  ...Object.fromEntries(GW_EXTRA_EVM_CHAINS.map(c => [c.id, { label: c.name, native: c.nativeToken.symbol, tickerSym: c.nativeToken.symbol + 'USDT' }])),
   1:     { label: 'Ethereum',  native: 'ETH',   tickerSym: 'ETHUSDT' },
   42161: { label: 'Arbitrum',  native: 'ETH',   tickerSym: 'ETHUSDT' },
   137:   { label: 'Polygon',   native: 'MATIC', tickerSym: 'MATICUSDT' },
@@ -8254,6 +8264,8 @@ function gwTkSortByVolume(a, b) {
 function gwLifiNormalizeToken(t, chainId) {
   const sym = gwSafeSym(String(t.symbol || '').toUpperCase());
   if (!sym || sym === '???') return null;
+  if (GW_EXTRA_EVM_BY_ID[chainId] && (!/^0x[0-9a-f]{40}$/i.test(t.address || '') || Number(t.chainId) !== Number(chainId)
+    || !Number.isInteger(t.decimals) || t.decimals < 0 || t.decimals > 255)) return null;
   const addr = t.address || GW_LIFI_ZERO;
   const verified = String(t.verificationStatus || '').toLowerCase() === 'verified'
     || (Array.isArray(t.verificationStatusBreakdown)
@@ -8317,7 +8329,7 @@ async function gwLifiEnsureChainTokens(chainId, { force } = {}) {
           const cfg = (typeof GW_OC_SWAP !== 'undefined') ? GW_OC_SWAP[cid] : null;
           if (cfg) {
             if (s === cfg.native || (cid === 137 && (s === 'POL' || s === 'MATIC'))) {
-              return (typeof GW_LIFI_ZERO !== 'undefined') ? GW_LIFI_ZERO : '0x0000000000000000000000000000000000000000';
+              return cfg.nativeAddress || ((typeof GW_LIFI_ZERO !== 'undefined') ? GW_LIFI_ZERO : '0x0000000000000000000000000000000000000000');
             }
             if (cfg.tokens && cfg.tokens[s]) return cfg.tokens[s];
             if (s === 'ETH' && cfg.tokens?.WETH) return cfg.tokens.WETH;
@@ -8420,7 +8432,7 @@ async function gwLifiEnsureChainTokens(chainId, { force } = {}) {
             if (cfg.native) {
               inject.push([
                 cfg.native,
-                (typeof GW_LIFI_ZERO !== 'undefined') ? GW_LIFI_ZERO : '0x0000000000000000000000000000000000000000',
+                cfg.nativeAddress || ((typeof GW_LIFI_ZERO !== 'undefined') ? GW_LIFI_ZERO : '0x0000000000000000000000000000000000000000'),
                 cfg.decimals?.[cfg.native] ?? 18,
                 cfg.native,
               ]);
@@ -8433,14 +8445,15 @@ async function gwLifiEnsureChainTokens(chainId, { force } = {}) {
           for (const [sym, addr, dec, name] of inject) {
             const hit = bySym.get(sym);
             if (hit && String(hit.address).toLowerCase() === String(addr).toLowerCase()) {
-              hit.verified = true;
+              if (!GW_EXTRA_EVM_BY_ID[cid]) hit.verified = true;
               hit.popRank = Math.min(Number(hit.popRank) || 9000, gwTokenPopRank(sym));
               continue;
             }
+            const seed = GW_EXTRA_EVM_BY_ID[cid]?.tokens.find(t => t.address.toLowerCase() === String(addr).toLowerCase());
             bySym.set(sym, {
-              sym, name, logo: hit?.logo || '', address: addr, decimals: dec,
-              chainId: cid, verified: true, priceUSD: hit?.priceUSD ?? null,
-              volumeUSD24H: hit?.volumeUSD24H ?? null, marketCapUSD: hit?.marketCapUSD ?? null,
+              sym, name: seed?.name || name, logo: seed?.logoURI || '', address: addr, decimals: dec,
+              chainId: cid, verified: seed ? seed.verificationStatus === 'verified' : true,
+              priceUSD: null, volumeUSD24H: null, marketCapUSD: null,
               popRank: gwTokenPopRank(sym),
             });
           }
@@ -8524,7 +8537,7 @@ function gwLifiPickToken(chainId, sym) {
   // Prefer non-zero (ERC-20) unless native symbol
   const cfg = (typeof GW_OC_SWAP !== 'undefined') ? GW_OC_SWAP[cid] : null;
   if (cfg && s === cfg.native) {
-    const native = arr.find((t) => String(t.address).toLowerCase() === GW_LIFI_ZERO)
+    const native = arr.find((t) => String(t.address).toLowerCase() === (cfg.nativeAddress || GW_LIFI_ZERO).toLowerCase())
       || arr[0];
     return native;
   }
@@ -8949,6 +8962,7 @@ function gwInjectSimpleModeCss() {
 
 /** Same-chain popular tokens for a given chainId — enriched, 15+ each. */
 const GW_SIM_SAME_CHAIN = {
+  ...Object.fromEntries(GW_EXTRA_EVM_CHAINS.map(c => [c.id, c.tokens.map(t => t.symbol.toUpperCase())])),
   1:     ['ETH', 'USDC', 'USDT', 'WBTC', 'DAI', 'LINK', 'UNI', 'AAVE', 'MKR', 'CRV', 'LDO', 'PEPE', 'SHIB'],
   42161: ['ETH', 'USDC', 'USDT', 'WBTC', 'ARB', 'DAI', 'LINK', 'UNI', 'AAVE', 'GMX', 'MAGIC', 'JOE', 'GRAIL', 'RDNT', 'PENDLE'],
   137:   ['POL', 'USDC', 'USDT', 'PUSD', 'USDC.E', 'ETH', 'WBTC', 'DAI', 'LINK', 'AAVE'],
@@ -9039,9 +9053,10 @@ const GW_TK_XCHAIN_FEATURED = [
   { sym: 'ETH', chainId: 59144 }, { sym: 'USDC', chainId: 59144 }, { sym: 'USDT', chainId: 59144 },
 ];
 
-const GW_TK_XCHAIN_CHAINS = [1, 56, 42161, 137, 8453, 10, 43114, 59144, 728126428, 1151111081099710];
+const GW_TK_XCHAIN_CHAINS = [1, 56, 42161, 137, 8453, 10, 43114, 59144, ...GW_EXTRA_EVM_IDS, 728126428, 1151111081099710];
 
 function gwTkChainShort(cid) {
+  if (GW_EXTRA_EVM_BY_ID[cid]) return GW_EXTRA_EVM_BY_ID[cid].short;
   const m = {
     1: 'ETH', 56: 'BSC', 42161: 'ARB', 137: 'POL', 8453: 'BASE',
     10: 'OP', 43114: 'AVAX', 59144: 'LINEA', 728126428: 'TRON',
@@ -9051,6 +9066,7 @@ function gwTkChainShort(cid) {
 }
 
 function gwTkChainColor(cid) {
+  if (GW_EXTRA_EVM_BY_ID[cid]) return GW_EXTRA_EVM_BY_ID[cid].color;
   const m = {
     1: '#627EEA', 56: '#F0B90B', 42161: '#28A0F0', 137: '#8247E5',
     8453: '#0052FF', 10: '#FF0420', 43114: '#E84142', 59144: '#61DFFF',
@@ -9071,7 +9087,7 @@ function gwTkChainBadgeHtml(cid, title) {
     56: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/bnb.svg',
     137: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/matic.svg',
     43114: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/avax.svg',
-  }[n] || '';
+  }[n] || GW_EXTRA_EVM_BY_ID[n]?.logoURI || '';
   if (logo) {
     return `<span class="gw-tk-chain-badge gw-tk-chain-badge--logo" title="${tip}"><img src="${logo}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('gw-tk-chain-badge--dot');this.remove()" /></span>`;
   }
@@ -9094,7 +9110,7 @@ function gwTkApplyChainBadge(el, cid, title) {
     56: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/bnb.svg',
     137: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/matic.svg',
     43114: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/avax.svg',
-  }[n] || '';
+  }[n] || GW_EXTRA_EVM_BY_ID[n]?.logoURI || '';
   el.textContent = '';
   el.removeAttribute('style');
   el.className = 'gw-tk-chain-badge';
@@ -9157,9 +9173,9 @@ function gwTkResolveCuratedToken(cid, sym) {
   const isNat = s === cfg.native || (cid === 137 && (s === 'POL' || s === 'MATIC'));
   if (isNat) {
     return {
-      address: (typeof GW_META_NATIVE !== 'undefined') ? GW_META_NATIVE : '0x0000000000000000000000000000000000000000',
+      address: cfg.nativeAddress && cfg.nativeAddress !== GW_LIFI_ZERO ? cfg.nativeAddress : ((typeof GW_META_NATIVE !== 'undefined') ? GW_META_NATIVE : GW_LIFI_ZERO),
       decimals: cfg.decimals?.[s] ?? cfg.decimals?.[cfg.native] ?? 18,
-      isNative: true,
+      isNative: !cfg.nativeAddress || cfg.nativeAddress === GW_LIFI_ZERO,
     };
   }
   if (cfg.tokens?.[s]) {
@@ -10304,6 +10320,7 @@ function gwInjectDashSwapCss() {
       color: #cfdfee; font-size: 11.5px; font-weight: 700; cursor: pointer;
       letter-spacing: .02em; transition: background .18s, border-color .18s;
     }
+    .gw-ds-chain-logo { width: 16px; height: 16px; border-radius: 50%; object-fit: contain; flex: 0 0 16px; }
     .gw-ds-chain .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--chColor, #00c2ff); box-shadow: 0 0 0 2px rgba(255,255,255,0.04); }
     .gw-ds-chain:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.12); }
     .gw-ds-chain.on { background: rgba(0,194,255,0.14); border-color: rgba(0,194,255,0.35); color: #e7eef8; }
@@ -10325,6 +10342,7 @@ function gwInjectDashSwapCss() {
       border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #e7eef8; font-size: 14.5px; outline: none; font-family: inherit; }
     #gw-tk-panel .search input:focus { border-color: rgba(0,194,255,0.35); }
     .gw-tk-chains { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; }
+    .gw-tk-chain { display: inline-flex; align-items: center; gap: 5px; }
     .gw-tk-chains[hidden] { display: none !important; }
     .gw-tk-chain {
       padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.10);
@@ -12397,7 +12415,7 @@ async function gwBtcRevQuote({ toChainId, toSym, btcAmt, evmDestAddr, btcRefundA
   const wantNative = String(toSym).toUpperCase() === String(cfg.native).toUpperCase()
     || String(toSym).toUpperCase() === 'ETH' && cfg.native === 'ETH';
   const outAddr = wantNative
-    ? '0x0000000000000000000000000000000000000000'
+    ? (cfg.nativeAddress || '0x0000000000000000000000000000000000000000')
     : (cfg.tokens[toSym] || (toSym === cfg.native ? cfg.wrapped : null));
   if (!outAddr) throw new Error(`${toSym} not on chain ${toChainId}`);
   if (!gwBtcAddrValid(btcRefundAddr)) throw new Error('Invalid BTC refund address');
@@ -13479,7 +13497,7 @@ async function gwLifiQuoteToBtc({ fromChainId, fromSym, amtNum, evmAccount, toBt
   const cfg = GW_OC_SWAP[fromChainId];
   if (!cfg) return null;
   if (!gwBtcAddrValid(toBtcAddr)) throw new Error('Invalid BTC destination address');
-  const isNative = fromSym === cfg.native;
+  const isNative = fromSym === cfg.native && (!cfg.nativeAddress || cfg.nativeAddress === GW_LIFI_ZERO);
   // Native input must use LI.FI zero marker — not wrapped without wrap/approve (F11)
   const inAddr = isNative ? '0x0000000000000000000000000000000000000000' : cfg.tokens[fromSym];
   if (!inAddr) return null;
@@ -13533,7 +13551,7 @@ async function gwBtcSwapExec({ fromChainId, fromSym, amtNum }) {
   const quote = await gwLifiQuoteToBtc({ fromChainId, fromSym, amtNum, evmAccount: account, toBtcAddr: btcAddr });
   if (!quote?.transactionRequest) throw new Error('No THORchain route for this size/pair');
   const cfg = GW_OC_SWAP[fromChainId];
-  const isNative = fromSym === cfg.native;
+  const isNative = fromSym === cfg.native && (!cfg.nativeAddress || cfg.nativeAddress === GW_LIFI_ZERO);
   const inAddr = isNative ? null : cfg.tokens[fromSym];
   const inDec = cfg.decimals[fromSym] ?? 18;
   const amountIn = typeof gwAmtToBaseUnits === 'function'
@@ -13965,6 +13983,7 @@ const GW_DS_CHAINS = [
   { key: 'op',       chainId: 10,     name: 'Optimism',  short: 'OP',    color: '#FF0420' },
   { key: 'avax',     chainId: 43114,  name: 'Avalanche', short: 'AVAX',  color: '#E84142' },
   { key: 'linea',    chainId: 59144,  name: 'Linea',     short: 'LINEA', color: '#61DFFF' },
+  ...GW_EXTRA_EVM_CHAINS.map(c => ({ key: c.key, chainId: c.id, name: c.name, short: c.short, color: c.color, logo: c.logoURI })),
   { key: 'solana',   nonEvm: 'sol',   name: 'Solana',    short: 'SOL',   color: '#9945FF' },
   { key: 'bitcoin',  nonEvm: 'btc',   name: 'Bitcoin',   short: 'BTC',   color: '#F7931A' },
   { key: 'tron',     nonEvm: 'trx',   name: 'Tron',      short: 'TRX',   color: '#EF0027' },
@@ -13984,7 +14003,7 @@ function gwDsChainChipsHtml(activeChainId) {
         const dataAttr = c.chainId ? `data-cid="${c.chainId}"` : `data-nonevm="${c.nonEvm}"`;
         const title = solSoon ? `${c.name} · Instant Swap soon` : c.name;
         return `<button type="button" class="gw-ds-chain${on}${soon}" ${dataAttr} title="${title}" style="--chColor:${c.color}">
-          <span class="dot"></span><span class="lbl">${c.short}</span>${soonFlag ? '<span class="soon-tag">soon</span>' : ''}
+          ${c.logo ? `<img class="gw-ds-chain-logo" src="${c.logo}" alt="" loading="lazy" />` : '<span class="dot"></span>'}<span class="lbl">${c.short}</span>${soonFlag ? '<span class="soon-tag">soon</span>' : ''}
         </button>`;
       }).join('')}
     </div>
@@ -14027,11 +14046,11 @@ function gwDsChainChipsWire(wrap) {
         const nonevmStuck = new Set(['SOL', 'TRX', 'BTC']);
         const exclusiveMismatch = fromSym && GW_TOKEN_EXCLUSIVE_CHAIN[fromSym]
           && GW_TOKEN_EXCLUSIVE_CHAIN[fromSym] !== cid;
-        if (fromSym && (nonevmStuck.has(fromSym) || exclusiveMismatch)) {
+        if (fromSym && (nonevmStuck.has(fromSym) || exclusiveMismatch || GW_EXTRA_EVM_BY_ID[cid])) {
           const cfg = (typeof GW_OC_SWAP !== 'undefined') ? GW_OC_SWAP[cid] : null;
           const native = cfg?.native || 'ETH';
           if (fromSym !== native) {
-            try { gwDsEnsureTokenOption(native, { sym: native }); } catch (_) {}
+            try { gwDsEnsureTokenOption(native, { sym: native, chainId: cid }); } catch (_) {}
             if (fromEl) fromEl.value = native;
             window.__gwDsUserPickedFrom = { sym: native, chainId: cid, at: Date.now() };
             try { gwTkSyncButton('from'); } catch (_) {}
@@ -14041,6 +14060,7 @@ function gwDsChainChipsWire(wrap) {
       } catch (_) {}
       /* Clear sticky TRX/SOL receive left over from nonevm chips. */
       try { gwDsAlignReceiveToPayChain(cid); } catch (_) {}
+      gwLifiEnsureChainTokens(cid).catch(() => {});
       try { gwTkSyncButton('from'); gwTkSyncButton('to'); } catch (_) {}
       try {
         const f = window.__gwDsForceBridgeTo;
@@ -14325,6 +14345,7 @@ function gwCustomTokenOpenModal() {
             <option value="8453">Base</option>
             <option value="43114">Avalanche</option>
             <option value="59144">Linea</option>
+            ${GW_EXTRA_EVM_CHAINS.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
             <option value="728126428">TRON</option>
             <option value="1151111081099710">Solana</option>
           </select>
@@ -14886,6 +14907,7 @@ function gwTkOpen(which /* 'from' | 'to' */) {
           { cid: 1, lbl: 'ETH' }, { cid: 56, lbl: 'BSC' }, { cid: 42161, lbl: 'ARB' },
           { cid: 137, lbl: 'POL' }, { cid: 8453, lbl: 'BASE' }, { cid: 10, lbl: 'OP' },
           { cid: 43114, lbl: 'AVAX' }, { cid: 59144, lbl: 'LINEA' },
+          ...GW_EXTRA_EVM_CHAINS.map(c => ({ cid: c.id, lbl: c.short, logo: c.logoURI })),
           { cid: GW_TRON_CHAIN_ID, lbl: 'TRX' },
           { cid: GW_LIFI_SOL_CHAIN, lbl: 'SOL' },
         ];
@@ -14904,7 +14926,7 @@ function gwTkOpen(which /* 'from' | 'to' */) {
           : (Number(ctx.chainId) || 1);
         strip.hidden = false;
         strip.innerHTML = chips.map((c) =>
-          `<button type="button" class="gw-tk-chain${c.cid === active ? ' on' : ''}" data-cid="${c.cid}">${c.lbl}</button>`
+          `<button type="button" class="gw-tk-chain${c.cid === active ? ' on' : ''}" data-cid="${c.cid}">${c.logo ? `<img src="${c.logo}" alt="" width="16" height="16" loading="lazy" />` : ''}${c.lbl}</button>`
         ).join('');
         strip.onclick = (e) => {
           const btn = e.target.closest('button[data-cid]');
@@ -15715,6 +15737,7 @@ function gwDsPriceImpactHtml(pct) {
 
 /** Explorer URL for a given chainId + tx hash. */
 const GW_DS_EXPLORER = {
+  ...Object.fromEntries(GW_EXTRA_EVM_CHAINS.map(c => [c.id, c.wallet.blockExplorerUrls[0].replace(/\/$/, '') + '/tx/'])),
   1:     'https://etherscan.io/tx/',
   56:    'https://bscscan.com/tx/',
   42161: 'https://arbiscan.io/tx/',
@@ -15723,7 +15746,6 @@ const GW_DS_EXPLORER = {
   8453:  'https://basescan.org/tx/',
   43114: 'https://snowtrace.io/tx/',
   59144: 'https://lineascan.build/tx/',
-  250:   'https://ftmscan.com/tx/',
 };
 function gwDsExplorerUrl(chainId, hash) { const base = GW_DS_EXPLORER[chainId]; return base ? base + hash : ''; }
 
@@ -15923,6 +15945,16 @@ async function gwDsTokenBalanceOnChain(sym, chainId, opts) {
     } catch (_) {}
   }
   if (!addr || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) return 0;
+  if (GW_EXTRA_EVM_BY_ID[c]) {
+    const token = gwResolveEvmToken(c, s, 'from');
+    if (!token) return 0;
+    try {
+      const raw = token.isNative
+        ? await gwRpcTry(c, 'eth_getBalance', [addr, 'latest'])
+        : await gwRpcTry(c, 'eth_call', [{ to: token.address, data: padAddressData(addr) }, 'latest']);
+      return Number(BigInt(raw)) / (10 ** token.decimals);
+    } catch (_) { return 0; }
+  }
   const b = await window.gromFetchOnchainBalances?.(addr, c).catch(() => null);
   if (!b) return 0;
   if (s === 'ETH' && b.nativeEth) return Number(b.nativeEth) || 0;
@@ -15940,7 +15972,7 @@ async function gwDsBestChainForToken(sym, opts) {
   const addr = gwOcConnectedAddress();
   if (!addr || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) return null;
   const prefer = opts?.prefer ? Number(opts.prefer) : null;
-  const scan = opts?.chains || [56, 1, 42161, 137, 8453, 10, 43114, 59144, 250];
+  const scan = opts?.chains || [56, 1, 42161, 137, 8453, 10, 43114, 59144, ...GW_EXTRA_EVM_IDS];
   let bestCid = null;
   let bestBal = 0;
   for (const c of scan) {
@@ -16067,6 +16099,8 @@ function gwDsDefaultReceiveSym(payCid, fromSym) {
   if (cid === GW_LIFI_SOL_CHAIN || cid === 1151111081099710) {
     return from === 'USDC' ? 'SOL' : 'USDC';
   }
+  const extra = GW_EXTRA_EVM_BY_ID[cid];
+  if (extra) return from === extra.defaultTo ? extra.nativeToken.symbol : extra.defaultTo;
   if (from === 'USDC') return 'USDT';
   if (from === 'USDT') return 'USDC';
   return 'USDC';
@@ -16080,6 +16114,7 @@ function gwDsToSymIncompatibleWithPayChain(toSym, payCid) {
     ? gwDsNormSym(toSym)
     : String(toSym || '').toUpperCase();
   if (!cid || !to) return true;
+  if (GW_EXTRA_EVM_BY_ID[cid] && !gwResolveEvmToken(cid, to, 'to')) return true;
   if (to === 'BTC') return true;
   if (to === 'TRX' && cid !== GW_TRON_CHAIN_ID) return true;
   if (to === 'SOL' && cid !== GW_LIFI_SOL_CHAIN && cid !== 1151111081099710) return true;
@@ -16236,7 +16271,7 @@ async function gwDsAutoDetectChainFor(fromSym, opts) {
     if (window.__gwDsChainHintShown !== hintKey && !opts?.silent) {
       window.__gwDsChainHintShown = hintKey;
       const lbl = (typeof gwChainLabel === 'function') ? gwChainLabel(target) : String(target);
-      const gas = target === 56 ? 'BNB' : target === 137 ? 'POL' : target === 43114 ? 'AVAX' : 'ETH';
+      const gas = gwChainGasSymbol(target);
       gwToast(`${sym} on ${lbl} · gas in ${gas}`, 'info');
     }
   } catch (_) {}
@@ -16328,8 +16363,10 @@ async function gwDsAvailableAmount(sym, opts) {
     }
     const addr = gwOcConnectedAddress();
     if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) return 0;
+    if (GW_EXTRA_EVM_BY_ID[ui] && !opts?.allChains) return gwDsTokenBalanceOnChain(s, ui, { account: addr });
     const pick = (b, c) => {
       if (!b) return 0;
+      if (GW_EXTRA_EVM_BY_ID[c]) return s === GW_EXTRA_EVM_BY_ID[c].nativeToken.symbol ? Number(b.nativeEth) || 0 : Number(b.tokens?.[s]) || 0;
       if (s === 'ETH' && b.nativeEth) return Number(b.nativeEth) || 0;
       if (s === 'BNB' && c === 56 && b.nativeEth) return Number(b.nativeEth) || 0;
       if ((s === 'MATIC' || s === 'POL') && c === 137 && b.nativeEth) return Number(b.nativeEth) || 0;
@@ -16339,7 +16376,7 @@ async function gwDsAvailableAmount(sym, opts) {
     };
     if (opts && opts.allChains) {
       let total = 0;
-      for (const c of [ui, 56, 1, 42161, 137, 8453, 10, 43114, 59144]) {
+      for (const c of new Set([ui, 56, 1, 42161, 137, 8453, 10, 43114, 59144])) {
         if (!c) continue;
         const b = await window.gromFetchOnchainBalances?.(addr, c).catch(() => null);
         total += pick(b, c);
@@ -16722,7 +16759,38 @@ function gwUxCss() {
     .gw-swap-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:3px;border:1px solid rgba(151,178,199,.16);border-radius:15px;background:linear-gradient(145deg,rgba(20,30,43,.94),rgba(30,43,58,.86));box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 5px 14px -12px rgba(0,0,0,.9)}
     .gw-swap-modes button{position:relative;min-height:36px;font-size:13px;border:1px solid transparent;border-radius:10px;padding:8px 10px;background:transparent;color:#b8c5d4;font-weight:680;letter-spacing:.01em;cursor:pointer;transition:color .18s ease,background .18s ease,border-color .18s ease,box-shadow .18s ease}.gw-swap-modes button:hover{color:#edf6fb;background:rgba(145,180,197,.09);border-color:rgba(164,205,221,.15)}.gw-swap-modes button.on{color:#edf5f9;border-color:rgba(174,207,222,.18);background:linear-gradient(180deg,rgba(133,154,170,.28),rgba(83,103,122,.24));box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 3px 9px -7px rgba(0,0,0,.9)}.gw-swap-modes button.on:after{content:"";position:absolute;left:50%;bottom:3px;width:18px;height:2px;border-radius:2px;background:linear-gradient(90deg,#78c8d9,#a9dce5);transform:translateX(-50%);opacity:.9}
     .gw-order-mode-panel{margin-top:2px;padding:14px 0 2px;border-top:1px solid rgba(136,192,208,.14)}.gw-order-mode-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.gw-order-mode-head p{margin:0}.gw-order-create{width:100%;margin-top:10px;background:#88c0d0;color:#162c36;border:0;border-radius:11px;padding:12px;font-weight:800;cursor:pointer}
-    @media(max-width:600px){#gwDsCard{padding:16px!important}#gwDsCard .gw-ds-row-mid{flex-wrap:wrap!important}#gwDsCard .gw-ds-tkbtn .net{max-width:100px}#gwDsCard .gw-ds-route{font-size:12px}#gwDsCard .gw-ds-cta{min-height:48px}.gw-ux-picker-tabs{padding:8px}.gw-ux-picker-tabs button{padding:8px 6px;font-size:12px}.gw-ux-order-form{display:grid;grid-template-columns:1fr}.gw-ux-order-form label{min-width:0}.gw-swap-modes button{min-height:40px;padding:7px 5px;font-size:12px}}
+    @media (max-width: 600px) {
+      #gwUxPickerTabs {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(min-content, 1fr);
+        flex: none;
+        align-items: stretch;
+        margin: 8px 14px 0;
+        padding: 3px;
+        gap: 2px;
+        min-height: 0;
+      }
+      #gwUxPickerTabs button {
+        min-height: 44px;
+        padding: 4px!important;
+        white-space: normal;
+        text-align: center;
+      }
+      #gwUxPickerTabs button.on {
+        background: #304a63!important;
+        border-color: #517892!important;
+        box-shadow: none;
+      }
+      #gwUxPickerTabs button.on::after { content: none; }
+    }
+    @media (max-width: 380px) {
+      #gwUxPickerTabs:has([data-filter="popular"]) {
+        grid-auto-flow: row;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media(max-width:600px){#gwDsCard{padding:16px!important}#gwDsCard .gw-ds-row-mid{flex-wrap:wrap!important}#gwDsCard .gw-ds-tkbtn .net{max-width:100px}#gwDsCard .gw-ds-route{font-size:12px}#gwDsCard .gw-ds-cta{min-height:48px}.gw-ux-order-form{display:grid;grid-template-columns:1fr}.gw-ux-order-form label{min-width:0}.gw-swap-modes button{min-height:40px;padding:7px 5px;font-size:12px}}
   `; document.head.appendChild(s);
 }
 function gwUxAccount() {
@@ -16814,7 +16882,17 @@ function gwUxPickerBar(which) {
   const tabs=which==='from'?[['holdings','Мои активы','My assets'],['favorites','Избранное','Favorites'],['recent','Недавние','Recent']]:[['popular','Популярные','Popular'],['holdings','Мои активы','My assets'],['favorites','Избранное','Favorites'],['recent','Недавние','Recent']];
   bar.setAttribute('role','group');bar.setAttribute('aria-label',gwUxText('Разделы токенов','Token lists'));
   bar.innerHTML=tabs.map(([id,ru,en])=>`<button type="button" data-filter="${id}" aria-pressed="${filter===id?'true':'false'}" class="${filter===id?'on':''}">${gwUxText(ru,en)}</button>`).join('');
-  bar.querySelectorAll('button').forEach(b=>b.onclick=()=>{window.__gwUxTokenFilter=b.dataset.filter;gwUxPickerBar(which);gwTkRender(document.getElementById('gwTkSearch')?.value || '');});
+  bar.querySelectorAll('button').forEach(button => {
+    button.onclick = () => {
+      window.__gwUxTokenFilter = button.dataset.filter;
+      for (const item of bar.querySelectorAll('button')) {
+        const selected = item === button;
+        item.classList.toggle('on', selected);
+        item.setAttribute('aria-pressed', String(selected));
+      }
+      gwTkRender(document.getElementById('gwTkSearch')?.value || '');
+    };
+  });
 }
 function gwUxFilterRows(rows) {
   const f=window.__gwUxTokenFilter;if(f==='favorites'||f==='recent'){const saved=gwUxSaved(f==='favorites'?'gw_swap_favorites':'gw_swap_recent_tokens');const keys=new Set(saved.map(gwUxTokenKey));return rows.filter(a=>keys.has(gwUxTokenKey(a)));}return rows;
@@ -17068,7 +17146,7 @@ try {
   window.gwNormalizeEvmTxForWallet = gwNormalizeEvmTxForWallet;
 } catch (_) {}
 
-function gwGuardProviderTxParams(txParams, source) {
+function gwGuardProviderTxParams(txParams, source, expectedOverride) {
   let v = 0n;
   try {
     v = gwParseTxValueWei(txParams?.value);
@@ -17092,7 +17170,8 @@ function gwGuardProviderTxParams(txParams, source) {
   if (window.__gwAllowLargeNativeTx === true) return;
   let expected = null;
   try {
-    if (window.__gwExpectedNativeWei != null) expected = BigInt(String(window.__gwExpectedNativeWei));
+    const expectedWei = expectedOverride ?? window.__gwExpectedNativeWei;
+    if (expectedWei != null) expected = BigInt(String(expectedWei));
   } catch (_) { expected = null; }
   if (expected != null && expected > 0n && expected <= GW_NATIVE_TX_HARD_CAP_WEI) {
     const lo = (expected * 95n) / 100n;
@@ -17125,7 +17204,7 @@ async function gwProviderSendTx(provider, txParams, timeoutMs = 180000, chainIdH
   if (typeof gwNormalizeEvmTxForWallet === 'function') {
     txParams = gwNormalizeEvmTxForWallet(txParams);
   }
-  gwGuardProviderTxParams(txParams, 'gwProviderSendTx');
+  gwGuardProviderTxParams(txParams, 'gwProviderSendTx', wakeOpts.expectedWei);
   const from = String(txParams?.from || '').toLowerCase();
   const to = String(txParams?.to || '').toLowerCase();
   const expect = {
@@ -17143,6 +17222,7 @@ async function gwProviderSendTx(provider, txParams, timeoutMs = 180000, chainIdH
     nonceBefore = parseInt(hex, 16);
   } catch (_) {}
 
+  if (wakeOpts.verify) await wakeOpts.verify();
   const wcP = gwProviderRequestWithWake(provider, { method: 'eth_sendTransaction', params: [txParams] }, wakeOpts)
     .then((h) => {
       if (typeof h === 'string' && /^0x[a-fA-F0-9]{64}$/.test(h)) return h;
@@ -18306,6 +18386,12 @@ const gwDsRefreshBalancesDebounced = gwDebounce(() => {
  * works for every one — we only differ in router address, wrapped-native
  * address and token addresses. */
 const GW_OC_SWAP = {
+  ...Object.fromEntries(GW_EXTRA_EVM_CHAINS.map(c => [c.id, {
+    native: c.nativeToken.symbol, nativeAddress: c.nativeToken.address,
+    wrapped: c.wrapped, dexName: 'LI.FI', lifiOnly: true,
+    tokens: Object.fromEntries(c.tokens.filter(t => t.address !== GW_LIFI_ZERO).map(t => [t.symbol.toUpperCase(), t.address])),
+    decimals: Object.fromEntries(c.tokens.map(t => [t.symbol.toUpperCase(), t.decimals])),
+  }])),
   1: { // Ethereum · Uniswap V2
     router: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
     native: 'ETH',
@@ -18553,7 +18639,7 @@ async function gwWaitSwapApproval(provider, hash, chainId) {
 /* Send: ERC-20 approve(spender, MaxUint256). Waits for receipt.
  * Skip entirely when allowance already covers `needed` (fewer Trust prompts).
  * USDT mainnet reset-to-0 only when existing allowance is positive but too low. */
-async function gwErc20ApproveMax(provider, token, spender, from, chainId, needed) {
+async function gwErc20ApproveMax(provider, token, spender, from, chainId, needed, exact = false, verify) {
   const tokenLc = String(token || '').toLowerCase();
   const need = (needed != null && BigInt(needed) > 0n) ? BigInt(needed) : null;
   let allow = 0n;
@@ -18565,12 +18651,12 @@ async function gwErc20ApproveMax(provider, token, spender, from, chainId, needed
   const USDT_RESET = new Set(['0xdac17f958d2ee523a2206206994597c13d831ec7']);
   if (USDT_RESET.has(tokenLc) && allow > 0n) {
     const data0 = '0x095ea7b3' + gwAddr(spender) + '0'.repeat(64);
-    const hash0 = await gwProviderSendTx(provider, { from, to: token, data: data0, value: '0x0' }, 180000, chainId, { action: 'approve', step: '1/2' });
+    const hash0 = await gwProviderSendTx(provider, { from, to: token, data: data0, value: '0x0' }, 180000, chainId, { action: 'approve', step: '1/2', verify });
     await gwWaitSwapApproval(provider, hash0, chainId);
   }
-  const MAX = 'f'.repeat(64);
-  const data = '0x095ea7b3' + gwAddr(spender) + MAX;
-  const hash = await gwProviderSendTx(provider, { from, to: token, data, value: '0x0' }, 180000, chainId, { action: 'approve', step: USDT_RESET.has(tokenLc) && allow > 0n ? '2/2' : '' });
+  const approvalAmount = exact ? BigInt(needed).toString(16).padStart(64, '0') : 'f'.repeat(64);
+  const data = '0x095ea7b3' + gwAddr(spender) + approvalAmount;
+  const hash = await gwProviderSendTx(provider, { from, to: token, data, value: '0x0' }, 180000, chainId, { action: 'approve', step: USDT_RESET.has(tokenLc) && allow > 0n ? '2/2' : '', verify });
   await gwWaitSwapApproval(provider, hash, chainId);
   return hash;
 }
@@ -18617,6 +18703,7 @@ try { window.gwWaitReceipt = gwWaitReceipt; } catch (_) {}
 
 /* Ensure the wallet is on the correct chain. If not, prompt to switch. */
 const GW_EVM_CHAIN_PARAMS = {
+  ...Object.fromEntries(GW_EXTRA_EVM_CHAINS.map(c => [c.id, c.wallet])),
   1: {
     chainId: '0x1', chainName: 'Ethereum Mainnet',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
@@ -18669,10 +18756,18 @@ const GW_EVM_CHAIN_PARAMS = {
 
 function gwChainGasSymbol(chainId) {
   const c = Number(chainId);
+  if (GW_EXTRA_EVM_BY_ID[c]) return GW_EXTRA_EVM_BY_ID[c].wallet.nativeCurrency.symbol;
   if (c === 56) return 'BNB';
   if (c === 137) return 'POL';
   if (c === 43114) return 'AVAX';
   return 'ETH';
+}
+
+function gwUsesGasBalance(chainId, token) {
+  if (token?.isNative) return true;
+  const native = GW_EXTRA_EVM_BY_ID[chainId]?.nativeToken;
+  return !!(native && native.address !== GW_LIFI_ZERO && token?.address
+    && native.address.toLowerCase() === token.address.toLowerCase());
 }
 
 /** Min native USD on the swap source chain before an ERC-20 / bridge tx. */
@@ -18714,6 +18809,19 @@ async function gwGasNativeUsdPrice(sym) {
       px = Number(await gwDsPriceUsd(s)) || 0;
     }
   } catch (_) {}
+  const extra = GW_EXTRA_EVM_CHAINS.find(c => c.nativeToken.symbol === s);
+  if (!(px > 0) && extra) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    try {
+      const r = await fetch(`${gwLifiEndpoint()}/token?chain=${extra.id}&token=${extra.nativeToken.address}`, { signal: ctrl.signal });
+      if (r.ok) {
+        const t = await r.json();
+        if (Number(t.chainId) === extra.id && String(t.address).toLowerCase() === extra.nativeToken.address.toLowerCase()) px = Number(t.priceUSD);
+      }
+    } finally { clearTimeout(timer); }
+    if (!(px > 0) || !Number.isFinite(px)) throw Object.assign(new Error('Gas price unavailable — retry the quote'), { code: 'GAS_PRICE_UNAVAILABLE' });
+  }
   const floor = floors[s] || 0;
   const fb = fallbacks[s] != null ? fallbacks[s] : 2400;
   if (!(px > 0) || (floor > 0 && px < floor)) px = fb;
@@ -19084,7 +19192,7 @@ async function gwDsFillNativeMax({ chainId, fromSym, toSym, decimals = 18 }) {
     ]);
     if (!current()) return;
     const reserveUsd = gwGasSwapReserveUsd({ chainId, fromSym, toSym, account,
-      amtNum: window.__gwLastAggQuotes?.amtNum, nativeInput: true });
+      amtNum: window.__gwLastAggQuotes?.amtNum, nativeInput: !!gwResolveEvmToken(chainId, fromSym, 'from')?.isNative });
     // A small buffer prevents price/rounding drift between MAX and the next quote.
     const reserve = reserveUsd * 1.1 / price;
     const precision = Math.min(8, decimals);
@@ -19145,7 +19253,7 @@ async function gwEnsureGasTopUpBeforeSwap({ chainId, fromSym, toSym, amtNum, acc
   const nativeInput = resolved?.isNative === true;
   const bal = await gwGasNativeBal(dest, account);
   const px = await gwGasNativeUsdPrice(gasSym);
-  const swapNative = nativeInput ? Number(amtNum) || 0 : 0;
+  const swapNative = gwUsesGasBalance(dest, resolved) ? Number(amtNum) || 0 : 0;
   if (swapNative > bal) throw Object.assign(new Error(gwGasUiRu()
     ? ('Не хватает ' + gasSym + ' для суммы обмена в сети ' + gwChainLabel(dest) + '. Выберите токен и сеть, где есть баланс.')
     : ('Not enough ' + gasSym + ' for the swap amount on ' + gwChainLabel(dest) + '. Choose a funded token and network.')), { code: 'GAS_SWAP_BALANCE' });
@@ -19154,13 +19262,13 @@ async function gwEnsureGasTopUpBeforeSwap({ chainId, fromSym, toSym, amtNum, acc
   if (bal >= requiredNative) return { ok: true, bal };
   // Native MAX pays value and gas from the same balance. Do not bridge more
   // ETH merely because the form reserved too little for this route.
-  if (nativeInput && bal > reserveUsd / px) throw Object.assign(new Error(gwGasUiRu()
+  if (gwUsesGasBalance(dest, resolved) && bal > reserveUsd / px) throw Object.assign(new Error(gwGasUiRu()
     ? ('Часть ' + gasSym + ' нужна для комиссии в сети ' + gwChainLabel(dest) + '. Нажмите MAX: комиссия будет вычтена из доступной суммы.')
     : ('Keep some ' + gasSym + ' for fees on ' + gwChainLabel(dest) + '. Tap MAX to subtract the gas reserve from the swap amount.')), { code: 'GAS_NATIVE_RESERVE' });
   window.__gwGasTopUpInFlight = true;
   try {
     // Same-chain refuel is possible only when there is enough dust to pay for it.
-    if (!nativeInput && bal * px >= 0.05 && account && provider?.request) {
+    if (!gwUsesGasBalance(dest, resolved) && bal * px >= 0.05 && account && provider?.request) {
       try {
         const done = await gwGasExecSameChainTokenTopUp({ chainId: dest, fromSym: from,
           gasSym, account, provider, swapAmount: amtNum, requiredNative, intent });
@@ -20621,6 +20729,7 @@ function gwOcUiSym(chainId, sym) {
   if (!s) return s;
   try {
     const cfg = (typeof GW_OC_SWAP !== 'undefined') ? GW_OC_SWAP[cid] : null;
+    if (cfg?.lifiOnly) return s;
     if (s === 'ETH' && cid && cid !== 1 && cfg?.tokens?.WETH) return 'WETH';
     if (s === 'BTC' && cid && cid !== 1 && cfg?.tokens?.WBTC) return 'WBTC';
     if (s === 'BTC' && cid === 56 && (cfg?.tokens?.BTCB || cfg?.tokens?.BTC)) return cfg.tokens.BTCB ? 'BTCB' : 'BTC';
@@ -20823,13 +20932,13 @@ async function gwLifiQuote({ chainId, fromSym, toSym, amtNum, account, toChainId
   let inAddr = inn?.address || null;
   let outAddr = out?.address || null;
   if (!inAddr && cfg) {
-    const isNative = fromSym === cfg.native;
-    inAddr = isNative ? ZERO : (cfg.tokens?.[fromSym] || null);
+    const isNative = fromSym === cfg.native && (!cfg.nativeAddress || cfg.nativeAddress === GW_LIFI_ZERO);
+    inAddr = isNative ? (cfg.nativeAddress || ZERO) : (cfg.tokens?.[fromSym] || null);
   }
   if (!outAddr && GW_OC_SWAP[toCid]) {
     const ocfg = GW_OC_SWAP[toCid];
     const isNative = toSym === ocfg.native;
-    outAddr = isNative ? ZERO : (ocfg.tokens?.[toSym] || null);
+    outAddr = isNative ? (ocfg.nativeAddress || ZERO) : (ocfg.tokens?.[toSym] || null);
   }
   if (inAddr === GW_META_NATIVE) inAddr = ZERO;
   if (outAddr === GW_META_NATIVE) outAddr = ZERO;
@@ -21070,7 +21179,7 @@ async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, p
   const cfg = GW_OC_SWAP[execChain];
   if (!cfg) throw new Error(`unsupported chain ${execChain}`);
   const inn = typeof gwResolveEvmToken === 'function' ? gwResolveEvmToken(execChain, fromSym, 'from') : null;
-  const isNative = !!inn?.isNative || fromSym === cfg.native;
+  const isNative = inn ? !!inn.isNative : fromSym === cfg.native && (!cfg.nativeAddress || cfg.nativeAddress === GW_LIFI_ZERO);
   const inAddr = isNative ? cfg.wrapped : (inn?.address || cfg.tokens[fromSym]);
   if (!inAddr) throw new Error(typeof gwTokenChainHint === 'function' ? gwTokenChainHint(fromSym, execChain) : `${fromSym} not on chain`);
   const inDec = Number.isFinite(inn?.decimals) ? inn.decimals : (cfg.decimals[fromSym] ?? 18);
@@ -21172,6 +21281,7 @@ async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, p
 
 /* Try direct + WETH/USDC hub paths for V2 inline fallback. */
 async function gwFindV2SwapPath(provider, cfg, inAddr, outAddr, amountIn, chainId) {
+  if (!cfg?.router) return null;
   const paths = [[inAddr, outAddr]];
   if (cfg.wrapped && inAddr !== cfg.wrapped && outAddr !== cfg.wrapped) {
     paths.push([inAddr, cfg.wrapped, outAddr]);
@@ -21215,6 +21325,12 @@ function gwDsNormSym(sym) {
     /* Polygon gas renamed POL — keep MATIC/WMATIC as aliases for same-asset + resolve */
     WMATIC: 'POL', MATIC: 'POL', WPOL: 'POL',
   };
+  // On catalog networks the contract selection distinguishes wrapped and native assets.
+  if (map[s] && typeof GW_EXTRA_EVM_BY_ID !== 'undefined') {
+    const picks = [window.__gwDsUserPickedFrom, window.__gwDsUserPickedTo, window.__gwDsForceBridgeTo];
+    if (picks.some(p => GW_EXTRA_EVM_BY_ID[p?.chainId] && String(p.sym || '').toUpperCase() === s)) return s;
+    if (typeof gwGetActiveUiChainId === 'function' && GW_EXTRA_EVM_BY_ID[gwGetActiveUiChainId()]) return s;
+  }
   return map[s] || s;
 }
 
@@ -21227,7 +21343,9 @@ function gwDsNormSym(sym) {
  */
 function gwResolveEvmToken(chainId, sym, role) {
   const cid = Number(chainId);
-  const s = (typeof gwDsNormSym === 'function') ? gwDsNormSym(sym) : String(sym || '').toUpperCase();
+  // Preserve wrapped/native identities on LI.FI chains (e.g. ETH vs WETH).
+  const exact = String(sym || '').toUpperCase();
+  const s = GW_EXTRA_EVM_BY_ID[cid] ? exact : ((typeof gwDsNormSym === 'function') ? gwDsNormSym(sym) : exact);
   if (!cid || !s) return null;
   const cfg = (typeof GW_OC_SWAP !== 'undefined') ? GW_OC_SWAP[cid] : null;
 
@@ -21239,7 +21357,7 @@ function gwResolveEvmToken(chainId, sym, role) {
     const candidates = [picked, window.__gwDsUserPickedTo, window.__gwDsUserPickedFrom, force].filter(Boolean);
     for (const p of candidates) {
       if (!p || !p.address) continue;
-      if (gwDsNormSym(p.sym) !== s) continue;
+      if ((GW_EXTRA_EVM_BY_ID[cid] ? String(p.sym || '').toUpperCase() : gwDsNormSym(p.sym)) !== s) continue;
       if (p.chainId != null && Number(p.chainId) !== cid) continue;
       const a = String(p.address);
       if (!a || a === 'undefined') continue;
@@ -21255,13 +21373,21 @@ function gwResolveEvmToken(chainId, sym, role) {
     }
   } catch (_) {}
 
+  // A default selection must keep the verified chain+contract, even if another
+  // token with the same ticker is ranked higher in the live catalog.
+  const seed = GW_EXTRA_EVM_BY_ID[cid]?.tokens.find(t => t.symbol.toUpperCase() === s);
+  if (seed) {
+    const native = seed.address.toLowerCase() === GW_LIFI_ZERO;
+    return { address: native ? GW_META_NATIVE : seed.address, decimals: seed.decimals, source: 'network-seed', isNative: native };
+  }
+
   // 2) LiFi catalog (full chain token list)
   try {
     if (typeof gwLifiPickToken === 'function') {
       const hit = gwLifiPickToken(cid, s);
       if (hit && hit.address) {
         const a = String(hit.address);
-        const isNat = a.toLowerCase() === GW_LIFI_ZERO || (cfg && s === cfg.native);
+        const isNat = a.toLowerCase() === GW_LIFI_ZERO || a.toLowerCase() === String(GW_META_NATIVE).toLowerCase();
         return {
           address: isNat ? GW_META_NATIVE : a,
           decimals: Number.isFinite(Number(hit.decimals)) ? Number(hit.decimals) : 18,
@@ -21279,15 +21405,16 @@ function gwResolveEvmToken(chainId, sym, role) {
       return { address: GW_META_NATIVE, decimals: 18, source: 'curated', isNative: true };
     }
     if (s === cfg.native) {
-      return { address: GW_META_NATIVE, decimals: cfg.decimals?.[s] ?? 18, source: 'curated', isNative: true };
+      const isNative = !cfg.nativeAddress || cfg.nativeAddress === GW_LIFI_ZERO;
+      return { address: isNative ? GW_META_NATIVE : cfg.nativeAddress, decimals: cfg.decimals?.[s] ?? 18, source: 'curated', isNative };
     }
     if (cfg.tokens && cfg.tokens[s]) {
       return { address: cfg.tokens[s], decimals: cfg.decimals?.[s] ?? 18, source: 'curated', isNative: false };
     }
-    if (s === 'ETH' && cfg.tokens?.WETH) {
+    if (!cfg.lifiOnly && s === 'ETH' && cfg.tokens?.WETH) {
       return { address: cfg.tokens.WETH, decimals: cfg.decimals?.WETH ?? cfg.decimals?.ETH ?? 18, source: 'curated', isNative: false };
     }
-    if (s === 'BTC' && (cfg.tokens?.WBTC || cfg.tokens?.BTC)) {
+    if (!cfg.lifiOnly && s === 'BTC' && (cfg.tokens?.WBTC || cfg.tokens?.BTC)) {
       const a = cfg.tokens.WBTC || cfg.tokens.BTC;
       return { address: a, decimals: cfg.decimals?.WBTC ?? cfg.decimals?.BTC ?? 8, source: 'curated', isNative: false };
     }
@@ -21335,7 +21462,7 @@ function gwOcTokenAddr(cfg, sym) {
     return t ? t.address : null;
   }
   const s = (typeof gwDsNormSym === 'function') ? gwDsNormSym(sym) : String(sym).toUpperCase();
-  if (s === cfg.native) return GW_META_NATIVE;
+  if (s === cfg.native) return cfg.nativeAddress && cfg.nativeAddress !== GW_LIFI_ZERO ? cfg.nativeAddress : GW_META_NATIVE;
   if (cfg.tokens[s]) return cfg.tokens[s];
   if (s === 'ETH' && cfg.tokens.WETH) return cfg.tokens.WETH;
   if (s === 'BTC' && cfg.tokens.WBTC) return cfg.tokens.WBTC;
@@ -21961,7 +22088,8 @@ async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account, onP
     new Promise((_, rej) => setTimeout(() => rej(new Error(name + ' timeout ' + ms + 'ms')), ms)),
   ]);
   const quotes = [];
-  const names = ['LiFi', 'Paraswap', 'KyberSwap', 'Odos', 'CoWSwap', 'Squid'];
+  const lifiOnly = !!GW_OC_SWAP[chainId]?.lifiOnly;
+  const names = lifiOnly ? ['LiFi'] : ['LiFi', 'Paraswap', 'KyberSwap', 'Odos', 'CoWSwap', 'Squid'];
   const merge = () => {
     quotes.sort((a, b) => {
       const da = Number(a.outDecimals) > 0 ? Number(a.outDecimals) : outDec;
@@ -21998,11 +22126,13 @@ async function gwMetaAggQuoteAll({ chainId, fromSym, toSym, amtNum, account, onP
   });
   const jobs = [
     wrap(withTimeout(gwAggQuoteLifi({ chainId, fromSym, toSym, amtNum, account, toChainId }), 'LiFi', 8000), 'LiFi'),
-    wrap(withTimeout(gwAggQuoteParaswap({ chainId, fromSym, toSym, amtNum, account }), 'Paraswap', 6000), 'Paraswap'),
-    wrap(withTimeout(gwAggQuoteKyber({ chainId, fromSym, toSym, amtNum, account }), 'KyberSwap', 3800), 'KyberSwap'),
-    wrap(withTimeout(gwAggQuoteOdos({ chainId, fromSym, toSym, amtNum, account }), 'Odos', 5500), 'Odos'),
-    wrap(withTimeout(gwAggQuoteCow({ chainId, fromSym, toSym, amtNum, account }), 'CoWSwap', 2500), 'CoWSwap'),
-    wrap(withTimeout(gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account, toChainId }), 'Squid', 3500), 'Squid'),
+    ...(lifiOnly ? [] : [
+      wrap(withTimeout(gwAggQuoteParaswap({ chainId, fromSym, toSym, amtNum, account }), 'Paraswap', 6000), 'Paraswap'),
+      wrap(withTimeout(gwAggQuoteKyber({ chainId, fromSym, toSym, amtNum, account }), 'KyberSwap', 3800), 'KyberSwap'),
+      wrap(withTimeout(gwAggQuoteOdos({ chainId, fromSym, toSym, amtNum, account }), 'Odos', 5500), 'Odos'),
+      wrap(withTimeout(gwAggQuoteCow({ chainId, fromSym, toSym, amtNum, account }), 'CoWSwap', 2500), 'CoWSwap'),
+      wrap(withTimeout(gwAggQuoteSquid({ chainId, fromSym, toSym, amtNum, account, toChainId }), 'Squid', 3500), 'Squid'),
+    ]),
   ];
   try { window.__gromMetaQuoteTried = jobs.length; } catch (_) {}
   const started = Date.now();
@@ -24963,7 +25093,7 @@ function gwInjectDashSwapPanel() {
       window.__gwNativeMaxRequest = (window.__gwNativeMaxRequest || 0) + 1;
       const sourceChain = Number(window.__gwDsUserPickedFrom?.chainId || gwGetActiveUiChainId());
       const sourceToken = gwResolveEvmToken(sourceChain, from, 'from');
-      if (pct === 100 && gwDsGetMode() === 'onchain' && sourceToken?.isNative) {
+      if (pct === 100 && gwDsGetMode() === 'onchain' && gwUsesGasBalance(sourceChain, sourceToken)) {
         gwDsFillNativeMax({ chainId: sourceChain, fromSym: from,
           toSym: document.getElementById('gwDsTo')?.value || '', decimals: sourceToken.decimals });
         return;
@@ -27767,6 +27897,8 @@ function gwDsEnsureTokenOption(sym, meta) {
   sym = String(sym || '').trim().toUpperCase();
   if (!sym) return false;
   meta = meta || {};
+  const seed = GW_EXTRA_EVM_BY_ID[meta.chainId]?.tokens.find(t => t.symbol.toUpperCase() === sym);
+  if (seed) meta = { name: seed.name, logo: seed.logoURI, address: seed.address, decimals: seed.decimals, ...meta };
   if (!GW_DS_ASSETS.find((a) => a.sym === sym)) {
     GW_DS_ASSETS.unshift({
       sym,
@@ -29792,3 +29924,27 @@ if (document.readyState === 'loading') {
 
 
 try { document.addEventListener("DOMContentLoaded", function () { gwBindSafeImgFallback(document); }); } catch (_e) {}
+
+// Earn uses the selected account's holdings and the existing wallet transport.
+window.gromEarnWallet = {
+  account: gwOcConnectedAddress,
+  provider: gwActiveEvmProvider,
+  switchChain: gwEnsureChain,
+  allowance: gwErc20Allowance,
+  approve: (provider, token, spender, owner, chain, units, verify) =>
+    gwErc20ApproveMax(provider, token, spender, owner, chain, units, true, verify),
+  checkValue: gwAssertNativeTxValue,
+  send: gwProviderSendTx,
+  explorer: gwDsExplorerUrl,
+  async assets() {
+    const rows = await gwTkLoadHoldings(false);
+    return rows.flatMap(row => {
+      const cfg = GW_OC_SWAP[row.chainId];
+      if (!cfg || !(row.amt > 0)) return [];
+      const native = row.sym === cfg.native;
+      const address = native ? '0x' + '0'.repeat(40) : row.address || cfg.tokens?.[row.sym];
+      if (!/^0x[\da-f]{40}$/i.test(address || '')) return [];
+      return [{ address, chainId: row.chainId, network: row.chain, symbol: row.sym, balance: row.amt }];
+    });
+  },
+};

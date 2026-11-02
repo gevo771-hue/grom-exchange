@@ -9,6 +9,7 @@ function harness(extra={}) {
  const op={id:'main',from:'USDT',to:'ETH',amt:'2',chainId:8453,account,stage:'preparing'};
  const context={URLSearchParams,console:{warn(){}},Date:{now:()=>now},setTimeout:(fn,ms)=>{if(ms===6000)return 0;now+=ms;fn();},clearTimeout(){},
   localStorage:{getItem:()=> 'en'},document:{documentElement:{lang:'en'}},
+  GW_EXTRA_EVM_BY_ID:{},GW_EXTRA_EVM_CHAINS:[],GW_LIFI_ZERO:'0x'+'0'.repeat(40),
   window:{__gwSwapOp:op},GW_OC_SWAP:{1:{},56:{},42161:{},8453:{},10:{},137:{},43114:{},59144:{}},
   gwDsPriceUsd:async sym=>({ETH:2500,BNB:500,POL:.25,AVAX:20}[sym]||1),
   gwDsTokenBalanceOnChain:async()=>0,gwRpcTry:async()=> '0x0',

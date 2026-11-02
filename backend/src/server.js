@@ -33,6 +33,7 @@ import {
   jupFeeModeFromConfig,
   jupFeeBpsFromConfig,
 } from './wallet/jup-fee.js';
+import { createEarnRouter } from './earn/routes.js';
 import { createOdosRouter } from './liquidity/odos-routes.js';
 import { walletConnectProjectIdForClient } from './wallet/public-config.js';
 
@@ -203,6 +204,9 @@ async function main() {
       },
     });
   });
+
+  app.use('/api/earn', rateLimit({ windowMs: 60000, max: 45, standardHeaders: true, legacyHeaders: false }),
+    createEarnRouter({ apiKey: config.liquidity?.lifiApiKey }));
 
   /** Cached LiFi on-chain quotes for Instant Swap (public read-only). */
   app.post('/api/swap/oc-quote', quoteLimiter, async (req, res, next) => {

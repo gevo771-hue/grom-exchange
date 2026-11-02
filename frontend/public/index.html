@@ -323,8 +323,8 @@
 </script>
 <script>
 (function () {
-  var ALLOW = { landing: 1, dashboard: 1, spot: 1, binary: 1, futures: 1, trade: 1, markets: 1, wallet: 1, referral: 1, history: 1, settings: 1, help: 1, predict: 1, xstocks: 1, backoffice: 1 };
-  var PATH = { '': 'landing', swap: 'dashboard', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
+  var ALLOW = { landing: 1, dashboard: 1, earn: 1, spot: 1, binary: 1, futures: 1, trade: 1, markets: 1, wallet: 1, referral: 1, history: 1, settings: 1, help: 1, predict: 1, xstocks: 1, backoffice: 1 };
+  var PATH = { '': 'landing', swap: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
   var LOCALES = { es: 1, tr: 1, ru: 1, vi: 1, id: 1 };
   var parts = (location.pathname || '/').split('/').filter(Boolean);
   if (parts[0] === 'pt-BR') parts.shift();
@@ -367,6 +367,7 @@
   html:not(.grom-js-ready)[data-grom-route="help"] #page-help,
   html:not(.grom-js-ready)[data-grom-route="backoffice"] #page-backoffice,
   html:not(.grom-js-ready)[data-grom-route="predict"] #page-predict,
+  html:not(.grom-js-ready)[data-grom-route="earn"] #page-earn,
   html:not(.grom-js-ready)[data-grom-route="xstocks"] #page-xstocks { display: block !important; }
   /* Never paint crawl-only SEO accordion above product/admin UI (2026-09-22). */
   html.grom-js-ready:not([data-grom-route="landing"]) #gromSeoRouteCopy { display: none !important; }
@@ -731,6 +732,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Oxanium:wght@600;700;800&family=Rajdhani:wght@600;700&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/grom-banners.css" />
 <link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/favicon.ico" sizes="48x48" />
+<link rel="icon" type="image/png" href="/favicon-96.png" sizes="96x96" />
 <link rel="icon" type="image/png" href="/icon-192.png?v=20260608a" sizes="192x192" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260608a" sizes="180x180" />
 <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png?v=20260608a" />
@@ -6154,13 +6157,28 @@
 @media(min-width:1181px){#page-futures aside.wl{align-self:stretch;overflow:hidden}#page-futures #futList{height:0;flex:1 1 0;max-height:none}#page-futures aside.wl>.wl-head,#page-futures aside.wl>.wl-search,#page-futures aside.wl>#futCats,#page-futures aside.wl>.wl-tabs{flex-shrink:0}}
 #futList:focus-visible{outline:2px solid #5bd8ff;outline-offset:3px}
 .grom-socials{display:flex;align-items:center;gap:8px}
-.grom-socials a{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:96px;padding:8px 12px;border:1px solid #9bbbd833;border-radius:12px;background:linear-gradient(145deg,#2a374b,#1b2838);color:#e3effa;font-size:12px;font-weight:650;text-decoration:none;box-shadow:inset 0 1px #e0f3ff0a,0 3px 9px #10172418;transition:background .16s,border-color .16s}
-.grom-socials svg{width:17px;height:17px;flex:none;fill:currentColor;box-sizing:content-box;padding:5px;border-radius:8px;background:#d7e7ff0c}
-.grom-socials a[data-social="telegram"] svg{color:#69d4ff;background:#48baff18}
-.grom-socials a:hover{background:linear-gradient(145deg,#33475f,#25364c);border-color:#82b9dd88;color:#fff}
+.grom-community-footer .grom-socials a{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:96px;padding:8px 12px;border:1px solid #9bbbd833;border-radius:12px;background:linear-gradient(145deg,#2a374b,#1b2838);color:#e3effa;font-size:12px;font-weight:650;text-decoration:none;box-shadow:inset 0 1px #e0f3ff0a,0 3px 9px #10172418;transition:background .16s,border-color .16s}
+.grom-community-footer .grom-socials svg{width:17px;height:17px;flex:none;fill:currentColor;box-sizing:content-box;padding:5px;border-radius:8px;background:#d7e7ff0c}
+.grom-community-footer .grom-socials a[data-social="telegram"] svg{color:#69d4ff;background:#48baff18}
+.grom-community-footer .grom-socials a:hover{background:linear-gradient(145deg,#33475f,#25364c);border-color:#82b9dd88;color:#fff}
 .grom-socials a:focus-visible{outline:2px solid #5bd8ff;outline-offset:3px}
-.sidebar>.grom-socials{display:grid;grid-template-columns:minmax(0,.72fr) minmax(0,1.28fr);padding:16px 8px;margin-top:12px;border-top:1px solid #9bbbd820}
-.sidebar>.grom-socials a{min-width:0;padding:8px 6px;gap:6px;white-space:nowrap}
+.sidebar > .grom-socials {
+  padding: 12px 8px;
+  margin-top: 12px;
+  border-top: 1px solid #9bbbd820;
+  gap: 4px;
+}
+.sidebar > .grom-socials a {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: #fff;
+  text-decoration: none;
+}
+.sidebar > .grom-socials [data-social="telegram"] { color: #26a5e4; }
+.sidebar > .grom-socials a:hover { opacity: .82; }
+.sidebar > .grom-socials svg { width: 22px; height: 22px; fill: currentColor; }
 @media(max-width:760px){
   #page-futures .bo-panel-v2>.acct-switch.fut-perp-only{width:100%!important;max-width:100%;align-self:stretch;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:4px;border:1px solid #9bbbd830;border-radius:14px;background:linear-gradient(145deg,#253346,#1d2838);box-shadow:inset 0 1px #ffffff08}
   #page-futures .acct-switch.fut-perp-only button{min-width:0;min-height:50px;padding:8px 12px;gap:4px;border-radius:10px;font-size:12px;letter-spacing:0;color:#bccbdd;justify-content:center}
@@ -6378,6 +6396,7 @@
     <div class="nav-item" data-page="dashboard"><span class="ico"><svg width="18" height="18"><use href="#i-dashboard"/></svg></span><span class="nav-label" data-i18n="nav_dashboard">Dashboard</span></div>
     <div class="nav-item" data-page="futures"><span class="ico"><svg width="18" height="18"><use href="#i-futures"/></svg></span><span class="nav-label" data-i18n="nav_futures">Trade</span><span class="badge new" data-i18n="badge_new">NEW</span></div>
     <div class="nav-item" data-page="markets"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="nav-label" data-i18n="nav_markets">Markets</span></div>
+    <div class="nav-item" data-page="earn"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="nav-label">Earn</span></div>
     <div class="nav-item" data-page="wallet"><span class="ico"><svg width="18" height="18"><use href="#i-wallet"/></svg></span><span class="nav-label" data-i18n="nav_wallet">Wallet</span></div>
     <div class="nav-item" data-page="referral"><span class="ico"><svg width="18" height="18"><use href="#i-referral"/></svg></span><span class="nav-label" data-i18n="nav_referral">Referral</span><span class="badge new">REF</span></div>
     <div class="nav-item" data-page="history"><span class="ico"><svg width="18" height="18"><use href="#i-history"/></svg></span><span class="nav-label" data-i18n="nav_history">History</span></div>
@@ -6388,8 +6407,8 @@
     <div class="nav-item" data-page="backoffice" id="navBackoffice" style="display:none"><span class="ico"><svg width="18" height="18"><use href="#i-shield"/></svg></span><span class="nav-label">Админка</span><span class="badge new">ADMIN</span></div>
 
     <nav class="grom-socials" aria-label="GROM social media">
-      <a href="https://x.com/GromExchange" target="_blank" rel="noopener noreferrer" aria-label="GROM on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.6 5.5 22H2.3l7.9-9L2.5 2H9l4.5 6.8L18.9 2ZM17.8 20h1.8L8 3.9H6.1L17.8 20Z"/></svg><span>X</span></a>
-      <a href="https://t.me/grom_finence_hub" data-social="telegram" target="_blank" rel="noopener noreferrer" aria-label="GROM on Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.7 3.5-3.2 16.1c-.2 1.1-.9 1.4-1.8.9l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.4-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.1 13.4l-4.8-1.5c-1-.3-1-1 .2-1.4L20.2 3.3c.9-.3 1.7.2 1.5 1.2Z"/></svg><span>Telegram</span></a>
+      <a href="https://x.com/GromExchange" target="_blank" rel="noopener noreferrer" aria-label="GROM on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.6 5.5 22H2.3l7.9-9L2.5 2H9l4.5 6.8L18.9 2ZM17.8 20h1.8L8 3.9H6.1L17.8 20Z"/></svg></a>
+      <a href="https://t.me/grom_finence_hub" data-social="telegram" target="_blank" rel="noopener noreferrer" aria-label="GROM on Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.7 3.5-3.2 16.1c-.2 1.1-.9 1.4-1.8.9l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.4-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.1 13.4l-4.8-1.5c-1-.3-1-1 .2-1.4L20.2 3.3c.9-.3 1.7.2 1.5 1.2Z"/></svg></a>
     </nav>
 
     <div id="sidebarLogout" data-authed-only="1" style="display:none;margin-top:12px;padding:10px 12px;border-top:1px solid rgba(136,192,208,.15)">
@@ -6844,6 +6863,7 @@
     <!-- PREDICTION + XSTOCKS (content hydrated by boot script) -->
     <section class="page" id="page-predict"></section>
     <section class="page" id="page-xstocks"></section>
+    <section class="page" id="page-earn"><div class="earn-wrap"><h1>Earn</h1><div role="status" aria-busy="true">…</div></div></section>
 
     <!-- WALLET -->
     <section class="page" id="page-wallet">
@@ -7464,6 +7484,7 @@
 
 
 
+<script src="/grom-swap-networks.js"></script>
 <script src="/grom-swap-core.js"></script>
 <script src="/grom-instruments.js"></script>
 <script src="/grom-i18n.js"></script>
@@ -7493,6 +7514,7 @@ if (window.GROM_LANDING) try { document.documentElement.classList.add('grom-land
 /* Product module loader: no requests until a route or a consumer needs one. */
 (function () {
   var modules = {
+    earn: { src: '/grom-earn.js', ready: function () { return window.gromEarn; } },
     predictEvent: { src: '/grom-predict-event.js', ready: function () { return window.gromPredictEvent; } },
     predict: { src: '/grom-predict.js', ready: function () { return window.gromPredict; } },
     trade: { src: '/grom-hyperliquid.js', ready: function () { return window.gromHL; } },
@@ -7530,6 +7552,13 @@ if (window.GROM_LANDING) try { document.documentElement.classList.add('grom-land
   };
   window.gromLoadPageModules = function (page) {
     var names = [];
+    if (page === 'earn') {
+      names.push('earn');
+      if (!document.getElementById('grom-earn-style')) {
+        var sheet = document.createElement('link');
+        sheet.id = 'grom-earn-style'; sheet.rel = 'stylesheet'; sheet.href = '/grom-earn.css'; document.head.appendChild(sheet);
+      }
+    }
     if (page === 'predict') names.push('predict');
     // Trade data also powers market lists, portfolio totals and history.
     if (['dashboard', 'futures', 'markets', 'wallet', 'history'].indexOf(page) !== -1) names.push('trade');
@@ -7959,7 +7988,7 @@ function updateRouteSeo(page) {
   gromSeoSet('twitter:title', title);
   gromSeoSet('twitter:description', desc);
   gromSeoSet('keywords', kw);
-  var publicPaths = { landing: '/', dashboard: '/swap', futures: '/futures', predict: '/predict', xstocks: '/stocks', markets: '/markets' };
+  var publicPaths = { landing: '/', dashboard: '/swap', earn: '/earn', futures: '/futures', predict: '/predict', xstocks: '/stocks', markets: '/markets' };
   var localePrefix = /^\/(es|pt-BR|tr|ru|vi|id)(?:\/|$)/.exec(location.pathname || '');
   var canonicalUrl = 'https://grom.exchange' + (localePrefix ? '/' + localePrefix[1] : '') + (publicPaths[key] || '/');
   if (canonical) canonical.setAttribute('href', canonicalUrl);
@@ -8388,6 +8417,7 @@ window.gromSyncPrettyPath = function gromSyncPrettyPath(page) {
     var PAGE_SEG = {
       landing: '',
       dashboard: 'swap',
+      earn: 'earn',
       futures: 'futures',
       predict: 'predict',
       xstocks: 'stocks',
@@ -8685,7 +8715,7 @@ document.addEventListener('click', function (e) {
 var _logoHome = document.getElementById('logoHome');
 if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefault(); show('landing'); });
 (function () {
-  var PATH = { '': 'landing', swap: 'dashboard', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
+  var PATH = { '': 'landing', swap: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
   var LOCALES = { es: 1, tr: 1, ru: 1, vi: 1, id: 1 };
   var parts = (location.pathname || '/').split('/').filter(Boolean);
   if (parts[0] === 'pt-BR') parts.shift();

@@ -323,8 +323,8 @@
 </script>
 <script>
 (function () {
-  var ALLOW = { landing: 1, dashboard: 1, spot: 1, binary: 1, futures: 1, trade: 1, markets: 1, wallet: 1, referral: 1, history: 1, settings: 1, help: 1, predict: 1, xstocks: 1, backoffice: 1 };
-  var PATH = { '': 'landing', swap: 'dashboard', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
+  var ALLOW = { landing: 1, dashboard: 1, earn: 1, spot: 1, binary: 1, futures: 1, trade: 1, markets: 1, wallet: 1, referral: 1, history: 1, settings: 1, help: 1, predict: 1, xstocks: 1, backoffice: 1 };
+  var PATH = { '': 'landing', swap: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
   var LOCALES = { es: 1, tr: 1, ru: 1, vi: 1, id: 1 };
   var parts = (location.pathname || '/').split('/').filter(Boolean);
   if (parts[0] === 'pt-BR') parts.shift();
@@ -367,6 +367,7 @@
   html:not(.grom-js-ready)[data-grom-route="help"] #page-help,
   html:not(.grom-js-ready)[data-grom-route="backoffice"] #page-backoffice,
   html:not(.grom-js-ready)[data-grom-route="predict"] #page-predict,
+  html:not(.grom-js-ready)[data-grom-route="earn"] #page-earn,
   html:not(.grom-js-ready)[data-grom-route="xstocks"] #page-xstocks { display: block !important; }
   /* Never paint crawl-only SEO accordion above product/admin UI (2026-09-22). */
   html.grom-js-ready:not([data-grom-route="landing"]) #gromSeoRouteCopy { display: none !important; }
@@ -6378,6 +6379,7 @@
     <div class="nav-item" data-page="dashboard"><span class="ico"><svg width="18" height="18"><use href="#i-dashboard"/></svg></span><span class="nav-label" data-i18n="nav_dashboard">Dashboard</span></div>
     <div class="nav-item" data-page="futures"><span class="ico"><svg width="18" height="18"><use href="#i-futures"/></svg></span><span class="nav-label" data-i18n="nav_futures">Trade</span><span class="badge new" data-i18n="badge_new">NEW</span></div>
     <div class="nav-item" data-page="markets"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="nav-label" data-i18n="nav_markets">Markets</span></div>
+    <div class="nav-item" data-page="earn"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="nav-label">Earn</span></div>
     <div class="nav-item" data-page="wallet"><span class="ico"><svg width="18" height="18"><use href="#i-wallet"/></svg></span><span class="nav-label" data-i18n="nav_wallet">Wallet</span></div>
     <div class="nav-item" data-page="referral"><span class="ico"><svg width="18" height="18"><use href="#i-referral"/></svg></span><span class="nav-label" data-i18n="nav_referral">Referral</span><span class="badge new">REF</span></div>
     <div class="nav-item" data-page="history"><span class="ico"><svg width="18" height="18"><use href="#i-history"/></svg></span><span class="nav-label" data-i18n="nav_history">History</span></div>
@@ -6844,6 +6846,7 @@
     <!-- PREDICTION + XSTOCKS (content hydrated by boot script) -->
     <section class="page" id="page-predict"></section>
     <section class="page" id="page-xstocks"></section>
+    <section class="page" id="page-earn"><div class="earn-wrap"><h1>Earn</h1><div role="status" aria-busy="true">…</div></div></section>
 
     <!-- WALLET -->
     <section class="page" id="page-wallet">
@@ -7493,6 +7496,7 @@ if (window.GROM_LANDING) try { document.documentElement.classList.add('grom-land
 /* Product module loader: no requests until a route or a consumer needs one. */
 (function () {
   var modules = {
+    earn: { src: '/grom-earn.js', ready: function () { return window.gromEarn; } },
     predictEvent: { src: '/grom-predict-event.js', ready: function () { return window.gromPredictEvent; } },
     predict: { src: '/grom-predict.js', ready: function () { return window.gromPredict; } },
     trade: { src: '/grom-hyperliquid.js', ready: function () { return window.gromHL; } },
@@ -7530,6 +7534,13 @@ if (window.GROM_LANDING) try { document.documentElement.classList.add('grom-land
   };
   window.gromLoadPageModules = function (page) {
     var names = [];
+    if (page === 'earn') {
+      names.push('earn');
+      if (!document.getElementById('grom-earn-style')) {
+        var sheet = document.createElement('link');
+        sheet.id = 'grom-earn-style'; sheet.rel = 'stylesheet'; sheet.href = '/grom-earn.css'; document.head.appendChild(sheet);
+      }
+    }
     if (page === 'predict') names.push('predict');
     // Trade data also powers market lists, portfolio totals and history.
     if (['dashboard', 'futures', 'markets', 'wallet', 'history'].indexOf(page) !== -1) names.push('trade');
@@ -7959,7 +7970,7 @@ function updateRouteSeo(page) {
   gromSeoSet('twitter:title', title);
   gromSeoSet('twitter:description', desc);
   gromSeoSet('keywords', kw);
-  var publicPaths = { landing: '/', dashboard: '/swap', futures: '/futures', predict: '/predict', xstocks: '/stocks', markets: '/markets' };
+  var publicPaths = { landing: '/', dashboard: '/swap', earn: '/earn', futures: '/futures', predict: '/predict', xstocks: '/stocks', markets: '/markets' };
   var localePrefix = /^\/(es|pt-BR|tr|ru|vi|id)(?:\/|$)/.exec(location.pathname || '');
   var canonicalUrl = 'https://grom.exchange' + (localePrefix ? '/' + localePrefix[1] : '') + (publicPaths[key] || '/');
   if (canonical) canonical.setAttribute('href', canonicalUrl);
@@ -8388,6 +8399,7 @@ window.gromSyncPrettyPath = function gromSyncPrettyPath(page) {
     var PAGE_SEG = {
       landing: '',
       dashboard: 'swap',
+      earn: 'earn',
       futures: 'futures',
       predict: 'predict',
       xstocks: 'stocks',
@@ -8685,7 +8697,7 @@ document.addEventListener('click', function (e) {
 var _logoHome = document.getElementById('logoHome');
 if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefault(); show('landing'); });
 (function () {
-  var PATH = { '': 'landing', swap: 'dashboard', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
+  var PATH = { '': 'landing', swap: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
   var LOCALES = { es: 1, tr: 1, ru: 1, vi: 1, id: 1 };
   var parts = (location.pathname || '/').split('/').filter(Boolean);
   if (parts[0] === 'pt-BR') parts.shift();

@@ -17068,7 +17068,7 @@ try {
   window.gwNormalizeEvmTxForWallet = gwNormalizeEvmTxForWallet;
 } catch (_) {}
 
-function gwGuardProviderTxParams(txParams, source) {
+function gwGuardProviderTxParams(txParams, source, expectedOverride) {
   let v = 0n;
   try {
     v = gwParseTxValueWei(txParams?.value);
@@ -17092,7 +17092,8 @@ function gwGuardProviderTxParams(txParams, source) {
   if (window.__gwAllowLargeNativeTx === true) return;
   let expected = null;
   try {
-    if (window.__gwExpectedNativeWei != null) expected = BigInt(String(window.__gwExpectedNativeWei));
+    const expectedWei = expectedOverride ?? window.__gwExpectedNativeWei;
+    if (expectedWei != null) expected = BigInt(String(expectedWei));
   } catch (_) { expected = null; }
   if (expected != null && expected > 0n && expected <= GW_NATIVE_TX_HARD_CAP_WEI) {
     const lo = (expected * 95n) / 100n;
@@ -17125,7 +17126,7 @@ async function gwProviderSendTx(provider, txParams, timeoutMs = 180000, chainIdH
   if (typeof gwNormalizeEvmTxForWallet === 'function') {
     txParams = gwNormalizeEvmTxForWallet(txParams);
   }
-  gwGuardProviderTxParams(txParams, 'gwProviderSendTx');
+  gwGuardProviderTxParams(txParams, 'gwProviderSendTx', wakeOpts.expectedWei);
   const from = String(txParams?.from || '').toLowerCase();
   const to = String(txParams?.to || '').toLowerCase();
   const expect = {
@@ -17143,6 +17144,7 @@ async function gwProviderSendTx(provider, txParams, timeoutMs = 180000, chainIdH
     nonceBefore = parseInt(hex, 16);
   } catch (_) {}
 
+  if (wakeOpts.verify) await wakeOpts.verify();
   const wcP = gwProviderRequestWithWake(provider, { method: 'eth_sendTransaction', params: [txParams] }, wakeOpts)
     .then((h) => {
       if (typeof h === 'string' && /^0x[a-fA-F0-9]{64}$/.test(h)) return h;
@@ -18553,7 +18555,7 @@ async function gwWaitSwapApproval(provider, hash, chainId) {
 /* Send: ERC-20 approve(spender, MaxUint256). Waits for receipt.
  * Skip entirely when allowance already covers `needed` (fewer Trust prompts).
  * USDT mainnet reset-to-0 only when existing allowance is positive but too low. */
-async function gwErc20ApproveMax(provider, token, spender, from, chainId, needed) {
+async function gwErc20ApproveMax(provider, token, spender, from, chainId, needed, exact = false, verify) {
   const tokenLc = String(token || '').toLowerCase();
   const need = (needed != null && BigInt(needed) > 0n) ? BigInt(needed) : null;
   let allow = 0n;
@@ -18565,12 +18567,12 @@ async function gwErc20ApproveMax(provider, token, spender, from, chainId, needed
   const USDT_RESET = new Set(['0xdac17f958d2ee523a2206206994597c13d831ec7']);
   if (USDT_RESET.has(tokenLc) && allow > 0n) {
     const data0 = '0x095ea7b3' + gwAddr(spender) + '0'.repeat(64);
-    const hash0 = await gwProviderSendTx(provider, { from, to: token, data: data0, value: '0x0' }, 180000, chainId, { action: 'approve', step: '1/2' });
+    const hash0 = await gwProviderSendTx(provider, { from, to: token, data: data0, value: '0x0' }, 180000, chainId, { action: 'approve', step: '1/2', verify });
     await gwWaitSwapApproval(provider, hash0, chainId);
   }
-  const MAX = 'f'.repeat(64);
-  const data = '0x095ea7b3' + gwAddr(spender) + MAX;
-  const hash = await gwProviderSendTx(provider, { from, to: token, data, value: '0x0' }, 180000, chainId, { action: 'approve', step: USDT_RESET.has(tokenLc) && allow > 0n ? '2/2' : '' });
+  const approvalAmount = exact ? BigInt(needed).toString(16).padStart(64, '0') : 'f'.repeat(64);
+  const data = '0x095ea7b3' + gwAddr(spender) + approvalAmount;
+  const hash = await gwProviderSendTx(provider, { from, to: token, data, value: '0x0' }, 180000, chainId, { action: 'approve', step: USDT_RESET.has(tokenLc) && allow > 0n ? '2/2' : '', verify });
   await gwWaitSwapApproval(provider, hash, chainId);
   return hash;
 }
@@ -29792,3 +29794,27 @@ if (document.readyState === 'loading') {
 
 
 try { document.addEventListener("DOMContentLoaded", function () { gwBindSafeImgFallback(document); }); } catch (_e) {}
+
+// Earn uses the selected account's holdings and the existing wallet transport.
+window.gromEarnWallet = {
+  account: gwOcConnectedAddress,
+  provider: gwActiveEvmProvider,
+  switchChain: gwEnsureChain,
+  allowance: gwErc20Allowance,
+  approve: (provider, token, spender, owner, chain, units, verify) =>
+    gwErc20ApproveMax(provider, token, spender, owner, chain, units, true, verify),
+  checkValue: gwAssertNativeTxValue,
+  send: gwProviderSendTx,
+  explorer: gwDsExplorerUrl,
+  async assets() {
+    const rows = await gwTkLoadHoldings(false);
+    return rows.flatMap(row => {
+      const cfg = GW_OC_SWAP[row.chainId];
+      if (!cfg || !(row.amt > 0)) return [];
+      const native = row.sym === cfg.native;
+      const address = native ? '0x' + '0'.repeat(40) : row.address || cfg.tokens?.[row.sym];
+      if (!/^0x[\da-f]{40}$/i.test(address || '')) return [];
+      return [{ address, chainId: row.chainId, network: row.chain, symbol: row.sym, balance: row.amt }];
+    });
+  },
+};

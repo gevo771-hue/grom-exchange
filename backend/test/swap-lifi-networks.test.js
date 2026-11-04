@@ -66,3 +66,23 @@ test('unknown wallet network is added, switched and verified without sending a t
     assert.deepEqual(calls, ['eth_chainId','wallet_switchEthereumChain','wallet_addEthereumChain','wallet_switchEthereumChain','eth_chainId']);
   }
 });
+
+test('a token selected before catalog hydration does not suppress the network request or renew a stale catalog', async () => {
+  const {c} = setup();
+  Object.assign(c.window, {__gwLifiCatalog:{}, __gwLifiBySym:{}, __gwLifiByAddr:{}});
+  Object.assign(c, {GW_DS_ASSETS:[], gwSafeSym: String, gwSafeName: String, gwSafeLogo: () => '',
+    gwTokenPopRank: () => 100, gwTkSortByVolume: () => 0, gwTkVolScore: () => 1, gwLifiEndpoint: () => 'https://unused.test'});
+  for (const name of ['gwLifiIndexChain','gwLifiSeedToken','gwLifiNormalizeToken','gwLifiEnsureChainTokens']) {
+    const start = wallet.lastIndexOf('\n', wallet.indexOf('function ' + name + '(')) + 1;
+    vm.runInContext(wallet.slice(start, wallet.indexOf('\n}', start) + 2), c);
+  }
+  const extra = {chainId:196, symbol:'USD₮0', name:'USD₮0', address:account, decimals:6, verificationStatus:'verified'};
+  c.fetch = async () => ({ok:true, json: async () => ({tokens:{196:[extra]}})});
+  c.gwLifiSeedToken(196,{sym:'USDC', address:c.GW_EXTRA_EVM_BY_ID[196].tokens.find(t => t.symbol === 'USDC').address, decimals:6});
+  assert.equal(c.window.__gwLifiCatalog[196].at, 0);
+  const list = await c.gwLifiEnsureChainTokens(196);
+  assert(list.some(t => t.address === account && t.sym === extra.symbol));
+  const old = c.window.__gwLifiCatalog[196].at = Date.now() - 90_000_000;
+  c.gwLifiSeedToken(196,{sym:'USD₮0', address:account, decimals:6});
+  assert.equal(c.window.__gwLifiCatalog[196].at, old);
+});

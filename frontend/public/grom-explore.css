@@ -166,7 +166,7 @@ body .grom-ai-launcher.grom-ai-launcher:hover{border-color:#a7eeff;box-shadow:in
 body .grom-ai-launcher.grom-ai-launcher:focus-visible{outline:2px solid #a7eeff;outline-offset:4px}
 body .grom-ai-launcher.grom-ai-launcher:active{background-color:#2a5069}
 body:not(:has(#gw-ai-fab)) .grom-ai-launcher{display:none}
-body:has(#page-futures.active,#page-markets.active,#page-predict.active,#page-xstocks.active) #gw-ai-fab{visibility:hidden;pointer-events:none}
+body:has(#page-futures.active,#page-markets.active,#page-predict.active,#page-xstocks.active,#page-earn.active) #gw-ai-fab{visibility:hidden;pointer-events:none}
 #page-markets .markets-hero,#page-predict .gwx-hero,#page-xstocks .gwx-hero{position:relative;padding-right:62px}
 .markets-hero>.grom-ai-launcher,.gwx-hero>.grom-ai-launcher{position:absolute!important;right:0;top:0}
 @media(max-width:760px){

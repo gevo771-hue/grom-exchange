@@ -6289,6 +6289,7 @@
 
     <symbol id="i-dashboard" viewBox="0 0 24 24"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
     <symbol id="i-spot" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 7v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-earn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14v-3c0-4 3-6 7-6 0 4-3 7-7 7m0-2c-3 0-5-2-5-5 3 0 5 2 5 5"/><ellipse cx="12" cy="16" rx="8" ry="2.7"/><path d="M4 16v3c0 1.5 3.6 2.7 8 2.7s8-1.2 8-2.7v-3"/></g></symbol>
     <symbol id="i-markets" viewBox="0 0 24 24"><path d="M4 20V10m5 10V4m5 16v-8m5 8V8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
     <symbol id="i-predict" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.75"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><path d="M12 4.5v2.2M12 17.3v2.2M4.5 12h2.2M17.3 12h2.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
     <symbol id="i-xstocks" viewBox="0 0 24 24"><path d="M4 19h16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M7 7v10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M5.5 11h3v4h-3z" fill="currentColor" opacity="0.9"/><path d="M12 10v7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M10.5 13h3v5h-3z" fill="currentColor" opacity="0.9"/><path d="M17 6v11" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M15.5 9h3v3h-3z" fill="currentColor" opacity="0.9"/></symbol>
@@ -6396,7 +6397,7 @@
     <div class="nav-item" data-page="dashboard"><span class="ico"><svg width="18" height="18"><use href="#i-dashboard"/></svg></span><span class="nav-label" data-i18n="nav_dashboard">Dashboard</span></div>
     <div class="nav-item" data-page="futures"><span class="ico"><svg width="18" height="18"><use href="#i-futures"/></svg></span><span class="nav-label" data-i18n="nav_futures">Trade</span><span class="badge new" data-i18n="badge_new">NEW</span></div>
     <div class="nav-item" data-page="markets"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="nav-label" data-i18n="nav_markets">Markets</span></div>
-    <div class="nav-item" data-page="earn"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="nav-label">Earn</span></div>
+    <div class="nav-item" data-page="earn"><span class="ico"><svg width="18" height="18"><use href="#i-earn"/></svg></span><span class="nav-label">Earn</span></div>
     <div class="nav-item" data-page="wallet"><span class="ico"><svg width="18" height="18"><use href="#i-wallet"/></svg></span><span class="nav-label" data-i18n="nav_wallet">Wallet</span></div>
     <div class="nav-item" data-page="referral"><span class="ico"><svg width="18" height="18"><use href="#i-referral"/></svg></span><span class="nav-label" data-i18n="nav_referral">Referral</span><span class="badge new">REF</span></div>
     <div class="nav-item" data-page="history"><span class="ico"><svg width="18" height="18"><use href="#i-history"/></svg></span><span class="nav-label" data-i18n="nav_history">History</span></div>
@@ -6863,7 +6864,19 @@
     <!-- PREDICTION + XSTOCKS (content hydrated by boot script) -->
     <section class="page" id="page-predict"></section>
     <section class="page" id="page-xstocks"></section>
-    <section class="page" id="page-earn"><div class="earn-wrap"><h1>Earn</h1><div role="status" aria-busy="true">…</div></div></section>
+    <section class="page" id="page-earn">
+      <div class="earn-wrap">
+        <header class="earn-head">
+          <div class="gwx-hero earn-title-row">
+            <h1><span class="earn-mark" aria-hidden="true"><svg width="21" height="21"><use href="#i-earn"/></svg></span><span class="earn-title">Smarter earning starts here</span></h1>
+            <button type="button" class="grom-ai-launcher" data-grom-ai aria-label="GROM AI" title="GROM AI" aria-haspopup="dialog"><svg viewBox="0 0 36 36" aria-hidden="true"><use href="#i-grom-ai"/></svg></button>
+          </div>
+          <p class="earn-intro">Explore over 300 DeFi vaults by asset, network and yield.</p>
+        </header>
+        <nav class="earn-nav" aria-label="Earn"><button type="button" data-action="catalog">Vaults</button><button type="button" data-action="positions">My positions</button></nav>
+        <div class="earn-body"><p role="status" aria-busy="true">…</p></div>
+      </div>
+    </section>
 
     <!-- WALLET -->
     <section class="page" id="page-wallet">

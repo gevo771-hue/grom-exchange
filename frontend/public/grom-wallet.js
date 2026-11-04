@@ -135,7 +135,7 @@ function gwSafeSym(sym) {
   var d = gwDom();
   if (d && d.safeTokenSymbol) return d.safeTokenSymbol(sym);
   var s = String(sym || '').trim().slice(0, 32);
-  return /^[\p{L}\p{N}.$_+-]{1,32}$/u.test(s) ? s : '???';
+  return /^[\p{L}\p{N}.$₮_+-]{1,32}$/u.test(s) ? s : '???';
 }
 function gwSafeName(name, fb) {
   var d = gwDom();
@@ -8154,7 +8154,7 @@ function gwLifiEndpoint() {
     : 'https://li.quest/v1';
 }
 
-function gwLifiIndexChain(chainId, list) {
+function gwLifiIndexChain(chainId, list, fetchedAt) {
   const cid = Number(chainId);
   const bySym = new Map();
   const byAddr = new Map();
@@ -8170,7 +8170,7 @@ function gwLifiIndexChain(chainId, list) {
   for (const [, arr] of bySym) {
     arr.sort((a, b) => Number(!!b.verified) - Number(!!a.verified));
   }
-  window.__gwLifiCatalog[cid] = { at: Date.now(), list, ver: 7 };
+  window.__gwLifiCatalog[cid] = { at: fetchedAt, list, ver: 7 };
   window.__gwLifiBySym[cid] = bySym;
   window.__gwLifiByAddr[cid] = byAddr;
 }
@@ -8203,7 +8203,7 @@ function gwLifiSeedToken(chainId, tok) {
     const ix = list.findIndex((t) => String(t.address || '').toLowerCase() === addrLc);
     if (ix >= 0) list[ix] = Object.assign({}, list[ix], entry);
     else list.push(entry);
-    gwLifiIndexChain(cid, list);
+    gwLifiIndexChain(cid, list, cat?.at || 0);
     return true;
   } catch (_) {
     return false;
@@ -8312,7 +8312,8 @@ async function gwLifiEnsureChainTokens(chainId, { force } = {}) {
       });
       if (!r.ok) throw new Error('lifi tokens ' + r.status);
       const j = await r.json();
-      const raw = (j.tokens && (j.tokens[cid] || j.tokens[String(cid)])) || [];
+      const raw = j.tokens?.[cid];
+      if (!Array.isArray(raw)) throw new Error('Missing token catalog for network ' + cid);
       const list = [];
       const seen = new Set();
       const isNonevm = cid === 728126428 || cid === 1151111081099710;
@@ -8472,7 +8473,7 @@ async function gwLifiEnsureChainTokens(chainId, { force } = {}) {
           capped = list;
         }
       }
-      gwLifiIndexChain(cid, capped);
+      gwLifiIndexChain(cid, capped, raw.length ? Date.now() : 0);
       try {
         const have = new Set(GW_DS_ASSETS.map((a) => a.sym));
         let added = 0;
@@ -9075,6 +9076,15 @@ function gwTkChainColor(cid) {
   return m[Number(cid)] || '#98a8c0';
 }
 
+function gwChainLogo(chainId) {
+  const official = GW_EXTRA_EVM_BY_ID[chainId]?.logoURI;
+  if (official) return official;
+  const slug = { 1: 'ethereum', 56: 'bsc', 42161: 'arbitrum', 137: 'polygon', 8453: 'base',
+    10: 'optimism', 43114: 'avalanche', 59144: 'linea', 1151111081099710: 'solana',
+    20000000000001: 'bitcoin', 728126428: 'tron' }[chainId];
+  return slug ? 'https://raw.githubusercontent.com/lifinance/types/main/src/assets/icons/chains/' + slug + '.svg' : '';
+}
+
 /** Mini chain mark for token badges — logo image, never a single letter (looked like «T»). */
 function gwTkChainBadgeHtml(cid, title) {
   const n = Number(cid) || 0;
@@ -9082,12 +9092,7 @@ function gwTkChainBadgeHtml(cid, title) {
   const short = gwTkChainShort(n);
   const color = gwTkChainColor(n);
   const tip = title || short;
-  const logo = {
-    1: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/eth.svg',
-    56: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/bnb.svg',
-    137: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/matic.svg',
-    43114: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/avax.svg',
-  }[n] || GW_EXTRA_EVM_BY_ID[n]?.logoURI || '';
+  const logo = gwChainLogo(n);
   if (logo) {
     return `<span class="gw-tk-chain-badge gw-tk-chain-badge--logo" title="${tip}"><img src="${logo}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('gw-tk-chain-badge--dot');this.remove()" /></span>`;
   }
@@ -9105,12 +9110,7 @@ function gwTkApplyChainBadge(el, cid, title) {
   const short = gwTkChainShort(n);
   const color = gwTkChainColor(n);
   const tip = title || ((typeof gwChainLabel === 'function') ? gwChainLabel(n) : short);
-  const logo = {
-    1: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/eth.svg',
-    56: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/bnb.svg',
-    137: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/matic.svg',
-    43114: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/avax.svg',
-  }[n] || GW_EXTRA_EVM_BY_ID[n]?.logoURI || '';
+  const logo = gwChainLogo(n);
   el.textContent = '';
   el.removeAttribute('style');
   el.className = 'gw-tk-chain-badge';
@@ -10344,6 +10344,10 @@ function gwInjectDashSwapCss() {
     .gw-tk-chains { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; }
     .gw-tk-chain { display: inline-flex; align-items: center; gap: 5px; }
     .gw-tk-chains[hidden] { display: none !important; }
+    @media (max-width: 480px) {
+      #gwTkChains { flex-wrap: nowrap; flex: none; overflow-x: auto; overscroll-behavior-x: contain; }
+      #gwTkChains button { flex: 0 0 auto; }
+    }
     .gw-tk-chain {
       padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.10);
       background: rgba(255,255,255,0.04); color: #98a8c0; font-size: 11px; font-weight: 800;
@@ -13996,6 +14000,7 @@ function gwDsChainChipsHtml(activeChainId) {
   return `
     <div class="gw-ds-chains" role="tablist">
       ${GW_DS_CHAINS.map((c) => {
+        const logo = gwChainLogo(c.chainId || { sol: GW_LIFI_SOL_CHAIN, btc: GW_LIFI_BTC_CHAIN_ID, trx: GW_TRON_CHAIN_ID }[c.nonEvm]);
         const solSoon = c.key === 'solana' && !jupReady;
         const soonFlag = !!(c.soon || solSoon);
         const on = c.chainId === activeChainId ? ' on' : '';
@@ -14003,7 +14008,7 @@ function gwDsChainChipsHtml(activeChainId) {
         const dataAttr = c.chainId ? `data-cid="${c.chainId}"` : `data-nonevm="${c.nonEvm}"`;
         const title = solSoon ? `${c.name} · Instant Swap soon` : c.name;
         return `<button type="button" class="gw-ds-chain${on}${soon}" ${dataAttr} title="${title}" style="--chColor:${c.color}">
-          ${c.logo ? `<img class="gw-ds-chain-logo" src="${c.logo}" alt="" loading="lazy" />` : '<span class="dot"></span>'}<span class="lbl">${c.short}</span>${soonFlag ? '<span class="soon-tag">soon</span>' : ''}
+          ${logo ? `<img class="gw-ds-chain-logo" src="${logo}" alt="" loading="lazy" />` : '<span class="dot"></span>'}<span class="lbl">${c.short}</span>${soonFlag ? '<span class="soon-tag">soon</span>' : ''}
         </button>`;
       }).join('')}
     </div>
@@ -14926,8 +14931,14 @@ function gwTkOpen(which /* 'from' | 'to' */) {
           : (Number(ctx.chainId) || 1);
         strip.hidden = false;
         strip.innerHTML = chips.map((c) =>
-          `<button type="button" class="gw-tk-chain${c.cid === active ? ' on' : ''}" data-cid="${c.cid}">${c.logo ? `<img src="${c.logo}" alt="" width="16" height="16" loading="lazy" />` : ''}${c.lbl}</button>`
+          `<button type="button" class="gw-tk-chain${c.cid === active ? ' on' : ''}" data-cid="${c.cid}"><img class="gw-ds-chain-logo" src="${gwChainLogo(c.cid)}" alt="" width="16" height="16" loading="lazy" />${c.lbl}</button>`
         ).join('');
+        const revealNetwork = (chip) => {
+          if (!chip || strip.scrollWidth <= strip.clientWidth) return;
+          strip.scrollLeft += chip.getBoundingClientRect().left - strip.getBoundingClientRect().left
+            - (strip.clientWidth - chip.offsetWidth) / 2;
+        };
+        revealNetwork(strip.querySelector('.on'));
         strip.onclick = (e) => {
           const btn = e.target.closest('button[data-cid]');
           if (!btn) return;
@@ -14940,6 +14951,7 @@ function gwTkOpen(which /* 'from' | 'to' */) {
           } catch (_) {}
           try { window.__gwTkShowLimit = 40; window.__gwTkXchainLimit = 16; window.__gwTkCrossLimit = 12; } catch (_) {}
           strip.querySelectorAll('button').forEach((b) => b.classList.toggle('on', Number(b.dataset.cid) === cid));
+          revealNetwork(btn);
           if (typeof gwLifiEnsureChainTokens === 'function') {
             gwLifiEnsureChainTokens(cid);
           }
@@ -15463,13 +15475,13 @@ async function gwTkRender(q) {
     const sameBlock = () => {
       let h = '';
       if (popular.length || shownRest.length) {
-        h += `<div class="gw-tk-group">${gwUxText('В выбранной сети','On selected network')}${label} · ${shownCat.toLocaleString()} · ${tx('tk_sort_vol', 'by volume')}</div>`;
+        h += `<div class="gw-tk-group">${gwUxText('В выбранной сети','On selected network')}${label} · ${shownCat.toLocaleString()} · ${gwUxText('Популярные', 'Popular')}</div>`;
         if (popular.length) {
           h += popular.map((a) => rowHtml({ ...a, showChainBadge: true, chain: chainMeta.label || a.chain })).join('');
         }
         if (shownRest.length) {
           if (popular.length) {
-            h += `<div class="gw-tk-group">${tx('tk_group_all_vol', 'All tokens · high → low volume')}</div>`;
+            h += `<div class="gw-tk-group">${gwUxText('Другие токены сети', 'More network tokens')}</div>`;
           }
           h += shownRest.map((a) => rowHtml({ ...a, showChainBadge: true, chain: chainMeta.label || a.chain })).join('');
         }
@@ -15489,7 +15501,7 @@ async function gwTkRender(q) {
       + featured.map((a) => a.sym + ':' + a.chainId).join(',') + '|'
       + popular.map((a) => a.sym).join(',') + '|'
       + shownRest.slice(0, 24).map((a) => a.sym + (a.address || '').slice(0, 10)).join(',')
-      + '|L' + limit + 'X' + xLimit + 'C' + cLimit;
+      + '|' + shownCat + '|' + totalCat + '|L' + limit + 'X' + xLimit + 'C' + cLimit;
     if (list.dataset.tkFp === fp && list.childElementCount > 0) {
       try {
         const ban = document.getElementById('gwTkXchainBanner');
@@ -15544,18 +15556,28 @@ async function gwTkRender(q) {
     try {
       const inp = document.getElementById('gwTkSearch');
       if (inp) {
-        const n = shownCat > 0 ? shownCat : totalCat;
+        const n = totalCat || shownCat;
         inp.placeholder = xJump
           ? tx('tk_search_xchain', 'Search cross-chain destinations…')
           : (n > 0
-            ? `Search ${n.toLocaleString()} tokens on ${chainMeta.label || 'this network'}…`
+            ? gwUxText('Поиск среди ' + n.toLocaleString('ru-RU') + ' токенов', 'Search ' + n.toLocaleString('en-US') + ' tokens') + ' · ' + chainMeta.label + '…'
             : 'Search tokens…');
       }
     } catch (_) {}
   };
 
-  // Show curated list immediately, then hydrate full LiFi catalog
-  renderTo();
+  // A local pick may seed the address index before the provider catalog is ready.
+  const snapshot = window.__gwLifiCatalog?.[catalogChain];
+  const showCached = !!snapshot?.at && snapshot.list?.length > 0;
+  if (showCached) renderTo();
+  else {
+    delete list.dataset.tkFp;
+    list.scrollTop = 0;
+    list.innerHTML = '<div class="gw-tk-empty" role="status">' +
+      gwUxText('Загружаем токены сети…', 'Loading network tokens…') + '</div>';
+    const input = document.getElementById('gwTkSearch');
+    if (input) input.placeholder = gwUxText('Поиск токенов', 'Search tokens') + ' · ' + chainMeta.label;
+  }
   if (!window.__gwTkCatalogRefreshDeb) {
     window.__gwTkCatalogRefreshDeb = gwDebounce(() => {
       if (!document.getElementById('gw-tk-overlay')?.classList.contains('open')) return;
@@ -15565,41 +15587,35 @@ async function gwTkRender(q) {
   }
   const scheduleRefresh = () => { try { window.__gwTkCatalogRefreshDeb(); } catch (_) {} };
   if (catalogChain && typeof gwLifiEnsureChainTokens === 'function') {
-    const had = (window.__gwLifiCatalog && window.__gwLifiCatalog[catalogChain] && window.__gwLifiCatalog[catalogChain].list) || [];
-    if (!had.length) {
-      list.insertAdjacentHTML('afterbegin', `<div class="gw-tk-empty" id="gwTkCatLoad">${tx('tk_loading_catalog', 'Loading full token catalog…')}</div>`);
-    }
-    gwLifiEnsureChainTokens(catalogChain).then((listTok) => {
+    const refreshCatalog = async (force = false) => {
+      await gwLifiEnsureChainTokens(catalogChain, { force });
       if (!stillLive()) return;
-      try { document.getElementById('gwTkCatLoad')?.remove(); } catch (_) {}
-      if (!listTok || !listTok.length) {
-        list.insertAdjacentHTML('afterbegin',
-          `<div class="gw-tk-empty" id="gwTkCatLoad">${tx('tk_catalog_fail', 'Catalog slow — showing popular tokens. Tap Retry or switch network.')}`
-          + ` <button type="button" class="gw-tk-retry" id="gwTkCatRetry">Retry</button></div>`);
-        try {
-          document.getElementById('gwTkCatRetry')?.addEventListener('click', () => {
-            try { document.getElementById('gwTkCatLoad')?.remove(); } catch (_) {}
-            gwLifiEnsureChainTokens(catalogChain, { force: true }).then((l2) => {
-              if (l2 && l2.length && stillLive()) scheduleRefresh();
-            });
-          });
-        } catch (_) {}
-        return;
-      }
-      scheduleRefresh();
-    }).catch(() => {
-      try { document.getElementById('gwTkCatLoad')?.remove(); } catch (_) {}
-    });
+      const current = window.__gwLifiCatalog?.[catalogChain];
+      if (!showCached || current !== snapshot) renderTo();
+      if (current?.at && current.list.length) return;
+      const notice = document.createElement('div');
+      notice.className = 'gw-tk-empty';
+      notice.setAttribute('role', 'status');
+      notice.textContent = gwUxText('Полный список токенов временно недоступен. ', 'Full token list temporarily unavailable. ');
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'gw-tk-retry';
+      retry.textContent = gwUxText('Повторить', 'Retry');
+      retry.onclick = () => { notice.remove(); refreshCatalog(true); };
+      notice.appendChild(retry);
+      list.prepend(notice);
+    };
+    refreshCatalog();
   }
   /* Prefetch other hubs quietly — do NOT re-render picker on every hub
    * (that reloaded every logo and caused constant flicker). */
   try {
-    if (which === 'to' && typeof gwLifiEnsureChainTokens === 'function'
+    if (which === 'to' && window.__gwTkXchainJump && typeof gwLifiEnsureChainTokens === 'function'
         && typeof GW_TK_XCHAIN_CHAINS !== 'undefined'
         && !window.GROM_STABLE_UI && !window.GROM_MOBILE) {
       let i = 0;
       for (const cid of GW_TK_XCHAIN_CHAINS) {
-        if (Number(cid) === Number(catalogChain)) continue;
+        if (Number(cid) === Number(catalogChain) || window.__gwLifiCatalog?.[cid]?.at) continue;
         const delay = (++i) * 220;
         setTimeout(() => {
           if (!stillLive()) return;
@@ -16761,33 +16777,27 @@ function gwUxCss() {
     .gw-order-mode-panel{margin-top:2px;padding:14px 0 2px;border-top:1px solid rgba(136,192,208,.14)}.gw-order-mode-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.gw-order-mode-head p{margin:0}.gw-order-create{width:100%;margin-top:10px;background:#88c0d0;color:#162c36;border:0;border-radius:11px;padding:12px;font-weight:800;cursor:pointer}
     @media (max-width: 600px) {
       #gwUxPickerTabs {
-        display: grid;
-        grid-auto-flow: column;
-        grid-auto-columns: minmax(min-content, 1fr);
-        flex: none;
+        display: flex;
+        overflow-x: auto!important;
         align-items: stretch;
-        margin: 8px 14px 0;
-        padding: 3px;
+        flex: none;
+        padding: 4px;
         gap: 2px;
-        min-height: 0;
       }
       #gwUxPickerTabs button {
         min-height: 44px;
-        padding: 4px!important;
-        white-space: normal;
-        text-align: center;
+        padding: 6px 2px!important;
+        flex: 1 0 auto;
+        white-space: nowrap;
       }
-      #gwUxPickerTabs button.on {
-        background: #304a63!important;
-        border-color: #517892!important;
-        box-shadow: none;
-      }
-      #gwUxPickerTabs button.on::after { content: none; }
     }
     @media (max-width: 380px) {
-      #gwUxPickerTabs:has([data-filter="popular"]) {
-        grid-auto-flow: row;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+      #gwUxPickerTabs { margin-inline: 6px; padding: 3px; }
+      #gwUxPickerTabs button {
+        flex: 1 1 auto;
+        min-width: min-content;
+        font-size: 11px!important;
+        white-space: normal;
       }
     }
     @media(max-width:600px){#gwDsCard{padding:16px!important}#gwDsCard .gw-ds-row-mid{flex-wrap:wrap!important}#gwDsCard .gw-ds-tkbtn .net{max-width:100px}#gwDsCard .gw-ds-route{font-size:12px}#gwDsCard .gw-ds-cta{min-height:48px}.gw-ux-order-form{display:grid;grid-template-columns:1fr}.gw-ux-order-form label{min-width:0}.gw-swap-modes button{min-height:40px;padding:7px 5px;font-size:12px}}

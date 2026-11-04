@@ -83,7 +83,6 @@
     return window.gromEarnWallet;
   }
   function header() {
-    page.querySelector('.earn-title').textContent = t('Smarter earning starts here', 'Разумный заработок начинается здесь');
     page.querySelector('.earn-intro').textContent = t(
       'Explore over 300 DeFi vaults by asset, network and yield.',
       'Более 300 хранилищ DeFi. Выбирайте по активу, сети и доходности.'
@@ -591,7 +590,7 @@
       else if (a === 'retry') await render();
       else if (a === 'deposit' || a === 'withdraw') await orderForm(a);
       else if (a === 'confirm') await confirm();
-      else if (a === 'connect') document.getElementById('walletChip')?.click();
+      else if (a === 'connect') window.openConnectModal();
     } catch (err) {
       fail(err);
     }

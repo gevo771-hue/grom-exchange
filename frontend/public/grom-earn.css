@@ -25,7 +25,7 @@
   gap: 12px;
   min-width: 0;
   font-family: inherit;
-  font-size: clamp(24px, 2.7vw, 32px);
+  font-size: clamp(20px, 2.1vw, 28px);
   font-weight: 750;
   line-height: 1.2;
   letter-spacing: -.035em;
@@ -57,7 +57,7 @@
   flex-wrap: wrap;
   margin: 16px 0;
 }
-#page-earn button:not(.grom-ai-launcher),
+#page-earn button:where(:not(.grom-ai-launcher)),
 #page-earn input,
 #page-earn select {
   font: inherit;
@@ -71,7 +71,7 @@
 #page-earn button {
   cursor: pointer;
 }
-#page-earn button:not(.grom-ai-launcher):hover {
+#page-earn button:where(:not(.grom-ai-launcher)):hover {
   border-color: #82c4d8;
   background: #30495c;
 }
@@ -86,7 +86,29 @@
   color: #142735;
   font-weight: 700;
 }
-#page-earn .earn-filters,
+#page-earn .earn-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+#page-earn .earn-filters :is(select, input) {
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+#page-earn .earn-actions { align-items: center; }
+#page-earn :is(.earn-body button, .earn-actions a) {
+  font-size: 13px;
+  font-weight: 600;
+}
+#page-earn .earn-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+#page-earn button.primary:hover { background: #ace2ee; }
 #page-earn .earn-order-form,
 #page-earn .earn-custom {
   display: flex;
@@ -173,7 +195,6 @@
 }
 @media (max-width: 600px) {
   #page-earn .earn-filters {
-    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   #page-earn .earn-filters button {
@@ -194,28 +215,29 @@
   margin: 8px 0 0;
   color: #bacadc;
   line-height: 1.55;
-  font-size: 14px;
+  font-size: 13px;
 }
 #page-earn .earn-nav {
   border-bottom: 1px solid #c8d4e825;
   gap: 22px;
-  margin: 4px 0 18px;
+  margin: 0 0 16px;
 }
 #page-earn .earn-nav button {
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
   background: transparent;
-  color: #b9c9da;
-  font-weight: 650;
-  padding: 10px 0;
+  color: #b1bccd;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 0;
 }
 #page-earn .earn-nav button:hover,
 #page-earn .earn-nav button[aria-pressed="true"] {
-  color: #95deef;
+  color: #fff;
   background: transparent;
 }
-#page-earn .earn-nav button[aria-pressed="true"] { border-bottom-color: #73cde4; }
+#page-earn .earn-nav button[aria-pressed="true"] { border-bottom-color: #5bd8ff; }
 #page-earn .earn-row .earn-asset {
   display: flex;
   align-items: center;

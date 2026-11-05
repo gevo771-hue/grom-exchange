@@ -1456,3 +1456,140 @@ html.lv2-on #page-landing .lp-h1.lv2-h1-mobile-in .lv2-h1-line.lv2-accent {
     transform: none !important;
   }
 }
+
+/* Targeted landing polish — retains existing palette, layout and actions. */
+html.lv2-on #page-landing .lp-hero .lp-cta-row,
+html.lv2-on #page-landing .lp-final-cta .lp-cta-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:12px}
+html.lv2-on #page-landing .lp-cta-row .lp-btn-primary,
+html.lv2-on #page-landing .lp-cta-row .lp-btn-secondary{display:inline-flex;align-items:center;justify-content:center;min-height:48px;height:auto;padding:13px 23px;border-radius:10px;font-size:14px;font-weight:600;line-height:1.4;letter-spacing:0;transition:background .18s,border-color .18s,box-shadow .18s}
+html.lv2-on #page-landing .lp-cta-row .lp-btn-primary{background:linear-gradient(110deg,#88c0d0,#81a1c1);border:1px solid #a6d9e34a;color:#172a39;box-shadow:inset 0 1px #ffffff20,0 6px 20px #10172418}
+html.lv2-on #page-landing .lp-cta-row .lp-btn-secondary{background:#20273745;border:1px solid #88c0d040;color:#d8dee9;box-shadow:none}
+html.lv2-on #page-landing .lp-cta-row .lp-btn-primary:hover{background:linear-gradient(110deg,#9bcedb,#91b2d0);box-shadow:0 6px 24px #88c0d018}
+html.lv2-on #page-landing .lp-cta-row .lp-btn-secondary:hover{background:#88c0d00c;border-color:#88c0d080}
+html.lv2-on #page-landing .lp-cta-row button:focus-visible{outline:2px solid #88c0d0;outline-offset:4px}
+html.lv2-on #page-landing .lv2-orbit-diagram{background:linear-gradient(145deg,#2f3543,#202737);border:1px solid #88c0d026;border-radius:20px;padding:28px 28px 24px;box-shadow:inset 0 1px #ffffff03}
+html.lv2-on #page-landing .lv2-orbit-diagram:before{background:radial-gradient(ellipse at center,#88c0d009,transparent 65%)}
+.lv2-orbit-map{position:relative;max-width:850px;height:375px;margin:auto;isolation:isolate}
+.lv2-orbit-track{position:absolute;left:50%;top:50%;width:76%;height:48%;border:1px solid #88c0d022;border-radius:50%;transform:translate(-50%,-50%) rotate(-24deg);pointer-events:none;z-index:-1}
+.lv2-orbit-track-b{transform:translate(-50%,-50%) rotate(24deg)}
+.lv2-orbit-track-c{width:35%;height:82%;transform:translate(-50%,-50%) rotate(65deg);border-color:#88c0d012}
+.lv2-orbit-core{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:152px;height:152px;border:1px solid #88c0d050;border-radius:50%;background:radial-gradient(ellipse at top,#88c0d00c,transparent 70%),#252e3d;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 10px #88c0d004,0 0 0 11px #88c0d012}
+.lv2-orbit-core img{width:100px;height:100px;object-fit:contain}
+.lv2-orbit-core>span{position:absolute;top:calc(100% + 22px);left:50%;transform:translateX(-50%);white-space:nowrap;color:#8d9fb4;font-size:9px;letter-spacing:1.3px;text-transform:uppercase}
+.lv2-orbit-node{position:absolute;display:flex;flex-direction:column;align-items:center;gap:14px;width:140px;transform:translate(-50%,-50%)}
+.lv2-orbit-swap{left:20%;top:24%}.lv2-orbit-perps{left:80%;top:24%}.lv2-orbit-predict{left:20%;top:77%}.lv2-orbit-stocks{left:80%;top:77%}
+.lv2-orbit-icon{width:74px;height:74px;border:1px solid #88c0d039;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#2f3543,#252d3c);box-shadow:inset 0 1px #ffffff05;color:#a8bbc9}
+.lv2-orbit-icon svg{width:27px!important;height:27px!important;margin:0!important;stroke-width:1.35}
+.lv2-orbit-label{font-size:12px;letter-spacing:.04em;color:#c2cbd8;line-height:1.4;text-align:center}
+html.lv2-on #page-landing .lv2-orbit-diagram .lv2-diagram-cap{font-size:12px;line-height:1.8;color:#97a6ba;border-top:1px solid #88c0d015;padding-top:20px;margin:10px 0 0}
+html.lv2-on #page-landing .lv2-orbit-diagram .lv2-diagram-cap strong{color:#cbd6e1;font-weight:500}
+@media(max-width:960px){html.lv2-on #page-landing .lp-hero .lp-cta-row,html.lv2-on #page-landing .lp-final-cta .lp-cta-row{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px!important;width:100%}html.lv2-on #page-landing .lp-cta-row .lp-btn-primary,html.lv2-on #page-landing .lp-cta-row .lp-btn-secondary{width:100%!important;min-width:0!important;margin:0!important;padding:12px!important;min-height:46px;font-size:12px!important;white-space:normal!important;text-align:center}}
+@media(max-width:760px){.lv2-orbit-map{height:325px}.lv2-orbit-track{width:90%;height:45%}.lv2-orbit-core{width:112px;height:112px}.lv2-orbit-core img{width:78px;height:78px}.lv2-orbit-core>span{font-size:7px;top:calc(100% + 18px);letter-spacing:.8px}.lv2-orbit-icon{width:58px;height:58px}.lv2-orbit-icon svg{width:23px!important;height:23px!important}.lv2-orbit-node{width:100px;gap:10px}.lv2-orbit-label{font-size:11px}.lv2-orbit-swap,.lv2-orbit-predict{left:17%}.lv2-orbit-perps,.lv2-orbit-stocks{left:83%}.lv2-orbit-swap,.lv2-orbit-perps{top:19%}.lv2-orbit-predict,.lv2-orbit-stocks{top:82%}html.lv2-on #page-landing .lv2-orbit-diagram{padding:18px 18px 20px;border-radius:16px}html.lv2-on #page-landing .lv2-orbit-diagram .lv2-diagram-cap{font-size:11px;padding-top:16px}}
+@media(max-width:360px){html.lv2-on #page-landing .lp-hero .lp-cta-row,html.lv2-on #page-landing .lp-final-cta .lp-cta-row{grid-template-columns:1fr}.lv2-orbit-map{height:305px}.lv2-orbit-label{font-size:10px}.lv2-orbit-node{width:86px}}
+@media(prefers-reduced-motion:reduce){html.lv2-on #page-landing .lp-cta-row button{transition:none}}
+@media(min-width:481px) and (max-width:960px){html.lv2-on #page-landing .lp-cta-row .lp-btn-primary,html.lv2-on #page-landing .lp-cta-row .lp-btn-secondary{font-size:clamp(11px,1.9vw,13px)!important;padding:12px 8px!important;min-height:48px;letter-spacing:-.1px}}
+@media(max-width:480px){html.lv2-on #page-landing .lp-hero .lp-cta-row,html.lv2-on #page-landing .lp-final-cta .lp-cta-row{grid-template-columns:1fr;gap:8px!important}html.lv2-on #page-landing .lp-cta-row .lp-btn-primary,html.lv2-on #page-landing .lp-cta-row .lp-btn-secondary{min-height:44px;font-size:12px!important}}
+
+/* Compact landing actions and footer resources. */
+html.lv2-on #page-landing .lp-hero .lp-cta-row,
+html.lv2-on #page-landing .lp-final-cta .lp-cta-row {
+  display:flex!important; flex-direction:row!important; flex-wrap:wrap;
+  align-items:center; gap:12px!important; width:auto;
+}
+html.lv2-on #page-landing .lp-cta-row .lp-btn-primary,
+html.lv2-on #page-landing .lp-cta-row .lp-btn-secondary {
+  flex:0 0 auto!important; width:auto!important; min-width:0!important;
+  min-height:36px!important; height:auto!important; padding:7px 16px!important;
+  font-size:14px!important; line-height:20px!important; border-radius:6px;
+  white-space:normal!important; margin:0!important;
+}
+#page-landing .lp-about-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+#page-landing .lp-about-grid .lp-seo-details {margin:0;min-width:0}
+#page-landing .lp-about-grid .lp-seo-details-sum {padding:16px 18px;font-size:14px;line-height:1.5}
+@media(max-width:560px){
+  #page-landing .lp-about-grid {grid-template-columns:1fr;gap:12px}
+  html.lv2-on #page-landing .lp-cta-row .lp-btn-primary,
+  html.lv2-on #page-landing .lp-cta-row .lp-btn-secondary {font-size:12px!important;padding:8px 12px!important}
+}
+
+html.lv2-on #page-landing .lp-sec-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px}
+html.lv2-on #page-landing .lp-sec-item{flex:0 1 calc((100% - 40px)/3);box-sizing:border-box}
+html.lv2-on #page-landing .lv2-diagram-sec .lv2-sec-head h2{font-size:clamp(23px,2.5vw,32px);font-weight:600;line-height:1.25;letter-spacing:-.025em}
+html.lv2-on #page-landing .lv2-diagram-sec .lv2-sec-head p{font-size:14px;line-height:1.7;max-width:660px;margin-left:auto;margin-right:auto}
+#page-landing .lp-about-grid{display:flex;flex-wrap:wrap;gap:12px}
+#page-landing .lp-about-grid .lp-seo-details{flex:0 1 auto;width:fit-content;max-width:100%}
+#page-landing .lp-about-grid .lp-seo-details-sum{gap:18px;padding:12px 16px;font-size:13px}
+html.lv2-on body:has(#page-landing.active) #gromSeoRouteCopy{width:fit-content;max-width:calc(100% - 40px);margin:24px auto 40px}
+html.lv2-on body:has(#page-landing.active) #gromSeoRouteCopy .grom-seo-summary{padding:12px 16px;font-size:13px;gap:18px}
+@media(max-width:900px){html.lv2-on #page-landing .lp-sec-item{flex-basis:calc((100% - 20px)/2)}}
+@media(max-width:600px){html.lv2-on #page-landing .lp-sec-item{flex-basis:100%}}
+@media(max-width:560px){html.lv2-on #page-landing .lp-cta-row .lp-btn-primary,html.lv2-on #page-landing .lp-cta-row .lp-btn-secondary{font-size:14px!important;padding:9px 16px!important;min-height:40px!important}}
+
+/* Shared desktop and mobile landing controls. */
+html.lv2-on #page-landing .lp-cta-row .lp-btn-primary,
+html.lv2-on #page-landing .lp-cta-row .lp-btn-secondary {
+  border-radius:6px!important;
+  font-size:14px!important;
+  line-height:20px!important;
+  padding:7px 16px!important;
+  min-height:36px!important;
+}
+html.lv2-on #page-landing .lp-seo-details,
+html.lv2-on body:has(#page-landing.active) #gromSeoRouteCopy .grom-seo-details {
+  background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;
+}
+html.lv2-on #page-landing .lp-about-grid .lp-seo-details-sum,
+html.lv2-on body:has(#page-landing.active) #gromSeoRouteCopy .grom-seo-summary {
+  background:transparent!important;border:0!important;border-radius:0!important;
+  padding:10px 0!important;font-size:13px!important;font-weight:500;
+}
+html.lv2-on #page-landing .lv2-hw-tabs {
+  background:#1c2b38;border:1px solid #88c0d029;border-radius:16px;padding:4px;
+}
+html.lv2-on #page-landing .lv2-hw-tabs button {
+  border-radius:12px;min-width:0;font-weight:600;
+}
+html.lv2-on #page-landing .lv2-hw-tabs button.is-on {
+  background:linear-gradient(160deg,#394956,#283847);box-shadow:inset 0 0 0 1px #88c0d04d;
+}
+@media(max-width:600px){
+  html.lv2-on #page-landing .lv2-diagram-sec .lv2-sec-head h2 {
+    font-size:20px!important;font-weight:500!important;line-height:1.35!important;
+  }
+  html.lv2-on #page-landing .lv2-diagram-sec .lv2-sec-head p {
+    font-size:12px!important;line-height:1.65!important;max-width:340px;
+  }
+  html.lv2-on #page-landing .lv2-diagram-sec .lv2-sec-head {margin-bottom:22px}
+}
+
+/* Local preview of the dashboard swap layout. */
+.lv2-preview-chains{display:flex;gap:8px;overflow:auto;margin-bottom:16px;scrollbar-width:none}
+.lv2-preview-chains span{flex:none;padding:7px 12px;border:1px solid #ffffff18;border-radius:22px;font-size:12px;font-weight:600;color:#c6d3e1}
+.lv2-preview-chains span:first-child{border-color:#53c9e577;background:#2892b321}
+.lv2-dashboard-preview .lv2-swap-body{flex-direction:row-reverse;gap:12px}
+.lv2-dashboard-preview .lv2-swap-amt{text-align:right;min-width:0;font-size:26px;flex:1;width:50%}
+.lv2-dashboard-preview .lv2-pill{border-radius:13px;background:#ffffff08;border:1px solid #ffffff16;padding:8px 12px}
+.lv2-dashboard-preview .lv2-swap-lbl{margin-bottom:12px}
+.lv2-preview-percent{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+.lv2-preview-percent span{text-align:center;padding:7px;background:#ffffff06;border:1px solid #ffffff12;border-radius:8px;font-size:12px;font-weight:600;color:#a9bbd0}
+.lv2-preview-percent span:last-child{color:#42d2ff;border-color:#42d2ff44;background:#42d2ff0a}
+.lv2-dashboard-preview .lv2-flip{width:42px;height:42px;border-radius:50%;background:#88bbcf;color:#173044}
+.lv2-dashboard-preview .lv2-flip-wrap{position:relative;margin:8px 0}
+
+.lv2-preview-chains>span{display:inline-flex;align-items:center;gap:7px}
+.lv2-preview-chains img{display:block;width:18px;height:18px;object-fit:contain;border-radius:50%}
+html.lv2-on #page-landing .lv2-hw-tabs{position:relative;display:flex;gap:4px;padding:4px;border-radius:16px;background:linear-gradient(135deg,#1c2c38,#1c2a36);border:1px solid #88c0d029}
+html.lv2-on #page-landing .lv2-hw-tab{position:relative;flex:1;padding:10px 8px;border:1px solid transparent;border-radius:12px;font-size:12px;font-weight:600;background:transparent;box-shadow:none}
+html.lv2-on #page-landing .lv2-hw-tab[aria-selected="true"]{background:linear-gradient(160deg,#394956,#283847);border-color:#88c0d04d;box-shadow:inset 0 1px 1px #ffffff14;color:#edf4fb}
+html.lv2-on #page-landing .lv2-hw-tab[aria-selected="true"]::after{content:"";position:absolute;bottom:4px;width:20px;height:2px;background:#88c0d0;border-radius:2px;left:calc(50% - 10px)}
+@media(max-width:400px){html.lv2-on #page-landing .lv2-hw-tab{font-size:10px;padding:10px 4px}}
+
+/* Big screens (4K and wider at 100% OS scaling): scale the whole landing column up
+ * so it reads like the 1440–1920 layout instead of a small strip in the middle.
+ * Retina / HiDPI screens report ≤2560 CSS px and are not affected. */
+@media (min-width: 2600px) {
+  html.lv2-on #page-landing { zoom: 1.4; }
+}
+@media (min-width: 3400px) {
+  html.lv2-on #page-landing { zoom: 1.75; }
+}

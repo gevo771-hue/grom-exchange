@@ -1178,7 +1178,7 @@
     var rateText = hasPrice ? eth.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : '—';
     return (
       '<div class="lv2-swap-demo lv2-dashboard-preview" data-lv2-act="connect" role="button" tabindex="0" aria-label="' + esc(t('connect')) + '">' +
-        renderPreviewChains() +
+        (typeof renderPreviewChains === 'function' ? renderPreviewChains() : '') +
         '<div class="lv2-swap-field">' +
           '<div class="lv2-swap-lbl">' + esc(t('pay')) + '</div>' +
           '<div class="lv2-swap-body">' +
@@ -1199,6 +1199,7 @@
         '</div>' +
         '<div class="lv2-swap-info"><span>' + esc(t('rate')) + ': 1 ETH = ' + rateText + ' USDC</span>' +
           '<span class="save">' + esc(t('compare_estimate')) + ': ' + (hasPrice ? '+' + fmtUsd(modelDifference) : '—') + ' vs 1inch</span></div>' +
+        '<p class="lv2-swap-model">' + esc(t('compare_note')) + '</p>' +
         '<button type="button" class="lv2-cta" data-lv2-act="connect">' + esc(t('connect')) + '</button>' +
       '</div>'
     );

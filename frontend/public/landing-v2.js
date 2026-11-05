@@ -715,10 +715,10 @@
   }
 
   var COIN_LOGO = {
-    BTC: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
-    ETH: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
-    SOL: 'https://assets.coingecko.com/coins/images/4128/small/solana.png',
-    DOGE: 'https://assets.coingecko.com/coins/images/5/small/dogecoin.png',
+    BTC: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png',
+    ETH: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png',
+    SOL: 'https://assets.coingecko.com/coins/images/4128/large/solana.png',
+    DOGE: 'https://assets.coingecko.com/coins/images/5/large/dogecoin.png',
   };
   var COIN_TINT = {
     BTC: '#f7931a',
@@ -1111,6 +1111,61 @@
     }).join('');
   }
 
+  /* Same networks, order and logos as the swap chips on «Главное» (grom-wallet.js GW_DS_CHAINS).
+   * The wallet is an ES module loaded later, so its chip helper is not on window — the landing
+   * builds the row itself from the same sources: base chains + window.GromSwapNetworks. */
+  var LV2_CHAIN_ICON = 'https://raw.githubusercontent.com/lifinance/types/main/src/assets/icons/chains/';
+  var LV2_BASE_CHAINS = [
+    { name: 'Ethereum', short: 'ETH', slug: 'ethereum' },
+    { name: 'BNB Chain', short: 'BSC', slug: 'bsc' },
+    { name: 'Arbitrum', short: 'ARB', slug: 'arbitrum' },
+    { name: 'Polygon', short: 'POL', slug: 'polygon' },
+    { name: 'Base', short: 'BASE', slug: 'base' },
+    { name: 'Optimism', short: 'OP', slug: 'optimism' },
+    { name: 'Avalanche', short: 'AVAX', slug: 'avalanche' },
+    { name: 'Linea', short: 'LINEA', slug: 'linea' }
+  ];
+  var LV2_NONEVM_CHAINS = [
+    { name: 'Solana', short: 'SOL', slug: 'solana' },
+    { name: 'Bitcoin', short: 'BTC', slug: 'bitcoin' },
+    { name: 'Tron', short: 'TRX', slug: 'tron' }
+  ];
+
+  function previewChainList() {
+    var extra = [];
+    try {
+      var nets = window.GromSwapNetworks && window.GromSwapNetworks.chains;
+      if (nets && nets.length) {
+        extra = nets.map(function (c) { return { name: c.name, short: c.short, logo: c.logoURI }; });
+      }
+    } catch (_) {}
+    function withLogo(c) { return { name: c.name, short: c.short, logo: LV2_CHAIN_ICON + c.slug + '.svg' }; }
+    return LV2_BASE_CHAINS.map(withLogo).concat(extra, LV2_NONEVM_CHAINS.map(withLogo));
+  }
+
+  function renderPreviewChains() {
+    var host = document.createElement('div');
+    host.className = 'lv2-preview-chains';
+    previewChainList().forEach(function (c) {
+      if (!c || !c.short) return;
+      var item = document.createElement('span');
+      item.title = c.name || c.short;
+      if (c.logo) {
+        var img = document.createElement('img');
+        img.src = c.logo;
+        img.alt = '';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.width = 18;
+        img.height = 18;
+        item.appendChild(img);
+      }
+      item.appendChild(document.createTextNode(c.short));
+      host.appendChild(item);
+    });
+    return host.children.length ? host.outerHTML : '';
+  }
+
   function renderSwap(eth) {
     eth = Number(eth);
     var hasPrice = Number.isFinite(eth) && eth > 0;
@@ -1122,7 +1177,8 @@
     var usdText = hasPrice ? '≈ ' + fmtUsd(get) : '—';
     var rateText = hasPrice ? eth.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : '—';
     return (
-      '<div class="lv2-swap-demo" data-lv2-act="connect" role="button" tabindex="0" aria-label="' + esc(t('connect')) + '">' +
+      '<div class="lv2-swap-demo lv2-dashboard-preview" data-lv2-act="connect" role="button" tabindex="0" aria-label="' + esc(t('connect')) + '">' +
+        renderPreviewChains() +
         '<div class="lv2-swap-field">' +
           '<div class="lv2-swap-lbl">' + esc(t('pay')) + '</div>' +
           '<div class="lv2-swap-body">' +
@@ -1130,22 +1186,19 @@
             '<span class="lv2-pill">' + coinBadge('ETH', COIN_LOGO.ETH, COIN_TINT.ETH) + 'ETH</span>' +
           '</div>' +
           '<div class="lv2-swap-meta"><span>' + usdText + '</span></div>' +
+          '<div class="lv2-preview-percent"><span>25%</span><span>50%</span><span>75%</span><span>MAX</span></div>' +
         '</div>' +
         '<div class="lv2-flip-wrap"><div class="lv2-flip">' + ICON.flip + '</div></div>' +
         '<div class="lv2-swap-field">' +
           '<div class="lv2-swap-lbl">' + esc(t('get')) + '</div>' +
           '<div class="lv2-swap-body">' +
             '<input class="lv2-swap-amt" value="' + valueText + '" readonly tabindex="-1" />' +
-            '<span class="lv2-pill">' + coinBadge('U', 'https://assets.coingecko.com/coins/images/6319/small/usdc.png', '#2775ca') + 'USDC</span>' +
+            '<span class="lv2-pill">' + coinBadge('U', 'https://assets.coingecko.com/coins/images/6319/large/usdc.png', '#2775ca') + 'USDC</span>' +
           '</div>' +
           '<div class="lv2-swap-meta"><span>' + usdText + '</span></div>' +
         '</div>' +
         '<div class="lv2-swap-info"><span>' + esc(t('rate')) + ': 1 ETH = ' + rateText + ' USDC</span>' +
           '<span class="save">' + esc(t('compare_estimate')) + ': ' + (hasPrice ? '+' + fmtUsd(modelDifference) : '—') + ' vs 1inch</span></div>' +
-        '<p class="lv2-swap-model">' + esc(t('compare_note')) + '</p>' +
-        '<div class="lv2-swap-route">' + esc(t('route')) +
-          ' ' +
-          esc(t('route_best')) + '</div>' +
         '<button type="button" class="lv2-cta" data-lv2-act="connect">' + esc(t('connect')) + '</button>' +
       '</div>'
     );
@@ -1503,194 +1556,36 @@
       host.className = 'lv2-sec lv2-diagram-sec';
       root.appendChild(host);
     }
-    try {
-      if (!window._lv2DiagMq && window.matchMedia) {
-        window._lv2DiagMq = window.matchMedia('(max-width: 720px)');
-        var onMq = function () {
-          var r = document.getElementById('landing-v2-root');
-          if (r) mountDiagram(r);
-        };
-        if (window._lv2DiagMq.addEventListener) window._lv2DiagMq.addEventListener('change', onMq);
-        else if (window._lv2DiagMq.addListener) window._lv2DiagMq.addListener(onMq);
-      }
-    } catch (_) {}
-    var narrow = diagramNarrow();
-    /* Keep running animation — remount only on language / layout / flow-version change */
-    var flowVer = narrow ? 'v8m' : 'v5d';
-    if (host.querySelector('.lv2-diagram svg')
-      && host.getAttribute('data-lv2-lang') === lang()
-      && host.getAttribute('data-lv2-flow') === flowVer) {
-      return;
-    }
+    if (host.getAttribute('data-lv2-lang') === lang() && host.querySelector('.lv2-orbit-map')) return;
     stopFlowDot(host);
     host.setAttribute('data-lv2-lang', lang());
-    host.setAttribute('data-lv2-flow', flowVer);
-    /* Same raster as nav — dark plate so 3D mark reads clean (no neon wash). */
-    var logo = '/assets/grom-brand-header-clear.webp';
-
-    /* Desktop: wallet → hub → products. Mobile: GROM hub center, products left/right. */
-    var vbW = narrow ? 360 : 900;
-    var vbH = narrow ? 188 : 260;
-    var pad = narrow ? 16 : 60;
-    var walletW = narrow ? 0 : 120;
-    var walletH = narrow ? 0 : 80;
-    var pillW = narrow ? 112 : 160;
-    var pillH = narrow ? 36 : 40;
-    var pillFs = narrow ? 12 : 12;
-    var pillRx = narrow ? 12 : 10;
-    var pillDot = narrow ? 5 : 8;
-    var hubRing = narrow ? 40 : 58;
-    var hubRad = narrow ? 35 : 54;
-    var logoSize = narrow ? 52 : 80;
-    var wx;
-    var pillPositions; /* [{x,y}] */
-    var hubCx;
-    var hubCy;
-    var midY;
-    var wy;
-    var lines;
-    var lineStroke = narrow ? '#88c0d0' : '#3b4558';
-    var lineOp = narrow ? '0.5' : '1';
-    var ambience = '';
-
-    if (narrow) {
-      hubCx = vbW / 2;
-      hubCy = 100;
-      midY = hubCy;
-      wx = 0;
-      wy = 0;
-      var sidePad = 12;
-      var leftX = sidePad;
-      var rightX = vbW - sidePad - pillW;
-      var topY = 14;
-      var botY = 150;
-      /* TL Swap, TR Futures, BL Predict, BR Stocks */
-      pillPositions = [
-        { x: leftX, y: topY },
-        { x: rightX, y: topY },
-        { x: leftX, y: botY },
-        { x: rightX, y: botY }
-      ];
-      vbH = botY + pillH + 12;
-      ambience =
-        '<circle cx="' + hubCx + '" cy="' + hubCy + '" r="78" fill="url(#lv2HubGlow)"/>' +
-        '<circle class="lv2-hub-pulse" cx="' + hubCx + '" cy="' + hubCy + '" r="' + (hubRing + 8) + '" fill="none" stroke="#88c0d0" stroke-width="1" opacity="0.22"/>';
-      lines = pillPositions.map(function (p, idx) {
-        var tx = p.x + pillW / 2;
-        var ty = p.y + pillH / 2;
-        var dx = tx - hubCx;
-        var dy = ty - hubCy;
-        var dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        var x1 = hubCx + (dx / dist) * (hubRing + 3);
-        var y1 = hubCy + (dy / dist) * (hubRing + 3);
-        var x2 = tx - (dx / dist) * 12;
-        var y2 = ty - (dy / dist) * 12;
-        return '<line class="lv2-spoke" data-i="' + idx + '" x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" stroke="' + lineStroke + '" stroke-width="1.4" stroke-dasharray="3 5" stroke-linecap="round" opacity="' + lineOp + '"/>';
-      }).join('');
-      host._lv2FlowLay = {
-        wallet: [hubCx, hubCy],
-        hubL: [hubCx - hubRing, hubCy],
-        hubR: [hubCx + hubRing, hubCy],
-        dest: pillPositions.map(function (p) { return [p.x + pillW / 2, p.y + pillH / 2]; })
-      };
-    } else {
-      wx = pad;
-      wy = 90;
-      hubCx = 440;
-      hubCy = 130;
-      midY = 130;
-      var pillX = 700;
-      var pillYs = [40, 90, 140, 190];
-      pillPositions = pillYs.map(function (y) { return { x: pillX, y: y }; });
-      var walletEdge = wx + walletW;
-      lines =
-        '<line x1="' + walletEdge + '" y1="' + midY + '" x2="' + (hubCx - hubRing) + '" y2="' + hubCy + '" stroke="#3b4558" stroke-width="2" stroke-dasharray="4 4"/>' +
-        pillPositions.map(function (p) {
-          return '<line x1="' + (hubCx + hubRing) + '" y1="' + hubCy + '" x2="' + p.x + '" y2="' + (p.y + pillH / 2) + '" stroke="#3b4558" stroke-width="2" stroke-dasharray="4 4"/>';
-        }).join('');
-      host._lv2FlowLay = {
-        wallet: [walletEdge, midY],
-        hubL: [hubCx - hubRing, hubCy],
-        hubR: [hubCx + hubRing, hubCy],
-        dest: pillPositions.map(function (p) { return [p.x, p.y + pillH / 2]; })
-      };
-    }
-
-    var hubX = hubCx - 60;
-    var hubY = hubCy - 40;
-
-    function pill(x, y, label, color) {
-      var dotX = narrow ? 15 : 16;
-      var textX = narrow ? 28 : 30;
-      var stroke = narrow ? color : '#3b4558';
-      var strokeOp = narrow ? '0.45' : '1';
-      var fill = narrow ? '#222b3a' : '#1f2a38';
-      return (
-        '<g class="lv2-pill" transform="translate(' + x + ',' + y + ')">' +
-          '<rect width="' + pillW + '" height="' + pillH + '" rx="' + pillRx + '" fill="' + fill + '" stroke="' + stroke + '" stroke-opacity="' + strokeOp + '"/>' +
-          '<circle cx="' + dotX + '" cy="' + (pillH / 2) + '" r="' + pillDot + '" fill="' + color + '" opacity="' + (narrow ? '0.85' : '0.45') + '"/>' +
-          '<text x="' + textX + '" y="' + (pillH / 2 + 4) + '" fill="#eaf1fb" font-size="' + pillFs + '" font-weight="650" font-family="Inter,system-ui,sans-serif">' + esc(label) + '</text>' +
-        '</g>'
-      );
-    }
-    var clipR = hubRad - 4;
-    var wRx = 14;
-    var wBarY1 = Math.round(walletH * 0.22);
-    var wBarY2 = Math.round(walletH * 0.42);
-    var wBarY3 = Math.round(walletH * 0.60);
-    var labSwap = narrow ? (t('diag_swap_m') || t('diag_swap')) : t('diag_swap');
-    var labPerps = narrow ? (t('diag_perps_m') || t('diag_perps')) : t('diag_perps');
-    var labPred = narrow ? (t('diag_pred_m') || t('diag_pred')) : t('diag_pred');
-    var labStocks = narrow ? (t('diag_stocks_m') || t('diag_stocks')) : t('diag_stocks');
-    var walletBlock = narrow
-      ? ''
-      : (
-          '<g transform="translate(' + wx + ',' + wy + ')">' +
-            '<rect width="' + walletW + '" height="' + walletH + '" rx="' + wRx + '" fill="#1f2a38" stroke="#3b4558"/>' +
-            '<rect x="14" y="' + wBarY1 + '" width="' + Math.round(walletW * 0.32) + '" height="10" rx="3" fill="#88c0d0" opacity="0.65"/>' +
-            '<rect x="14" y="' + wBarY2 + '" width="' + Math.round(walletW * 0.55) + '" height="8" rx="3" fill="#eaf1fb" opacity="0.9"/>' +
-            '<rect x="14" y="' + wBarY3 + '" width="' + Math.round(walletW * 0.38) + '" height="6" rx="3" fill="#8a9bb5"/>' +
-            '<circle cx="' + (walletW - 18) + '" cy="' + Math.round(walletH * 0.28) + '" r="6" fill="#a3be8c"/>' +
-            '<text x="' + (walletW / 2) + '" y="' + (walletH + 22) + '" text-anchor="middle" fill="#a3adc2" font-size="11" font-weight="700" font-family="Inter,system-ui,sans-serif">' + esc(t('diag_wallet')) + '</text>' +
-          '</g>'
-        );
-    var flowDot = narrow
-      ? ''
-      : ('<circle class="lv2-flow-dot" cx="' + host._lv2FlowLay.wallet[0] + '" cy="' + host._lv2FlowLay.wallet[1] + '" r="3.5" fill="#88c0d0" opacity="0.95"/>');
+    host.setAttribute('data-lv2-flow', 'orbit-v1');
+    var products = [
+      { key: 'swap', label: t('diag_swap_m') || t('diag_swap') },
+      { key: 'perps', label: t('diag_perps_m') || t('diag_perps') },
+      { key: 'predict', label: t('diag_pred_m') || t('diag_pred') },
+      { key: 'stocks', label: t('diag_stocks_m') || t('diag_stocks') }
+    ];
     host.innerHTML =
       '<div class="lv2-sec-head">' +
         '<div class="lv2-sec-eye">' + esc(t('diag_eye')) + '</div>' +
         '<h2 class="lv2-sec-title">' + esc(t('diag_h')) + '</h2>' +
         '<p class="lv2-sec-sub">' + esc(t('diag_sub')) + '</p>' +
       '</div>' +
-      '<div class="lv2-diagram' + (narrow ? ' is-narrow' : '') + '">' +
-        '<svg viewBox="0 0 ' + vbW + ' ' + vbH + '" role="img" aria-label="GROM wallet hub">' +
-          '<defs>' +
-            '<linearGradient id="lv2HubRing" x1="0" y1="0" x2="1" y2="1">' +
-              '<stop offset="0" stop-color="#88c0d0"/><stop offset="1" stop-color="#a3be8c"/></linearGradient>' +
-            '<radialGradient id="lv2HubGlow" cx="50%" cy="50%" r="50%">' +
-              '<stop offset="0" stop-color="#88c0d0" stop-opacity="0.30"/>' +
-              '<stop offset="0.55" stop-color="#81a1c1" stop-opacity="0.10"/>' +
-              '<stop offset="1" stop-color="#88c0d0" stop-opacity="0"/></radialGradient>' +
-            '<clipPath id="lv2HubClip"><circle cx="60" cy="40" r="' + clipR + '"/></clipPath>' +
-          '</defs>' +
-          ambience +
-          walletBlock +
-          lines +
-          '<g class="lv2-hub" transform="translate(' + hubX + ',' + hubY + ')">' +
-            '<circle cx="60" cy="40" r="' + hubRing + '" fill="none" stroke="url(#lv2HubRing)" stroke-width="' + (narrow ? 1.75 : 2) + '" opacity="0.95"/>' +
-            '<circle cx="60" cy="40" r="' + hubRad + '" fill="#1f2a38" stroke="#3b4558" stroke-width="1"/>' +
-            '<image class="lv2-hub-logo" href="' + logo + '" xlink:href="' + logo + '" x="' + (60 - logoSize / 2) + '" y="' + (40 - logoSize / 2) + '" width="' + logoSize + '" height="' + logoSize + '" preserveAspectRatio="xMidYMid meet" clip-path="url(#lv2HubClip)"/>' +
-          '</g>' +
-          pill(pillPositions[0].x, pillPositions[0].y, labSwap, '#88c0d0') +
-          pill(pillPositions[1].x, pillPositions[1].y, labPerps, '#a3be8c') +
-          pill(pillPositions[2].x, pillPositions[2].y, labPred, '#ebcb8b') +
-          pill(pillPositions[3].x, pillPositions[3].y, labStocks, '#81a1c1') +
-          flowDot +
-        '</svg>' +
+      '<div class="lv2-diagram lv2-orbit-diagram">' +
+        '<div class="lv2-orbit-map">' +
+          '<div class="lv2-orbit-track lv2-orbit-track-a" aria-hidden="true"></div>' +
+          '<div class="lv2-orbit-track lv2-orbit-track-b" aria-hidden="true"></div>' +
+          '<div class="lv2-orbit-track lv2-orbit-track-c" aria-hidden="true"></div>' +
+          '<div class="lv2-orbit-core"><img src="/assets/grom-brand-mark-clear.webp" alt="GROM" width="110" height="110" loading="lazy"/><span>' + esc(t('diag_wallet')) + '</span></div>' +
+          products.map(function (product) {
+            return '<div class="lv2-orbit-node lv2-orbit-' + product.key + '">' +
+              '<span class="lv2-orbit-icon" aria-hidden="true">' + ICON[product.key] + '</span>' +
+              '<span class="lv2-orbit-label">' + esc(product.label) + '</span></div>';
+          }).join('') +
+        '</div>' +
         '<div class="lv2-diagram-cap">' + t('diag_cap') + '</div>' +
       '</div>';
-    if (!narrow) startFlowDot(host);
   }
 
   function removePreview() {

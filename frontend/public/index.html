@@ -6189,6 +6189,33 @@
 @media(prefers-reduced-motion:reduce){.grom-socials a{transition:none}}
 .grom-community-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-top:32px;padding:24px 0;border-top:1px solid #9bbbd82b}
 .grom-community-footer>span{font-size:13px;font-weight:700;letter-spacing:.12em;color:#a9bed2}
+/* Landing footer and both existing About disclosures. */
+#page-landing .grom-community-footer{padding:26px 0;gap:18px;border-color:#88c0d026}
+#page-landing .grom-community-footer>span{font-size:11px;font-weight:600;letter-spacing:.18em;color:#acbacd}
+#page-landing .grom-community-footer .grom-socials{gap:12px}
+#page-landing .grom-community-footer .grom-socials a{width:44px;min-width:44px;height:44px;padding:10px;gap:0;border:0;border-radius:0;background:none;box-shadow:none;color:#aebbcf;transition:color .18s}
+#page-landing .grom-community-footer .grom-socials svg{width:22px;height:22px;padding:0;border-radius:0;background:none!important;color:inherit}
+#page-landing .grom-community-footer .grom-socials a[data-social="telegram"] svg{color:inherit;background:none}
+#page-landing .grom-community-footer .grom-socials a:hover{color:#88c0d0;background:none;border-color:transparent}
+#page-landing .grom-community-footer .grom-socials a>span{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#page-landing .lp-seo-details,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-details{background:linear-gradient(145deg,#2f3543,#283141);border:1px solid #88c0d024;border-radius:14px;box-shadow:none;overflow:hidden;margin:0 0 12px}
+#page-landing .lp-seo-details-sum,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-summary{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:21px 24px;list-style:none;font-size:14px;font-weight:500;letter-spacing:0;color:#d8e1ec;line-height:1.5;cursor:pointer}
+#page-landing .lp-seo-details-sum::-webkit-details-marker,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-summary::-webkit-details-marker{display:none}
+#page-landing .lp-seo-details-sum:after,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-summary:after{content:'+';color:#88c0d0;font-size:22px;font-weight:400;line-height:1;flex-shrink:0}
+#page-landing .lp-seo-details[open]>.lp-seo-details-sum:after,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-details[open]>.grom-seo-summary:after{content:'−'}
+#page-landing .lp-seo-details[open]>.lp-seo-details-sum,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-details[open]>.grom-seo-summary{border-bottom:1px solid #88c0d01a}
+#page-landing .lp-seo-details-sum:focus-visible,#gromSeoRouteCopy[data-seo-route="landing"] summary:focus-visible{outline:2px solid #88c0d0;outline-offset:-4px;border-radius:10px}
+#page-landing #lpSeoPrimary,#page-landing #lpSeoMultilang,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-article{padding:28px;max-width:none;font-size:13px;line-height:1.9;color:#a7b4c8}
+#page-landing #lpSeoPrimary>h2:first-child,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-article>h1:first-child,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-article>h2:first-child{font-size:clamp(22px,2.6vw,30px);font-weight:500;letter-spacing:-.7px;line-height:1.3;max-width:650px;color:#e4ebf3;margin:0 0 20px}
+#page-landing #lpSeoPrimary>h3,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-article>h2{font-size:16px;font-weight:500;color:#dbe4ef;padding-top:22px;margin:25px 0 12px;border-top:1px solid #88c0d01a;line-height:1.5}
+#page-landing #lpSeoPrimary p,#gromSeoRouteCopy[data-seo-route="landing"] p{max-width:850px;color:#a7b4c8;font-size:13px;line-height:1.9;margin:0 0 16px}
+#page-landing #lpSeoPrimary a,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-article a{color:#88c0d0;text-underline-offset:4px;text-decoration-color:#88c0d055}
+#page-landing #lpSeoMultilang .lp-seo-lang{background:#20273745;border:1px solid #88c0d020;border-radius:8px;margin-bottom:10px;overflow:hidden}
+#page-landing #lpSeoMultilang .lp-seo-lang>summary{padding:15px 18px;color:#bdcbdc;font-size:12px;cursor:pointer}
+#page-landing #lpSeoMultilang article{padding:8px 18px 18px}
+#gromSeoRouteCopy[data-seo-route="landing"].grom-seo-route{max-width:1288px;padding:0 24px 40px;margin:24px auto 0}
+@media(max-width:640px){#page-landing .grom-community-footer{padding:20px 0;gap:8px}#page-landing .grom-community-footer>span{font-size:9px;letter-spacing:.1em}#page-landing .grom-community-footer .grom-socials{gap:4px}#page-landing .lp-seo-details-sum,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-summary{padding:18px;font-size:12px}#page-landing #lpSeoPrimary,#page-landing #lpSeoMultilang,#gromSeoRouteCopy[data-seo-route="landing"] .grom-seo-article{padding:20px 18px;font-size:12px}#page-landing #lpSeoPrimary p,#gromSeoRouteCopy[data-seo-route="landing"] p{font-size:12px}#gromSeoRouteCopy[data-seo-route="landing"].grom-seo-route{padding:0 16px 28px;margin-top:18px}}
+
 </style>
 <link rel="stylesheet" href="/grom-explore.css">
 <link rel="stylesheet" href="/grom-dashboard-shell.css">
@@ -6672,9 +6699,10 @@
       <footer class="grom-community-footer"><span>GROM FINANCE HUB</span><nav class="grom-socials" aria-label="GROM social media">
       <a href="https://x.com/GromExchange" target="_blank" rel="noopener noreferrer" aria-label="GROM on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.6 5.5 22H2.3l7.9-9L2.5 2H9l4.5 6.8L18.9 2ZM17.8 20h1.8L8 3.9H6.1L17.8 20Z"/></svg><span>X</span></a>
       <a href="https://t.me/grom_finence_hub" data-social="telegram" target="_blank" rel="noopener noreferrer" aria-label="GROM on Telegram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.7 3.5-3.2 16.1c-.2 1.1-.9 1.4-1.8.9l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.4-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.1 13.4l-4.8-1.5c-1-.3-1-1 .2-1.4L20.2 3.3c.9-.3 1.7.2 1.5 1.2Z"/></svg><span>Telegram</span></a>
-    </nav></footer>
+    <a href="https://github.com/gevo771-hue/grom-exchange" target="_blank" rel="noopener noreferrer" aria-label="GROM on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .8a11.2 11.2 0 0 0-3.54 21.83c.56.1.77-.24.77-.54v-2.1c-3.14.68-3.8-1.33-3.8-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.03-.7.08-.69.08-.69 1.14.08 1.74 1.17 1.74 1.17 1.01 1.73 2.65 1.23 3.3.94.1-.73.4-1.23.72-1.51-2.51-.29-5.15-1.26-5.15-5.6 0-1.24.44-2.25 1.17-3.04-.12-.29-.51-1.44.11-3 0 0 .95-.3 3.08 1.17a10.7 10.7 0 0 1 5.6 0c2.14-1.47 3.08-1.17 3.08-1.17.62 1.56.23 2.71.11 3 .73.79 1.17 1.8 1.17 3.04 0 4.35-2.65 5.3-5.17 5.58.41.35.77 1.04.77 2.1v3.09c0 .3.2.65.78.54A11.2 11.2 0 0 0 12 .8Z"/></svg></a></nav></footer>
 
         <!-- SEO GUIDES (collapsed — bottom of page, crawlable) -->
+        <div class="lp-about-grid">
         <details class="lp-seo-details lp-seo-details-primary" id="lpSeoPrimaryWrap">
           <summary class="lp-seo-details-sum" id="lpSeoPrimarySum">Guides: crypto, futures, predictions &amp; stocks</summary>
           <section class="lp-seo-block" id="lpSeoPrimary" aria-label="Trading products SEO" lang="en">
@@ -6699,6 +6727,7 @@
           <summary class="lp-seo-details-sum" id="lpSeoMultilangSum">GROM in 18 languages — crypto, futures, predictions &amp; stocks</summary>
           <section class="lp-seo-multilang" id="lpSeoMultilang" aria-label="Multilingual SEO guides"></section>
         </details>
+        </div>
 
 
       </div>

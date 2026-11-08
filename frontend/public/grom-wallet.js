@@ -20402,6 +20402,421 @@ window.gwXstocksStableBalances = async function () {
   return { usdt, usdc, best, lines, rows: stables };
 };
 
+/* =========================================================================
+ * Stocks section v2 — pay with any token, buy on any network.
+ * Quotes: LI.FI (EVM source → EVM or Solana destination) and Jupiter
+ * (Solana → Solana). Every quote passes the xStocks price guard against an
+ * independent share price before it can be executed; execution refreshes the
+ * route and re-checks the guard. Nothing is signed without the user's wallet.
+ * ========================================================================= */
+const GW_STOCKS_SOL_NATIVE_MINT = 'So11111111111111111111111111111111111111112';
+
+function gwStocksIsSolChain(c) { return c === 'solana' || Number(c) === GW_LIFI_SOL_CHAIN; }
+
+/** Resolve a payment/receive token on an EVM chain or Solana by symbol. */
+function gwStocksTokenRef(chainId, sym) {
+  const s = String(sym || '').toUpperCase();
+  if (gwStocksIsSolChain(chainId)) {
+    const mint = GW_SOL_TOKENS[s];
+    if (!mint) return null;
+    return { chainId: 'solana', sym: s, address: mint, decimals: s === 'SOL' ? 9 : (GW_SOL_DECIMALS[s] ?? 6), isNative: s === 'SOL' };
+  }
+  const cid = Number(chainId);
+  const cfg = GW_OC_SWAP[cid];
+  if (!cfg) return null;
+  if (s === String(cfg.native || '').toUpperCase()) {
+    return { chainId: cid, sym: s, address: GW_LIFI_ZERO, decimals: 18, isNative: true };
+  }
+  const addr = cfg.tokens?.[s];
+  if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) return null;
+  return { chainId: cid, sym: s, address: addr, decimals: Number(cfg.decimals?.[s] ?? 18), isNative: false };
+}
+window.gwStocksTokenRef = gwStocksTokenRef;
+/** Connected trading accounts (EVM signer + Phantom) for the Stocks panel. */
+window.gwStocksAccount = function () {
+  let evm = '';
+  let sol = '';
+  try { evm = gwReadOnlyAddress() || ''; } catch (_) {}
+  try { sol = gwXstocksSolPayAccount() || ''; } catch (_) {}
+  let solDest = '';
+  try { solDest = gwXstocksSolDest() || ''; } catch (_) {}
+  return { evm, sol, solDest };
+};
+/** EVM chains the wallet can sign on (stocks payment / receive). */
+window.gwStocksEvmChains = function () {
+  return Object.keys(GW_OC_SWAP).map(Number).filter(Boolean);
+};
+
+/** Wallet holdings across EVM chains + Solana, with token addresses resolved. */
+window.gwStocksHoldings = async function () {
+  let rows = [];
+  try { rows = (typeof gwTkLoadHoldings === 'function') ? await gwTkLoadHoldings(false) : []; } catch (_) { rows = []; }
+  const out = [];
+  for (const r of rows || []) {
+    const amt = Number(r.amt);
+    if (!(amt > 0)) continue;
+    const ref = gwStocksTokenRef(gwStocksIsSolChain(r.chainId) ? 'solana' : r.chainId, r.sym);
+    if (!ref) continue;
+    const usd = Number(r.usd);
+    out.push({ ...ref, amt, usd: Number.isFinite(usd) ? usd : 0, priceUsd: usd > 0 ? usd / amt : 0, chain: r.chain || '', name: r.name || ref.sym, logo: r.logo || '' });
+  }
+  out.sort((a, b) => b.usd - a.usd);
+  return out;
+};
+
+/** Balance of one stock token variant for the connected wallet. */
+window.gwStocksVariantBalance = async function (variant) {
+  if (!variant) return 0;
+  if (gwStocksIsSolChain(variant.c)) {
+    const pk = gwXstocksSolPayAccount() || (typeof gwSolPubkey === 'function' ? gwSolPubkey() : '');
+    if (!pk) return 0;
+    try {
+      const res = await gwSolRpc('getTokenAccountsByOwner', [pk, { mint: variant.a }, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
+      let total = 0;
+      for (const row of res?.value || []) total += Number(row?.account?.data?.parsed?.info?.tokenAmount?.uiAmount) || 0;
+      return total;
+    } catch (_) { return 0; }
+  }
+  const acc = gwReadOnlyAddress();
+  if (!acc) return 0;
+  return window.gwXstocksBalanceOf({ chainId: Number(variant.c), tokenAddress: variant.a, account: acc, decimals: variant.d });
+};
+
+function gwStocksLifiParams({ from, to, fromAmount, fromAddress, toAddress }) {
+  const qs = new URLSearchParams({
+    fromChain: String(gwStocksIsSolChain(from.chainId) ? GW_LIFI_SOL_CHAIN : Number(from.chainId)),
+    toChain: String(gwStocksIsSolChain(to.chainId) ? GW_LIFI_SOL_CHAIN : Number(to.chainId)),
+    fromToken: from.address,
+    toToken: to.address,
+    fromAmount,
+    fromAddress,
+    toAddress,
+    slippage: String(typeof gwSwapSlippageFraction === 'function' ? gwSwapSlippageFraction() : 0.005),
+    integrator: GW_LIFI_INTEGRATOR,
+    order: 'RECOMMENDED',
+  });
+  if (GW_LIFI_FEE_ADDR && !/^0x0{40}$/i.test(GW_LIFI_FEE_ADDR)) {
+    qs.set('fee', String(GW_LIFI_FEE_PCT));
+    qs.set('feeAddress', GW_LIFI_FEE_ADDR);
+  }
+  return qs;
+}
+
+async function gwStocksLifiFetch(qs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const r = await fetch(`${GW_LIFI_ENDPOINT}/quote?${qs}`, { headers: { accept: 'application/json' }, signal: controller.signal });
+    if (!r.ok) {
+      const body = await r.text().catch(() => '');
+      if (gwLifiIsFeeConfigErr(r.status, body)) gwLifiMarkFeeUnavailable('stocks-lifi');
+      const rwa = /RWA/i.test(body);
+      const err = new Error(r.status === 429 ? 'Too many quote requests — retry in a few seconds'
+        : (rwa ? 'Cross-network stock purchase is not available yet' : 'No route for this amount and network'));
+      err.code = r.status === 429 ? 'rate_limited' : (rwa ? 'cross_unavailable' : 'no_route');
+      throw err;
+    }
+    const q = await r.json();
+    if (!q?.estimate?.toAmount || !q.transactionRequest?.to) {
+      const err = new Error('No route for this amount and network');
+      err.code = 'no_route';
+      throw err;
+    }
+    return q;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Same-chain stock route through KyberSwap by contract address (GROM fee included). */
+const GW_STOCKS_KYBER_CHAINS = { 1: 1, 56: 1, 42161: 1, 10: 1, 8453: 1 };
+async function gwStocksKyberQuote({ chainId, from, to, amountIn, account }) {
+  const slug = GW_META_KS_CHAIN[chainId];
+  if (!slug || !GW_STOCKS_KYBER_CHAINS[chainId]) return null;
+  const inAddr = from.isNative ? GW_META_NATIVE : from.address;
+  const outAddr = to.isNative ? GW_META_NATIVE : to.address;
+  const qs = new URLSearchParams({
+    tokenIn: inAddr, tokenOut: outAddr, amountIn, saveGas: '0', gasInclude: '1',
+    chargeFeeBy: 'currency_out', feeReceiver: gwSwapFeeReceiver(), feeAmount: String(gwSwapFeeBps()), isInBps: 'true',
+  });
+  const r = await gwFetchJson(`https://aggregator-api.kyberswap.com/${slug}/api/v1/routes?${qs}`, {
+    headers: { accept: 'application/json', 'x-client-id': 'grom-exchange' },
+  }, 6000);
+  if (!r.ok) {
+    if (r.status === 429) { const err = new Error('Too many quote requests — retry in a few seconds'); err.code = 'rate_limited'; throw err; }
+    return null;
+  }
+  const rj = await r.json();
+  const data = rj?.data;
+  const summary = data?.routeSummary;
+  if (!summary?.amountOut || BigInt(summary.amountOut) <= 0n) return null;
+  if (String(summary.tokenIn || '').toLowerCase() !== inAddr.toLowerCase()
+      || String(summary.tokenOut || '').toLowerCase() !== outAddr.toLowerCase()) return null;
+  const amountInUsd = Number(summary.amountInUsd);
+  const amountOutUsd = Number(summary.amountOutUsd);
+  return {
+    aggregator: 'KyberSwap',
+    tool: 'KyberSwap',
+    venue: 'evm',
+    toAmount: BigInt(summary.amountOut),
+    gasUsd: Number(summary.gasUsd || 0),
+    approvalAddress: data.routerAddress,
+    transactionRequest: null,
+    _kyberIn: amountInUsd > 0 ? amountInUsd : 0,
+    _kyberOut: amountOutUsd > 0 ? amountOutUsd : 0,
+    _ksSummary: summary,
+    _ksRouter: data.routerAddress,
+    _ksSlug: slug,
+    _ksAcc: account,
+    _execChainId: Number(chainId),
+  };
+}
+
+/**
+ * Quote a stock buy or sell.
+ * opts: { side, token (pay token for buy / receive token for sell), amount, tokenPriceUsd,
+ *         variant {k,s,c,a,d}, refPrice, solMultiplier, solDest }
+ */
+window.gwStocksQuote = async function (opts) {
+  const side = opts?.side === 'sell' ? 'sell' : 'buy';
+  const token = opts?.token;
+  const variant = opts?.variant;
+  const amount = Number(opts?.amount);
+  const refPrice = Number(opts?.refPrice);
+  if (!token || !variant || !(amount > 0)) throw new Error('Enter an amount');
+  const stockRef = { chainId: gwStocksIsSolChain(variant.c) ? 'solana' : Number(variant.c), address: variant.a, decimals: Number(variant.d) || 18, sym: variant.s };
+  const from = side === 'buy' ? token : stockRef;
+  const to = side === 'buy' ? stockRef : token;
+  const fromSol = gwStocksIsSolChain(from.chainId);
+  const toSol = gwStocksIsSolChain(to.chainId);
+  const fromAmount = gwAmtToBaseUnits(String(amount), Number(from.decimals)).toString();
+  const solMult = Number(opts?.solMultiplier) > 0 ? Number(opts.solMultiplier) : null;
+  const stockSol = gwStocksIsSolChain(variant.c);
+  let q;
+  if (fromSol) {
+    if (!toSol) {
+      const err = new Error('Pay from an EVM wallet to buy on this network');
+      err.code = 'pay_evm_required';
+      throw err;
+    }
+    const jq = await gwSolQuote({
+      inMint: from.isNative ? GW_STOCKS_SOL_NATIVE_MINT : from.address,
+      outMint: to.isNative ? GW_STOCKS_SOL_NATIVE_MINT : to.address,
+      amountBaseUnits: fromAmount,
+    });
+    if (!jq?.outAmount) { const err = new Error('No route for this amount'); err.code = 'no_route'; throw err; }
+    q = {
+      aggregator: 'Jupiter', tool: 'Jupiter', venue: 'solana',
+      toAmount: BigInt(jq.outAmount), outDecimals: Number(to.decimals),
+      gasUsd: 0, _solQuote: jq,
+    };
+  } else {
+    const account = gwReadOnlyAddress();
+    if (!account) { const err = new Error('Connect an EVM wallet'); err.code = 'connect'; throw err; }
+    let toAddress = account;
+    if (toSol) {
+      toAddress = String(opts?.solDest || '').trim();
+      if (!gwIsSolAddr(toAddress)) { const err = new Error('Add a Solana address to receive'); err.code = 'sol_dest'; throw err; }
+    }
+    const sameChain = !toSol && Number(from.chainId) === Number(to.chainId);
+    if (sameChain && GW_STOCKS_KYBER_CHAINS[Number(from.chainId)]) {
+      const kq = await gwStocksKyberQuote({ chainId: Number(from.chainId), from, to, amountIn: fromAmount, account });
+      if (!kq) { const err = new Error('No route for this amount and network'); err.code = 'no_route'; throw err; }
+      kq.outDecimals = Number(to.decimals);
+      kq._fromChainId = Number(from.chainId);
+      kq._toChainId = Number(to.chainId);
+      kq._crossChain = false;
+      kq._durationSec = 15;
+      kq._amountIn = fromAmount;
+      q = kq;
+    }
+    const params = { from, to, fromAmount, fromAddress: account, toAddress };
+    if (!q) {
+    const raw = await gwStocksLifiFetch(gwStocksLifiParams(params));
+    const gas = (raw.estimate?.gasCosts || []).reduce((s, g) => s + (Number(g.amountUSD) || 0), 0);
+    const fees = (raw.estimate?.feeCosts || []).reduce((s, f) => s + (f.included ? 0 : (Number(f.amountUSD) || 0)), 0);
+    q = {
+      aggregator: 'LiFi', tool: raw.toolDetails?.name || raw.tool || 'LI.FI',
+      venue: toSol ? 'bridge-sol' : 'evm',
+      toAmount: BigInt(raw.estimate.toAmount), outDecimals: Number(to.decimals),
+      gasUsd: gas + fees, raw, transactionRequest: raw.transactionRequest,
+      approvalAddress: raw.estimate?.approvalAddress || raw.transactionRequest.to,
+      _lifiParams: params,
+      _fromChainId: Number(from.chainId), _toChainId: toSol ? GW_LIFI_SOL_CHAIN : Number(to.chainId),
+      _crossChain: String(from.chainId) !== String(to.chainId),
+      _durationSec: Number(raw.estimate?.executionDuration) || 0,
+      _steps: (raw.includedSteps || []).map((s) => ({ type: s.type, tool: s.toolDetails?.name || s.tool })),
+    };
+    }
+    q._lifiParams = params;
+  }
+  q._side = side;
+  q._amount = amount;
+  q._from = from;
+  q._to = to;
+  q._variant = { ...variant };
+  q._refPrice = refPrice;
+  q._solMultiplier = solMult;
+  q._gromFeeBps = q.aggregator === 'Jupiter'
+    ? (Number(q._solQuote?._gromFeeBps) >= 0 ? Number(q._solQuote._gromFeeBps) : (_gwFeeCfg?.jupiterFeeBps || 0))
+    : gwSwapFeeBps();
+  return gwStocksGuard(q, opts);
+};
+
+/** Apply the xStocks price guard (≤5% value loss vs independent share price). */
+function gwStocksGuard(q, opts) {
+  const side = q._side;
+  const amount = q._amount;
+  const refPrice = q._refPrice;
+  const stockSol = gwStocksIsSolChain(q._variant.c);
+  const tokenPx = Number(opts?.tokenPriceUsd);
+  /* Non-xStock wrappers are only tradable when their market price shows ~1 share per token. */
+  const vp = Number(q._variant?.p);
+  if (q._variant?.k !== 'x' && refPrice > 0 && vp > 0 && (vp / refPrice < 0.85 || vp / refPrice > 1.2)) {
+    q.impactBlocked = true;
+    q.impactBlockReason = 'share_ratio_unknown';
+    return q;
+  }
+  if (side === 'buy') {
+    const lifiIn = Number(q.raw?.estimate?.fromAmountUSD) || Number(q._kyberIn) || 0;
+    const inUsd = lifiIn > 0 ? lifiIn : (tokenPx > 0 ? amount * tokenPx : 0);
+    if (!(inUsd > 0)) {
+      q.impactBlocked = true;
+      q.impactBlockReason = 'missing_input_value';
+      return q;
+    }
+    q.amountInUsd = inUsd;
+    gwXstocksEnrichUsd(q, { amtNum: amount, buy: true, refPrice, solMultiplier: stockSol ? q._solMultiplier : null });
+  } else {
+    const mult = stockSol ? Number(q._solMultiplier) : 1;
+    q.amountInUsd = refPrice > 0 && mult > 0 ? amount * mult * refPrice : NaN;
+    const lifiOut = Number(q.raw?.estimate?.toAmountUSD) || Number(q._kyberOut) || 0;
+    const outTokens = Number(q.toAmount) / (10 ** (Number(q.outDecimals) || 18));
+    q.amountOutUsd = lifiOut > 0 ? lifiOut : (tokenPx > 0 ? outTokens * tokenPx : NaN);
+    const imp = window.GromSwapCore?.quoteUsdImpact
+      ? window.GromSwapCore.quoteUsdImpact({ amountInUsd: q.amountInUsd, amountOutUsd: q.amountOutUsd, maxImpact: GW_XSTOCKS_MAX_IMPACT })
+      : { impact: NaN, blocked: true };
+    q.priceImpact = imp.impact;
+    q.impactBlocked = !!imp.blocked || !(q.amountOutUsd > 0) || !Number.isFinite(imp.impact);
+    if (!(q.amountOutUsd > 0)) q.impactBlockReason = 'missing_output_value';
+    q.outTokens = outTokens;
+  }
+  if (!(q.amountInUsd > 0) || !(refPrice > 0)) {
+    q.impactBlocked = true;
+    q.impactBlockReason = refPrice > 0 ? 'missing_input_value' : 'missing_fair_value';
+  }
+  return q;
+}
+
+/** Execute a guarded stock quote: refresh, re-check, approve if needed, sign. */
+window.gwStocksExecute = async function (quote, opts) {
+  if (!quote || quote.impactBlocked) throw new Error('This quote is blocked by price protection — refresh it');
+  if (quote.aggregator === 'Jupiter') {
+    const p = window.solana || window.phantom?.solana;
+    const pk = gwXstocksSolPayAccount();
+    if (!p || !pk) throw new Error('Connect Phantom to trade on Solana');
+    const from = quote._from;
+    const to = quote._to;
+    const fresh = await gwSolQuote({
+      inMint: from.isNative ? GW_STOCKS_SOL_NATIVE_MINT : from.address,
+      outMint: to.isNative ? GW_STOCKS_SOL_NATIVE_MINT : to.address,
+      amountBaseUnits: gwAmtToBaseUnits(String(quote._amount), Number(from.decimals)).toString(),
+    });
+    if (!fresh?.outAmount) throw new Error('Route expired — refresh the quote');
+    const re = gwStocksGuard({ ...quote, toAmount: BigInt(fresh.outAmount), _solQuote: fresh, raw: null }, opts);
+    if (re.impactBlocked) throw new Error('Price moved — the trade is blocked by price protection. Refresh the quote.');
+    gwToast('Confirm in Phantom', 'info');
+    const txB64 = await gwSolSwap({ quoteResponse: fresh, userPubkey: pk });
+    if (pk !== gwXstocksSolPayAccount()) throw new Error('Solana wallet changed — review the trade');
+    const signature = await gwSolSignAndSendBase64(p, txB64);
+    gwToast('Submitted on Solana…', 'info');
+    return { signature, namespace: 'solana', crossChain: false };
+  }
+  const provider = gwActiveSigningProvider() || window.gromWallet?.wcProvider || window.ethereum;
+  const account = gwReadOnlyAddress();
+  if (!provider?.request || !account) throw new Error('Connect EVM wallet first');
+  if (quote.aggregator === 'KyberSwap') {
+    const cid = Number(quote._execChainId);
+    if (String(quote._ksAcc || '').toLowerCase() !== String(account).toLowerCase()) throw new Error('Wallet changed — refresh the quote');
+    await gwEnsureChain(provider, cid);
+    const from = quote._from;
+    const to = quote._to;
+    const fresh = await gwStocksKyberQuote({ chainId: cid, from, to, amountIn: quote._amountIn, account });
+    if (!fresh) throw new Error('Route expired — refresh the quote');
+    const re = gwStocksGuard({ ...quote, ...fresh, outDecimals: quote.outDecimals }, opts);
+    if (re.impactBlocked) throw new Error('Price moved — the trade is blocked by price protection. Refresh the quote.');
+    await gwAggBuildTxIfNeeded(re, { chainId: cid, account });
+    const ktx = re.transactionRequest;
+    if (!ktx?.to || !ktx?.data) throw new Error('Route expired — refresh the quote');
+    const nativeIn = !!from.isNative;
+    const amountInK = BigInt(quote._amountIn);
+    if (!nativeIn) {
+      const spender = re.approvalAddress || ktx.to;
+      const allowK = await gwErc20Allowance(provider, from.address, account, spender, cid);
+      if (allowK < amountInK) {
+        gwToast('Approve ' + (from.sym || 'token') + ' in your wallet', 'info');
+        await gwErc20ApproveMax(provider, from.address, spender, account, cid, amountInK);
+      }
+    }
+    gwAssertNativeTxValue({
+      isNative: nativeIn, amountIn: amountInK, txValue: ktx.value || '0x0', fromSym: from.sym || 'token',
+      amtHumanStr: String(quote._amount), decimals: Number(from.decimals),
+    });
+    const sim = await gwSimulateSwapTx(cid, { from: account, to: ktx.to, data: ktx.data, value: ktx.value || '0x0' });
+    if (!sim.ok) throw new Error('This trade would fail on-chain — refresh the quote or change the amount');
+    try {
+      window.__gwExpectedNativeWei = nativeIn ? amountInK.toString() : '0';
+      window.__gwAllowLargeNativeTx = false;
+    } catch (_) {}
+    const sendK = (typeof window.gwProviderSendTx === 'function')
+      ? window.gwProviderSendTx
+      : ((p, txp) => p.request({ method: 'eth_sendTransaction', params: [txp] }));
+    const hashK = await sendK(provider, { from: account, to: ktx.to, data: ktx.data, value: ktx.value || '0x0' }, 180000, cid);
+    gwToast('Submitted · waiting for confirmation…', 'info');
+    await gwWaitReceipt(provider, hashK, 90000, false, cid);
+    return { hash: hashK, namespace: 'evm', crossChain: false, chainId: cid };
+  }
+  const params = quote._lifiParams;
+  if (!params || String(params.fromAddress).toLowerCase() !== String(account).toLowerCase()) {
+    throw new Error('Wallet changed — refresh the quote');
+  }
+  const execChain = Number(params.from.chainId);
+  await gwEnsureChain(provider, execChain);
+  /* Fresh calldata — never sign a preliminary route. */
+  const raw = await gwStocksLifiFetch(gwStocksLifiParams(params));
+  const freshTo = String(raw.action?.toToken?.address || '').toLowerCase();
+  if (freshTo && freshTo !== String(params.to.address).toLowerCase()) throw new Error('Route changed — refresh the quote');
+  const re = gwStocksGuard({ ...quote, raw, toAmount: BigInt(raw.estimate.toAmount), transactionRequest: raw.transactionRequest }, opts);
+  if (re.impactBlocked) throw new Error('Price moved — the trade is blocked by price protection. Refresh the quote.');
+  const tx = raw.transactionRequest;
+  const isNative = !!params.from.isNative || /^0x0{40}$/i.test(params.from.address);
+  const amountIn = BigInt(params.fromAmount);
+  if (!isNative) {
+    const spender = raw.estimate?.approvalAddress || tx.to;
+    const allow = await gwErc20Allowance(provider, params.from.address, account, spender, execChain);
+    if (allow < amountIn) {
+      gwToast('Approve ' + (params.from.sym || 'token') + ' in your wallet', 'info');
+      await gwErc20ApproveMax(provider, params.from.address, spender, account, execChain, amountIn);
+    }
+  }
+  gwAssertNativeTxValue({
+    isNative, amountIn, txValue: tx.value || '0x0', fromSym: params.from.sym || 'token',
+    amtHumanStr: String(quote._amount), decimals: Number(params.from.decimals),
+  });
+  try {
+    window.__gwExpectedNativeWei = isNative ? amountIn.toString() : '0';
+    window.__gwAllowLargeNativeTx = false;
+  } catch (_) {}
+  const sendTx = (typeof window.gwProviderSendTx === 'function')
+    ? window.gwProviderSendTx
+    : ((p, txp) => p.request({ method: 'eth_sendTransaction', params: [txp] }));
+  const hash = await sendTx(provider, { from: account, to: tx.to, data: tx.data, value: tx.value || '0x0' }, 180000, execChain);
+  const crossChain = !!quote._crossChain;
+  gwToast(crossChain ? 'Submitted · delivery to the destination network is pending' : 'Submitted · waiting for confirmation…', 'info');
+  if (!crossChain) await gwWaitReceipt(provider, hash, 90000, false, execChain);
+  return { hash, namespace: 'evm', crossChain, chainId: execChain };
+};
+
 function gwInjectXstocksWalletCss() {
   if (document.getElementById('gw-xstocks-wallet-css')) return;
   const s = document.createElement('style');

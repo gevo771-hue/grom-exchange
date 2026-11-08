@@ -79,7 +79,7 @@ mustHave(
 /* Soft reopen must still kick catalog (seed «Скоро» bug). */
 {
   const idx = readFileSync(join(root, 'frontend/public/index.html'), 'utf8');
-  const soft = idx.match(/function ensureXstocksPage[\s\S]{0,1600}?function ensurePages/);
+  const soft = idx.match(/function ensureXstocksPage[\s\S]{0,3200}?function ensurePages/);
   if (!soft || !/gwxKickCatalog/.test(soft[0])) {
     fail('ensureXstocksPage must call gwxKickCatalog (including soft reopen)');
   } else {

@@ -7559,6 +7559,7 @@ if (window.GROM_LANDING) try { document.documentElement.classList.add('grom-land
     earn: { src: '/grom-earn.js', ready: function () { return window.gromEarn; } },
     predictEvent: { src: '/grom-predict-event.js', ready: function () { return window.gromPredictEvent; } },
     predict: { src: '/grom-predict.js', ready: function () { return window.gromPredict; } },
+    stocks: { src: '/grom-stocks.js', ready: function () { return window.gromStocks; } },
     trade: { src: '/grom-hyperliquid.js', ready: function () { return window.gromHL; } },
     charts: { src: 'https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js', ready: function () { return window.LightweightCharts; } },
   };
@@ -7602,6 +7603,13 @@ if (window.GROM_LANDING) try { document.documentElement.classList.add('grom-land
       }
     }
     if (page === 'predict') names.push('predict');
+    if (page === 'xstocks') {
+      names.push('stocks');
+      if (!document.getElementById('grom-stocks-style')) {
+        var stocksSheet = document.createElement('link');
+        stocksSheet.id = 'grom-stocks-style'; stocksSheet.rel = 'stylesheet'; stocksSheet.href = '/grom-stocks.css'; document.head.appendChild(stocksSheet);
+      }
+    }
     // Trade data also powers market lists, portfolio totals and history.
     if (['dashboard', 'futures', 'markets', 'wallet', 'history'].indexOf(page) !== -1) names.push('trade');
     if (page === 'futures') names.push('charts');
@@ -8484,6 +8492,7 @@ window.gromSyncPrettyPath = function gromSyncPrettyPath(page) {
     if (!newPath) newPath = '/';
     var routeParams = new URLSearchParams(location.search);
     if (page !== 'predict') routeParams.delete('event');
+    if (page !== 'xstocks') routeParams.delete('sym');
     var routeQuery = routeParams.toString();
     var next = newPath + (routeQuery ? '?' + routeQuery : '') + newHash;
     var cur = location.pathname + location.search + location.hash;
@@ -17404,10 +17413,36 @@ var GROM_XSTOCKS = [
       });
     } catch (_) {}
   }
+  /* Stocks v2 (grom-stocks.js) owns #page-xstocks; the legacy list below stays as a fallback. */
+  function gwxStocksV2Active() {
+    var sec = document.getElementById('page-xstocks');
+    return !!(sec && sec.querySelector('.gs-root'));
+  }
   function ensureXstocksPage() {
     var anchor = document.getElementById('page-markets') || document.querySelector('main .page');
     if (!anchor || !anchor.parentNode) return;
     var sec = document.getElementById('page-xstocks');
+    if (!window.GROM_STOCKS_LEGACY && typeof window.gromEnsureProductModule === 'function') {
+      if (!sec) {
+        sec = document.createElement('section'); sec.className = 'page'; sec.id = 'page-xstocks';
+        anchor.parentNode.appendChild(sec);
+      }
+      if (!document.getElementById('grom-stocks-style')) {
+        var gsCss = document.createElement('link');
+        gsCss.id = 'grom-stocks-style'; gsCss.rel = 'stylesheet'; gsCss.href = '/grom-stocks.css'; document.head.appendChild(gsCss);
+      }
+      if (window.gromStocks) { window.gromStocks.mount(sec); return; }
+      if (!sec.querySelector('.gs-root')) sec.innerHTML = '<div class="gs-root" id="gsRoot"></div>';
+      window.gromEnsureProductModule('stocks').then(function (mod) {
+        mod.mount(document.getElementById('page-xstocks'));
+      }).catch(function () {
+        window.GROM_STOCKS_LEGACY = true;
+        var s = document.getElementById('page-xstocks');
+        if (s) { delete s.dataset.gwxReady; s.innerHTML = ''; }
+        ensureXstocksPage();
+      });
+      return;
+    }
     var lang = gwxCurrentLang();
     var langOk = sec && sec.dataset.gwxLang === lang;
     if (sec && sec.dataset.gwxReady === '12' && !sec.dataset.gwxForce && langOk) {
@@ -17873,10 +17908,14 @@ var GROM_XSTOCKS = [
   document.addEventListener('grom:xstocks-focus', function (ev) {
     try {
       var sym = ev && ev.detail && ev.detail.sym;
-      if (sym) { try { sessionStorage.setItem('gwx_focus_sym', sym); } catch (_) {} gwxFocusFromHash(); }
+      if (sym) {
+        try { sessionStorage.setItem('gwx_focus_sym', sym); } catch (_) {}
+        if (!window.GROM_STOCKS_LEGACY && typeof window.gromEnsureProductModule === 'function') { ensureXstocksPage(); return; }
+        gwxFocusFromHash();
+      }
     } catch (_) {}
   });
-  document.addEventListener('grom:wallet-connected', function () { refreshUsdtBalChip(); gwxLoadPositions(); });
+  document.addEventListener('grom:wallet-connected', function () { if (gwxStocksV2Active()) return; refreshUsdtBalChip(); gwxLoadPositions(); });
   document.addEventListener('grom:wallet-disconnected', function () { ++gwxFundsLoadId; gwxStableFunds = null; gwxUsdtBal = 0; gwxPositions = []; updateXstocksStats(); renderStockPos(); });
 
   document.addEventListener('click', function (e) {
@@ -18022,7 +18061,7 @@ var GROM_XSTOCKS = [
     _gwxTick++;
     var px = document.getElementById('page-xstocks');
     var pp = document.getElementById('page-predict');
-    if (px && px.classList.contains('active')) {
+    if (px && px.classList.contains('active') && !gwxStocksV2Active()) {
       refreshStockPrices();
       if (_gwxTick % 4 === 0) { renderStockPos(); updateXstocksStats(); }
       if (_gwxTick % 20 === 0) { refreshUsdtBalChip(); gwxLoadPositions(); }

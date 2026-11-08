@@ -15,12 +15,13 @@ function fixture() {
   const context = vm.createContext({ Promise, console, setTimeout, clearTimeout,
     document: {
       createElement: () => ({ remove() { this.removed = true; } }),
+      getElementById: id => scripts.find(el => el.id === id) || null,
       head: { appendChild: el => scripts.push(el) },
     },
   });
   context.window = context;
   vm.runInContext(loader, context);
-  const exports = { trade: 'gromHL', predict: 'gromPredict', charts: 'LightweightCharts' };
+  const exports = { trade: 'gromHL', predict: 'gromPredict', charts: 'LightweightCharts', stocks: 'gromStocks' };
   function finish(name, api = {}) {
     context[exports[name]] = api;
     scripts.findLast(s => s.id === 'grom-product-' + name && !s.removed).onload();
@@ -29,12 +30,26 @@ function fixture() {
 }
 test('landing and unrelated pages do not download trading, prediction or chart modules', async () => {
   const { context: c, scripts } = fixture();
-  for (const page of ['landing', 'xstocks', 'settings', 'referral', 'help', 'backoffice']) {
+  for (const page of ['landing', 'settings', 'referral', 'help', 'backoffice']) {
     await c.gromLoadPageModules(page);
   }
   assert.equal(scripts.length, 0);
   assert.doesNotMatch(src, /<script[^>]+src=["'][^"']*lightweight-charts/);
   assert.doesNotMatch(src + wallet, /gromLoadAuxScripts|__gromAuxLoaded/);
+});
+test('Stocks page downloads only the stocks module, once', async () => {
+  const { context: c, scripts, finish } = fixture();
+  const first = c.gromLoadPageModules('xstocks');
+  const second = c.gromLoadPageModules('xstocks');
+  assert.deepEqual(scripts.map(x => x.id).sort(), ['grom-product-stocks', 'grom-stocks-style']);
+  assert.match(scripts.find(x => x.id === 'grom-product-stocks').src, /grom-stocks\.js$/);
+  assert.match(scripts.find(x => x.id === 'grom-stocks-style').href, /grom-stocks\.css$/);
+  context_finish: {
+    c.gromStocks = { mount() {} };
+    scripts.find(s => s.id === 'grom-product-stocks').onload();
+  }
+  await Promise.all([first, second]);
+  assert.equal(scripts.length, 2);
 });
 test('direct Trade entry and concurrent balance requests share one download per module', async () => {
   const { context: c, scripts, finish } = fixture();

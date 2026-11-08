@@ -12,6 +12,8 @@ import { registerXstocksChartRoute } from './xstocks-chart.js';
 import { registerXstocksReferenceRoute } from './xstocks-reference.js';
 import { createXstocksCatalogLoader, fetchXstocksCatalogPages } from './xstocks-catalog-fetch.js';
 import { fetchAxelarGmpStatus } from './axelar-gmp.js';
+import { createStocksUniverse, createStockLiquidity, registerStocksRoutes, classifyLifiStockToken, LIFI_STOCK_CHAIN_IDS } from './stocks-universe.js';
+import { currentXstockMultiplier } from './xstocks-reference.js';
 
 const CG_IDS = {
   BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin', XRP: 'ripple',
@@ -314,13 +316,20 @@ async function fetchYahooEquityMetrics(items) {
         const dollarVol = (Number.isFinite(px) && Number.isFinite(shares) && px > 0 && shares > 0)
           ? px * shares
           : 0;
+        const chgAbs = Number(r.regularMarketChange);
+        const pe = Number(r.trailingPE);
         out.set(row.key, {
           vol24: fmtCompactUsd(dollarVol),
           mc: fmtCompactUsd(mc),
+          mcNum: Number.isFinite(mc) && mc > 0 ? mc : null,
           equityPx: Number.isFinite(px) && px > 0 ? px : 0,
           currency: String(r.currency || '').toUpperCase(),
           chg: Number.isFinite(chg) ? chg : null,
           chgSource: Number.isFinite(chg) ? 'yahoo' : null,
+          chgAbs: Number.isFinite(chgAbs) ? chgAbs : null,
+          pe: Number.isFinite(pe) && pe > 0 && pe < 10000 ? pe : null,
+          marketState: String(r.marketState || ''),
+          shortName: String(r.shortName || r.longName || ''),
         });
       }
     } catch (e) {
@@ -401,6 +410,9 @@ async function enrichXstocksMetrics(items) {
       }
       /* Market cap = underlying company (what «КАПИТАЛИЗАЦИЯ» means on Stocks). */
       if (m.mc && m.mc !== '—') it.mc = m.mc;
+      if (m.mcNum) it.mcNum = m.mcNum;
+      if (m.chgAbs != null) it.chgAbs = m.chgAbs;
+      if (m.pe) it.pe = m.pe;
       /* Keep Yahoo equity $ volume as fallback; Dex pool vol preferred below. */
       if (m.vol24 && m.vol24 !== '—') it.vol24 = m.vol24;
     }
@@ -987,6 +999,137 @@ function slicePredictPage(markets, offset, limit) {
   };
 }
 
+// ---- Stocks section: every tokenized share across GROM networks (read-only) ----
+const STOCK_LIFI_DISK = '/tmp/grom-stock-lifi-tokens.json';
+function readStockLifiDisk() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(STOCK_LIFI_DISK, 'utf8'));
+    return raw && typeof raw.tokens === 'object' ? raw.tokens : null;
+  } catch (_) { return null; }
+}
+async function fetchStockLifiTokens() {
+  try {
+    const headers = { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' };
+    const key = String(config.liquidity?.lifiApiKey || '').trim();
+    if (key) headers['x-lifi-api-key'] = key;
+    const { data } = await axios.get('https://li.quest/v1/tokens', {
+      params: { chains: LIFI_STOCK_CHAIN_IDS.join(',') },
+      timeout: 20000,
+      headers,
+      maxContentLength: 40 * 1024 * 1024,
+    });
+    const out = {};
+    for (const [cid, list] of Object.entries(data?.tokens || {})) {
+      const kept = (Array.isArray(list) ? list : []).filter((tok) => classifyLifiStockToken(tok, cid));
+      if (kept.length) out[cid] = kept.map((tok) => ({
+        symbol: tok.symbol, name: tok.name, address: tok.address, decimals: tok.decimals,
+        priceUSD: tok.priceUSD, logoURI: tok.logoURI, verificationStatus: tok.verificationStatus,
+      }));
+    }
+    if (Object.keys(out).length) {
+      try { fs.writeFileSync(STOCK_LIFI_DISK, JSON.stringify({ ts: Date.now(), tokens: out }), 'utf8'); } catch (_) {}
+      return out;
+    }
+  } catch (_) {}
+  return readStockLifiDisk();
+}
+
+const stocksUniverse = createStocksUniverse({
+  getCatalog: () => xstocksCatalog.get(),
+  fetchLifiTokens: fetchStockLifiTokens,
+  fetchMetrics: (rows) => fetchYahooEquityMetrics(rows),
+});
+
+const STOCK_DS_QUEUE = { last: 0 };
+const stockLiquidity = createStockLiquidity({
+  fetchPairs: async (chainSlug, address) => {
+    // Gentle spacing for the public DexScreener API (300 req/min).
+    const wait = Math.max(0, STOCK_DS_QUEUE.last + 220 - Date.now());
+    STOCK_DS_QUEUE.last = Date.now() + wait;
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    const { data } = await axios.get(
+      `https://api.dexscreener.com/token-pairs/v1/${encodeURIComponent(chainSlug)}/${encodeURIComponent(address)}`,
+      { timeout: 10000, headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' } },
+    );
+    return Array.isArray(data) ? data : [];
+  },
+});
+
+const stockRefCache = new Map();
+/** Independent share price (Yahoo, ≤60 s old) + Solana share multiplier for the trade guard. */
+async function fetchStockReference(item) {
+  const sym = item.sym;
+  const hit = stockRefCache.get(sym);
+  if (hit && Date.now() - hit.ts < 60_000) return hit.value;
+  const [metrics, mult] = await Promise.all([
+    fetchYahooEquityMetrics([{ sym, yahooSym: item.yahooSym || sym.replace(/\./g, '-') }]).catch(() => new Map()),
+    item.solMint && /x$/i.test(String(item.tokenSym || ''))
+      ? axios.get(`https://api.xstocks.fi/api/v2/public/assets/${encodeURIComponent(item.tokenSym)}/multiplier`,
+        { timeout: 8000, params: { network: 'Solana' }, headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' } })
+        .then(({ data }) => currentXstockMultiplier(data)).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  const m = metrics.get(sym);
+  const usd = m && m.currency === 'USD' && m.equityPx > 0 ? m.equityPx : 0;
+  const value = {
+    price: usd || null,
+    source: usd ? 'yahoo-usd' : null,
+    at: usd ? Date.now() : null,
+    marketState: m?.marketState || null,
+    solMultiplier: mult,
+  };
+  while (stockRefCache.size >= 500) stockRefCache.delete(stockRefCache.keys().next().value);
+  stockRefCache.set(sym, { ts: Date.now(), value });
+  return value;
+}
+
+const stockSparkCache = new Map();
+async function fetchStockSpark(rows) {
+  const series = {};
+  const missing = [];
+  for (const row of rows) {
+    const hit = stockSparkCache.get(row.sym);
+    if (hit && Date.now() - hit.ts < 15 * 60_000) series[row.sym] = hit.value;
+    else missing.push(row);
+  }
+  for (let i = 0; i < missing.length; i += 20) {
+    const chunk = missing.slice(i, i + 20);
+    try {
+      const { data } = await axios.get('https://query1.finance.yahoo.com/v8/finance/spark', {
+        timeout: 10000,
+        params: { symbols: chunk.map((r) => r.yahooSym).join(','), range: '5d', interval: '1h' },
+        headers: { 'User-Agent': YF_UA, Accept: 'application/json' },
+      });
+      for (const row of chunk) {
+        const closes = (data?.[row.yahooSym]?.close || []).map(Number).filter((c) => Number.isFinite(c) && c > 0);
+        const value = closes.length >= 3 ? closes.map((c) => Math.round(c * 10000) / 10000) : [];
+        series[row.sym] = value;
+        while (stockSparkCache.size >= 2000) stockSparkCache.delete(stockSparkCache.keys().next().value);
+        stockSparkCache.set(row.sym, { ts: Date.now(), value });
+      }
+    } catch (_) {}
+  }
+  return series;
+}
+
+const STOCK_INDICES = [
+  ['^GSPC', 'S&P 500'], ['^IXIC', 'NASDAQ'], ['^DJI', 'Dow Jones'], ['^RUT', 'Russell 2000'],
+  ['^VIX', 'VIX'], ['GC=F', 'Gold'], ['CL=F', 'Oil WTI'], ['^TNX', 'US 10Y'],
+];
+let stockIndicesCache = { ts: 0, value: null };
+async function fetchStockIndices() {
+  if (stockIndicesCache.value && Date.now() - stockIndicesCache.ts < 60_000) return stockIndicesCache.value;
+  const metrics = await fetchYahooEquityMetrics(STOCK_INDICES.map(([y]) => ({ sym: y, yahooSym: y })));
+  const indices = STOCK_INDICES.map(([y, name]) => {
+    const m = metrics.get(y);
+    return m && m.equityPx > 0 ? { sym: y, name, price: m.equityPx, chg: m.chg, chgAbs: m.chgAbs } : null;
+  }).filter(Boolean);
+  const state = metrics.get('^GSPC')?.marketState || null;
+  const value = { indices, marketState: state, ts: Date.now() };
+  if (indices.length) stockIndicesCache = { ts: Date.now(), value };
+  return value;
+}
+
 export function createMarketRouter() {
   const r = express.Router();
   registerPredictionEventRoutes(r);
@@ -1022,7 +1165,8 @@ export function createMarketRouter() {
 
   // Public chart proxy is restricted to the canonical xStock catalog and fixed chart presets.
   registerXstocksChartRoute(r, {
-    getCatalog: () => xstocksCatalog.get(),
+    // Any Stocks-section ticker (catalog + other issuers) may load its chart.
+    getCatalog: () => stocksUniverse.chartCatalog().catch(() => xstocksCatalog.get()),
     getSession: () => ensureYahooSession(),
     fetchChartData: ({ yahoo, range, interval, session }) => {
       const headers = { 'User-Agent': YF_UA, Accept: 'application/json' };
@@ -1034,6 +1178,14 @@ export function createMarketRouter() {
         { timeout: 12000, params, headers },
       ).then(({ data }) => data);
     },
+  });
+
+  registerStocksRoutes(r, {
+    universe: stocksUniverse,
+    liquidity: stockLiquidity,
+    fetchReference: fetchStockReference,
+    fetchSpark: fetchStockSpark,
+    fetchIndices: fetchStockIndices,
   });
 
   // Backed xStocks catalog (server-side to bypass CORS on api.backed.fi).

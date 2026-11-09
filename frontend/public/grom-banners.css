@@ -325,3 +325,8 @@
     transition: none !important;
   }
 }
+
+/* Live-stories hero mount (grom-home-hero.js) — reserve its height so the page does not jump. */
+#page-dashboard #gromHomeHero{min-height:300px;border-radius:22px;background:#141a24;border:1px solid rgba(200,212,232,.12)}
+#page-dashboard #gromHomeHero:has(.ghh){min-height:0;background:none;border:0}
+@media (max-width:820px){#page-dashboard #gromHomeHero{min-height:470px}}

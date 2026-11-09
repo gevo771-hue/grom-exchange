@@ -1539,9 +1539,26 @@
       root.addEventListener('error', onImgError, true);
       root.addEventListener('load', onImgLoad, true);
     }
+    /* Booted in the background on other pages: wait until Stocks is actually opened. */
+    if (!stocksWanted(sec)) {
+      if (!lazyBound) {
+        lazyBound = true;
+        window.addEventListener('grom:route-change', function (e) {
+          if (e && e.detail && e.detail.page === 'xstocks') setTimeout(function () { mount(document.getElementById('page-xstocks')); }, 0);
+        });
+      }
+      return;
+    }
     if (!S.indices) loadIndices().then(function () { var s = root && root.querySelector('.gs-strip'); if (s) s.outerHTML = stripHtml(); });
     if (!S.rows) loadList();
     render();
+  }
+  var lazyBound = false;
+  function stocksWanted(sec) {
+    if (sec && sec.classList.contains('active')) return true;
+    var r = ''; try { r = document.documentElement.getAttribute('data-grom-route') || ''; } catch (_) {}
+    if (r === 'xstocks') return true;
+    return /^#xstocks/.test(location.hash || '') || /^\/stocks/.test(location.pathname || '');
   }
 
   window.gromStocks = { mount: mount, open: function (sym) { go(String(sym || '').toUpperCase()); } };

@@ -112,3 +112,11 @@ test('routes: list, detail with liquidity and reference, unknown ticker', async 
     server.close();
   }
 });
+
+test('universe picks up refreshed catalog prices (new catalog array)', async () => {
+  let cat = catalog.map((c) => ({ ...c, price: 0, fairPrice: 0 }));
+  const universe = createStocksUniverse({ getCatalog: async () => cat, fetchLifiTokens: async () => ({}), coldLifiWaitMs: 10 });
+  assert.equal((await universe.find('TSLA')).fairPrice, 0);
+  cat = catalog.map((c) => ({ ...c }));
+  assert.equal((await universe.find('TSLA')).fairPrice, 358.2);
+});

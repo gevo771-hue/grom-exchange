@@ -637,7 +637,7 @@
   }
   /* Pool liquidity is filled server-side in the background; pick it up without blocking the page. */
   function pollLiquidity(sym) {
-    if ((S.liqTries || 0) >= 5) return;
+    if ((S.liqTries || 0) >= 10) return;
     S.liqTries = (S.liqTries || 0) + 1;
     setTimeout(function () {
       if (S.detailSym !== sym) return;
@@ -647,7 +647,7 @@
         S.detail = d;
         applyDetailUpdate(sym);
       }).catch(function () { pollLiquidity(sym); });
-    }, 2500);
+    }, S.liqTries < 4 ? 2500 : 6000);
   }
   function applyDetailUpdate(sym) {
     var a = document.activeElement;

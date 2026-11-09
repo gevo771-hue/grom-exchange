@@ -128,3 +128,10 @@ test('background pre-warming never takes the visitors\' half of the budget', asy
   assert.equal(await liq.forItem(mk('B'), new Set(), { background: true }), null);
   assert.ok(await liq.forItem(mk('C'), new Set()));
 });
+
+test('market cap and turnover of non-US listings are not shown as USD', () => {
+  const items = buildStocksUniverse({ catalog: [{ sym: 'TCENT', yahooSym: '0700.HK', tokenSym: 'TCENTx', name: 'Tencent xStock', addrs: { 1: A(30) }, solMint: '', mc: '$3.83T', vol24: '$551.1M', mcNum: 3.83e12 }], lifiTokens: {} });
+  const row = compactStockRow(items[0]);
+  assert.equal(row.mc, null);
+  assert.equal(row.v, null);
+});

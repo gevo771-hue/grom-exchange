@@ -321,7 +321,7 @@ async function fetchYahooEquityMetrics(items) {
         out.set(row.key, {
           vol24: fmtCompactUsd(dollarVol),
           mc: fmtCompactUsd(mc),
-          mcNum: Number.isFinite(mc) && mc > 0 ? mc : null,
+          mcNum: Number.isFinite(mc) && mc > 0 && String(r.currency || '').toUpperCase() === 'USD' ? mc : null,
           equityPx: Number.isFinite(px) && px > 0 ? px : 0,
           currency: String(r.currency || '').toUpperCase(),
           chg: Number.isFinite(chg) ? chg : null,

@@ -1087,7 +1087,7 @@
       + '<div id="gsRecvAddr"></div><div class="gs-route" id="gsRoute" style="display:none"></div><div id="gsWarn"></div><button type="button" class="gs-cta" id="gsCta"></button>'
       + '<div class="gs-fine">' + esc(t('tp_fine')) + ' <a href="#" data-legal>' + esc(t('tp_legal')) + '</a></div>';
     var lgA = el.querySelector('[data-legal]');
-    if (lgA) lgA.addEventListener('click', function (e) { e.preventDefault(); var lg = root.querySelector('#gsLegal'); if (lg) lg.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+    if (lgA) lgA.addEventListener('click', function (e) { e.preventDefault(); closeSheet(); var lg = root.querySelector('#gsLegal'); if (lg) setTimeout(function () { lg.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, sheetMode() ? 280 : 0); });
     el.querySelectorAll('[data-side]').forEach(function (b) { b.addEventListener('click', function () { setSide(b.getAttribute('data-side')); }); });
     var inp = el.querySelector('#gsAmt');
     if (inp) inp.addEventListener('input', function () {

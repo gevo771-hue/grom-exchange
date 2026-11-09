@@ -1056,31 +1056,42 @@ const stockLiquidity = createStockLiquidity({
 });
 
 const stockRefCache = new Map();
-/** Independent share price (Yahoo, ≤60 s old) + Solana share multiplier for the trade guard. */
+const stockMultCache = new Map();
+/** Solana share multiplier changes rarely (dividends) — cache 30 min per token. */
+async function stockSolMultiplier(item) {
+  if (!item.solMint || !/x$/i.test(String(item.tokenSym || ''))) return null;
+  const key = item.tokenSym;
+  const hit = stockMultCache.get(key);
+  if (hit && Date.now() - hit.ts < 30 * 60_000) return hit.value;
+  const value = await axios.get(`https://api.xstocks.fi/api/v2/public/assets/${encodeURIComponent(item.tokenSym)}/multiplier`,
+    { timeout: 8000, params: { network: 'Solana' }, headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' } })
+    .then(({ data }) => currentXstockMultiplier(data)).catch(() => null);
+  if (value) {
+    while (stockMultCache.size >= 1000) stockMultCache.delete(stockMultCache.keys().next().value);
+    stockMultCache.set(key, { ts: Date.now(), value });
+  }
+  return value;
+}
+/** Independent share price (Yahoo) + Solana share multiplier for the trade guard. */
 async function fetchStockReference(item) {
   const sym = item.sym;
   const hit = stockRefCache.get(sym);
   if (hit && Date.now() - hit.ts < 60_000) return hit.value;
-  /* Catalog Yahoo price refreshed within 3 min is fresh enough — skip the extra round trip. */
+  /* The catalog refreshes Yahoo prices every ~5 min; reuse them while ≤6 min old. */
   const at = Number(item.fairPriceAt) || 0;
-  const needMult = item.solMint && /x$/i.test(String(item.tokenSym || ''));
-  if (!needMult && item.fairPrice > 0 && at > 0 && Date.now() - at < 3 * 60_000) {
-    return { price: Number(item.fairPrice), source: 'yahoo-usd', at, marketState: null, solMultiplier: null };
-  }
+  const catalogFresh = item.fairPrice > 0 && at > 0 && Date.now() - at < 6 * 60_000;
   const [metrics, mult] = await Promise.all([
-    fetchYahooEquityMetrics([{ sym, yahooSym: item.yahooSym || sym.replace(/\./g, '-') }]).catch(() => new Map()),
-    item.solMint && /x$/i.test(String(item.tokenSym || ''))
-      ? axios.get(`https://api.xstocks.fi/api/v2/public/assets/${encodeURIComponent(item.tokenSym)}/multiplier`,
-        { timeout: 8000, params: { network: 'Solana' }, headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' } })
-        .then(({ data }) => currentXstockMultiplier(data)).catch(() => null)
-      : Promise.resolve(null),
+    catalogFresh
+      ? Promise.resolve(null)
+      : fetchYahooEquityMetrics([{ sym, yahooSym: item.yahooSym || sym.replace(/\./g, '-') }]).catch(() => new Map()),
+    stockSolMultiplier(item),
   ]);
-  const m = metrics.get(sym);
-  const usd = m && m.currency === 'USD' && m.equityPx > 0 ? m.equityPx : 0;
+  const m = metrics ? metrics.get(sym) : null;
+  const usd = catalogFresh ? Number(item.fairPrice) : (m && m.currency === 'USD' && m.equityPx > 0 ? m.equityPx : 0);
   const value = {
     price: usd || null,
     source: usd ? 'yahoo-usd' : null,
-    at: usd ? Date.now() : null,
+    at: usd ? (catalogFresh ? at : Date.now()) : null,
     marketState: m?.marketState || null,
     solMultiplier: mult,
   };
@@ -1158,7 +1169,7 @@ function startStockWarmers() {
     for (const it of all) for (const v of it.variants) set.add(v.c === 'solana' ? v.a : String(v.a).toLowerCase());
     for (const it of await top(40)) {
       if (stockLiquidity.peek(it.sym)) continue;
-      const got = await stockLiquidity.forItem(it, set).catch(() => null);
+      const got = await stockLiquidity.forItem(it, set, { background: true }).catch(() => null);
       if (!got) break; // request budget used up — continue next round
     }
   };

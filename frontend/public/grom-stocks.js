@@ -823,7 +823,7 @@
       + '<div class="gs-dh-main"><div class="gs-ttl"><h1 data-switch>' + esc(r.n || r.s) + '</h1><button type="button" class="gs-chev" data-switch aria-haspopup="dialog" aria-label="' + esc(t('sw_open')) + '" title="' + esc(t('sw_open')) + '">' + ICO.down + '</button></div>'
       + '<div class="gs-meta"><b>' + esc(r.s) + '</b>' + (r.k ? '<i></i><span>' + esc(t('c_' + r.k)) + '</span>' : '') + '<i></i><span>' + esc(netsLabel((r.nets || []).length)) + '</span></div></div>'
       + '<div class="gs-dacts"><button type="button" class="gs-ghost gs-ic" data-fav1 aria-label="★">' + (S.fav[r.s] ? ICO.star.replace('<svg', '<svg width="16" height="16" style="color:#f5c84a"') : ICO.starO.replace('<svg', '<svg width="16" height="16"')) + '</button><button type="button" class="gs-ghost gs-ic" data-share aria-label="' + esc(t('share')) + '">' + ICO.share + '<span class="gs-sh-t">' + esc(t('share')) + '</span></button></div></div>'
-      + '<div class="gs-px"><b class="num">' + px(price) + '</b><span class="gs-chg num ' + cls(r.c) + '">' + pct(r.c) + ' 24h</span></div>'
+      + '<div class="gs-px"><b class="num">' + px(price) + '</b><span class="gs-chg num ' + cls(r.c) + '">' + pct(r.c) + ' <small>24h</small></span></div>'
       + '<div class="gs-ref">' + esc(t('ex_price')) + ': <b class="num">' + px(ref) + '</b>' + (prem != null ? ' · ' + esc(prem >= 0 ? t('premium') : t('discount')) + ' <b class="num">' + nf(Math.abs(prem), 2) + '%</b>' : '') + '</div>'
       + '<div class="gs-card gs-sec" id="gsChartCard"><div class="gs-chhead"><div class="gs-rng" id="gsRng">' + [['1d', '1D'], ['5d', '5D'], ['1mo', '1M']].map(function (x) { return '<button type="button" data-r="' + x[0] + '" class="' + (S.range === x[0] ? 'on' : '') + '">' + x[1] + '</button>'; }).join('') + '</div><span class="gs-mu" style="font-size:12px">' + esc(t('chart_ex')) + '</span></div>'
       + '<div class="gs-chart" id="gsChart"><div class="gs-ctip" id="gsCtip"></div></div>'
@@ -1241,8 +1241,8 @@
     var curNet = initialNet || 'all', qq = '';
     var ov = document.createElement('div'); ov.className = 'gs-ov'; ov.id = 'gsOv';
     ov.innerHTML = '<div class="gs-mdl" role="dialog" aria-modal="true"><div class="mh">' + esc(mode === 'pay' ? t('pk_title_pay') : t('pk_title_get')) + '<button type="button" class="x" data-x>' + ICO.x + '</button></div>'
-      + '<div class="mb"><label class="gs-search">' + ICO.search + '<input id="gsPkQ" autocomplete="off" placeholder="' + esc(t('pk_search')) + '"></label><div class="chs" id="gsPkChs"></div><div class="tl" id="gsPkList"></div></div></div>';
-    document.body.appendChild(ov);
+      + '<div class="mb lst"><label class="gs-search">' + ICO.search + '<input id="gsPkQ" autocomplete="off" placeholder="' + esc(t('pk_search')) + '"></label><div class="chs" id="gsPkChs"></div><div class="tl" id="gsPkList"></div></div></div>';
+    document.body.appendChild(ov); lockPage(true);
     ov.addEventListener('error', onImgError, true);
     ov.addEventListener('load', onImgLoad, true);
     var destNet = (destVariant(S.detail) || {}).net || '';
@@ -1304,8 +1304,8 @@
     closeOverlay();
     var ov = document.createElement('div'); ov.className = 'gs-ov gs-ov-sw'; ov.id = 'gsOv';
     ov.innerHTML = '<div class="gs-mdl gs-sw" role="dialog" aria-modal="true"><div class="mh">' + esc(t('sw_title')) + '<button type="button" class="x" data-x>' + ICO.x + '</button></div>'
-      + '<div class="mb"><label class="gs-search">' + ICO.search + '<input id="gsSwQ" type="search" autocomplete="off" placeholder="' + esc(t('search')) + '"></label><div class="tl" id="gsSwList"></div></div></div>';
-    document.body.appendChild(ov);
+      + '<div class="mb lst"><label class="gs-search">' + ICO.search + '<input id="gsSwQ" type="search" autocomplete="off" placeholder="' + esc(t('search')) + '"></label><div class="tl" id="gsSwList"></div></div></div>';
+    document.body.appendChild(ov); lockPage(true);
     ov.addEventListener('error', onImgError, true);
     ov.addEventListener('load', onImgLoad, true);
     var qq = '';
@@ -1343,7 +1343,8 @@
     if (!S.rows) loadList().then(function () { if (document.getElementById('gsOv') === ov) list(); });
     setTimeout(function () { if (window.innerWidth > 760) qi.focus(); }, 30);
   }
-  function closeOverlay() { var o = document.getElementById('gsOv'); if (o) o.remove(); }
+  function lockPage(on) { try { document.documentElement.classList.toggle('gs-lock', !!on); } catch (_) {} }
+  function closeOverlay() { var o = document.getElementById('gsOv'); if (o) o.remove(); lockPage(false); }
   function onKey(e) { if (e.key === 'Escape') closeOverlay(); }
 
   /* ---------- execution ---------- */
@@ -1358,7 +1359,7 @@
     ov.innerHTML = '<div class="gs-mdl" role="dialog" aria-modal="true"><div class="mh">' + esc(buy ? t('tp_buy_x', { sym: sym }) : t('tp_sell_x', { sym: sym })) + '<button type="button" class="x" data-x>' + ICO.x + '</button></div>'
       + '<div class="mb"><div class="steps" id="gsSteps"><div class="run" data-st="1"><i></i><span>' + esc(t('x_confirm')) + '<small>' + esc(t('x_confirm_sub')) + '</small></span></div></div>'
       + '<button type="button" class="gs-cta" id="gsXDone" disabled>' + esc(t('tp_quoting')) + '</button></div></div>';
-    document.body.appendChild(ov);
+    document.body.appendChild(ov); lockPage(true);
     var steps = ov.querySelector('#gsSteps'), done = ov.querySelector('#gsXDone');
     function finish(label) { done.disabled = false; done.textContent = label || t('x_close'); done.onclick = function () { closeOverlay(); }; }
     ov.querySelector('[data-x]').addEventListener('click', closeOverlay);

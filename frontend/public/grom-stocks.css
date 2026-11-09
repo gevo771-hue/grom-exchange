@@ -422,3 +422,7 @@ html.gs-lock,html.gs-lock body{overflow:hidden!important}
   .gs-ov.gs-ov-sh .gs-mdl{max-width:none;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom)}
   .gs-share .sn{width:44px;height:44px}
 }
+
+/* Desktop Chrome gives <main> transform:translateZ(0) (index.html), which would pin position:fixed
+   children (bottom bar, trade sheet) to <main> instead of the screen. Drop it while Stocks is open on narrow screens. */
+@media (max-width:1020px){ .shell > main:has(#page-xstocks.active){ transform:none !important; } }

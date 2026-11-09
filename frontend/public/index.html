@@ -1251,8 +1251,8 @@
     aspect-ratio: 441 / 462;
     object-fit: contain;
     object-position: center;
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: crisp-edges;
+    /* Smooth resampling: crisp-edges used nearest-neighbour and left jagged edges. */
+    image-rendering: auto;
   }
   @keyframes grom-landing-logo-float {
     0%, 100% { transform: translateY(0); }
@@ -2136,6 +2136,23 @@
   @media (min-width: 1720px) {
     main > .page { max-width: 1480px; margin-left: auto; margin-right: auto; }
     main > .page.landing-cosmos { max-width: none; }
+  }
+  /* 4K and larger screens at 100% OS scaling: scale the header, the sidebar and
+   * the home page like browser zoom. Children are zoomed rather than the shell,
+   * so the vh-based shell heights stay exact. Same steps as the landing/stocks. */
+  @media (min-width: 2600px) and (hover: hover) and (pointer: fine) { :root { --gx-z: 1.4; } }
+  @media (min-width: 3400px) and (hover: hover) and (pointer: fine) { :root { --gx-z: 1.75; } }
+  @media (min-width: 4600px) and (hover: hover) and (pointer: fine) { :root { --gx-z: 2.3; } }
+  @media (min-width: 2600px) and (hover: hover) and (pointer: fine) {
+    :root { --topbar-h: calc(60px * var(--gx-z)); --sidebar-w: calc(232px * var(--gx-z)); }
+    .topbar { padding-left: calc(16px * var(--gx-z)); padding-right: calc(16px * var(--gx-z)); gap: calc(10px * var(--gx-z)); }
+    .topbar > * { zoom: var(--gx-z); }
+    .sidebar { padding: calc(18px * var(--gx-z)) calc(12px * var(--gx-z)); }
+    .sidebar > * { zoom: var(--gx-z); }
+    main { padding: calc(22px * var(--gx-z)) calc(28px * var(--gx-z)) calc(60px * var(--gx-z)); }
+    #page-dashboard, #gw-ai-fab { zoom: var(--gx-z); }
+    /* vw-based offsets would be multiplied by zoom; pin the AI button to the corner. */
+    #gw-ai-fab.grom-ai-launcher { right: 20px !important; bottom: 20px !important; }
   }
   .breadcrumb {
     display: flex; align-items: center; gap: 8px;
@@ -6361,7 +6378,7 @@
     </button>
     <a href="#" class="grom-logo" id="logoHome" aria-label="GROM — Finance Hub">
       <span class="logo-img-shell logo-img-shell--header">
-        <img class="logo-raster logo-raster--header" src="/assets/grom-brand-header-clear.png" width="441" height="462" alt="" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/assets/grom-brand-mark-clear.png'}else{this.onerror=null;this.src='/assets/grom-brand-mark.png'}" />
+        <img class="logo-raster logo-raster--header" src="/assets/grom-logo-header-96.png" srcset="/assets/grom-logo-header-96.png 1x, /assets/grom-logo-header-192.png 2x, /assets/grom-logo-header-288.png 3x" width="441" height="462" alt="" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/assets/grom-brand-mark-clear.png'}else{this.onerror=null;this.src='/assets/grom-brand-mark.png'}" />
       </span>
       <span class="topbar-brand-lockup">
         <span class="tb-name">GROM</span>
@@ -6736,43 +6753,7 @@
     <!-- DASHBOARD -->
     <section class="page" id="page-dashboard">
       <div class="dash-banners-wrap" id="dashBannersWrap" hidden>
-      <div class="dash-banners" id="dashBanners">
-        <a class="dash-banner banner-spot" href="#dashboard" data-banner-go="dashboard" data-banner-scroll="gwDsCard">
-          <div class="banner-photo" aria-hidden="true"></div>
-          <div class="banner-scrim" aria-hidden="true"></div>
-          <div class="banner-content">
-            <div class="banner-copy">
-              <div class="banner-eyebrow" data-i18n="dash_banner_spot_eyebrow">INSTANT SWAP</div>
-              <h3 data-i18n="dash_banner_spot_h">Swap across networks</h3>
-              <p data-i18n="dash_banner_spot_p">Compare available routes. Sign in your wallet and settle on-chain.</p>
-            </div>
-          </div>
-        </a>
-        <a class="dash-banner banner-futures" href="#futures" data-banner-go="futures">
-          <div class="banner-photo" aria-hidden="true"></div>
-          <div class="banner-scrim" aria-hidden="true"></div>
-          <div class="banner-content">
-            <div class="banner-copy">
-              <div class="banner-eyebrow" data-i18n="dash_banner_fut_eyebrow">TRADE</div>
-              <h3 data-i18n="dash_banner_fut_h">Spot and perpetuals</h3>
-              <p data-i18n="dash_banner_fut_p">Trade on Hyperliquid. Leverage depends on the selected market.</p>
-            </div>
-          </div>
-        </a>
-        <a class="dash-banner banner-predict" href="#predict" data-banner-go="predict">
-          <div class="banner-photo" aria-hidden="true"></div>
-          <div class="banner-scrim" aria-hidden="true"></div>
-          <div class="banner-content">
-            <div class="banner-copy">
-              <div class="banner-eyebrow" data-i18n="dash_banner_px_eyebrow">PREDICT</div>
-              <h3 data-i18n="dash_banner_px_h">Sports. Politics. Macro.</h3>
-              <p data-i18n="dash_banner_px_p">Live odds — one click to the market.</p>
-            </div>
-          </div>
-        </a>
-      </div>
-      <script>(function(){try{var c=document.getElementById('dashBanners');if(!c)return;var idx=0,n=c.querySelectorAll('.dash-banner').length;try{var s=parseInt(sessionStorage.getItem('grom_dash_banner'),10);if(Number.isFinite(s)&&s>=0&&s<n)idx=s;}catch(_){}var w=c.clientWidth||0;if(w>0)c.scrollLeft=idx*w;}catch(_){}})();</script>
-      <div class="dash-banner-dots" id="dashBannerDots" aria-hidden="true"></div>
+        <div id="gromHomeHero" class="ghh-host"></div>
       </div>
 
 
@@ -7561,6 +7542,7 @@ if (window.GROM_LANDING) try { document.documentElement.classList.add('grom-land
     predictEvent: { src: '/grom-predict-event.js', ready: function () { return window.gromPredictEvent; } },
     predict: { src: '/grom-predict.js', ready: function () { return window.gromPredict; } },
     stocks: { src: '/grom-stocks.js', ready: function () { return window.gromStocks; } },
+    home: { src: '/grom-home-hero.js', ready: function () { return window.gromHomeStories; } },
     trade: { src: '/grom-hyperliquid.js', ready: function () { return window.gromHL; } },
     charts: { src: 'https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js', ready: function () { return window.LightweightCharts; } },
   };
@@ -19123,6 +19105,20 @@ function wireDashBannerCarousel() {
   var carousel = document.getElementById('dashBanners');
   var dotsHost = document.getElementById('dashBannerDots');
   var wrap = document.getElementById('dashBannersWrap');
+  /* Live-stories hero (grom-home-hero.js) replaced the photo carousel. */
+  var heroHost = document.getElementById('gromHomeHero');
+  if (heroHost) {
+    if (!document.getElementById('grom-home-hero-style')) {
+      var hs = document.createElement('link');
+      hs.id = 'grom-home-hero-style'; hs.rel = 'stylesheet'; hs.href = '/grom-home-hero.css'; document.head.appendChild(hs);
+    }
+    document.documentElement.classList.add('grom-dash-ready');
+    if (wrap) wrap.hidden = false;
+    if (typeof window.gromEnsureProductModule === 'function') {
+      window.gromEnsureProductModule('home').then(function (m) { m.mount(heroHost); }).catch(function () { if (wrap) wrap.hidden = true; });
+    }
+    return;
+  }
   if (!carousel) return;
   var banners = carousel.querySelectorAll('.dash-banner');
   if (!banners.length) return;

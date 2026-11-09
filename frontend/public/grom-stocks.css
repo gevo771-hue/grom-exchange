@@ -383,6 +383,7 @@ html.gs-lock,html.gs-lock body{overflow:hidden!important}
 /* 4K and wider: scale the section like the landing (sharp vectors and 2× logos). */
 @media (min-width:2600px){#page-xstocks .gs-root{zoom:1.4}}
 @media (min-width:3400px){#page-xstocks .gs-root{zoom:1.75}}
+@media (min-width:4600px){#page-xstocks .gs-root{zoom:2.3}}
 
 /* stock switcher */
 .gs-sw .tl button.on{background:rgba(126,228,255,.07)}

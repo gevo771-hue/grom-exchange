@@ -467,6 +467,24 @@ export function registerStocksRoutes(router, {
     }
   });
 
+  /* Small payload for the home page: largest US-listed companies with today's move. */
+  router.get('/stocks/top', limiter(60), async (req, res) => {
+    try {
+      const n = Math.max(1, Math.min(24, Number.parseInt(req.query?.n, 10) || 12));
+      const items = await universe.get();
+      if (!items.length) return res.status(503).json({ items: [], error: 'stocks_unavailable' });
+      const top = items.map(compactStockRow)
+        .filter((r) => r.mc > 0 && r.p > 0 && Number.isFinite(r.c))
+        .sort((a, b) => b.mc - a.mc)
+        .slice(0, n)
+        .map((r) => ({ s: r.s, n: r.n, p: r.p, c: r.c, mc: r.mc }));
+      return res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
+        .json({ items: top, count: items.length, ts: Date.now() });
+    } catch (_) {
+      return res.status(502).json({ items: [], error: 'stocks_unavailable' });
+    }
+  });
+
   router.get('/stocks/detail', limiter(40), async (req, res) => {
     try {
       const item = await universe.find(req.query?.sym || req.query?.symbol);

@@ -135,3 +135,26 @@ test('market cap and turnover of non-US listings are not shown as USD', () => {
   assert.equal(row.mc, null);
   assert.equal(row.v, null);
 });
+
+test('home page top list: largest USD caps only, small payload', async () => {
+  const universe = createStocksUniverse({ getCatalog: async () => catalog, fetchLifiTokens: async () => lifi, coldLifiWaitMs: 50 });
+  const liquidity = createStockLiquidity({ fetchPairs: async () => [] });
+  const app = express();
+  const r = express.Router();
+  registerStocksRoutes(r, { universe, liquidity });
+  app.use('/api/market', r);
+  const server = app.listen(0);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}/api/market`;
+    const res = await fetch(`${base}/stocks/top?n=5`);
+    assert.equal(res.status, 200);
+    const j = await res.json();
+    assert.ok(Array.isArray(j.items) && j.items.length >= 1 && j.items.length <= 5);
+    assert.equal(j.items[0].s, 'TSLA');
+    assert.deepEqual(Object.keys(j.items[0]).sort(), ['c', 'mc', 'n', 'p', 's']);
+    assert.ok(j.items.every((x) => x.mc > 0 && x.p > 0));
+    assert.ok(!j.items.find((x) => x.s === 'P'), 'no caps → not listed');
+  } finally {
+    server.close();
+  }
+});

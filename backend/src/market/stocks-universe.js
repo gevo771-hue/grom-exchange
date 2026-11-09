@@ -309,7 +309,7 @@ export function createStocksUniverse({
   let extraMetrics = new Map();
   let metricsTs = 0;
   let metricsPending = null;
-  let built = { key: null, items: [] };
+  let built = { key: null, catalog: null, items: [] };
 
   function loadLifi() {
     if (!lifiPending) {
@@ -342,8 +342,9 @@ export function createStocksUniverse({
     } else if (now() - lifi.ts > lifiTtlMs) {
       void loadLifi();
     }
-    const key = `${catalog?.length || 0}|${lifi.ts}|${metricsTs}|${catalog?.[0]?.fairPriceAt || 0}`;
-    if (built.key === key && built.items.length) return built.items;
+    /* Rebuild whenever the catalog array is replaced (background price/metrics refresh). */
+    const key = `${lifi.ts}|${metricsTs}`;
+    if (built.key === key && built.catalog === catalog && built.items.length) return built.items;
     const items = buildStocksUniverse({ catalog, lifiTokens: lifi.data || {} });
     for (const it of items) {
       if (it.src !== 'lifi') continue;
@@ -357,7 +358,7 @@ export function createStocksUniverse({
       if (m.vol24 && m.vol24 !== '—') it.vol24 = m.vol24;
       if (m.pe) it.pe = m.pe;
     }
-    built = { key, items };
+    built = { key, catalog, items };
     refreshExtraMetrics(items);
     return items;
   }
@@ -378,7 +379,7 @@ export function createStocksUniverse({
 }
 
 /** Per-ticker on-chain liquidity across every variant (DexScreener), cached and bounded. */
-export function createStockLiquidity({ fetchPairs, now = Date.now, ttlMs = 10 * 60_000, maxPerMinute = 200, concurrency = 4 } = {}) {
+export function createStockLiquidity({ fetchPairs, now = Date.now, ttlMs = 20 * 60_000, maxPerMinute = 200, concurrency = 4 } = {}) {
   if (typeof fetchPairs !== 'function') throw new TypeError('fetchPairs is required');
   const cache = boundedCache(600);
   const inflight = new Map();
@@ -417,7 +418,9 @@ export function createStockLiquidity({ fetchPairs, now = Date.now, ttlMs = 10 * 
     inflight.set(key, pending);
     try { return await pending; } finally { inflight.delete(key); }
   }
-  return { forItem, variantKey };
+  /** Cached result only — never starts upstream requests. */
+  function peek(sym) { return cache.get(String(sym || ''), ttlMs, now()); }
+  return { forItem, peek, variantKey };
 }
 
 /** Register /stocks, /stocks/detail, /stocks/spark and /stocks/indices on the market router. */
@@ -460,10 +463,16 @@ export function registerStocksRoutes(router, {
     try {
       const item = await universe.find(req.query?.sym || req.query?.symbol);
       if (!item) return res.status(404).json({ error: 'unknown_stock' });
-      const [liqMap, ref] = await Promise.all([
-        liquidity.forItem(item, await stockAddrSet()).catch(() => null),
-        typeof fetchReference === 'function' ? fetchReference(item).catch(() => null) : null,
-      ]);
+      /* Never block the page on DexScreener: answer from cache, fill it in the background. */
+      let liqMap = typeof liquidity.peek === 'function' ? liquidity.peek(item.sym) : null;
+      const pendingLiq = !liqMap;
+      if (pendingLiq) {
+        const addrs = await stockAddrSet();
+        const job = liquidity.forItem(item, addrs).catch(() => null);
+        /* Short wait covers warm upstreams; slower lookups finish after the response. */
+        liqMap = await Promise.race([job, new Promise((r) => setTimeout(() => r(null), 900))]);
+      }
+      const ref = typeof fetchReference === 'function' ? await fetchReference(item).catch(() => null) : null;
       const payload = detailStockPayload(item);
       if (liqMap) {
         for (const v of payload.variants) {
@@ -473,7 +482,7 @@ export function registerStocksRoutes(router, {
       }
       payload.liquidityKnown = !!liqMap;
       payload.ref = ref || null;
-      return res.set('Cache-Control', 'public, max-age=30').json(payload);
+      return res.set('Cache-Control', liqMap ? 'public, max-age=30' : 'no-store').json(payload);
     } catch (_) {
       return res.status(502).json({ error: 'stock_unavailable' });
     }

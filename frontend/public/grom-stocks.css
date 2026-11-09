@@ -245,6 +245,10 @@
 #page-xstocks .gs-cta.c{background:linear-gradient(180deg,#b2deef,#80b8d1)!important;color:#13202b!important}
 #page-xstocks .gs-cta:disabled{background:rgba(255,255,255,.08)!important;color:var(--gs-mu)!important;cursor:not-allowed}
 #page-xstocks .gs-fine{font-size:11px;color:var(--gs-mu2);margin-top:10px;line-height:1.45;text-align:center}
+#page-xstocks .gs-fine a{color:var(--gs-mu);text-decoration:underline;text-underline-offset:2px}
+#page-xstocks .gs-legal{margin-top:16px}
+#page-xstocks .gs-legal p{margin:0 0 8px;font-size:12.5px;line-height:1.55;color:var(--gs-mu)}
+#page-xstocks .gs-legal p:last-child{margin-bottom:0}
 #page-xstocks .gs-mbar{display:none}
 /* modal (outside root → own scope) */
 .gs-ov{position:fixed;inset:0;z-index:9000;background:rgba(10,13,18,.62);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px;color:#E5E9F0;font-size:14px}

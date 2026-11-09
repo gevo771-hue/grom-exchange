@@ -120,3 +120,11 @@ test('universe picks up refreshed catalog prices (new catalog array)', async () 
   cat = catalog.map((c) => ({ ...c }));
   assert.equal((await universe.find('TSLA')).fairPrice, 358.2);
 });
+
+test('background pre-warming never takes the visitors\' half of the budget', async () => {
+  const liq = createStockLiquidity({ fetchPairs: async () => [], now: () => 0, maxPerMinute: 4 });
+  const mk = (s) => ({ sym: s, variants: [{ c: 1, a: A(1) }, { c: 56, a: A(2) }] });
+  assert.ok(await liq.forItem(mk('A'), new Set(), { background: true }));
+  assert.equal(await liq.forItem(mk('B'), new Set(), { background: true }), null);
+  assert.ok(await liq.forItem(mk('C'), new Set()));
+});

@@ -69,7 +69,7 @@
       h_name: 'Company', h_price: 'Price', h_chga: 'Change $', h_chg: 'Change %', h_5d: '5 days', h_mc: 'Market cap', h_vol: 'Volume 24h', h_pe: 'P/E', h_nets: 'Networks',
       buy: 'Buy', sell: 'Sell', empty: 'Nothing found. Try another ticker or clear the filters.',
       back: 'Stocks', share: 'Share', copied: 'Copied', link_copied: 'Link copied',
-      nets_n: '{n} networks', net_1: '1 network', sh_title: 'Share', sh_sub: 'Share the {name} price with friends.', sh_copy: 'Copy', sh_link: 'Link', sh_more: 'More', sh_text: '{name} ({sym}) — {price}, {chg} in 24h. Tokenized stocks 24/7 on GROM', tp_close: 'Close', sw_title: 'Choose a stock', sw_fav: 'Favorites', sw_top: 'Largest', sw_none: 'Nothing found', sw_open: 'Other stocks', ex_price: 'Exchange price', premium: 'premium', discount: 'discount',
+      nets_n: '{n} networks', net_1: '1 network', sh_title: 'Share', sh_sub: 'Share the {name} price with friends.', sh_copy: 'Copy', sh_link: 'Link', sh_more: 'More', sh_text: '{name} ({sym}) — {price}, {chg} in 24h. Tokenized stocks 24/7 on GROM', tp_close: 'Close', sw_title: 'Choose a stock', sw_fav: 'Favorites', sw_top: 'Largest', sw_all: 'All stocks · {n}', sw_none: 'Nothing found', sw_open: 'Other stocks', ex_price: 'Exchange price', premium: 'premium', discount: 'discount',
       t_chart: 'Chart', t_where: 'Where to buy', t_stats: 'Statistics', t_token: 'Token', t_faq: 'FAQ',
       chart_ex: 'Exchange price, USD', chart_none: 'Chart is not available for this ticker yet.', chart_load: 'Loading chart…',
       sess_closed: 'The token trades on-chain 24/7 — at night and on weekends the pool price can differ from the exchange; GROM shows the difference before you buy.',
@@ -132,7 +132,7 @@
       h_name: 'Компания', h_price: 'Цена', h_chga: 'Изм. $', h_chg: 'Изм. %', h_5d: '5 дней', h_mc: 'Капитализация', h_vol: 'Объём 24ч', h_pe: 'P/E', h_nets: 'Сети',
       buy: 'Купить', sell: 'Продать', empty: 'Ничего не найдено. Попробуйте другой тикер или снимите фильтры.',
       back: 'Акции', share: 'Поделиться', copied: 'Скопировано', link_copied: 'Ссылка скопирована',
-      nets_n: '{n} сетей', nets_few: '{n} сети', net_1: '1 сеть', sh_title: 'Поделиться', sh_sub: 'Поделитесь ценой {name} с друзьями.', sh_copy: 'Копировать', sh_link: 'Ссылка', sh_more: 'Ещё', sh_text: '{name} ({sym}) — {price}, {chg} за 24 ч. Токенизированные акции 24/7 на GROM', tp_close: 'Закрыть', sw_title: 'Выбрать акцию', sw_fav: 'Избранное', sw_top: 'Крупнейшие', sw_none: 'Ничего не найдено', sw_open: 'Другие акции', ex_price: 'Цена на бирже', premium: 'премия', discount: 'дисконт',
+      nets_n: '{n} сетей', nets_few: '{n} сети', net_1: '1 сеть', sh_title: 'Поделиться', sh_sub: 'Поделитесь ценой {name} с друзьями.', sh_copy: 'Копировать', sh_link: 'Ссылка', sh_more: 'Ещё', sh_text: '{name} ({sym}) — {price}, {chg} за 24 ч. Токенизированные акции 24/7 на GROM', tp_close: 'Закрыть', sw_title: 'Выбрать акцию', sw_fav: 'Избранное', sw_top: 'Крупнейшие', sw_all: 'Все акции · {n}', sw_none: 'Ничего не найдено', sw_open: 'Другие акции', ex_price: 'Цена на бирже', premium: 'премия', discount: 'дисконт',
       t_chart: 'График', t_where: 'Где купить', t_stats: 'Статистика', t_token: 'О токене', t_faq: 'FAQ',
       chart_ex: 'Биржевая цена, USD', chart_none: 'График для этого тикера пока недоступен.', chart_load: 'Загружаем график…',
       sess_closed: 'Токен торгуется on-chain 24/7 — ночью и в выходные цена в пулах может отличаться от биржевой, GROM показывает разницу до покупки.',
@@ -1339,31 +1339,48 @@
         + '<span style="min-width:0"><span class="t">' + esc(x.s) + '</span><div class="n">' + esc(x.n || '') + '</div></span>'
         + '<span class="r"><b class="num">' + px(priceOf(x)) + '</b><small class="num ' + cls(x.c) + '">' + pct(x.c) + '</small></span></button>';
     }
+    /* Every stock is listed; rows are rendered in pages as the list scrolls. */
+    var items = [], shown = 0, PAGE = 80;
+    function byCap(a, b) { return (b.mc || 0) - (a.mc || 0) || (b.v || 0) - (a.v || 0) || (a.s < b.s ? -1 : 1); }
+    function more() {
+      var el = ov.querySelector('#gsSwList'); if (!el || shown >= items.length) return;
+      var next = items.slice(shown, shown + PAGE); shown += next.length;
+      el.insertAdjacentHTML('beforeend', next.map(function (x) { return x.gh ? '<div class="gh">' + esc(x.gh) + '</div>' : row(x); }).join(''));
+    }
     function list() {
-      var rows = S.rows || [], h = '';
-      if (!rows.length) { h = '<div class="gs-skel"></div><div class="gs-skel"></div><div class="gs-skel"></div>'; }
-      else if (qq) {
+      var rows = S.rows || [], el = ov.querySelector('#gsSwList');
+      items = []; shown = 0;
+      if (!rows.length) { el.innerHTML = '<div class="gs-skel"></div><div class="gs-skel"></div><div class="gs-skel"></div>'; return; }
+      if (qq) {
         var hit = rows.filter(function (x) { return x.s.toLowerCase().indexOf(qq) >= 0 || String(x.n || '').toLowerCase().indexOf(qq) >= 0; });
         hit.sort(function (a, b) {
           var ra = a.s.toLowerCase() === qq ? 0 : a.s.toLowerCase().indexOf(qq) === 0 ? 1 : 2;
           var rb = b.s.toLowerCase() === qq ? 0 : b.s.toLowerCase().indexOf(qq) === 0 ? 1 : 2;
-          return ra - rb || (b.mc || 0) - (a.mc || 0);
+          return ra - rb || byCap(a, b);
         });
-        h = hit.length ? hit.slice(0, 60).map(row).join('') : '<div class="gs-mu" style="padding:18px 6px">' + esc(t('sw_none')) + '</div>';
+        items = hit;
+        el.innerHTML = hit.length ? '' : '<div class="gs-mu" style="padding:18px 6px">' + esc(t('sw_none')) + '</div>';
       } else {
-        var fav = rows.filter(function (x) { return S.fav[x.s]; });
-        var top = rows.filter(function (x) { return x.mc > 0 && !S.fav[x.s]; }).sort(function (a, b) { return b.mc - a.mc; }).slice(0, 40);
-        if (fav.length) h += '<div class="gh">' + esc(t('sw_fav')) + '</div>' + fav.map(row).join('');
-        h += '<div class="gh">' + esc(t('sw_top')) + '</div>' + top.map(row).join('');
+        var fav = rows.filter(function (x) { return S.fav[x.s]; }).sort(byCap);
+        var rest = rows.filter(function (x) { return !S.fav[x.s]; }).sort(byCap);
+        if (fav.length) items.push({ gh: t('sw_fav') });
+        items = items.concat(fav);
+        items.push({ gh: t('sw_all', { n: nf(rows.length, 0) }) });
+        items = items.concat(rest);
+        el.innerHTML = '';
       }
-      var el = ov.querySelector('#gsSwList'); el.innerHTML = h;
-      el.querySelectorAll('[data-sw]').forEach(function (b) {
-        b.addEventListener('click', function () { var sym = b.getAttribute('data-sw'); closeOverlay(); if (sym !== cur) go(sym); });
-      });
+      el.scrollTop = 0;
+      more();
     }
+    ov.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-sw]'); if (!b) return;
+      var sym = b.getAttribute('data-sw'); closeOverlay(); if (sym !== cur) go(sym);
+    });
     ov.querySelector('[data-x]').addEventListener('click', closeOverlay);
     ov.addEventListener('click', function (e) { if (e.target === ov) closeOverlay(); });
     var qi = ov.querySelector('#gsSwQ'); qi.addEventListener('input', function () { qq = qi.value.trim().toLowerCase(); list(); });
+    var sl = ov.querySelector('#gsSwList');
+    sl.addEventListener('scroll', function () { if (sl.scrollTop + sl.clientHeight > sl.scrollHeight - 600) more(); }, { passive: true });
     list();
     if (!S.rows) loadList().then(function () { if (document.getElementById('gsOv') === ov) list(); });
     setTimeout(function () { if (window.innerWidth > 760) qi.focus(); }, 30);

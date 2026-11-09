@@ -8,7 +8,7 @@
 
   var API = '/api/market';
   /* Networks with an executable same-chain route today (KyberSwap on EVM, Jupiter on Solana). */
-  var EVM_TRADE = { 1: 1, 56: 1, 42161: 1, 10: 1, 8453: 1 };
+  var EVM_TRADE = { 1: 1, 56: 1, 42161: 1, 10: 1, 8453: 1, 4663: 1, 999: 1, 143: 1 };
   var CH = {
     solana: { id: 'solana', name: 'Solana' },
     ethereum: { id: 1, name: 'Ethereum' },
@@ -93,13 +93,20 @@
       tp_soldest: 'Receive on Solana address', tp_soldest_ph: 'Paste your Solana address', tp_phantom: 'Connect Phantom', tp_route: 'Route', tp_steps: '{n} steps', tp_step: '1 step',
       tp_rate: 'Rate', tp_vs: 'Value vs exchange price', tp_fees: 'Network & bridge fees', tp_grom: 'GROM fee', tp_min: 'Minimum received', tp_via: 'Provider', tp_time: 'Time',
       tp_connect: 'Connect wallet', tp_enter: 'Enter amount', tp_quoting: 'Finding the best route…', tp_buy_x: 'Buy {sym}', tp_sell_x: 'Sell {sym}',
-      tp_fine: 'Trades run from your own wallet. GROM never holds your funds.',
+      tp_fine: 'Trades run from your own wallet. GROM never holds your funds.', tp_legal: 'Important information',
+      lg_h: 'Important information',
+      lg1: 'GROM is an independent interface. Some routes, including transfers between networks, use LI.FI. GROM integrates LI.FI independently and is not associated with LI.FI.',
+      lg2: 'LI.FI is a technology infrastructure provider. It does not issue, distribute, market, promote, recommend or endorse any tokenized stock and does not provide financial, investment or advisory services to users.',
+      lg3: 'LI.FI has no contractual relationship with users and no relationship with any token issuer.',
+      lg4: 'The smart contracts behind these routes are non-custodial. Transactions are executed by independent third-party protocols and solvers. LI.FI does not warrant the availability, reliability or operation of any third-party protocol, solver or token issuer at any time.',
+      lg5: 'Tokenized stocks may be regulated financial instruments in some jurisdictions and may not be suitable for all investors. Blockchain transactions carry risks, including smart-contract vulnerabilities, liquidity risk and regulatory risk.',
+      lg6: 'Seek independent legal and financial advice before trading tokenized stocks.',
       tp_nohold: 'You don’t hold {sym} on a supported network yet.', tp_pick_tok: 'Choose a token',
       tp_auto_note: '“Auto” buys on {net} — deepest liquidity ({liq}). The transfer from {from} is included in the route.',
       tp_lowliq: 'Almost no {sym} liquidity on {net} — the price there would be poor. Switch to “Auto”.',
       tp_no_route: 'No route for this amount on {net}. Try “Auto”, another network or a different amount.',
       tp_rate_lim: 'Too many quote requests — retrying in a few seconds.',
-      tp_cross: 'Buying from another network is not available yet. Pay with a token on {net} — or choose a network where you hold tokens.', tp_pick_on: 'Choose a token on {net}',
+      tp_cross: 'No route from another network right now. Pay with a token on {net} — or try another network or amount.', tp_pick_on: 'Choose a token on {net}',
       tp_pay_evm: 'To buy on {net}, pay from an EVM wallet (MetaMask, Trust, etc.). Solana tokens can buy the Solana version.',
       tp_need_sol: 'Add a Solana address to receive the stock.',
       g_fair: 'Independent share price is unavailable right now — trading is paused for safety. Try again shortly.',
@@ -149,13 +156,20 @@
       tp_soldest: 'Зачислить на Solana-адрес', tp_soldest_ph: 'Вставьте ваш Solana-адрес', tp_phantom: 'Подключить Phantom', tp_route: 'Маршрут', tp_steps: '{n} шага', tp_step: '1 шаг',
       tp_rate: 'Курс', tp_vs: 'Стоимость к биржевой цене', tp_fees: 'Газ сетей и мост', tp_grom: 'Комиссия GROM', tp_min: 'Минимум к получению', tp_via: 'Провайдер', tp_time: 'Время',
       tp_connect: 'Подключить кошелёк', tp_enter: 'Введите сумму', tp_quoting: 'Ищем лучший маршрут…', tp_buy_x: 'Купить {sym}', tp_sell_x: 'Продать {sym}',
-      tp_fine: 'Сделка выполняется из вашего кошелька. GROM не хранит средства.',
+      tp_fine: 'Сделка выполняется из вашего кошелька. GROM не хранит средства.', tp_legal: 'Важная информация',
+      lg_h: 'Важная информация',
+      lg1: 'GROM — независимый интерфейс. Часть маршрутов, включая переводы между сетями, работает через LI.FI. GROM интегрирует LI.FI самостоятельно и не связан с LI.FI.',
+      lg2: 'LI.FI — поставщик технологической инфраструктуры. LI.FI не выпускает, не распространяет, не продвигает, не рекламирует, не рекомендует и не одобряет токенизированные акции и не оказывает пользователям финансовых, инвестиционных или консультационных услуг.',
+      lg3: 'У LI.FI нет договорных отношений с пользователями и нет отношений с эмитентами токенов.',
+      lg4: 'Смарт-контракты этих маршрутов некастодиальные. Транзакции исполняют независимые сторонние протоколы и солверы. LI.FI не гарантирует доступность, надёжность и работу сторонних протоколов, солверов и эмитентов токенов.',
+      lg5: 'Токенизированные акции в ряде юрисдикций могут быть регулируемыми финансовыми инструментами и подходят не всем инвесторам. Операции в блокчейне несут риски, включая уязвимости смарт-контрактов, риск ликвидности и регуляторный риск.',
+      lg6: 'Перед сделками с токенизированными акциями получите независимую юридическую и финансовую консультацию.',
       tp_nohold: 'У вас пока нет {sym} в поддерживаемых сетях.', tp_pick_tok: 'Выберите токен',
       tp_auto_note: '«Авто» покупает в {net} — там самая глубокая ликвидность ({liq}). Перенос из {from} уже включён в маршрут.',
       tp_lowliq: 'В сети {net} почти нет ликвидности {sym} — цена там будет плохой. Включите «Авто».',
       tp_no_route: 'Нет маршрута для этой суммы в {net}. Попробуйте «Авто», другую сеть или сумму.',
       tp_rate_lim: 'Слишком много запросов котировок — повторим через несколько секунд.',
-      tp_cross: 'Покупка из другой сети пока недоступна. Оплатите токеном в сети {net} или выберите сеть, где у вас есть токены.', tp_pick_on: 'Выбрать токен в {net}',
+      tp_cross: 'Сейчас нет маршрута из другой сети. Оплатите токеном в сети {net} или попробуйте другую сеть или сумму.', tp_pick_on: 'Выбрать токен в {net}',
       tp_pay_evm: 'Чтобы купить в {net}, платите из EVM-кошелька (MetaMask, Trust и др.). Токенами Solana можно купить версию в Solana.',
       tp_need_sol: 'Добавьте Solana-адрес для зачисления акции.',
       g_fair: 'Независимая цена акции сейчас недоступна — торговля приостановлена для безопасности. Попробуйте чуть позже.',
@@ -425,6 +439,10 @@
     return '<div class="gs-strip"><span class="gs-mstate ' + (ss.open ? 'open' : '') + '"><i></i>' + esc(ss.label) + '</span>'
       + '<div class="gs-marq">' + (line ? '<div class="gs-marq-in">' + line + line + '</div>' : '<div class="gs-marq-in" style="animation:none"><span class="gs-mu">' + esc(t('m_onchain')) + '</span></div>') + '</div></div>';
   }
+  function legalCard(id) {
+    return '<div class="gs-card gs-sec gs-legal"' + (id ? ' id="' + id + '"' : '') + '><div class="gs-h2">' + esc(t('lg_h')) + '</div>'
+      + [1, 2, 3, 4, 5, 6].map(function (i) { return '<p>' + esc(t('lg' + i)) + '</p>'; }).join('') + '</div>';
+  }
   function viewList() {
     S.detailSym = '';
     root.classList.remove('gs-detail');
@@ -452,7 +470,7 @@
       + '<div class="gs-themes" id="gsThemes">' + THEMES.map(function (th) { return '<button type="button" data-th="' + th + '" class="' + (S.theme === th ? 'on' : '') + '">' + esc(t('th_' + th)) + '</button>'; }).join('') + '</div>'
       + '<div class="gs-toolbar"><label class="gs-search">' + ICO.search + '<input id="gsQ" type="search" autocomplete="off" placeholder="' + esc(t('search')) + '" value="' + esc(S.q) + '"></label>'
       + '<div class="gs-sel" id="gsCatSel"></div><div class="gs-sel" id="gsNetSel"></div><span class="gs-cnt" id="gsCnt"></span></div>'
-      + '<div class="gs-card gs-tbl" id="gsTbl"></div><div class="gs-pager" id="gsPager"></div>';
+      + '<div class="gs-card gs-tbl" id="gsTbl"></div><div class="gs-pager" id="gsPager"></div>' + legalCard('');
     root.querySelectorAll('[data-go]').forEach(function (e) { e.addEventListener('click', function () { go(e.getAttribute('data-go')); }); });
     root.querySelectorAll('#gsThemes button').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -779,6 +797,7 @@
       + Object.keys(versions).map(function (s) { return '<div><span>' + esc(s) + '</span><b>' + esc(versions[s].join(', ')) + '</b></div>'; }).join('') + '</div></div>'
       + '<div class="gs-card gs-sec gs-faq" id="gsFaq"><div class="gs-h2">' + esc(t('faq_h')) + '</div>'
       + [1, 2, 3, 4, 5].map(function (i) { return '<details' + (i === 1 ? ' open' : '') + '><summary>' + esc(t('fq' + i)) + '</summary><p>' + esc(t('fa' + i, { name: r.n || r.s })) + '</p></details>'; }).join('') + '</div>'
+      + legalCard('gsLegal')
       + (sim.length ? '<div class="gs-card gs-sec"><div class="gs-h2">' + esc(t('sim_h')) + '</div><div class="gs-sim">' + sim.map(function (x) {
         return '<div class="c" data-go="' + esc(x.s) + '">' + logo(x.s, 34, x.l) + '<div class="m"><b>' + esc(x.s) + '</b><small>' + esc(x.n) + '</small></div><div class="r num"><b>' + px(priceOf(x)) + '</b><div class="' + cls(x.c) + '">' + pct(x.c) + '</div></div></div>';
       }).join('') + '</div></div>' : '')
@@ -998,7 +1017,9 @@
     el.innerHTML = '<div class="gs-side"><button type="button" class="b ' + (buy ? 'on' : '') + '" data-side="buy">' + esc(t('buy')) + '</button><button type="button" class="s ' + (!buy ? 'on' : '') + '" data-side="sell">' + esc(t('sell')) + '</button></div>'
       + payBox + '<div class="gs-flip"><span>' + ICO.arrow + '</span></div>' + recvBox + destHtml
       + '<div id="gsRecvAddr"></div><div class="gs-route" id="gsRoute" style="display:none"></div><div id="gsWarn"></div><button type="button" class="gs-cta" id="gsCta"></button>'
-      + '<div class="gs-fine">' + esc(t('tp_fine')) + '</div>';
+      + '<div class="gs-fine">' + esc(t('tp_fine')) + ' <a href="#" data-legal>' + esc(t('tp_legal')) + '</a></div>';
+    var lgA = el.querySelector('[data-legal]');
+    if (lgA) lgA.addEventListener('click', function (e) { e.preventDefault(); var lg = root.querySelector('#gsLegal'); if (lg) lg.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
     el.querySelectorAll('[data-side]').forEach(function (b) { b.addEventListener('click', function () { setSide(b.getAttribute('data-side')); }); });
     var inp = el.querySelector('#gsAmt');
     if (inp) inp.addEventListener('input', function () {

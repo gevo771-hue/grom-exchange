@@ -1329,6 +1329,14 @@
   .coin-ico.has-logo { position: relative; }
   .coin-ico.has-logo > .cl { position: relative; z-index: 0; }
   .coin-ico.has-logo > img { position: absolute; inset: 0; z-index: 1; }
+  /* TradFi: company logos are wide marks on transparent PNGs — show them whole
+     on a light disc; indices, metals, energy and FX get vector badges. */
+  .coin-ico.eq { background: #eef2f6 !important; color: #3a4656; text-shadow: none; border-color: rgba(255,255,255,.5); }
+  .coin-ico.eq > img { object-fit: contain; padding: 15%; box-sizing: border-box; background: #eef2f6; }
+  .coin-ico.eq.dk, .coin-ico.eq.dk > img { background: #1c2533 !important; }
+  .coin-ico.tfi { display: inline-flex; align-items: center; justify-content: center; text-shadow: none; border-color: rgba(255,255,255,.22); }
+  .coin-ico.tfi b { font-size: 11px; font-weight: 900; letter-spacing: -.03em; line-height: 1; }
+  .coin-ico.tfi svg { width: 60%; height: 60%; display: block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
   /* Dashboard banners — canonical styles in /grom-banners.css */
   #page-dashboard .page-title,
   #page-dashboard .page-subtitle {
@@ -2150,7 +2158,13 @@
     .sidebar { padding: calc(18px * var(--gx-z)) calc(12px * var(--gx-z)); }
     .sidebar > * { zoom: var(--gx-z); }
     main { padding: calc(22px * var(--gx-z)) calc(28px * var(--gx-z)) calc(60px * var(--gx-z)); }
-    #page-dashboard, #gw-ai-fab { zoom: var(--gx-z); }
+    /* Every app page (the landing and stocks scale themselves), the AI button and
+     * the dialogs that live outside <main>. Dialog heights are px-capped, so the
+     * zoomed size still fits the screen. */
+    main > .page:not(#page-landing):not(#page-xstocks), #gw-ai-fab,
+    .wm, #gw-tk-panel, .gs-mdl, .gw-wc-panel--binance, .gw-expl-panel, .gw-tron-panel, .cmdk, .gtm { zoom: var(--gx-z); }
+    /* The AI panel is sized in vh, which zoom would multiply: give it a px height. */
+    #gw-ai-panel { zoom: var(--gx-z); height: 720px !important; max-height: 720px !important; }
     /* vw-based offsets would be multiplied by zoom; pin the AI button to the corner. */
     #gw-ai-fab.grom-ai-launcher { right: 20px !important; bottom: 20px !important; }
   }
@@ -7148,18 +7162,53 @@
 
     <!-- REFERRAL -->
     <section class="page" id="page-referral">
-      <div class="ref-heading"><div><div class="ref-eyebrow">GROM / COMMUNITY</div><h1 class="page-title" data-i18n="ref_new_title">Good things are better shared.</h1><p data-i18n="ref_new_sub">Invite friends to GROM. Your link, your community.</p></div><span class="ref-heading-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-referral"/></svg></span></div>
-      <div class="ref-invite-panel">
-        <div class="ref-invite-main"><div class="ref-lbl" data-i18n="ref_invite_link">Invite link</div><div class="ref-val mono" id="refLink" data-i18n="ref_connect_wallet_link">Connect wallet to reveal your link</div>
-          <div class="ref-share-actions"><button type="button" class="btn-primary" id="refShareBtn" data-ref-share="open" disabled data-i18n="ref_new_share">Share invitation</button><button type="button" class="btn-ghost" id="refCopyLinkBtn" disabled onclick="copyRefLink()" data-i18n="ref_copy_link">Copy link</button></div>
-          <p id="refStatus" role="status" class="ref-status"></p><button class="btn-ghost" id="refLinkRetry" type="button" hidden onclick="hydrateReferralSlice(true)" aria-label="Retry invite link">↻</button>
-        </div>
-        <div class="ref-code-line"><span class="ref-lbl" data-i18n="ref_invite_code">Your invite code</span><div class="ref-val mono" id="refCode" data-i18n="ref_connect_wallet_code">Connect wallet to generate</div><button class="btn-ghost" type="button" onclick="copyRef()" id="refCopyBtn" disabled data-i18n="common_copy">Copy</button></div>
+      <div class="rf-hero">
+        <div class="rf-hero-l">
+          <div class="ref-heading"><div class="ref-eyebrow"><i></i>GROM / COMMUNITY</div><h1 class="page-title" data-i18n="ref_new_title">Good things are better shared.</h1><p data-i18n="ref_new_sub">Invite friends to GROM. Your link, your community.</p></div>
+          <div class="rf-art" aria-hidden="true">
+        <svg class="rf-net" viewBox="0 0 400 400">
+          <defs>
+            <linearGradient id="rfLn" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7ee4ff"/><stop offset="1" stop-color="#a98bff"/></linearGradient>
+            <radialGradient id="rfCore" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#7ee4ff" stop-opacity=".35"/><stop offset="1" stop-color="#7ee4ff" stop-opacity="0"/></radialGradient>
+          </defs>
+          <circle cx="200" cy="200" r="150" class="rf-orb"/><circle cx="200" cy="200" r="98" class="rf-orb rf-orb2"/>
+          <circle cx="200" cy="200" r="120" fill="url(#rfCore)"/>
+          <g class="rf-links" stroke="url(#rfLn)">
+            <path d="M200 200 Q150 110 92 74"/><path d="M200 200 Q290 120 322 86"/><path d="M200 200 Q330 210 352 250"/>
+            <path d="M200 200 Q250 320 282 344"/><path d="M200 200 Q110 300 84 318"/><path d="M200 200 Q90 200 46 186"/>
+          </g>
+        </svg>
+        <span class="rf-core"><img src="/assets/grom-brand-header-clear.webp" alt="" width="441" height="462" decoding="async"></span>
+        <span class="rf-node n1" style="--c1:#7ee4ff;--c2:#2f9bff"></span><span class="rf-node n2" style="--c1:#c08bff;--c2:#6d5dfc"></span>
+        <span class="rf-node n3" style="--c1:#5ef0b0;--c2:#16a34a"></span><span class="rf-node n4" style="--c1:#ffd36e;--c2:#f59e0b"></span>
+        <span class="rf-node n5" style="--c1:#ff8fb3;--c2:#e5466d"></span><span class="rf-node n6" style="--c1:#9fe6ff;--c2:#4f7cff"></span>
+        <span class="rf-plus p1">+1</span><span class="rf-plus p2">+1</span><span class="rf-plus p3">+1</span>
+        <span class="rf-cap" data-i18n="ref_art_caption">Your network on GROM</span>
       </div>
+        </div>
+        <div class="ref-invite-panel">
+          <div class="rf-card-h"><b data-i18n="ref_card_title">Invite friends</b><span class="rf-live"><i></i><span data-i18n="ref_card_live">Tracking on</span></span></div>
+          <div class="ref-code-line"><span class="ref-lbl" data-i18n="ref_invite_code">Your invite code</span><div class="ref-val mono" id="refCode" data-i18n="ref_connect_wallet_code">Connect wallet to generate</div><button class="btn-ghost rf-copy" type="button" onclick="copyRef()" id="refCopyBtn" disabled data-i18n="common_copy">Copy</button></div>
+          <div class="ref-invite-main"><div class="ref-lbl" data-i18n="ref_invite_link">Invite link</div><div class="ref-val mono" id="refLink" data-i18n="ref_connect_wallet_link">Connect wallet to reveal your link</div>
+            <div class="ref-share-actions"><button type="button" class="btn-primary" id="refShareBtn" data-ref-share="open" disabled data-i18n="ref_new_share">Share invitation</button><button type="button" class="btn-ghost" id="refCopyLinkBtn" disabled onclick="copyRefLink()" data-i18n="ref_copy_link">Copy link</button></div>
+            <div class="rf-share-ico"><span data-i18n="ref_share_via">Share via</span><button type="button" onclick="refShareTelegram()" aria-label="Telegram" title="Telegram" class="tg"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg></button><button type="button" onclick="refShareX()" aria-label="X" title="X" class="xx"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></button><button type="button" data-ref-share="open" aria-label="More" title="More"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg></button></div>
+            <p id="refStatus" role="status" class="ref-status"></p><button class="btn-ghost" id="refLinkRetry" type="button" hidden onclick="hydrateReferralSlice(true)" aria-label="Retry invite link">↻</button>
+          </div>
+        </div>
+      </div>
+      <section class="rf-steps" aria-labelledby="rfStepsTitle">
+        <h2 id="rfStepsTitle" class="rf-sec" data-i18n="ref_steps_title">How it works</h2>
+        <ol>
+          <li><span class="rf-n">01</span><span class="rf-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></span><b data-i18n="ref_step1_t">Share your link</b><p data-i18n="ref_step1_p">Send your link or code to a friend — in Telegram, X or wherever you chat.</p></li>
+          <li><span class="rf-n">02</span><span class="rf-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M21 11h-5a2 2 0 0 0 0 4h5v-4z"/></svg></span><b data-i18n="ref_step2_t">Your friend connects a wallet</b><p data-i18n="ref_step2_p">A new wallet is linked to you the first time it signs in through your link.</p></li>
+          <li><span class="rf-n">03</span><span class="rf-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><b data-i18n="ref_step3_t">The invite is counted</b><p data-i18n="ref_step3_p">Track your invites in the stats below. Rewards have not launched yet.</p></li>
+        </ol>
+      </section>
+      <h2 class="rf-sec" data-i18n="ref_overview">Overview</h2>
       <div class="ref-kpis">
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_total_referred">Wallets invited</div><div class="kpi-val mono" id="refKpiTotalReferred">—</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_signups_30d">New signups (30d)</div><div class="kpi-val mono" id="refKpiSignups30d">—</div></div>
-        <div class="kpi-card"><div class="kpi-lbl" data-i18n="ref_active_30d">Seen (30d)</div><div class="kpi-val mono" id="refKpiActive30d">—</div></div>
+        <div class="kpi-card k1"><span class="rf-kic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><div class="kpi-lbl" data-i18n="ref_total_referred">Wallets invited</div><div class="kpi-val mono" id="refKpiTotalReferred">—</div></div>
+        <div class="kpi-card k2"><span class="rf-kic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></svg></span><div class="kpi-lbl" data-i18n="ref_signups_30d">New signups (30d)</div><div class="kpi-val mono" id="refKpiSignups30d">—</div></div>
+        <div class="kpi-card k3"><span class="rf-kic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span><div class="kpi-lbl" data-i18n="ref_active_30d">Seen (30d)</div><div class="kpi-val mono" id="refKpiActive30d">—</div></div>
       </div>
       <p class="ref-rewards-note" data-i18n="ref_new_rewards">Invite tracking is active. Rewards and payouts have not launched.</p>
       <div class="ref-list-card">
@@ -7167,6 +7216,7 @@
         <div class="ref-stats-access"><p id="refStatsStatus" role="status" class="ref-status"></p><button class="btn-ghost" id="refSignInBtn" type="button" hidden onclick="gwReferralSignIn()">Sign in with wallet</button></div>
         <div class="ref-table-scroll"><table class="ref-table"><thead><tr><th scope="col" data-i18n="ref_tbl_user">Wallet</th><th scope="col" data-i18n="ref_tbl_joined">Joined</th><th scope="col" data-i18n="ref_tbl_activity">Activity</th></tr></thead><tbody id="refRows"><tr><td colspan="3" class="ref-list-empty" data-i18n="ref_list_signin">Sign in to view your referrals.</td></tr></tbody></table></div>
       </div>
+      <h2 class="rf-sec" data-i18n="ref_rules_title">Rules</h2>
       <details class="ref-conditions"><summary data-i18n="ref_new_details">How invitations work</summary><p data-i18n="ref_tracking_disclosure">Invite friends with your link. New wallet signups are counted once; rewards and payouts are not enabled.</p><p data-i18n="ref_how_sub">A new wallet is attributed once when it first signs in through your link. Existing accounts are never reassigned.</p><p data-i18n="ref_list_privacy">The 10 most recent invites. Wallet addresses are shortened; activity means a visit in the last 30 days, not a completed trade.</p><p data-i18n="ref_reward_disclosure">Invites are counted now. Fee rewards and on-chain payouts have not launched; no earnings are accrued yet.</p></details>
       <dialog id="refShareDialog" aria-labelledby="refShareTitle">
         <div class="ref-dialog-head"><h2 id="refShareTitle" data-i18n="ref_new_share">Share invitation</h2><button type="button" data-ref-share="close" aria-label="Close">×</button></div>
@@ -19495,6 +19545,16 @@ function gromMarketLogoFor(coin, type) {
 window.gromMarketLogoFor = gromMarketLogoFor;
 // Verify logos off-DOM with Image() and only inject an <img> once one has
 // actually loaded — so a broken/loading logo never flashes over the monogram.
+/* Light (white) marks vanish on the light disc: sample the opaque pixels. */
+function gromLogoIsLight(img) {
+  try {
+    var c = document.createElement('canvas'); c.width = c.height = 48;
+    var x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, 48, 48);
+    var d = x.getImageData(0, 0, 48, 48).data, sum = 0, n = 0;
+    for (var i = 0; i < d.length; i += 4) { if (d[i + 3] > 90) { sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; n++; } }
+    return n > 8 && sum / n > 200;
+  } catch (_) { return false; }
+}
 function gromHydrateLogos(root) {
   if (!window.__gromLogoOk) window.__gromLogoOk = Object.create(null);
   if (!window.__gromLogoBad) window.__gromLogoBad = Object.create(null);
@@ -19519,9 +19579,12 @@ function gromHydrateLogos(root) {
         }
         var src = sources[i++];
         var probe = new Image();
+        var isEq = span.classList.contains('eq');
+        if (isEq) probe.crossOrigin = 'anonymous';
         probe.onload = function () {
           if (!probe.naturalWidth) { tryNext(); return; }
           window.__gromLogoOk[key] = src;
+          if (isEq && gromLogoIsLight(probe)) { (window.__gromLogoDark || (window.__gromLogoDark = Object.create(null)))[key] = 1; span.classList.add('dk'); }
           if (!span.querySelector('img')) {
             var im = document.createElement('img');
             im.alt = ''; im.decoding = 'async'; im.src = src;
@@ -19536,7 +19599,51 @@ function gromHydrateLogos(root) {
   }
 }
 window.gromHydrateLogos = gromHydrateLogos;
+/* TradFi (HIP-3) icons. The ticker-image service maps some symbols to the wrong
+ * company (CL = Colgate, GOLD = Barrick) and has nothing for indices, FX,
+ * commodities or Asian listings — those get vector badges or the right
+ * exchange ticker. Equity logos are shown whole on a light disc. */
+var GROM_TF_ICON = (function () {
+  var drop = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5c-.3 0-.6.2-.8.5C9.4 6 6 10.6 6 14.3 6 17.9 8.7 21 12 21s6-3.1 6-6.7C18 10.6 14.6 6 12.8 3c-.2-.3-.5-.5-.8-.5zm-2.6 12.1c.4 0 .8.3.8.8 0 1.2.9 2.1 2 2.3.4.1.7.5.6.9-.1.4-.4.6-.8.6h-.1c-1.9-.3-3.3-1.9-3.3-3.8 0-.5.4-.8.8-.8z"/></svg>';
+  var flame = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 2.3c.4 2.6-.6 4.4-1.9 5.9-1.4 1.6-3.1 3.1-3.1 5.8 0 .9.3 1.8.8 2.5-.9-.4-1.7-1.2-2-2.3C5.9 15.5 5.5 17 5.5 18c0 2.7 2.9 4.5 6.5 4.5s6.5-2.2 6.5-5.4c0-4.2-2.7-6.2-3.4-9.4-.3 1.3-.9 2.3-1.8 3 .6-2.7.4-5.9-1.6-8.4.6.1 1.3 0 1.8 0z"/></svg>';
+  function m(t, a, b, fg) { return { t: t, bg: 'linear-gradient(135deg,' + a + ',' + b + ')', fg: fg || '#fff' }; }
+  function g(svg, a, b, fg) { return { svg: svg, bg: 'linear-gradient(135deg,' + a + ',' + b + ')', fg: fg || '#fff' }; }
+  return {
+    CL: g(drop, '#2b3442', '#0d1117', '#f5b342'), BRENTOIL: g(drop, '#2a3d4f', '#0d1117', '#7fd3ff'), HO: g(drop, '#3b2a1f', '#120c08', '#ff9b5e'),
+    NATGAS: g(flame, '#1e3a8a', '#0b1530', '#6cc6ff'),
+    GOLD: m('Au', '#f7d774', '#b8860b', '#3b2a00'), SILVER: m('Ag', '#eef2f6', '#9aa6b2', '#2a323c'), PLATINUM: m('Pt', '#e6ecf3', '#8796a8', '#26303b'),
+    PALLADIUM: m('Pd', '#d9dee6', '#6f7a88', '#1f2730'), COPPER: m('Cu', '#f0a070', '#9a4a1f', '#2e1405'), ALUMINIUM: m('Al', '#dfe6ee', '#a5b1bf', '#26303b'),
+    XYZ100: m('100', '#4f7cff', '#1e2f8a'), SP500: m('500', '#2b6fd6', '#0f2a66'), JP225: m('225', '#e5466d', '#7a1030'),
+    KR200: m('200', '#2f6fe0', '#c8283c'), NIFTY: m('50', '#ff9933', '#138808'),
+    JPY: m('¥', '#ffffff', '#d9dee6', '#bc002d'), EUR: m('€', '#2d5bd7', '#0b2a7a', '#ffd84a'), GBP: m('£', '#1d3a8a', '#0b1a44', '#ff5a6e')
+  };
+})();
+/* Exchange tickers for listings the image service knows under another symbol. */
+var GROM_TF_ALIAS = { SKHX: '000660.KS', SMSN: '005930.KS', SOFTBANK: '9984.T', HYUNDAI: '005380.KS', KIOXIA: '285A.T', RELIANCE: 'RELIANCE.NS', CAMBRICON: '688256.SS', GIGADEV: '603986.SS' };
+function gromTfBase(p) {
+  var b = String(p.base || p.coin || p.symbol || p.sym || '');
+  if (b.indexOf(':') >= 0) b = b.split(':').pop();
+  return b.split('/')[0].replace(/-PERP$/i, '').replace(/(USDC|USDT|USD)$/i, '').toUpperCase();
+}
+function gromIsTradfi(p) {
+  var t = p.type || '';
+  return !!(p.hip3 || p.tradfi || t === 'hip3' || t === 'tradfi' || t === 'stock' || t === 'etf' || /^xyz:/i.test(String(p.coin || p.sym || '')));
+}
 function instrumentIcoHtmlLive(p) {
+  if (p && gromIsTradfi(p)) {
+    var tb = gromTfBase(p), sp = GROM_TF_ICON[tb];
+    if (sp) {
+      return '<span class="coin-ico tfi" style="background:' + sp.bg + ';color:' + sp.fg + '" title="' + tb + '">'
+        + (sp.svg || '<b>' + sp.t + '</b>') + '</span>';
+    }
+    var tick = GROM_TF_ALIAS[tb] || tb;
+    var q = Object.assign({}, p, { base: tb, logo: 'https://financialmodelingprep.com/image-stock/' + encodeURIComponent(tick.replace(/\./g, tick.indexOf('.') > 0 && /\.(KS|T|NS|SS)$/.test(tick) ? '.' : '-')) + '.png', type: 'hip3eq' });
+    var dk = window.__gromLogoDark && window.__gromLogoDark[gromLogoKey(q.logo, tb)] ? 'dk ' : '';
+    return instrumentIcoHtmlBase(q).replace('class="coin-ico ', 'class="coin-ico eq ' + dk);
+  }
+  return instrumentIcoHtmlBase(p);
+}
+function instrumentIcoHtmlBase(p) {
   if (!p) return '<span class="coin-ico">?</span>';
   if (!window.__gromIcoHtmlCache) window.__gromIcoHtmlCache = Object.create(null);
   if (!window.__gromLogoBad) window.__gromLogoBad = Object.create(null);
@@ -20163,7 +20270,7 @@ window.refShareX = function () {
   var linkEl = document.getElementById('refLink');
   var url = linkEl ? String(linkEl.textContent || '').trim() : '';
   if (!/^https?:\/\/[^/]+\/r\/[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(url)) { toast('Connect wallet to reveal your invite link','info'); return; }
-  var text = 'Trading on GROM — non-custodial DEX. Cross-chain swaps, Hyperliquid perps, xStocks.';
+  var text = 'Trading on GROM — non-custodial DEX. Cross-chain swaps, perps, predictions and tokenized stocks.';
   window.open('https://x.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url), '_blank', 'noopener');
 };
 window.refShareTelegram = function () {

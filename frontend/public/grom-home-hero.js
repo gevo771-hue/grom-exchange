@@ -110,6 +110,7 @@
   function treemap(el, items, hl) {
     var W = el.clientWidth, H = el.clientHeight;
     if (!W || !H) return;
+    var R = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
     var it = items.map(function (x) { return { x: x, v: x.mc }; });
     function col(c) { var a = Math.min(1, Math.abs(c || 0) / 5); return c >= 0 ? 'rgba(34,' + (120 + Math.round(80 * a)) + ',86,' + (0.6 + 0.35 * a) + ')' : 'rgba(' + (170 + Math.round(70 * a)) + ',58,76,' + (0.6 + 0.35 * a) + ')'; }
     function lay(a, x, y, w, h) {
@@ -128,7 +129,12 @@
       d.className = 't' + (o.x.s === hl ? ' hl' : '');
       d.setAttribute('data-sym', o.x.s);
       d.setAttribute('aria-label', (o.x.n || o.x.s) + ' ' + pct(o.x.c));
-      d.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;background:' + col(o.x.c);
+      // Tiles touching a corner of the map take the map's radius, so the white
+      // highlight frame follows the rounded corner instead of being cut by it.
+      var e = 0.5, rr = R + 'px', L = x < e, T = y < e, Rt = x + w > W - e, B = y + h > H - e;
+      d.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;background:' + col(o.x.c)
+        + (T && L ? ';border-top-left-radius:' + rr : '') + (T && Rt ? ';border-top-right-radius:' + rr : '')
+        + (B && L ? ';border-bottom-left-radius:' + rr : '') + (B && Rt ? ';border-bottom-right-radius:' + rr : '');
       d.innerHTML = (w > 30 && h > 26 ? '<b>' + esc(o.x.s) + '</b><span>' + pct(o.x.c) + '</span>' : '');
       el.appendChild(d);
       fit(d);

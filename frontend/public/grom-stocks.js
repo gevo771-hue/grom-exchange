@@ -404,20 +404,37 @@
     u.hash = 'xstocks';
     return u.pathname + u.search + u.hash;
   }
-  var topT = [];
+  /* On phones the app shell scrolls <main>, not the window (index.html @media max-width:900px). */
+  function scroller() {
+    var el = root && root.parentElement;
+    while (el && el !== document.body && el !== document.documentElement) {
+      var oy = getComputedStyle(el).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+  function scrollPos() { var sc = scroller(); return sc ? sc.scrollTop : (window.scrollY || 0); }
+  function setScroll(y) {
+    var sc = scroller();
+    if (sc) sc.scrollTop = y;
+    try { window.scrollTo({ top: sc ? 0 : y, left: 0, behavior: 'instant' }); } catch (_) { window.scrollTo(0, sc ? 0 : y); }
+  }
+  var topT = [], topMoved = false, topT0 = 0;
+  function onUserScrollIntent() { if (Date.now() - topT0 > 250) topMoved = true; }
   function toTop() {
     var go0 = function () {
-      try { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); } catch (_) { window.scrollTo(0, 0); }
+      setScroll(0);
       try { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; } catch (_) {}
     };
-    go0();
     topT.forEach(clearTimeout); topT = [];
-    var t0 = Date.now(), moved = false;
-    var mark = function () { moved = true; };
-    window.addEventListener('touchstart', mark, { once: true, passive: true });
-    window.addEventListener('wheel', mark, { once: true, passive: true });
-    try { requestAnimationFrame(function () { if (!moved) go0(); }); } catch (_) {}
-    [120, 360, 800].forEach(function (ms) { topT.push(setTimeout(function () { if (!moved && Date.now() - t0 < 1500 && window.scrollY > 0) go0(); }, ms)); });
+    topT0 = Date.now(); topMoved = false;
+    go0();
+    window.addEventListener('touchstart', onUserScrollIntent, { passive: true });
+    window.addEventListener('wheel', onUserScrollIntent, { passive: true });
+    try { requestAnimationFrame(function () { if (!topMoved) go0(); }); } catch (_) {}
+    [120, 360, 800].forEach(function (ms) { topT.push(setTimeout(function () { if (!topMoved && scrollPos() > 0) go0(); }, ms)); });
+    topT.push(setTimeout(function () { window.removeEventListener('touchstart', onUserScrollIntent); window.removeEventListener('wheel', onUserScrollIntent); }, 1500));
   }
   function sheetMode() { return window.innerWidth <= 1020; }
   function openSheet() {
@@ -635,7 +652,7 @@
     pe.querySelectorAll('button').forEach(function (b) {
       b.addEventListener('click', function () {
         S.page = +b.getAttribute('data-p'); paintTable();
-        var th = root.querySelector('#gsThemes'); if (th) window.scrollTo({ top: th.getBoundingClientRect().top + window.scrollY - 90, behavior: 'smooth' });
+        var th = root.querySelector('#gsThemes'); if (th) { var sc = scroller(); var off = th.getBoundingClientRect().top - (sc ? sc.getBoundingClientRect().top : 0) - (sc ? 12 : 90); if (sc) sc.scrollTo({ top: sc.scrollTop + off, behavior: 'smooth' }); else window.scrollTo({ top: window.scrollY + off, behavior: 'smooth' }); }
       });
     });
     var need = vis.map(function (r) { return r.s; }).filter(function (s) { return !S.spark[s]; });
@@ -740,10 +757,10 @@
       a.addEventListener('blur', function once() { a.removeEventListener('blur', once); if (S.detailSym === sym) viewDetail(sym); });
       return;
     }
-    var y = window.scrollY;
+    var y = scrollPos();
     if (S.tr.tokenAuto && !S.tr.amt) S.tr.token = null; /* default pay token follows the new best network */
     viewDetail(sym);
-    window.scrollTo(0, y);
+    setScroll(y);
   }
   function refPx(d) { return d && d.ref && d.ref.price > 0 ? d.ref.price : 0; }
   function vkey(v) { return v.c + ':' + (v.c === 'solana' ? v.a : String(v.a).toLowerCase()); }
@@ -1418,7 +1435,16 @@
     var nb = ov.querySelector('[data-native]');
     if (nb) nb.addEventListener('click', function () { try { navigator.share({ title: name + ' · GROM', text: text, url: url }).catch(function () {}); } catch (_) {} });
   }
-  function lockPage(on) { try { document.documentElement.classList.toggle('gs-lock', !!on); } catch (_) {} }
+  var lockedEl = null;
+  function lockPage(on) {
+    try { document.documentElement.classList.toggle('gs-lock', !!on); } catch (_) {}
+    if (on && !lockedEl) {
+      var sc = scroller();
+      if (sc) { lockedEl = sc; sc.setAttribute('data-gs-ov', sc.style.overflowY || ''); sc.style.overflowY = 'hidden'; }
+    } else if (!on && lockedEl) {
+      lockedEl.style.overflowY = lockedEl.getAttribute('data-gs-ov') || ''; lockedEl.removeAttribute('data-gs-ov'); lockedEl = null;
+    }
+  }
   function closeOverlay() { var o = document.getElementById('gsOv'); if (o) o.remove(); lockPage(!!(root && root.classList.contains('gs-tp-open'))); }
   function onKey(e) { if (e.key !== 'Escape') return; if (document.getElementById('gsOv')) closeOverlay(); else closeSheet(); }
 

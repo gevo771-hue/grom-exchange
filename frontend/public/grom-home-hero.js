@@ -9,7 +9,7 @@
   var API = '/api';
   var CHAIN_ICON = 'https://raw.githubusercontent.com/lifinance/types/main/src/assets/icons/chains/';
   var MARK = '/assets/grom-brand-header-clear.webp';
-  var BTC_ICON = 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png';
+  var BTC_ICON = 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/svg/color/btc.svg'; // vector: sharp at any size
   var STORY_MS = 6500;
 
   var I18N = {

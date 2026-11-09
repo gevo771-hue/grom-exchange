@@ -1251,8 +1251,8 @@
     aspect-ratio: 441 / 462;
     object-fit: contain;
     object-position: center;
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: crisp-edges;
+    /* Smooth resampling: crisp-edges used nearest-neighbour and left jagged edges. */
+    image-rendering: auto;
   }
   @keyframes grom-landing-logo-float {
     0%, 100% { transform: translateY(0); }
@@ -2136,6 +2136,23 @@
   @media (min-width: 1720px) {
     main > .page { max-width: 1480px; margin-left: auto; margin-right: auto; }
     main > .page.landing-cosmos { max-width: none; }
+  }
+  /* 4K and larger screens at 100% OS scaling: scale the header, the sidebar and
+   * the home page like browser zoom. Children are zoomed rather than the shell,
+   * so the vh-based shell heights stay exact. Same steps as the landing/stocks. */
+  @media (min-width: 2600px) and (hover: hover) and (pointer: fine) { :root { --gx-z: 1.4; } }
+  @media (min-width: 3400px) and (hover: hover) and (pointer: fine) { :root { --gx-z: 1.75; } }
+  @media (min-width: 4600px) and (hover: hover) and (pointer: fine) { :root { --gx-z: 2.3; } }
+  @media (min-width: 2600px) and (hover: hover) and (pointer: fine) {
+    :root { --topbar-h: calc(60px * var(--gx-z)); --sidebar-w: calc(232px * var(--gx-z)); }
+    .topbar { padding-left: calc(16px * var(--gx-z)); padding-right: calc(16px * var(--gx-z)); gap: calc(10px * var(--gx-z)); }
+    .topbar > * { zoom: var(--gx-z); }
+    .sidebar { padding: calc(18px * var(--gx-z)) calc(12px * var(--gx-z)); }
+    .sidebar > * { zoom: var(--gx-z); }
+    main { padding: calc(22px * var(--gx-z)) calc(28px * var(--gx-z)) calc(60px * var(--gx-z)); }
+    #page-dashboard, #gw-ai-fab { zoom: var(--gx-z); }
+    /* vw-based offsets would be multiplied by zoom; pin the AI button to the corner. */
+    #gw-ai-fab.grom-ai-launcher { right: 20px !important; bottom: 20px !important; }
   }
   .breadcrumb {
     display: flex; align-items: center; gap: 8px;
@@ -6361,7 +6378,7 @@
     </button>
     <a href="#" class="grom-logo" id="logoHome" aria-label="GROM — Finance Hub">
       <span class="logo-img-shell logo-img-shell--header">
-        <img class="logo-raster logo-raster--header" src="/assets/grom-brand-header-clear.png" width="441" height="462" alt="" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/assets/grom-brand-mark-clear.png'}else{this.onerror=null;this.src='/assets/grom-brand-mark.png'}" />
+        <img class="logo-raster logo-raster--header" src="/assets/grom-logo-header-96.png" srcset="/assets/grom-logo-header-96.png 1x, /assets/grom-logo-header-192.png 2x, /assets/grom-logo-header-288.png 3x" width="441" height="462" alt="" decoding="async" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/assets/grom-brand-mark-clear.png'}else{this.onerror=null;this.src='/assets/grom-brand-mark.png'}" />
       </span>
       <span class="topbar-brand-lockup">
         <span class="tb-name">GROM</span>

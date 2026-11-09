@@ -69,7 +69,7 @@
       h_name: 'Company', h_price: 'Price', h_chga: 'Change $', h_chg: 'Change %', h_5d: '5 days', h_mc: 'Market cap', h_vol: 'Volume 24h', h_pe: 'P/E', h_nets: 'Networks',
       buy: 'Buy', sell: 'Sell', empty: 'Nothing found. Try another ticker or clear the filters.',
       back: 'Stocks', share: 'Share', copied: 'Copied', link_copied: 'Link copied',
-      nets_n: '{n} networks', net_1: '1 network', sw_title: 'Choose a stock', sw_fav: 'Favorites', sw_top: 'Largest', sw_none: 'Nothing found', sw_open: 'Other stocks', ex_price: 'Exchange price', premium: 'premium', discount: 'discount',
+      nets_n: '{n} networks', net_1: '1 network', sh_title: 'Share', sh_sub: 'Share the {name} price with friends.', sh_copy: 'Copy', sh_link: 'Link', sh_more: 'More', sh_text: '{name} ({sym}) — {price}, {chg} in 24h. Tokenized stocks 24/7 on GROM', tp_close: 'Close', sw_title: 'Choose a stock', sw_fav: 'Favorites', sw_top: 'Largest', sw_none: 'Nothing found', sw_open: 'Other stocks', ex_price: 'Exchange price', premium: 'premium', discount: 'discount',
       t_chart: 'Chart', t_where: 'Where to buy', t_stats: 'Statistics', t_token: 'Token', t_faq: 'FAQ',
       chart_ex: 'Exchange price, USD', chart_none: 'Chart is not available for this ticker yet.', chart_load: 'Loading chart…',
       sess_closed: 'The token trades on-chain 24/7 — at night and on weekends the pool price can differ from the exchange; GROM shows the difference before you buy.',
@@ -132,7 +132,7 @@
       h_name: 'Компания', h_price: 'Цена', h_chga: 'Изм. $', h_chg: 'Изм. %', h_5d: '5 дней', h_mc: 'Капитализация', h_vol: 'Объём 24ч', h_pe: 'P/E', h_nets: 'Сети',
       buy: 'Купить', sell: 'Продать', empty: 'Ничего не найдено. Попробуйте другой тикер или снимите фильтры.',
       back: 'Акции', share: 'Поделиться', copied: 'Скопировано', link_copied: 'Ссылка скопирована',
-      nets_n: '{n} сетей', nets_few: '{n} сети', net_1: '1 сеть', sw_title: 'Выбрать акцию', sw_fav: 'Избранное', sw_top: 'Крупнейшие', sw_none: 'Ничего не найдено', sw_open: 'Другие акции', ex_price: 'Цена на бирже', premium: 'премия', discount: 'дисконт',
+      nets_n: '{n} сетей', nets_few: '{n} сети', net_1: '1 сеть', sh_title: 'Поделиться', sh_sub: 'Поделитесь ценой {name} с друзьями.', sh_copy: 'Копировать', sh_link: 'Ссылка', sh_more: 'Ещё', sh_text: '{name} ({sym}) — {price}, {chg} за 24 ч. Токенизированные акции 24/7 на GROM', tp_close: 'Закрыть', sw_title: 'Выбрать акцию', sw_fav: 'Избранное', sw_top: 'Крупнейшие', sw_none: 'Ничего не найдено', sw_open: 'Другие акции', ex_price: 'Цена на бирже', premium: 'премия', discount: 'дисконт',
       t_chart: 'График', t_where: 'Где купить', t_stats: 'Статистика', t_token: 'О токене', t_faq: 'FAQ',
       chart_ex: 'Биржевая цена, USD', chart_none: 'График для этого тикера пока недоступен.', chart_load: 'Загружаем график…',
       sess_closed: 'Токен торгуется on-chain 24/7 — ночью и в выходные цена в пулах может отличаться от биржевой, GROM показывает разницу до покупки.',
@@ -246,6 +246,9 @@
     x: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     share: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg>',
   };
+  /* Share glyphs: Simple Icons (CC0-1.0) path data. */
+  var SHARE_ICO = {"telegram": "M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z", "facebook": "M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z", "x": "M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z", "whatsapp": "M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z", "reddit": "M12 0C5.373 0 0 5.373 0 12c0 3.314 1.343 6.314 3.515 8.485l-2.286 2.286C.775 23.225 1.097 24 1.738 24H12c6.627 0 12-5.373 12-12S18.627 0 12 0Zm4.388 3.199c1.104 0 1.999.895 1.999 1.999 0 1.105-.895 2-1.999 2-.946 0-1.739-.657-1.947-1.539v.002c-1.147.162-2.032 1.15-2.032 2.341v.007c1.776.067 3.4.567 4.686 1.363.473-.363 1.064-.58 1.707-.58 1.547 0 2.802 1.254 2.802 2.802 0 1.117-.655 2.081-1.601 2.531-.088 3.256-3.637 5.876-7.997 5.876-4.361 0-7.905-2.617-7.998-5.87-.954-.447-1.614-1.415-1.614-2.538 0-1.548 1.255-2.802 2.803-2.802.645 0 1.239.218 1.712.585 1.275-.79 2.881-1.291 4.64-1.365v-.01c0-1.663 1.263-3.034 2.88-3.207.188-.911.993-1.595 1.959-1.595Zm-8.085 8.376c-.784 0-1.459.78-1.506 1.797-.047 1.016.64 1.429 1.426 1.429.786 0 1.371-.369 1.418-1.385.047-1.017-.553-1.841-1.338-1.841Zm7.406 0c-.786 0-1.385.824-1.338 1.841.047 1.017.634 1.385 1.418 1.385.785 0 1.473-.413 1.426-1.429-.046-1.017-.721-1.797-1.506-1.797Zm-3.703 4.013c-.974 0-1.907.048-2.77.135-.147.015-.241.168-.183.305.483 1.154 1.622 1.964 2.953 1.964 1.33 0 2.47-.81 2.953-1.964.057-.137-.037-.29-.184-.305-.863-.087-1.795-.135-2.769-.135Z"};
+  function glyph(k) { return '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="' + SHARE_ICO[k] + '"/></svg>'; }
   function logo(sym, sz, fallback) {
     sz = sz || 36;
     var ini = esc(String(sym).replace(/[^A-Z]/g, '').slice(0, 2) || String(sym).slice(0, 2));
@@ -401,8 +404,31 @@
     u.hash = 'xstocks';
     return u.pathname + u.search + u.hash;
   }
+  var topT = [];
   function toTop() {
-    try { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); } catch (_) { window.scrollTo(0, 0); }
+    var go0 = function () {
+      try { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); } catch (_) { window.scrollTo(0, 0); }
+      try { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; } catch (_) {}
+    };
+    go0();
+    topT.forEach(clearTimeout); topT = [];
+    var t0 = Date.now(), moved = false;
+    var mark = function () { moved = true; };
+    window.addEventListener('touchstart', mark, { once: true, passive: true });
+    window.addEventListener('wheel', mark, { once: true, passive: true });
+    try { requestAnimationFrame(function () { if (!moved) go0(); }); } catch (_) {}
+    [120, 360, 800].forEach(function (ms) { topT.push(setTimeout(function () { if (!moved && Date.now() - t0 < 1500 && window.scrollY > 0) go0(); }, ms)); });
+  }
+  function sheetMode() { return window.innerWidth <= 1020; }
+  function openSheet() {
+    if (!root || !sheetMode()) return;
+    root.classList.add('gs-tp-open'); lockPage(true);
+    var a = root.querySelector('.gs-aside'); if (a) a.scrollTop = 0;
+  }
+  function closeSheet() {
+    if (!root || !root.classList.contains('gs-tp-open')) return;
+    root.classList.remove('gs-tp-open');
+    if (!document.getElementById('gsOv')) lockPage(false);
   }
   function go(sym, toTrade) {
     S.pendingTrade = !!toTrade;
@@ -485,6 +511,7 @@
   }
   function viewList() {
     S.detailSym = '';
+    closeSheet();
     root.classList.remove('gs-detail');
     if (!S.rows) {
       root.innerHTML = '<h1 class="gs-sr">' + esc(t('seo_h1')) + '</h1>' + stripHtml()
@@ -768,6 +795,7 @@
       S.tr = { side: 'buy', token: S.tr.token, amt: '', dest: 'auto', openNets: false, routeOpen: true, quote: null, quoting: false, qerr: null, seq: S.tr.seq + 1, solDest: S.tr.solDest, sellKey: '' };
     }
     root.classList.add('gs-detail');
+    if (fresh) closeSheet();
     var row = S.bySym[sym] || null;
     if (!S.detail && !S.detailLoading && !S.detailErr) {
       S.detailLoading = true;
@@ -828,7 +856,7 @@
       + '<div class="gs-card gs-sec" id="gsChartCard"><div class="gs-chhead"><div class="gs-rng" id="gsRng">' + [['1d', '1D'], ['5d', '5D'], ['1mo', '1M']].map(function (x) { return '<button type="button" data-r="' + x[0] + '" class="' + (S.range === x[0] ? 'on' : '') + '">' + x[1] + '</button>'; }).join('') + '</div><span class="gs-mu" style="font-size:12px">' + esc(t('chart_ex')) + '</span></div>'
       + '<div class="gs-chart" id="gsChart"><div class="gs-ctip" id="gsCtip"></div></div>'
       + '<div class="gs-sess ' + (ss.open ? 'open' : '') + '">' + ICO.clock + '<span><b>' + esc(ss.label) + '.</b> ' + esc(t('sess_closed')) + '</span></div></div>'
-      + '</div><div class="gs-aside"><div class="gs-card gs-tp" id="gsTrade"></div></div><div class="gs-drest">'
+      + '</div><div class="gs-tp-bd" data-tp-close></div><div class="gs-aside"><div class="gs-sheet-h"><i class="grab"></i><span>' + logo(r.s, 24, r.l) + '<b>' + esc(r.s) + '</b><small class="num">' + px(price) + '</small></span><button type="button" class="x" data-tp-close aria-label="' + esc(t('tp_close')) + '">' + ICO.x + '</button></div><div class="gs-card gs-tp" id="gsTrade"></div></div><div class="gs-drest">'
       + '<div class="gs-card gs-sec" id="gsWhere"><div class="gs-h2">' + esc(t('where_h')) + '</div><div class="gs-mu" style="font-size:12.5px;margin:-6px 0 12px;line-height:1.5">' + esc(t('where_sub')) + '</div><div class="gs-ntbl">' + (d._partial ? '<div class="gs-skel"></div><div class="gs-skel"></div><div class="gs-skel"></div>' : ntbl) + '</div></div>'
       + '<div class="gs-card gs-sec"><div class="gs-h2">' + esc(t('t_stats')) + '</div><div class="gs-stats">'
       + '<div><span>' + esc(t('s_onchain')) + '</span><b class="num">' + px(price) + '</b></div><div><span>' + esc(t('s_ex')) + '</span><b class="num">' + px(ref) + '</b></div>'
@@ -853,17 +881,13 @@
     });
     root.querySelector('[data-fav1]').addEventListener('click', function () { if (S.fav[r.s]) delete S.fav[r.s]; else S.fav[r.s] = 1; saveFav(); viewDetail(r.s); });
     root.querySelectorAll('[data-switch]').forEach(function (b) { b.addEventListener('click', function () { openStockSwitch(r.s); }); });
-    root.querySelector('[data-share]').addEventListener('click', function () {
-      var url = location.origin + '/stocks?sym=' + encodeURIComponent(r.s) + '#xstocks';
-      try { if (navigator.share) { navigator.share({ title: (r.n || r.s) + ' · GROM', url: url }).catch(function () {}); return; } } catch (_) {}
-      try { navigator.clipboard.writeText(url); } catch (_) {}
-      toast(t('link_copied'));
-    });
+    root.querySelector('[data-share]').addEventListener('click', function () { openShare(r, price); });
     root.querySelectorAll('#gsRng button').forEach(function (b) {
       b.addEventListener('click', function () { S.range = b.getAttribute('data-r'); root.querySelectorAll('#gsRng button').forEach(function (x) { x.classList.toggle('on', x === b); }); drawChart(); });
     });
+    root.querySelectorAll('[data-tp-close]').forEach(function (b) { b.addEventListener('click', closeSheet); });
     root.querySelectorAll('[data-mb]').forEach(function (b) {
-      b.addEventListener('click', function () { setSide(b.getAttribute('data-mb')); var tp = root.querySelector('#gsTrade'); if (tp) tp.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+      b.addEventListener('click', function () { setSide(b.getAttribute('data-mb')); openSheet(); });
     });
     drawChart();
     renderTrade();
@@ -872,7 +896,8 @@
       S.pendingTrade = false;
       setTimeout(function () {
         var i = root && root.querySelector('#gsAmt');
-        if (i && window.innerWidth > 1020) { try { i.focus({ preventScroll: true }); } catch (_) {} }
+        if (sheetMode()) openSheet();
+        else if (i) { try { i.focus({ preventScroll: true }); } catch (_) {} }
       }, 80);
     }
     if (connected() && !d._partial) refreshBalances(d);
@@ -1343,9 +1368,42 @@
     if (!S.rows) loadList().then(function () { if (document.getElementById('gsOv') === ov) list(); });
     setTimeout(function () { if (window.innerWidth > 760) qi.focus(); }, 30);
   }
+  function openShare(r, price) {
+    closeOverlay();
+    var url = location.origin + '/stocks?sym=' + encodeURIComponent(r.s) + '#xstocks';
+    var name = r.n || r.s;
+    var text = t('sh_text', { name: name, sym: r.s, price: px(price), chg: pct(r.c) });
+    var U = encodeURIComponent(url), T = encodeURIComponent(text);
+    var nets = [
+      ['telegram', 'Telegram', 'https://t.me/share/url?url=' + U + '&text=' + T],
+      ['facebook', 'Facebook', 'https://www.facebook.com/sharer/sharer.php?u=' + U],
+      ['x', 'X', 'https://x.com/intent/tweet?text=' + T + '&url=' + U],
+      ['whatsapp', 'WhatsApp', 'https://wa.me/?text=' + encodeURIComponent(text + ' ' + url)],
+      ['reddit', 'Reddit', 'https://www.reddit.com/submit?url=' + U + '&title=' + T],
+    ];
+    var ov = document.createElement('div'); ov.className = 'gs-ov gs-ov-sh'; ov.id = 'gsOv';
+    ov.innerHTML = '<div class="gs-mdl gs-share" role="dialog" aria-modal="true"><div class="mh">' + esc(t('sh_title')) + '<button type="button" class="x" data-x aria-label="' + esc(t('tp_close')) + '">' + ICO.x + '</button></div>'
+      + '<div class="mb"><p class="sub">' + esc(t('sh_sub', { name: name })) + '</p>'
+      + '<div class="pv">' + logo(r.s, 40, r.l) + '<span class="m"><b>' + esc(name) + '</b><small>' + esc(r.s) + ' · GROM</small></span><span class="r"><b class="num">' + px(price) + '</b><small class="num ' + cls(r.c) + '">' + pct(r.c) + ' 24h</small></span></div>'
+      + '<div class="lk"><span class="u">' + esc(url.replace(/^https?:\/\//, '')) + '</span><button type="button" data-copy-link>' + esc(t('sh_copy')) + '</button></div>'
+      + '<div class="nets">' + nets.map(function (n) { return '<a class="sn sn-' + n[0] + '" href="' + esc(n[2]) + '" target="_blank" rel="noopener noreferrer" title="' + esc(n[1]) + '" aria-label="' + esc(n[1]) + '">' + glyph(n[0]) + '</a>'; }).join('')
+      + '<button type="button" class="sn" data-copy-link title="' + esc(t('sh_link')) + '" aria-label="' + esc(t('sh_link')) + '"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></svg></button>'
+      + (navigator.share ? '<button type="button" class="sn" data-native title="' + esc(t('sh_more')) + '" aria-label="' + esc(t('sh_more')) + '"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>' : '')
+      + '</div></div></div>';
+    document.body.appendChild(ov); lockPage(true);
+    ov.addEventListener('error', onImgError, true);
+    ov.addEventListener('load', onImgLoad, true);
+    ov.querySelector('[data-x]').addEventListener('click', closeOverlay);
+    ov.addEventListener('click', function (e) { if (e.target === ov) closeOverlay(); });
+    ov.querySelectorAll('[data-copy-link]').forEach(function (b) {
+      b.addEventListener('click', function () { try { navigator.clipboard.writeText(url); } catch (_) {} toast(t('link_copied')); });
+    });
+    var nb = ov.querySelector('[data-native]');
+    if (nb) nb.addEventListener('click', function () { try { navigator.share({ title: name + ' · GROM', text: text, url: url }).catch(function () {}); } catch (_) {} });
+  }
   function lockPage(on) { try { document.documentElement.classList.toggle('gs-lock', !!on); } catch (_) {} }
-  function closeOverlay() { var o = document.getElementById('gsOv'); if (o) o.remove(); lockPage(false); }
-  function onKey(e) { if (e.key === 'Escape') closeOverlay(); }
+  function closeOverlay() { var o = document.getElementById('gsOv'); if (o) o.remove(); lockPage(!!(root && root.classList.contains('gs-tp-open'))); }
+  function onKey(e) { if (e.key !== 'Escape') return; if (document.getElementById('gsOv')) closeOverlay(); else closeSheet(); }
 
   /* ---------- execution ---------- */
   function execute(q) {

@@ -327,9 +327,11 @@
     return S.loadingList;
   }
   function loadIndices() {
-    return getJson(API + '/stocks/indices', 12000).then(function (j) {
+    if (S.idxPending) return S.idxPending;
+    S.idxPending = getJson(API + '/stocks/indices', 12000).then(function (j) {
       if (j && Array.isArray(j.indices) && j.indices.length) S.indices = j;
-    }).catch(function () {});
+    }).catch(function () {}).finally(function () { S.idxPending = null; });
+    return S.idxPending;
   }
   function loadSpark(syms) {
     var want = syms.filter(function (s) { return !S.spark[s] && !S.sparkPending[s]; }).slice(0, 30);
@@ -629,9 +631,34 @@
     S.detailErr = false;
     return getJson(API + '/stocks/detail?sym=' + encodeURIComponent(sym), 25000).then(function (d) {
       if (!d || !Array.isArray(d.variants)) throw new Error('bad');
-      if (S.detailSym === sym) S.detail = d;
+      if (S.detailSym === sym) { S.detail = d; S.liqTries = 0; if (!d.liquidityKnown) pollLiquidity(sym); }
       return d;
     }).catch(function () { if (S.detailSym === sym) S.detailErr = true; });
+  }
+  /* Pool liquidity is filled server-side in the background; pick it up without blocking the page. */
+  function pollLiquidity(sym) {
+    if ((S.liqTries || 0) >= 5) return;
+    S.liqTries = (S.liqTries || 0) + 1;
+    setTimeout(function () {
+      if (S.detailSym !== sym) return;
+      getJson(API + '/stocks/detail?sym=' + encodeURIComponent(sym), 20000).then(function (d) {
+        if (S.detailSym !== sym || !d || !Array.isArray(d.variants)) return;
+        if (!d.liquidityKnown) { pollLiquidity(sym); return; }
+        S.detail = d;
+        applyDetailUpdate(sym);
+      }).catch(function () { pollLiquidity(sym); });
+    }, 2500);
+  }
+  function applyDetailUpdate(sym) {
+    var a = document.activeElement;
+    if (a && root && root.contains(a) && a.tagName === 'INPUT') {
+      a.addEventListener('blur', function once() { a.removeEventListener('blur', once); if (S.detailSym === sym) viewDetail(sym); });
+      return;
+    }
+    var y = window.scrollY;
+    if (S.tr.tokenAuto && !S.tr.amt) S.tr.token = null; /* default pay token follows the new best network */
+    viewDetail(sym);
+    window.scrollTo(0, y);
   }
   function refPx(d) { return d && d.ref && d.ref.price > 0 ? d.ref.price : 0; }
   function vkey(v) { return v.c + ':' + (v.c === 'solana' ? v.a : String(v.a).toLowerCase()); }
@@ -679,21 +706,28 @@
   function viewDetail(sym) {
     var fresh = S.detailSym !== sym;
     if (fresh) {
-      S.detailSym = sym; S.detail = null; S.varBal = {};
+      S.detailSym = sym; S.detail = null; S.varBal = {}; S.detailLoading = false; S.detailErr = false;
       S.tr = { side: 'buy', token: S.tr.token, amt: '', dest: 'auto', openNets: false, routeOpen: true, quote: null, quoting: false, qerr: null, seq: S.tr.seq + 1, solDest: S.tr.solDest, sellKey: '' };
     }
     root.classList.add('gs-detail');
     var row = S.bySym[sym] || null;
-    if (!S.detail) {
+    if (!S.detail && !S.detailLoading && !S.detailErr) {
+      S.detailLoading = true;
+      loadDetail(sym).then(function () {
+        S.detailLoading = false;
+        if (S.detailSym === sym && hashSym() === sym) { if (S.detail) applyDetailUpdate(sym); else viewDetail(sym); }
+      });
+    }
+    if (!S.detail && (!row || S.detailErr)) {
       root.innerHTML = '<div class="gs-crumb"><a data-back>' + esc(t('back')) + '</a><span>›</span><span>' + esc(row ? row.n : sym) + '</span></div>'
         + '<div class="gs-card gs-sec">' + (S.detailErr ? '<div class="gs-empty">' + esc(t('load_err')) + ' <button type="button" class="gs-ghost" data-retry>' + esc(t('retry')) + '</button></div>' : '<div class="gs-skel"></div><div class="gs-skel"></div><div class="gs-skel"></div>') + '</div>';
       bindBack();
       var rb = root.querySelector('[data-retry]'); if (rb) rb.addEventListener('click', function () { S.detailErr = false; viewDetail(sym); });
-      if (!S.detailErr) loadDetail(sym).then(function () { if (S.detailSym === sym && hashSym() === sym) viewDetail(sym); });
-      if (!S.rows) loadList();
+      if (!S.rows) loadList().then(function () { if (S.detailSym === sym && !S.detail && S.bySym[sym]) viewDetail(sym); });
       return;
     }
-    var d = S.detail;
+    /* Instant page from the list row; contract data and liquidity fill in when they arrive. */
+    var d = S.detail || { variants: [], ref: null, liquidityKnown: false, _partial: true };
     var r = Object.assign({}, row || {}, d);
     var ref = refPx(d) || r.f || 0;
     var price = priceOf(r);
@@ -734,7 +768,7 @@
       + '<div class="gs-chart" id="gsChart"><div class="gs-ctip" id="gsCtip"></div></div>'
       + '<div class="gs-sess ' + (ss.open ? 'open' : '') + '">' + ICO.clock + '<span><b>' + esc(ss.label) + '.</b> ' + esc(t('sess_closed')) + '</span></div></div>'
       + '</div><div class="gs-aside"><div class="gs-card gs-tp" id="gsTrade"></div></div><div class="gs-drest">'
-      + '<div class="gs-card gs-sec" id="gsWhere"><div class="gs-h2">' + esc(t('where_h')) + '</div><div class="gs-mu" style="font-size:12.5px;margin:-6px 0 12px;line-height:1.5">' + esc(t('where_sub')) + '</div><div class="gs-ntbl">' + ntbl + '</div></div>'
+      + '<div class="gs-card gs-sec" id="gsWhere"><div class="gs-h2">' + esc(t('where_h')) + '</div><div class="gs-mu" style="font-size:12.5px;margin:-6px 0 12px;line-height:1.5">' + esc(t('where_sub')) + '</div><div class="gs-ntbl">' + (d._partial ? '<div class="gs-skel"></div><div class="gs-skel"></div><div class="gs-skel"></div>' : ntbl) + '</div></div>'
       + '<div class="gs-card gs-sec"><div class="gs-h2">' + esc(t('t_stats')) + '</div><div class="gs-stats">'
       + '<div><span>' + esc(t('s_onchain')) + '</span><b class="num">' + px(price) + '</b></div><div><span>' + esc(t('s_ex')) + '</span><b class="num">' + px(ref) + '</b></div>'
       + '<div><span>' + esc(t('s_prem')) + '</span><b class="num ' + cls(prem) + '">' + pct(prem) + '</b></div><div><span>' + esc(t('s_chg')) + '</span><b class="num ' + cls(r.c) + '">' + pct(r.c) + '</b></div>'
@@ -779,7 +813,7 @@
         var i = root && root.querySelector('#gsAmt'); if (i && window.innerWidth > 1020) i.focus();
       }, 80);
     }
-    if (connected()) refreshBalances(d);
+    if (connected() && !d._partial) refreshBalances(d);
   }
   function bindBack() {
     var b = root.querySelector('[data-back]');
@@ -788,7 +822,7 @@
 
   /* ---------- chart ---------- */
   function drawChart() {
-    var host = root && root.querySelector('#gsChart'); if (!host || !S.detail) return;
+    var host = root && root.querySelector('#gsChart'); if (!host || !S.detailSym) return;
     var sym = S.detailSym, range = S.range, key = sym + '|' + range;
     var tip = host.querySelector('#gsCtip');
     host.querySelectorAll('svg,.gs-cmsg').forEach(function (e) { e.remove(); });
@@ -910,12 +944,13 @@
     renderTrade();
   }
   function renderTrade() {
-    var el = root && root.querySelector('#gsTrade'); if (!el || !S.detail) return;
+    var el = root && root.querySelector('#gsTrade'); if (!el) return;
+    if (!S.detail) { el.innerHTML = '<div class="gs-skel" style="border-radius:12px"></div><div class="gs-skel" style="height:110px;border-radius:12px"></div><div class="gs-skel" style="height:110px;border-radius:12px"></div>'; return; }
     var d = S.detail, tr = S.tr, buy = tr.side === 'buy';
     var sym = S.detailSym;
     var v = destVariant(d);
     if (!buy && v && !tr.token) tr.token = defaultRecvToken(v);
-    if (buy && !tr.token) tr.token = defaultPayToken();
+    if (buy && !tr.token) { tr.token = defaultPayToken(); tr.tokenAuto = true; }
     var tok = tr.token;
     var h = holdingOf(tok);
     var payBox, recvBox, destHtml = '';
@@ -1188,7 +1223,7 @@
         b.addEventListener('click', function () {
           var k = b.getAttribute('data-k');
           var pick = all.mine.concat(all.others).filter(function (tk) { return (tk.chainId + ':' + tk.address) === k; })[0];
-          if (pick) { S.tr.token = pick; S.tr.quote = null; }
+          if (pick) { S.tr.token = pick; S.tr.tokenAuto = false; S.tr.quote = null; }
           closeOverlay(); renderTrade(); scheduleQuote(true);
         });
       });
@@ -1276,7 +1311,12 @@
         var s = root && root.querySelector('.gs-strip');
         if (s) s.outerHTML = stripHtml();
       });
-      if (!S.detailSym) loadList(true).then(function () { if (!S.detailSym && isActive()) { paintTable(); paintHeat(); } });
+      if (!S.detailSym) loadList(true).then(function () {
+        if (S.detailSym || !isActive() || !root) return;
+        /* First prices can arrive after the cold start — rebuild the whole list once they do. */
+        if (!root.querySelector('.gs-trend') || !root.querySelector('.gs-tile')) { viewList(); return; }
+        paintTable(); paintHeat();
+      });
     }, 60000);
   }
   function mount(sec) {

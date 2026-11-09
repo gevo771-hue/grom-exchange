@@ -1061,6 +1061,12 @@ async function fetchStockReference(item) {
   const sym = item.sym;
   const hit = stockRefCache.get(sym);
   if (hit && Date.now() - hit.ts < 60_000) return hit.value;
+  /* Catalog Yahoo price refreshed within 3 min is fresh enough — skip the extra round trip. */
+  const at = Number(item.fairPriceAt) || 0;
+  const needMult = item.solMint && /x$/i.test(String(item.tokenSym || ''));
+  if (!needMult && item.fairPrice > 0 && at > 0 && Date.now() - at < 3 * 60_000) {
+    return { price: Number(item.fairPrice), source: 'yahoo-usd', at, marketState: null, solMultiplier: null };
+  }
   const [metrics, mult] = await Promise.all([
     fetchYahooEquityMetrics([{ sym, yahooSym: item.yahooSym || sym.replace(/\./g, '-') }]).catch(() => new Map()),
     item.solMint && /x$/i.test(String(item.tokenSym || ''))
@@ -1130,8 +1136,46 @@ async function fetchStockIndices() {
   return value;
 }
 
+/* Keep the Stocks section fast: pre-warm indices, sparklines and pool liquidity of the
+ * largest tickers in the background (bounded, unref'd, off in tests). */
+let stockWarmersStarted = false;
+function startStockWarmers() {
+  if (stockWarmersStarted || process.env.NODE_ENV === 'test') return;
+  stockWarmersStarted = true;
+  const every = (ms, fn) => { const t = setInterval(() => { fn().catch(() => {}); }, ms); t.unref?.(); };
+  const top = async (n) => (await stocksUniverse.get())
+    .filter((it) => Number(it.mcNum) > 0 || Number(it.price) > 0)
+    .sort((a, b) => (Number(b.mcNum) || 0) - (Number(a.mcNum) || 0))
+    .slice(0, n);
+  const warmIndices = () => fetchStockIndices();
+  const warmSpark = async () => {
+    const rows = (await top(50)).map((it) => ({ sym: it.sym, yahooSym: it.yahooSym || it.sym.replace(/\./g, '-') }));
+    if (rows.length) await fetchStockSpark(rows);
+  };
+  const warmLiquidity = async () => {
+    const set = new Set();
+    const all = await stocksUniverse.get();
+    for (const it of all) for (const v of it.variants) set.add(v.c === 'solana' ? v.a : String(v.a).toLowerCase());
+    for (const it of await top(40)) {
+      if (stockLiquidity.peek(it.sym)) continue;
+      const got = await stockLiquidity.forItem(it, set).catch(() => null);
+      if (!got) break; // request budget used up — continue next round
+    }
+  };
+  const kick = setTimeout(() => {
+    warmIndices().catch(() => {});
+    warmSpark().catch(() => {});
+    warmLiquidity().catch(() => {});
+  }, 20_000);
+  kick.unref?.();
+  every(55_000, warmIndices);
+  every(14 * 60_000, warmSpark);
+  every(3 * 60_000, warmLiquidity);
+}
+
 export function createMarketRouter() {
   const r = express.Router();
+  startStockWarmers();
   registerPredictionEventRoutes(r);
 
   // Read-only fixed-host recovery when Squid has not indexed an older route.

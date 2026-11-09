@@ -197,10 +197,16 @@ export function buildStocksUniverse({ catalog = [], lifiTokens = {} } = {}) {
 }
 
 /** Compact list row for the Stocks list (no addresses). */
+/** Listings quoted outside the US (e.g. 0700.HK): Yahoo cap/turnover are in local currency, not USD. */
+export function isNonUsdListing(item) {
+  return /\.[A-Z]{1,3}$/.test(String(item?.yahooSym || ''));
+}
+
 export function compactStockRow(item) {
   const nets = [...new Set(item.variants.map((v) => (v.c === 'solana' ? 'solana' : STOCK_CHAINS[v.c]?.key)).filter(Boolean))];
   const kinds = [...new Set(item.variants.map((v) => v.k))];
   const num = (x) => (Number.isFinite(Number(x)) && Number(x) !== 0 ? Number(x) : null);
+  const foreign = isNonUsdListing(item);
   return {
     s: item.sym,
     n: item.name,
@@ -209,8 +215,8 @@ export function compactStockRow(item) {
     f: num(item.fairPrice),
     c: item.chg == null || !Number.isFinite(Number(item.chg)) ? null : Number(item.chg),
     ca: num(item.chgAbs),
-    mc: item.mcNum || parseCompactUsd(item.mc),
-    v: item.volNum || parseCompactUsd(item.vol24),
+    mc: foreign ? null : (item.mcNum || parseCompactUsd(item.mc)),
+    v: foreign ? null : (item.volNum || parseCompactUsd(item.vol24)),
     pe: num(item.pe),
     k: item.k || null,
     h: item.halted ? 1 : 0,

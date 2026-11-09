@@ -385,20 +385,22 @@ export function createStockLiquidity({ fetchPairs, now = Date.now, ttlMs = 20 * 
   const inflight = new Map();
   let windowStart = 0;
   let used = 0;
-  function budget(n) {
+  function budget(n, background) {
     const t = now();
     if (t - windowStart >= 60_000) { windowStart = t; used = 0; }
-    if (used + n > maxPerMinute) return false;
+    /* Background pre-warming may use only half the budget — visitors always keep headroom. */
+    const cap = background ? Math.floor(maxPerMinute / 2) : maxPerMinute;
+    if (used + n > cap) return false;
     used += n;
     return true;
   }
-  async function forItem(item, knownStockAddrs) {
+  async function forItem(item, knownStockAddrs, { background = false } = {}) {
     const key = item.sym;
     const hit = cache.get(key, ttlMs, now());
     if (hit) return hit;
     if (inflight.has(key)) return inflight.get(key);
     const jobs = item.variants.filter((v) => (v.c === 'solana' ? STOCK_CHAINS.solana : STOCK_CHAINS[v.c])?.ds);
-    if (!budget(jobs.length)) return null;
+    if (!budget(jobs.length, background)) return null;
     const pending = (async () => {
       const out = {};
       for (let i = 0; i < jobs.length; i += concurrency) {

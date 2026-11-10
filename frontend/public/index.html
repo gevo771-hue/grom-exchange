@@ -393,11 +393,7 @@
   html.lv2-on #page-landing .lp-hero-right:has(.lv2-hw .lv2-hw-tabs) {
     visibility: visible;
   }
-  /* Dashboard banners: fully hidden until carousel is positioned (no glow flash) */
-  html:not(.grom-dash-ready) .dash-banners-wrap {
-    display: none !important;
-    min-height: 112px;
-  }
+  /* Dashboard hero: its frame is visible from first paint (see grom-dashboard-shell.css). */
   html.grom-dash-ready .dash-banners-wrap {
     display: block;
   }
@@ -731,6 +727,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Oxanium:wght@600;700;800&family=Rajdhani:wght@600;700&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/grom-banners.css" />
+<link rel="stylesheet" href="/grom-home-hero.css" id="grom-home-hero-style" />
+<link rel="stylesheet" href="/grom-earn.css" id="grom-earn-style" />
 <link rel="manifest" href="/manifest.webmanifest" />
 <link rel="icon" href="/favicon.ico" sizes="48x48" />
 <link rel="icon" type="image/png" href="/favicon-96.png" sizes="96x96" />
@@ -6404,6 +6402,8 @@
     <button type="button" class="hub-link" data-page="dashboard" data-i18n="nav_dashboard">Dashboard</button>
     <button type="button" class="hub-link" data-page="futures" data-i18n="nav_futures">Trade</button>
     <button type="button" class="hub-link" data-page="markets" data-i18n="nav_markets">Markets</button>
+    <button type="button" class="hub-link" data-page="predict" data-i18n="nav_predict">Predictions</button>
+    <button type="button" class="hub-link" data-page="xstocks" data-i18n="nav_xstocks">Stocks</button>
   </nav>
   <div class="right">
     <div class="topbar-ico-group" role="toolbar" aria-label="Search, alerts, language and help">
@@ -6455,6 +6455,8 @@
     <div class="nav-item" data-page="dashboard"><span class="ico"><svg width="18" height="18"><use href="#i-dashboard"/></svg></span><span class="nav-label" data-i18n="nav_dashboard">Dashboard</span></div>
     <div class="nav-item" data-page="futures"><span class="ico"><svg width="18" height="18"><use href="#i-futures"/></svg></span><span class="nav-label" data-i18n="nav_futures">Trade</span><span class="badge new" data-i18n="badge_new">NEW</span></div>
     <div class="nav-item" data-page="markets"><span class="ico"><svg width="18" height="18"><use href="#i-markets"/></svg></span><span class="nav-label" data-i18n="nav_markets">Markets</span></div>
+    <div class="nav-item" id="gwNav_predict" data-page="predict"><span class="ico"><svg width="18" height="18" aria-hidden="true"><use href="#i-predict"/></svg></span><span class="nav-label" data-i18n="nav_predict">Predictions</span></div>
+    <div class="nav-item" id="gwNav_xstocks" data-page="xstocks"><span class="ico"><svg width="18" height="18" aria-hidden="true"><use href="#i-xstocks"/></svg></span><span class="nav-label" data-i18n="nav_xstocks">Stocks</span><span class="badge new">NEW</span></div>
     <div class="nav-item" data-page="earn"><span class="ico"><svg width="18" height="18"><use href="#i-earn"/></svg></span><span class="nav-label">Earn</span></div>
     <div class="nav-item" data-page="wallet"><span class="ico"><svg width="18" height="18"><use href="#i-wallet"/></svg></span><span class="nav-label" data-i18n="nav_wallet">Wallet</span></div>
     <div class="nav-item" data-page="referral"><span class="ico"><svg width="18" height="18"><use href="#i-referral"/></svg></span><span class="nav-label" data-i18n="nav_referral">Referral</span><span class="badge new">REF</span></div>
@@ -6766,8 +6768,8 @@
 
     <!-- DASHBOARD -->
     <section class="page" id="page-dashboard">
-      <div class="dash-banners-wrap" id="dashBannersWrap" hidden>
-        <div id="gromHomeHero" class="ghh-host"></div>
+      <div class="dash-banners-wrap" id="dashBannersWrap">
+        <div id="gromHomeHero" class="ghh-host"><div class="ghh-skel" aria-hidden="true"><div class="l"><i class="eb"></i><i class="h"></i><i class="p"></i><i class="p s"></i><span class="b"><i></i><i></i></span></div><div class="r"><i></i></div><div class="bars"><i></i><i></i><i></i><i></i></div></div></div>
       </div>
 
 
@@ -6886,7 +6888,7 @@
     </section>
 
     <!-- PREDICTION + XSTOCKS (content hydrated by boot script) -->
-    <section class="page" id="page-predict"></section>
+    <section class="page" id="page-predict"><div class="gpx-boot" aria-hidden="true"><div class="hero"><span class="ttl"><i class="ic"></i><i class="t"></i></span><span class="st"><i></i><i></i><i></i></span></div><div class="tabs"><i></i><i></i><i class="r"></i></div><div class="tool"><span class="cats"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><i class="srch"></i></div><div class="grid"><div class="c"><span class="hd"><i class="ic"></i><i class="t"></i></span><i class="row"></i><i class="row"></i><i class="row s"></i><i class="ft"></i></div><div class="c"><span class="hd"><i class="ic"></i><i class="t"></i></span><i class="row"></i><i class="row"></i><i class="row s"></i><i class="ft"></i></div><div class="c"><span class="hd"><i class="ic"></i><i class="t"></i></span><i class="row"></i><i class="row"></i><i class="row s"></i><i class="ft"></i></div><div class="c"><span class="hd"><i class="ic"></i><i class="t"></i></span><i class="row"></i><i class="row"></i><i class="row s"></i><i class="ft"></i></div><div class="c"><span class="hd"><i class="ic"></i><i class="t"></i></span><i class="row"></i><i class="row"></i><i class="row s"></i><i class="ft"></i></div><div class="c"><span class="hd"><i class="ic"></i><i class="t"></i></span><i class="row"></i><i class="row"></i><i class="row s"></i><i class="ft"></i></div></div></div></section>
     <section class="page" id="page-xstocks"></section>
     <section class="page" id="page-earn">
       <div class="earn-wrap">
@@ -17371,6 +17373,9 @@ var GROM_XSTOCKS = [
   // Create real <section class="page"> shells so the app's own show() router
   // renders them on click AND on direct #predict / #xstocks URLs.
   function ensurePredictPage() {
+    // The page is styled by injectCss(); build it only once those rules exist,
+    // otherwise the first frame paints unstyled and the layout jumps.
+    if (!document.getElementById('grom-extra-enhance-css')) injectCss();
     preparePredictWallet();
     setTimeout(syncPredictEvent, 0);
     var anchor = document.getElementById('page-markets') || document.querySelector('main .page');
@@ -19165,7 +19170,7 @@ function wireDashBannerCarousel() {
     document.documentElement.classList.add('grom-dash-ready');
     if (wrap) wrap.hidden = false;
     if (typeof window.gromEnsureProductModule === 'function') {
-      window.gromEnsureProductModule('home').then(function (m) { m.mount(heroHost); }).catch(function () { if (wrap) wrap.hidden = true; });
+      window.gromEnsureProductModule('home').then(function (m) { m.mount(heroHost); }).catch(function () { if (wrap) wrap.style.setProperty('display', 'none', 'important'); });
     }
     return;
   }

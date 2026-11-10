@@ -4783,6 +4783,179 @@ async function gwRpcTry(chainId, method, params) {
   throw lastErr || new Error('all RPCs failed');
 }
 
+/* ---------------------------------------------------------------------------
+ * Wallet token discovery. The curated ONCHAIN_TOKENS map only knows stables,
+ * so a wallet holding ARB, LINK or tokenized stocks looked empty in the
+ * "You pay" picker. /api/swap/holdings-tokens lists the liquid contracts per
+ * chain (public catalog data, no wallet address sent) and one Multicall3
+ * aggregate3 call per chain reads every balanceOf at once.
+ * ------------------------------------------------------------------------- */
+const GW_MC3 = '0xcA11bde05977b3631167028862bE2a173976CA11';
+const GW_HOLD_TOK_LS = 'gw_hold_tok_v1';
+const GW_HOLD_TOK_TTL = 6 * 3600_000;
+const GW_MC3_CHUNK = 120;
+
+async function gwRpcTryT(chainId, method, params, timeoutMs) {
+  const urls = [ONCHAIN_RPC[chainId], ...(ONCHAIN_RPC_FALLBACK[chainId] || [])].filter(Boolean);
+  let lastErr;
+  for (const url of urls) {
+    try { return await rpcCall(url, method, params, timeoutMs); } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('all RPCs failed');
+}
+
+function gwHoldTokState() {
+  const st = window.__gwHoldTok = window.__gwHoldTok || { at: 0, chains: null, inflight: null, failAt: 0 };
+  if (!st.chains) {
+    try {
+      const j = JSON.parse(localStorage.getItem(GW_HOLD_TOK_LS) || 'null');
+      if (j && j.chains && typeof j.chains === 'object' && Date.now() - Number(j.at) < 2 * GW_HOLD_TOK_TTL) {
+        st.chains = j.chains; st.at = Number(j.at) || 0;
+      }
+    } catch (_) {}
+  }
+  return st;
+}
+
+/** [{ sym, address, decimals, priceUSD, verified }] to scan on `chainId`. */
+async function gwHoldingsTokenList(chainId) {
+  const st = gwHoldTokState();
+  if ((!st.chains || Date.now() - st.at > GW_HOLD_TOK_TTL) && !st.inflight && Date.now() - st.failAt > 60_000) {
+    st.inflight = (async () => {
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const t = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 9000) : null;
+      try {
+        const r = await fetch('/api/swap/holdings-tokens', { headers: { accept: 'application/json' }, signal: ctrl?.signal });
+        if (!r.ok) throw new Error('holdings tokens ' + r.status);
+        const j = await r.json();
+        if (!j || !j.chains || typeof j.chains !== 'object') throw new Error('bad holdings tokens');
+        st.chains = j.chains; st.at = Number(j.at) || Date.now();
+        try { localStorage.setItem(GW_HOLD_TOK_LS, JSON.stringify({ at: st.at, chains: st.chains })); } catch (_) {}
+      } catch (_) {
+        st.failAt = Date.now();
+      } finally {
+        if (t) clearTimeout(t);
+        st.inflight = null;
+      }
+    })();
+  }
+  if (!st.chains && st.inflight) await st.inflight;
+  const out = [];
+  const seen = new Set();
+  for (const row of (st.chains && st.chains[chainId]) || []) {
+    if (!Array.isArray(row)) continue;
+    const [address, decimals, sym, priceUSD, verified] = row;
+    const a = String(address || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(a) || seen.has(a) || !Number.isInteger(decimals)) continue;
+    const s = gwSafeSym(String(sym || '').toUpperCase());
+    if (!s || s === '???') continue;
+    seen.add(a);
+    out.push({ sym: s, address: String(address), decimals, priceUSD: Number(priceUSD) || null, verified: !!verified });
+  }
+  /* Tokens the user opened in the picker this session (full LI.FI catalog) — top by volume. */
+  try {
+    const cat = window.__gwLifiCatalog?.[chainId]?.list;
+    if (Array.isArray(cat) && cat.length && typeof gwTkSortByVolume === 'function') {
+      const top = cat.filter(x => x && /^0x[0-9a-fA-F]{40}$/.test(x.address || '') && x.address !== GW_LIFI_ZERO
+        && Number(x.priceUSD) > 0).slice().sort(gwTkSortByVolume).slice(0, 120);
+      for (const x of top) {
+        const a = x.address.toLowerCase();
+        if (seen.has(a)) continue;
+        seen.add(a);
+        out.push({ sym: x.sym, address: x.address, decimals: Number(x.decimals), priceUSD: Number(x.priceUSD) || null, verified: !!x.verified, logo: x.logo || '' });
+      }
+    }
+  } catch (_) {}
+  return out;
+}
+
+function gwMc3EncodeBalanceOf(tokens, owner) {
+  const w = (h) => String(h).padStart(64, '0');
+  const n = tokens.length;
+  const call = ('70a08231' + w(owner.slice(2).toLowerCase())).padEnd(128, '0');
+  let offsets = '';
+  let tuples = '';
+  for (let i = 0; i < n; i++) {
+    offsets += w((n * 32 + i * 192).toString(16));
+    tuples += w(tokens[i].address.slice(2).toLowerCase()) + w('1') + w('60') + w('24') + call;
+  }
+  return '0x82ad56cb' + w('20') + w(n.toString(16)) + offsets + tuples;
+}
+
+/** aggregate3 → array of BigInt|null balances (null when that call failed). */
+function gwMc3DecodeBalances(hex, n) {
+  const h = String(hex || '').replace(/^0x/, '');
+  const word = (byteOff) => h.substr(byteOff * 2, 64);
+  const num = (byteOff) => parseInt(word(byteOff), 16);
+  const arr = num(0);
+  if (num(arr) !== n) throw new Error('multicall length mismatch');
+  const base = arr + 32;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const t = base + num(base + i * 32);
+    const ok = num(t) !== 0;
+    const bOff = num(t + 32);
+    const len = num(t + bOff);
+    out.push(ok && len >= 32 ? BigInt('0x' + word(t + bOff + 32)) : null);
+  }
+  return out;
+}
+
+/** Non-zero balances of discovery tokens on one chain (skips curated contracts). */
+async function gwOcDiscoverTokens(chainId, owner, skipAddrs) {
+  const list = (await gwHoldingsTokenList(chainId)).filter(t => !skipAddrs.has(t.address.toLowerCase()));
+  if (!list.length) return [];
+  const chunks = [];
+  for (let i = 0; i < list.length; i += GW_MC3_CHUNK) chunks.push(list.slice(i, i + GW_MC3_CHUNK));
+  const found = [];
+  await Promise.all(chunks.map(async (chunk) => {
+    try {
+      const raw = await gwRpcTryT(chainId, 'eth_call', [{ to: GW_MC3, data: gwMc3EncodeBalanceOf(chunk, owner) }, 'latest'], 7000);
+      const bals = gwMc3DecodeBalances(raw, chunk.length);
+      bals.forEach((b, i) => {
+        if (b == null || b <= 0n) return;
+        const t = chunk[i];
+        const amt = Number(b) / (10 ** t.decimals);
+        if (amt > 0 && Number.isFinite(amt)) found.push({ ...t, amt });
+      });
+    } catch (_) {}
+  }));
+  return found;
+}
+try { window.gwOcDiscoverTokens = gwOcDiscoverTokens; } catch (_) {}
+
+/** Read balance + metadata for a pasted contract address on every EVM chain. */
+async function gwOcProbeTokenAddress(owner, tokenAddr) {
+  if (!/^0x[a-fA-F0-9]{40}$/.test(owner || '') || !/^0x[a-fA-F0-9]{40}$/.test(tokenAddr || '')) return [];
+  const chains = Object.keys(GW_OC_CHAIN_META).map(Number).filter(id => id > 0 && id < 1e8 && ONCHAIN_RPC[id]);
+  const decodeStr = (hex) => {
+    try {
+      const h = String(hex || '').replace(/^0x/, '');
+      if (h.length === 64) return decodeURIComponent(h.replace(/(00)+$/, '').replace(/../g, '%$&'));
+      const off = parseInt(h.substr(0, 64), 16) * 2;
+      const len = parseInt(h.substr(off, 64), 16);
+      return decodeURIComponent(h.substr(off + 64, len * 2).replace(/../g, '%$&'));
+    } catch (_) { return ''; }
+  };
+  const rows = await Promise.all(chains.map(async (cid) => {
+    try {
+      const call = (data) => gwRpcTryT(cid, 'eth_call', [{ to: tokenAddr, data }, 'latest'], 4500);
+      const balHex = await call(padAddressData(owner));
+      if (!/^0x[0-9a-f]{64}/i.test(String(balHex))) return null;
+      const bal = BigInt(String(balHex).slice(0, 66));
+      if (bal <= 0n) return null;
+      const [decHex, symHex] = await Promise.all([call('0x313ce567'), call('0x95d89b41')]);
+      const decimals = parseInt(String(decHex).slice(2, 66), 16);
+      if (!Number.isInteger(decimals) || decimals > 36) return null;
+      const sym = gwSafeSym(decodeStr(symHex).trim().toUpperCase());
+      if (!sym || sym === '???') return null;
+      return { chainId: cid, sym, address: tokenAddr, decimals, amt: Number(bal) / (10 ** decimals) };
+    } catch (_) { return null; }
+  }));
+  return rows.filter(Boolean);
+}
+try { window.gwOcProbeTokenAddress = gwOcProbeTokenAddress; } catch (_) {}
+
 window.gromFetchOnchainBalances = async function gromFetchOnchainBalances(address, chainId) {
   if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) return null;
   chainId = Number(chainId || currentChainId || 42161);
@@ -4815,8 +4988,21 @@ window.gromFetchOnchainBalances = async function gromFetchOnchainBalances(addres
         tokens[sym] = Number(BigInt(raw)) / (10 ** gwTokenDecimals(chainId, sym));
       } catch (_) { incomplete = true; }
     });
+    const skipAddrs = new Set(Object.values(tokenMap).map(a => String(a).toLowerCase()));
+    const discoverJob = typeof gwOcDiscoverTokens === 'function'
+      ? gwOcDiscoverTokens(chainId, address, skipAddrs).catch(() => []) : Promise.resolve([]);
     await Promise.all([nativeJob, ...tokenJobs]);
-    const data = { chainId, nativeEth, tokens, incomplete };
+    /* Discovered tokens join `tokens` so balance/MAX readers work unchanged;
+     * tokenMeta keeps the exact contract for the picker and the swap. */
+    const tokenMeta = {};
+    const nativeSym = String((typeof GW_OC_CHAIN_META !== 'undefined' && GW_OC_CHAIN_META[chainId]?.native) || 'ETH').toUpperCase();
+    const found = (await discoverJob).sort((a, b) => (b.amt * (b.priceUSD || 0)) - (a.amt * (a.priceUSD || 0)));
+    for (const t of found) {
+      if (t.sym === nativeSym || tokens[t.sym] != null || tokenMeta[t.sym]) continue;
+      tokens[t.sym] = t.amt;
+      tokenMeta[t.sym] = { address: t.address, decimals: t.decimals, priceUSD: t.priceUSD, verified: t.verified, logo: t.logo || '' };
+    }
+    const data = { chainId, nativeEth, tokens, tokenMeta, incomplete };
     if (!incomplete) window.__gwOcBalCache[ck] = { at: Date.now(), data };
     return data;
   })().finally(() => { try { delete window.__gwOcBalInflight[ck]; } catch (_) {} });
@@ -6132,7 +6318,8 @@ function gwOcCardRead(addr, tronAddr, force, onUpdate) {
         const previous = at >= 0 ? entry.chains[at].data : null;
         result = { ...result, data: { ...result.data,
           nativeEth: result.data.nativeEth ?? previous?.nativeEth ?? null,
-          tokens: { ...(previous?.tokens || {}), ...(result.data.tokens || {}) } } };
+          tokens: { ...(previous?.tokens || {}), ...(result.data.tokens || {}) },
+          tokenMeta: { ...(previous?.tokenMeta || {}), ...(result.data.tokenMeta || {}) } } };
       }
       if (at < 0) entry.chains.push(result); else entry.chains[at] = result;
       entry.known = true;
@@ -6232,7 +6419,7 @@ async function gwRenderOnchainCard(opts = {}) {
       for (const [sym, amtRaw] of Object.entries(c.data.tokens || {})) {
         const amt = Number(amtRaw);
         if (!(amt > 0.0001)) continue;
-        const usd = amt * (prices[sym] || 0);
+        const usd = amt * (prices[sym] || Number(c.data.tokenMeta?.[sym]?.priceUSD) || 0);
         chainUsd += usd;
         items.push({ sym, amt, usd });
       }
@@ -7092,7 +7279,8 @@ async function gwMpDexFetchOnchain() {
         const sym = String(rawSym).toUpperCase();
         const amt = Number(raw) || 0;
         if (!(amt > .0001)) continue;
-        const value = amt * (Number(prices[sym]) || (/^USD[CT]$/.test(sym) ? 1 : 0));
+        const value = amt * (Number(prices[sym]) || Number(c.data.tokenMeta?.[rawSym]?.priceUSD)
+          || (/^USD[CT]$/.test(sym) ? 1 : 0));
         usd += value;
         out.pnl24h += gwMpDexPnl(value, changes[sym]);
         assets++;
@@ -9604,6 +9792,8 @@ async function gwDsSimRenderBalances() {
       // ERC-20
       for (const [sym, amt] of Object.entries(c.data.tokens || {})) {
         if (!(amt > 0.0001)) continue;
+        /* Legacy Simple strip picks by ticker only — discovered contracts stay in the picker. */
+        if (c.data.tokenMeta?.[sym]) continue;
         rows.push({ chainId: c.chainId, chain: c.meta.label, sym, amt, usd: amt * (prices[sym] || 1) });
       }
     }
@@ -14465,9 +14655,20 @@ async function gwTkLoadHoldings(force, onUpdate) {
         if (gwTkHoldingsOwner().key !== owner.key || (loading && !chunks.size)) return;
         const rows = [];
         for (const assets of chunks.values()) for (const asset of assets) {
-          const px = Number(prices[asset.sym]) || 0;
+          /* A discovered contract is priced by its own catalog price: the same
+           * ticker on another chain can be a different asset. */
+          const px = asset.discovered
+            ? (Number(asset.priceUSD) || Number(prices[asset.sym]) || 0)
+            : (Number(prices[asset.sym]) || 0);
           const info = GW_DS_ASSETS.find(a => a.sym === asset.sym) || {};
-          rows.push({ ...asset, usd: asset.amt * px, pricePending: !(px > 0), name: info.name || asset.sym, logo: info.logo || '' });
+          let logo = info.logo || asset.logo || '';
+          if (!logo && asset.discovered) {
+            try {
+              logo = window.__gwLifiByAddr?.[asset.chainId]?.get(String(asset.address).toLowerCase())?.logo
+                || (location.protocol === 'https:' ? `${location.origin}/api/swap/token-logo/${asset.chainId}/${asset.address}` : '');
+            } catch (_) {}
+          }
+          rows.push({ ...asset, usd: asset.amt * px, pricePending: !(px > 0), name: info.name || asset.sym, logo });
         }
         rows.sort((a, b) => b.usd - a.usd);
         job.rows = rows;
@@ -14481,7 +14682,15 @@ async function gwTkLoadHoldings(force, onUpdate) {
         const meta = c.meta || {};
         const assets = [];
         if (c.data.nativeEth > 0.0000001) assets.push({ sym: meta.native || 'ETH', amt: c.data.nativeEth });
-        for (const [sym, amt] of Object.entries(c.data.tokens || {})) if (amt > 0.0001) assets.push({ sym, amt });
+        for (const [sym, amt] of Object.entries(c.data.tokens || {})) {
+          if (!(amt > 0)) continue;
+          const tm = c.data.tokenMeta?.[sym];
+          /* Discovered contracts: keep any amount (8-decimal stocks/BTC); the
+           * dust toggle hides what is worth under the threshold. */
+          if (tm) assets.push({ sym, amt, address: tm.address, decimals: tm.decimals, priceUSD: tm.priceUSD,
+            verified: !!tm.verified, discovered: true, logo: tm.logo || '' });
+          else if (amt > 0.0001) assets.push({ sym, amt });
+        }
         chunks.set(c.chainId, assets.map(a => ({ ...a, chainId: c.chainId, chain: meta.label || String(c.chainId) })));
         publish(true);
       }, 8000) : Promise.resolve();
@@ -14614,7 +14823,7 @@ function gwChainLabel(cid) {
   const map = {
     1: 'Ethereum', 56: 'BSC', 42161: 'Arbitrum', 137: 'Polygon',
     10: 'Optimism', 8453: 'Base', 43114: 'Avalanche', 59144: 'Linea',
-    728126428: 'Tron', 101: 'Solana',
+    728126428: 'Tron', 101: 'Solana', 1151111081099710: 'Solana', 20000000000001: 'Bitcoin',
   };
   return map[Number(cid)] || ('chain ' + cid);
 }
@@ -14629,18 +14838,18 @@ function gwTokenChainHint(sym, currentChainId) {
   try {
     const hit = typeof gwResolveEvmToken === 'function' ? gwResolveEvmToken(cur, s) : null;
     if (hit && hit.address) {
-      return 'No live aggregator route for ' + s + ' on ' + curLbl
-        + ' right now. Try USDT/USDC as intermediate, another amount, or switch network.';
+      return gwUxText(`Сейчас нет ликвидности для ${s} в сети ${curLbl}. Попробуйте другую сумму, оплату в USDT/USDC или другую сеть.`,
+        `No live aggregator route for ${s} on ${curLbl} right now. Try another amount, USDT/USDC, or another network.`);
     }
   } catch (_) {}
   const chains = gwChainsForSym(s).filter((c) => c !== cur);
   if (!chains.length) {
-    return s + ' is not available on ' + curLbl
-      + '. Switch network (Arbitrum / BSC / Solana / …) above, or pick another token.';
+    return gwUxText(`${s} нет в сети ${curLbl}. Выберите другую сеть или другой токен.`,
+      `${s} is not available on ${curLbl}. Switch network above, or pick another token.`);
   }
   const labels = chains.slice(0, 5).map(gwChainLabel);
-  return s + ' is not on ' + curLbl + '. Available on: ' + labels.join(', ')
-    + '. Switch network above, then retry.';
+  return gwUxText(`${s} нет в сети ${curLbl}. Есть в: ${labels.join(', ')}. Переключите сеть и повторите.`,
+    `${s} is not on ${curLbl}. Available on: ${labels.join(', ')}. Switch network above, then retry.`);
 }
 
 function gwTkTargetsFor(fromSym, chainId) {
@@ -15285,7 +15494,13 @@ async function gwTkRender(q) {
       const known = hideSmall ? spendable.filter(a => a.pricePending || Number(a.usd) >= GW_OC_DUST_USD) : spendable;
       const unpriced = gwDsSpendablePayHoldings((rows || []).filter(a => a.pricePending), 0);
       const filtered = gwUxFilterRows([...known, ...unpriced.filter(a => !known.includes(a))]).filter(a =>
-        !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query) || (a.chain || '').toUpperCase().includes(query));
+        !query || a.sym.includes(query) || (a.name || '').toUpperCase().includes(query) || (a.chain || '').toUpperCase().includes(query)
+        || (query.length === 42 && String(a.address || '').toUpperCase() === query));
+      /* Ticker matches first (ARB before every token on Arbitrum). */
+      if (query) {
+        const rank = (a) => (a.sym === query ? 0 : a.sym.startsWith(query) ? 1 : a.sym.includes(query) ? 2 : 3);
+        filtered.sort((x, y) => rank(x) - rank(y));
+      }
       const notice = status.loading
         ? gwUxText('Обновляем балансы остальных сетей…', 'Updating other networks…')
         : status.incomplete ? gwUxText('Обновлено частично', 'Partially updated') : '';
@@ -15307,6 +15522,23 @@ async function gwTkRender(q) {
     };
     const rows = await gwTkLoadHoldings(false, renderHoldings);
     renderHoldings(rows, { loading: false, incomplete: !!window.__gwTkHoldingsCache?.incomplete });
+    /* Pasted contract address that the scan list does not cover: read it on every EVM chain. */
+    const qAddr = String(q || '').trim();
+    if (addr && /^0x[0-9a-fA-F]{40}$/.test(qAddr)
+        && !(rows || []).some(r => String(r.address || '').toLowerCase() === qAddr.toLowerCase())) {
+      list.innerHTML = `<div class="gw-tk-empty">${gwUxText('Ищем токен по адресу во всех сетях…', 'Looking up this contract on every network…')}</div>`;
+      const found = typeof gwOcProbeTokenAddress === 'function' ? await gwOcProbeTokenAddress(addr, qAddr).catch(() => []) : [];
+      if (!stillLive() || overlay.dataset.which !== 'from') return;
+      if (!found.length) {
+        list.innerHTML = `<div class="gw-tk-empty">${gwUxText('В кошельке нет токена с этим адресом.', 'Your wallet holds no token at this address.')}</div>`;
+        return;
+      }
+      list.innerHTML = found.map(a => rowHtml({ ...a, discovered: true, name: a.sym,
+        chain: GW_OC_CHAIN_META[a.chainId]?.label || String(a.chainId), showChainBadge: true },
+        `<div class="gw-tk-bal"><div class="amt">${Number(a.amt).toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>`
+        + `<div class="usd">${gwUxText('Курс уточняется', 'Price pending')}</div></div>`)).join('');
+      wire();
+    }
     return;
   }
 
@@ -15938,6 +16170,19 @@ async function gwDsPriceUsd(sym) {
 }
 
 /** Balance of `sym` on one EVM chain (for routing / gas network pick). */
+/** { address, decimals } when "You pay" is an explicit ERC-20 contract on `chainId`. */
+function gwDsPickedFromContract(sym, chainId) {
+  try {
+    const p = window.__gwDsUserPickedFrom;
+    const a = String(p?.address || '');
+    if (!/^0x[0-9a-fA-F]{40}$/.test(a) || a.toLowerCase() === GW_LIFI_ZERO
+      || a.toLowerCase() === String(GW_META_NATIVE).toLowerCase()) return null;
+    if (Number(p.chainId) !== Number(chainId) || String(p.sym || '').toUpperCase() !== String(sym || '').toUpperCase()) return null;
+    const d = Number(p.decimals);
+    return { address: a, decimals: Number.isInteger(d) && d >= 0 && d <= 36 ? d : 18 };
+  } catch (_) { return null; }
+}
+
 async function gwDsTokenBalanceOnChain(sym, chainId, opts) {
   const s = String(sym || '').toUpperCase();
   const c = Number(chainId);
@@ -15961,6 +16206,14 @@ async function gwDsTokenBalanceOnChain(sym, chainId, opts) {
     } catch (_) {}
   }
   if (!addr || !/^0x[a-fA-F0-9]{40}$/i.test(addr)) return 0;
+  /* Exact contract the user picked (discovered or pasted token) — read it directly. */
+  const picked = gwDsPickedFromContract(s, c);
+  if (picked) {
+    try {
+      const raw = await gwRpcTry(c, 'eth_call', [{ to: picked.address, data: padAddressData(addr) }, 'latest']);
+      return Number(BigInt(raw)) / (10 ** picked.decimals);
+    } catch (_) {}
+  }
   if (GW_EXTRA_EVM_BY_ID[c]) {
     const token = gwResolveEvmToken(c, s, 'from');
     if (!token) return 0;
@@ -15973,7 +16226,7 @@ async function gwDsTokenBalanceOnChain(sym, chainId, opts) {
   }
   const b = await window.gromFetchOnchainBalances?.(addr, c).catch(() => null);
   if (!b) return 0;
-  if (s === 'ETH' && b.nativeEth) return Number(b.nativeEth) || 0;
+  if (s === 'ETH' && b.nativeEth && (GW_OC_CHAIN_META[c]?.native || 'ETH') === 'ETH') return Number(b.nativeEth) || 0;
   if (s === 'BNB' && c === 56 && b.nativeEth) return Number(b.nativeEth) || 0;
   if ((s === 'MATIC' || s === 'POL') && c === 137 && b.nativeEth) return Number(b.nativeEth) || 0;
   if (s === 'AVAX' && c === 43114 && b.nativeEth) return Number(b.nativeEth) || 0;
@@ -16379,11 +16632,13 @@ async function gwDsAvailableAmount(sym, opts) {
     }
     const addr = gwOcConnectedAddress();
     if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) return 0;
-    if (GW_EXTRA_EVM_BY_ID[ui] && !opts?.allChains) return gwDsTokenBalanceOnChain(s, ui, { account: addr });
+    if ((GW_EXTRA_EVM_BY_ID[ui] || gwDsPickedFromContract(s, ui)) && !opts?.allChains) {
+      return gwDsTokenBalanceOnChain(s, ui, { account: addr });
+    }
     const pick = (b, c) => {
       if (!b) return 0;
       if (GW_EXTRA_EVM_BY_ID[c]) return s === GW_EXTRA_EVM_BY_ID[c].nativeToken.symbol ? Number(b.nativeEth) || 0 : Number(b.tokens?.[s]) || 0;
-      if (s === 'ETH' && b.nativeEth) return Number(b.nativeEth) || 0;
+      if (s === 'ETH' && b.nativeEth && (GW_OC_CHAIN_META[c]?.native || 'ETH') === 'ETH') return Number(b.nativeEth) || 0;
       if (s === 'BNB' && c === 56 && b.nativeEth) return Number(b.nativeEth) || 0;
       if ((s === 'MATIC' || s === 'POL') && c === 137 && b.nativeEth) return Number(b.nativeEth) || 0;
       if (s === 'AVAX' && c === 43114 && b.nativeEth) return Number(b.nativeEth) || 0;
@@ -16568,6 +16823,7 @@ function gwDsSpendablePayHoldings(rows, minUsd) {
       if (cid === GW_LIFI_SOL_CHAIN || cid === 1151111081099710) {
         return typeof gwSolResolveToken === 'function' && !!gwSolResolveToken(sym, 'from');
       }
+      if (r.discovered && /^0x[0-9a-fA-F]{40}$/.test(String(r.address || ''))) return true;
       return typeof gwResolveEvmToken === 'function' && !!gwResolveEvmToken(cid, sym, 'from');
     } catch (_) {
       return false;
@@ -16587,7 +16843,8 @@ async function gwDsAutoPickFromToken() {
       || account !== String(gwOcConnectedAddress() || window.__gwTronAddr || window.__gwSolAddr || '')
       || window.__gwDsForceBridgeTo !== intent
       || document.getElementById('gwDsAmt')?.value) return;
-  const hit = gwDsLargestNetworkHolding(gwDsSpendablePayHoldings(rows));
+  /* Never auto-select an unverified discovered contract (airdropped look-alikes). */
+  const hit = gwDsLargestNetworkHolding(gwDsSpendablePayHoldings(rows).filter(r => !r.discovered || r.verified));
   const fromEl = document.getElementById('gwDsFrom');
   if (!hit || !fromEl) return;
   gwDsEnsureTokenOption(hit.sym, { ...hit });
@@ -18137,6 +18394,15 @@ async function gwDsRefreshRate() {
               const pool = (saneQuotes.length ? saneQuotes : quotes).filter((q) => Number(q._toChainId) === forceTo);
               saneQuotes = pool;
               if (!pool.length) return false;
+            } else {
+              /* Receive token picked on the pay network: same-network routes only. */
+              const pt = window.__gwDsUserPickedTo;
+              if (pt && Number(pt.chainId) === Number(chainId) && gwDsNormSym(pt.sym) === gwDsNormSym(to)) {
+                const same = (q) => !q._crossChain && (!q._toChainId || Number(q._toChainId) === Number(chainId));
+                saneQuotes = saneQuotes.filter(same);
+                quotes = quotes.filter(same);
+                if (!quotes.length) return false;
+              }
             }
           } catch (_) {}
           const useQuotes = saneQuotes.length ? saneQuotes : (quotes.length ? [quotes[0]] : []);
@@ -18271,9 +18537,16 @@ async function gwDsRefreshRate() {
     applyOut(mid.est);
     rateLine.textContent = `1 ${from} ≈ ${mid.rate.toFixed(6)} ${to}`;
     routeEl.className = 'gw-ds-route warn';
-    const bridgeHint = '⚠ No fee-verified aggregator route — try another pair or network';
+    const bridgeHint = '⚠ ' + gwUxText('Нет готового маршрута — выберите другую пару или сеть',
+      'No fee-verified aggregator route — try another pair or network');
     let bridgeHint2 = bridgeHint;
     try {
+      const nr = window.__gwDsLastNoRouteSameChain;
+      if (nr && Date.now() - nr.at < 60000 && gwDsNormSym(nr.toSym) === to) {
+        const lbl = (typeof gwChainLabel === 'function') ? gwChainLabel(nr.fromCid) : String(nr.fromCid);
+        bridgeHint2 = '⚠ ' + gwUxText(`Сейчас нет ликвидности ${from} → ${to} в сети ${lbl}. Выберите другой токен для получения или другую сеть.`,
+          `No liquidity for ${from} → ${to} on ${lbl} right now. Pick another receive token or network.`);
+      }
       const forceTo = Number(window.__gwDsForceBridgeTo?.chainId)
         || Number(window.__gwDsUserPickedTo?.chainId) || 0;
       const uiCid = typeof gwGetActiveUiChainId === 'function' ? Number(gwGetActiveUiChainId()) : 0;
@@ -18300,7 +18573,11 @@ async function gwDsRefreshRate() {
     const bridgeDest = (typeof gwDsResolveBridgeDest === 'function')
       ? gwDsResolveBridgeDest(from, to, uiCid || 0) : 0;
     if (bridgeDest > 0) {
-      failMsg = t.rateFailBridge || failMsg;
+      const a = (typeof gwChainLabel === 'function') ? gwChainLabel(uiCid) : String(uiCid);
+      const bl = (typeof gwChainLabel === 'function') ? gwChainLabel(bridgeDest) : String(bridgeDest);
+      failMsg = gwUxText(
+        `Сейчас нет маршрута ${from} (${a}) → ${to} (${bl}). Попробуйте другую сумму, другой токен для получения или оплату в USDC/ETH.`,
+        `No route ${from} (${a}) → ${to} (${bl}) right now. Try another amount, another receive token, or pay with USDC/ETH.`);
     } else if (typeof gwTokenChainHint === 'function') {
       failMsg = gwTokenChainHint(to, uiCid || 0);
     }
@@ -21450,7 +21727,7 @@ async function gwLifiQuote({ chainId, fromSym, toSym, amtNum, account, toChainId
   if (window.__gwBridgeQuoteErr === 'lifi-fee-unavailable') return null;
   if (window.__gwBridgeQuoteErr === 'rate-limit') return null;
 
-  const buildLifiQs = () => {
+  const buildLifiQs = (order = 'RECOMMENDED') => {
     const qs = new URLSearchParams({
       fromChain: String(fromCid),
       toChain: String(toCid),
@@ -21461,7 +21738,7 @@ async function gwLifiQuote({ chainId, fromSym, toSym, amtNum, account, toChainId
       toAddress: destAddress || fromAddress,
       slippage: slip,
       integrator: GW_LIFI_INTEGRATOR,
-      order: 'RECOMMENDED',
+      order,
     });
     /* Mandatory 20 bps — all chains. If LI.FI cannot apply fee, quote must fail closed. */
     if (GW_LIFI_FEE_ADDR !== '0x0000000000000000000000000000000000000000') {
@@ -21470,8 +21747,8 @@ async function gwLifiQuote({ chainId, fromSym, toSym, amtNum, account, toChainId
     }
     return qs;
   };
-  const fetchLifiQuote = async () => {
-    const url = `${GW_LIFI_ENDPOINT}/quote?${buildLifiQs()}`;
+  const fetchLifiQuote = async (order) => {
+    const url = `${GW_LIFI_ENDPOINT}/quote?${buildLifiQs(order)}`;
     const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     const lifiMs = cross ? 12000 : 4500;
     const kill = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, lifiMs) : null;
@@ -21513,7 +21790,15 @@ async function gwLifiQuote({ chainId, fromSym, toSym, amtNum, account, toChainId
     console.warn('[GROM] lifi quote failed', r.status, fromCid, '→', toCid, bodyText.slice(0, 160));
     return null;
   }
-  const j = await r.json();
+  let j = await r.json();
+  /* Same rule as the backend proxy: a 15–20 min bridge loses to an instant one
+   * that keeps ≥ 99.5% of the output. */
+  if (cross && gwLifiDurationSec(j) > GW_LIFI_SLOW_ROUTE_SEC) {
+    try {
+      const rf = await fetchLifiQuote('FASTEST');
+      if (rf.ok) j = gwLifiPickFasterRoute(j, await rf.json());
+    } catch (_) {}
+  }
   try {
     j._gromToChainId = toCid;
     j._gromFromChainId = fromCid;
@@ -21521,6 +21806,30 @@ async function gwLifiQuote({ chainId, fromSym, toSym, amtNum, account, toChainId
     j._toChainId = toCid;
   } catch (_) {}
   return j;
+}
+
+const GW_LIFI_SLOW_ROUTE_SEC = 600;
+function gwLifiDurationSec(q) {
+  const own = Number(q?.estimate?.executionDuration);
+  if (Number.isFinite(own) && own > 0) return own;
+  return (Array.isArray(q?.includedSteps) ? q.includedSteps : [])
+    .reduce((t, s) => t + (Number(s?.estimate?.executionDuration) || 0), 0);
+}
+function gwLifiPickFasterRoute(rec, fast) {
+  try {
+    if (!fast?.estimate?.toAmount || !rec?.estimate?.toAmount) return rec;
+    if (rec.transactionRequest && !fast.transactionRequest) return rec;
+    const dRec = gwLifiDurationSec(rec);
+    const dFast = gwLifiDurationSec(fast);
+    if (!(dFast > 0 && dFast < dRec)) return rec;
+    const lc = (v) => String(v || '').toLowerCase();
+    if (lc(fast.action?.fromToken?.address) !== lc(rec.action?.fromToken?.address)
+      || lc(fast.action?.toToken?.address) !== lc(rec.action?.toToken?.address)
+      || String(fast.action?.fromAmount || '') !== String(rec.action?.fromAmount || '')) return rec;
+    return BigInt(fast.estimate.toAmount) * 10000n >= BigInt(rec.estimate.toAmount) * 9950n ? fast : rec;
+  } catch (_) {
+    return rec;
+  }
 }
 
 /** LiFi /advanced/routes + stepTransaction — required for many Tron bridges. */
@@ -22687,8 +22996,19 @@ async function gwMetaAggQuoteBest({ chainId, fromSym, toSym, amtNum, account, on
     } catch (_) {}
   }
 
+  /* The user tapped a receive token on THIS network: never swap the destination
+   * for a hub bridge just because same-chain liquidity is dry (they would get
+   * funds on a chain the To button does not show). */
+  let pickedSameChain = false;
+  try {
+    const pt = window.__gwDsUserPickedTo;
+    pickedSameChain = !forceBridgeTo && !!pt && Number(pt.chainId) === fromCid
+      && gwDsNormSym(pt.sym) === gwDsNormSym(toSym);
+  } catch (_) {}
+  try { window.__gwDsLastNoRouteSameChain = pickedSameChain && !quotes.length ? { fromCid, toSym, at: Date.now() } : null; } catch (_) {}
+
   // --- Phase 3: cross-chain / bridge — token elsewhere OR same-chain dry OR forced ---
-  const needBridge = !!fromTok && (!!forceBridgeTo || !toTokSame || !quotes.length);
+  const needBridge = !!fromTok && !pickedSameChain && (!!forceBridgeTo || !toTokSame || !quotes.length);
   if (needBridge) {
     try {
       rateLineProgress('Scanning bridges across networks…');

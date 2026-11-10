@@ -36,6 +36,37 @@ function resolveLifiFeeAddr() {
 }
 const LIFI_FEE_ADDR = resolveLifiFeeAddr();
 
+/** Bridges slower than this get a FASTEST comparison quote. */
+export const SLOW_ROUTE_SEC = 600;
+/** Fast route must keep ≥ 99.5% of the recommended output. */
+const FAST_KEEP_BPS = 9950n;
+
+export function quoteDurationSec(q) {
+  const steps = Array.isArray(q?.includedSteps) ? q.includedSteps : [];
+  const own = Number(q?.estimate?.executionDuration);
+  if (Number.isFinite(own) && own > 0) return own;
+  return steps.reduce((t, s) => t + (Number(s?.estimate?.executionDuration) || 0), 0);
+}
+
+/** Prefer `fast` over `rec` when it is quicker and pays at least 99.5% as much. */
+export function pickFasterRoute(rec, fast) {
+  try {
+    if (!fast?.estimate?.toAmount || !rec?.estimate?.toAmount) return rec;
+    if (rec.transactionRequest && !fast.transactionRequest) return rec;
+    const dRec = quoteDurationSec(rec);
+    const dFast = quoteDurationSec(fast);
+    if (!(dFast > 0 && dFast < dRec)) return rec;
+    if (String(fast.action?.fromToken?.address || '').toLowerCase() !== String(rec.action?.fromToken?.address || '').toLowerCase()
+      || String(fast.action?.toToken?.address || '').toLowerCase() !== String(rec.action?.toToken?.address || '').toLowerCase()
+      || String(fast.action?.fromAmount || '') !== String(rec.action?.fromAmount || '')) return rec;
+    const a = BigInt(rec.estimate.toAmount);
+    const b = BigInt(fast.estimate.toAmount);
+    return b * 10000n >= a * FAST_KEEP_BPS ? fast : rec;
+  } catch (_) {
+    return rec;
+  }
+}
+
 /** Public HTTP clients may not disable GROM fee via skipFee/noFee. */
 export function publicClientFeeFlags(_body) {
   return { skipFee: false };
@@ -317,7 +348,7 @@ export async function fetchLifiOcQuote(body, deps = {}) {
     }
   }
 
-  const buildQs = (withFee) => {
+  const buildQs = (withFee, order = 'RECOMMENDED') => {
     const qs = new URLSearchParams({
       fromChain: String(fromChainId),
       toChain: String(toChainId),
@@ -328,7 +359,7 @@ export async function fetchLifiOcQuote(body, deps = {}) {
       toAddress: ctx.toAddress,
       slippage,
       integrator: INTEGRATOR,
-      order: 'RECOMMENDED',
+      order,
     });
     if (withFee && feeAddress && fee) {
       qs.set('fee', fee);
@@ -337,10 +368,10 @@ export async function fetchLifiOcQuote(body, deps = {}) {
     return qs;
   };
 
-  const fetchUpstream = async (withFee) => {
+  const fetchUpstream = async (withFee, order) => {
     await acquireLifiSlot();
     try {
-      const resp = await httpGet(`${LIFI}/quote?${buildQs(withFee)}`, {
+      const resp = await httpGet(`${LIFI}/quote?${buildQs(withFee, order)}`, {
         headers: {
           accept: 'application/json',
           ...(LIFI_API_KEY ? { 'x-lifi-api-key': LIFI_API_KEY } : {}),
@@ -361,8 +392,9 @@ export async function fetchLifiOcQuote(body, deps = {}) {
 
   let data;
   let httpStatus = 0;
+  let usedFee = !!(feeAddress && fee);
   try {
-    let got = await fetchUpstream(!!(feeAddress && fee));
+    let got = await fetchUpstream(usedFee);
     httpStatus = got.httpStatus;
     data = got.data;
     if (isFeeConfigErr(data, httpStatus) && feeAddress && fee) {
@@ -374,6 +406,7 @@ export async function fetchLifiOcQuote(body, deps = {}) {
         throw e;
       }
       logger.warn({ integrator: INTEGRATOR }, 'lifi fee wallet not configured (1011) — informative retry without fee');
+      usedFee = false;
       got = await fetchUpstream(false);
       httpStatus = got.httpStatus;
       data = got.data;
@@ -427,6 +460,18 @@ export async function fetchLifiOcQuote(body, deps = {}) {
     const e = new Error(err.message || 'lifi upstream error');
     e.status = 502;
     throw e;
+  }
+
+  /* RECOMMENDED sometimes picks a 15–20 min bridge when an instant one pays
+   * almost the same. Ask for FASTEST only in that case and keep it when the
+   * output is within 0.5% (same fee, tokens and addresses). */
+  if (cross && quoteDurationSec(data) > SLOW_ROUTE_SEC) {
+    try {
+      const fast = await fetchUpstream(usedFee, 'FASTEST');
+      if (fast.httpStatus < 400) data = pickFasterRoute(data, fast.data);
+    } catch (err) {
+      logger.debug({ err: err.message }, 'lifi fastest re-quote skipped');
+    }
   }
 
   try {

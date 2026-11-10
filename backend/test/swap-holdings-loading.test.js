@@ -101,3 +101,39 @@ test('malformed token RPC response is not treated as verified zero',async()=>{
  const c=rpcHarness();c.gwRpcTry=async(id,method)=>method==='eth_getBalance'?'0x0':undefined;
  const r=await c.window.gromFetchOnchainBalances(A,1);assert.equal(r.tokens.USDC,undefined);assert.equal(r.incomplete,true);
 });
+
+test('discovered wallet tokens join balances with their exact contract', async () => {
+ const c = rpcHarness();
+ c.gwRpcTry = async (id, method) => (method === 'eth_getBalance' ? '0x0' : '0x0');
+ const ARB = '0x912CE59144191C1204E64559FE8253a0e49E6548';
+ c.gwOcDiscoverTokens = async (id, owner, skip) => {
+  assert.ok(skip.has('usdc'));
+  return [{ sym: 'ARB', address: ARB, decimals: 18, priceUSD: 0.3, verified: true, amt: 12 },
+   { sym: 'USDC', address: '0x' + 'c'.repeat(40), decimals: 6, priceUSD: 1, amt: 99 },
+   { sym: 'ETH', address: '0x' + 'd'.repeat(40), decimals: 18, priceUSD: 3000, amt: 1 }];
+ };
+ const r = await c.window.gromFetchOnchainBalances(A, 1);
+ assert.equal(r.tokens.ARB, 12);
+ assert.equal(r.tokenMeta.ARB.address, ARB);
+ assert.equal(r.tokens.USDC, 0, 'curated ticker keeps its curated contract balance');
+ assert.equal(r.tokenMeta.USDC, undefined);
+ assert.equal(r.tokens.ETH, undefined, 'a token named like the gas coin never shadows native');
+});
+test('multicall balanceOf encode/decode round-trip', () => {
+ const c = { window: {} };
+ vm.createContext(c);
+ vm.runInContext(block('function gwMc3EncodeBalanceOf(', '\n/** Non-zero balances'), c);
+ const toks = [{ address: '0x' + '1'.repeat(40) }, { address: '0x' + '2'.repeat(40) }];
+ const data = c.gwMc3EncodeBalanceOf(toks, A);
+ assert.ok(data.startsWith('0x82ad56cb'));
+ assert.equal((data.length - 10) / 2, 32 * 2 + 32 * 2 + 192 * 2);
+ const w = (h) => String(h).padStart(64, '0');
+ // Result[] = [(true, 32 bytes = 5), (false, empty)]
+ const ret = '0x' + w('20') + w('2') + w('40') + w('c0')
+  + w('1') + w('40') + w('20') + w('5')
+  + w('0') + w('40') + w('0');
+ const out = c.gwMc3DecodeBalances(ret, 2);
+ assert.equal(out[0], 5n);
+ assert.equal(out[1], null);
+ assert.throws(() => c.gwMc3DecodeBalances(ret, 3), /length mismatch/);
+});

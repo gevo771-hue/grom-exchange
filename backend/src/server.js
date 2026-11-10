@@ -243,6 +243,30 @@ async function main() {
     }
   });
 
+  /** Public token list the swap picker scans for wallet balances (no user data). */
+  const holdingsLimiter = rateLimit({
+    windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false, validate: { trustProxy: false },
+  });
+  app.get('/api/swap/holdings-tokens', holdingsLimiter, async (_req, res, next) => {
+    try {
+      const { getHoldingsTokens } = await import('./liquidity/holdings-tokens.js');
+      const payload = await getHoldingsTokens();
+      res.set('Cache-Control', 'public, max-age=1800');
+      res.json(payload);
+    } catch (err) {
+      if (Number(err.status) === 503) return res.status(503).json({ error: 'token list unavailable' });
+      next(err);
+    }
+  });
+  app.get('/api/swap/token-logo/:chainId/:address', async (req, res) => {
+    const { holdingsTokenLogo } = await import('./liquidity/holdings-tokens.js');
+    const url = /^0x[0-9a-fA-F]{40}$/.test(req.params.address)
+      ? holdingsTokenLogo(req.params.chainId, req.params.address) : null;
+    if (!url) return res.status(404).end();
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.redirect(302, url);
+  });
+
   /** Odos SOR proxy — production router (server forces referralCode). */
   app.use('/api/swap', createOdosRouter({ config, quoteLimiter }));
 

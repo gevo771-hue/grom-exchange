@@ -5584,7 +5584,29 @@ function gwActiveEvmProvider() {
 }
 try { window.gwActiveEvmProvider = gwActiveEvmProvider; } catch (_) {}
 
+/** English toast → site language via window.GROM_TOAST_TR (exact strings + patterns). */
+function gwToastLocalize(msg) {
+  if (typeof msg !== 'string' || !msg) return msg;
+  try {
+    const raw = (typeof window.getGromLang === 'function' && window.getGromLang()) || localStorage.getItem('grom_lang') || navigator.language || 'en';
+    let l = String(raw).slice(0, 2).toLowerCase();
+    if (l === 'uk') l = 'ru';
+    if (l === 'en') return msg;
+    const T = window.GROM_TOAST_TR;
+    if (!T) return msg;
+    const hit = T.exact && T.exact[msg];
+    if (hit) return hit[l] || msg;
+    if (!window.__gwToastRe) window.__gwToastRe = (T.patterns || []).map(([src, tr]) => [new RegExp('^' + src + '$'), tr]);
+    for (const [re, tr] of window.__gwToastRe) {
+      const m = msg.match(re);
+      if (m && tr[l]) return tr[l].replace(/\$(\d)/g, (_, i) => (m[Number(i)] != null ? m[Number(i)] : ''));
+    }
+  } catch (_) {}
+  return msg;
+}
+try { window.gwToastLocalize = gwToastLocalize; } catch (_) {}
 function gwToast(msg, type) {
+  if (typeof gwToastLocalize === 'function') msg = gwToastLocalize(msg);
   if (typeof window.toast === 'function') return window.toast(msg, type || 'info');
   console.log('[grom-toast]', type || 'info', msg);
 }
@@ -10666,6 +10688,7 @@ function gwInjectDashSwapCss() {
       background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
       color: #e7eef8; font-size: 12.5px; font-weight: 700;
     }
+    .gw-tk-netbtn[hidden] { display: none !important; }
     .gw-tk-netbtn:hover, .gw-tk-netbtn[aria-expanded="true"] { background: rgba(255,255,255,0.10); border-color: rgba(0,194,255,0.35); }
     .gw-tk-netbtn img { width: 20px; height: 20px; border-radius: 50%; flex: 0 0 20px; }
     .gw-tk-netbtn .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -10879,6 +10902,79 @@ function gwDsPushRecent(entry) {
     localStorage.setItem('gw_ds_recent', JSON.stringify(list.slice(0, 8)));
   } catch (_) {}
 }
+/** After LI.FI reports delivery: replace the quoted "≈ amount" with what arrived. */
+function gwDsMarkRecentDelivered(hash, receiving) {
+  try {
+    const h = String(hash || '').toLowerCase();
+    if (!h) return false;
+    const list = JSON.parse(localStorage.getItem('gw_ds_recent') || '[]');
+    const row = list.find((r) => String(r?.hash || '').toLowerCase() === h);
+    if (!row) return false;
+    const dec = Number(receiving?.token?.decimals);
+    const amt = Number(receiving?.amount);
+    if (Number.isFinite(dec) && dec >= 0 && amt > 0) {
+      const o = amt / 10 ** dec;
+      row.out = o.toLocaleString('en-US', { maximumFractionDigits: o < 1 ? 8 : 4 });
+      const sym = String(receiving?.token?.symbol || '');
+      if (/^[A-Za-z0-9.$_+-]{1,16}$/.test(sym)) row.to = sym;
+    }
+    row.done = true;
+    if (receiving?.txHash) row.destHash = String(receiving.txHash);
+    localStorage.setItem('gw_ds_recent', JSON.stringify(list));
+    try { gwDsRefreshRecent(); } catch (_) {}
+    return true;
+  } catch (_) { return false; }
+}
+function gwDsRecentHtml(title) {
+  const recent = gwDsGetRecent();
+  if (!recent.length) return '';
+  return `
+    <div class="gw-ds-recent">
+      <div class="gw-ds-recent-title">${title}</div>
+      <div class="gw-ds-recent-list">
+        ${recent.map((r) => {
+          const explorer = (r.hash && r.chainId) ? gwDsExplorerUrl(r.chainId, r.hash) : '';
+          const modeIco  = r.mode === 'onchain' ? '🔗' : '⚡';
+          const linkHtml = explorer ? ` · <a href="${explorer}" target="_blank" rel="noopener" style="color:#5dd5ff;text-decoration:none">tx ↗</a>` : '';
+          const out = r.out === '≈ market' ? gwUxText('≈ по рынку', '≈ market') : r.out;
+          const done = r.done ? ' <span style="color:#3ddc97" title="' + gwUxText('Доставлено', 'Delivered') + '">✓</span>' : '';
+          return `<div class="gw-ds-recent-row">
+            <span class="r-pair">${r.amt} ${r.from} → ${out} ${r.to}${done}</span>
+            <span class="r-time">${gwDsTimeAgo(r.ts)} · ${modeIco}${linkHtml}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+/** After a swap: clear the amount, refresh quote/CTA, recent list and balances; keep the pair. */
+function gwDsAfterSwapKeepPair() {
+  try {
+    if (!gwDsRefreshRecent()) return false;
+    const a = document.getElementById('gwDsAmt');
+    if (a) { a.value = ''; a.dispatchEvent(new Event('input', { bubbles: true })); }
+    const out = document.getElementById('gwDsOut');
+    if (out && 'value' in out) out.value = '';
+    try { gwDsRefreshRate(); } catch (_) {}
+    try { gwDsSyncCtaState(); } catch (_) {}
+    try { gwDsRefreshBalances(); } catch (_) {}
+    setTimeout(() => { try { gwDsRefreshBalances(); } catch (_) {} try { gwDsSyncCtaState(); } catch (_) {} }, 8000);
+    return true;
+  } catch (_) { return false; }
+}
+try { window.gwDsAfterSwapKeepPair = gwDsAfterSwapKeepPair; } catch (_) {}
+/** Re-draw only the "Recent swaps" block (keeps the chosen pair and amount field). */
+function gwDsRefreshRecent() {
+  const card = document.getElementById('gwDsCard');
+  if (!card) return false;
+  const old = card.querySelector('.gw-ds-recent');
+  const title = old?.querySelector('.gw-ds-recent-title')?.textContent
+    || (typeof gwDsLang === 'function' ? gwDsLang().recent : '') || gwUxText('Недавние свопы', 'Recent swaps');
+  const html = gwDsRecentHtml(title);
+  if (old) { if (html) old.outerHTML = html; else old.remove(); }
+  else if (html) card.insertAdjacentHTML('beforeend', html);
+  return true;
+}
 function gwDsClearRecent() {
   try { localStorage.removeItem('gw_ds_recent'); } catch (_) {}
   try {
@@ -10887,6 +10983,7 @@ function gwDsClearRecent() {
 }
 try { window.gwActiveWalletKeys = gwActiveWalletKeys; } catch (_) {}
 try { window.gwDsClearRecent = gwDsClearRecent; } catch (_) {}
+try { window.gwDsRefreshRecent = gwDsRefreshRecent; window.gwDsMarkRecentDelivered = gwDsMarkRecentDelivered; } catch (_) {}
 try { window.gwDsGetRecent = gwDsGetRecent; } catch (_) {}
 function gwDsTimeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -13367,7 +13464,18 @@ async function gwLifiBridgeMonitor({ txHash, bridge, fromChainId, toChainId, opI
       } catch (_) {}
       if (!stillMine()) return;
       if (norm.outcome === 'completed' && norm.success) {
-        try { gwToast(gwTx('swap_toast_bridge_done', null, 'Bridge complete') + (norm.assetHint ? ' · ' + norm.assetHint : ''), 'success'); } catch (_) {}
+        let gotTxt = norm.assetHint || '';
+        try {
+          const rc = j?.receiving;
+          const dec = Number(rc?.token?.decimals);
+          const amt = Number(rc?.amount);
+          if (Number.isFinite(dec) && amt > 0) {
+            const o = amt / 10 ** dec;
+            gotTxt = o.toLocaleString('en-US', { maximumFractionDigits: o < 1 ? 8 : 4 }) + ' ' + (rc?.token?.symbol || norm.assetHint || '');
+          }
+        } catch (_) {}
+        try { gwDsMarkRecentDelivered(txHash, j?.receiving); } catch (_) {}
+        try { gwToast(gwTx('swap_toast_bridge_done', null, 'Bridge complete') + (gotTxt ? ' · ' + gotTxt : ''), 'success'); } catch (_) {}
         try { gwSwapOpClear('completed'); } catch (_) {}
         return;
       }
@@ -14683,6 +14791,40 @@ function gwTkHoldingsOwner() {
   return { addr, tAddr, solAddr, key: [addr.toLowerCase(), tAddr, solAddr].join('|') };
 }
 
+/** Price from the loaded LI.FI catalog or the discovery list when the main price feed has none (HYPE, MON…). */
+function gwTkCatalogPrice(asset) {
+  try {
+    const cid = Number(asset?.chainId);
+    if (!cid) return 0;
+    const sym = String(asset.sym || '').toUpperCase();
+    const map = window.__gwLifiByAddr?.[cid];
+    const addr = String(asset.address || '').toLowerCase();
+    if (addr && map) {
+      const t = map.get(addr);
+      if (Number(t?.priceUSD) > 0) return Number(t.priceUSD);
+    }
+    if (addr) {
+      const hold = window.__gwHoldTok?.chains?.[cid];
+      const r = Array.isArray(hold) ? hold.find((x) => String(x?.[0] || '').toLowerCase() === addr) : null;
+      if (r && Number(r[3]) > 0) return Number(r[3]);
+      return 0;
+    }
+    if (map) {
+      for (const k of ['0x0000000000000000000000000000000000000000', '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee']) {
+        const t = map.get(k);
+        if (t && String(t.sym || '').toUpperCase() === sym && Number(t.priceUSD) > 0) return Number(t.priceUSD);
+      }
+    } else if (typeof gwLifiEnsureChainTokens === 'function') {
+      window.__gwTkPriceWarm = window.__gwTkPriceWarm || {};
+      if (!window.__gwTkPriceWarm[cid]) {
+        window.__gwTkPriceWarm[cid] = true;
+        gwLifiEnsureChainTokens(cid).then(() => { try { if (window.__gwTkHoldingsCache) window.__gwTkHoldingsCache.at = 0; } catch (_) {} }).catch(() => {});
+      }
+    }
+  } catch (_) {}
+  return 0;
+}
+
 async function gwTkLoadHoldings(force, onUpdate) {
   const cache = window.__gwTkHoldingsCache;
   const owner = gwTkHoldingsOwner();
@@ -14714,9 +14856,9 @@ async function gwTkLoadHoldings(force, onUpdate) {
         for (const assets of chunks.values()) for (const asset of assets) {
           /* A discovered contract is priced by its own catalog price: the same
            * ticker on another chain can be a different asset. */
-          const px = asset.discovered
+          const px = (asset.discovered
             ? (Number(asset.priceUSD) || Number(prices[asset.sym]) || 0)
-            : (Number(prices[asset.sym]) || 0);
+            : (Number(prices[asset.sym]) || 0)) || gwTkCatalogPrice(asset);
           const info = GW_DS_ASSETS.find(a => a.sym === asset.sym) || {};
           let logo = info.logo || asset.logo || '';
           if (!logo && asset.discovered) {
@@ -15721,7 +15863,13 @@ async function gwTkRender(q) {
     wire();return;
   }
   if (which === 'from') {
-    list.innerHTML = `<div class="gw-tk-empty">${tx('tk_loading', 'Loading balances…')}</div>`;
+    /* Cached balances render straight away below; wiping first made the
+     * "My wallet" list blink on every open. */
+    const hcNow = window.__gwTkHoldingsCache;
+    if (!(hcNow && hcNow.ownerKey === gwTkHoldingsOwner().key && (hcNow.rows || []).length)) {
+      list.innerHTML = `<div class="gw-tk-empty">${tx('tk_loading', 'Loading balances…')}</div>`;
+      list.dataset.tkFp = 'from-loading';
+    }
     let addr = null;
     try {
       addr = (typeof gwAnyConnectedAddress === 'function')
@@ -15757,21 +15905,39 @@ async function gwTkRender(q) {
       const notice = status.loading
         ? gwUxText('Обновляем балансы остальных сетей…', 'Updating other networks…')
         : status.incomplete ? gwUxText('Обновлено частично', 'Partially updated') : '';
-      list.innerHTML = filtered.map(a => rowHtml(a,
+      let bodyHtml = filtered.map(a => rowHtml(a,
         `<div class="gw-tk-bal"><div class="amt">${Number(a.amt).toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>`
         + `<div class="usd">${a.pricePending ? gwUxText('Курс уточняется', 'Price pending') : '≈ $' + Number(a.usd || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div></div>`
       )).join('') || `<div class="gw-tk-empty">${status.loading ? tx('tk_loading', 'Loading balances…')
         : status.incomplete ? gwUxText('Балансы пока недоступны.', 'Balances are currently unavailable.')
         : query ? gwUxEsc(gwUxText('Ничего не найдено: ', 'Nothing matches: ') + q)
         : tx('tk_empty_wallet', 'No tokens in your wallet yet — deposit first, then choose what to pay with.')}</div>`;
-      if (smallCount || !hideSmall) list.insertAdjacentHTML('beforeend', `<div style="display:flex;justify-content:center;padding:8px"><button type="button" class="gw-oc-dust-btn" id="gwTkDustToggle">${hideSmall ? gwOcT('showSmall') + ' (' + smallCount + ')' : gwOcT('hideSmall')}</button></div>`);
-      list.querySelector('#gwTkDustToggle')?.addEventListener('click', () => { gwOcHideSmall(!hideSmall); renderHoldings(rows, status); });
-      if (notice) list.insertAdjacentHTML('beforeend', `<div style="padding:8px;text-align:center;font-size:11px;color:#98a8c0" aria-live="polite" title="${gwUxText('Не все сети ответили; известные балансы сохранены.', 'Some networks did not respond; known balances are retained.')}">${notice}${status.incomplete && !status.loading ? `<button type="button" id="gwTkRetry">${gwUxText('Повторить', 'Retry')}</button>` : ''}</div>`);
+      if (smallCount || !hideSmall) bodyHtml += `<div style="display:flex;justify-content:center;padding:8px"><button type="button" class="gw-oc-dust-btn" id="gwTkDustToggle">${hideSmall ? gwOcT('showSmall') + ' (' + smallCount + ')' : gwOcT('hideSmall')}</button></div>`;
+      /* Each network that answers re-publishes the same rows; rebuilding them
+       * recreated every logo and made the list blink. */
+      if (!(list.dataset.tkFp === 'from' && list.__gwFromHtml === bodyHtml)) {
+        list.innerHTML = bodyHtml;
+        list.__gwFromHtml = bodyHtml;
+        list.dataset.tkFp = 'from';
+      }
+      const dustBtn = list.querySelector('#gwTkDustToggle');
+      if (dustBtn) dustBtn.onclick = () => { gwOcHideSmall(!hideSmall); renderHoldings(rows, status); };
+      const noticeHtml = notice ? `${notice}${status.incomplete && !status.loading ? `<button type="button" id="gwTkRetry">${gwUxText('Повторить', 'Retry')}</button>` : ''}` : '';
+      let noticeEl = list.querySelector('.gw-tk-from-notice');
+      if (!noticeHtml) { if (noticeEl) noticeEl.remove(); }
+      else {
+        if (!noticeEl) {
+          list.insertAdjacentHTML('beforeend', `<div class="gw-tk-from-notice" style="padding:8px;text-align:center;font-size:11px;color:#98a8c0" aria-live="polite" title="${gwUxText('Не все сети ответили; известные балансы сохранены.', 'Some networks did not respond; known balances are retained.')}"></div>`);
+          noticeEl = list.querySelector('.gw-tk-from-notice');
+        }
+        if (noticeEl.__html !== noticeHtml) { noticeEl.innerHTML = noticeHtml; noticeEl.__html = noticeHtml; }
+      }
       wire();
-      list.querySelector('#gwTkRetry')?.addEventListener('click', () => {
+      const retryBtn = list.querySelector('#gwTkRetry');
+      if (retryBtn) retryBtn.onclick = () => {
         window.__gwTkHoldingsCache.at = 0;
         gwTkRender(document.getElementById('gwTkSearch')?.value || '');
-      });
+      };
     };
     const rows = await gwTkLoadHoldings(false, renderHoldings);
     renderHoldings(rows, { loading: false, incomplete: !!window.__gwTkHoldingsCache?.incomplete });
@@ -15779,6 +15945,7 @@ async function gwTkRender(q) {
     const qAddr = String(q || '').trim();
     if (addr && /^0x[0-9a-fA-F]{40}$/.test(qAddr)
         && !(rows || []).some(r => String(r.address || '').toLowerCase() === qAddr.toLowerCase())) {
+      list.dataset.tkFp = 'from-probe';
       list.innerHTML = `<div class="gw-tk-empty">${gwUxText('Ищем токен по адресу во всех сетях…', 'Looking up this contract on every network…')}</div>`;
       const found = typeof gwOcProbeTokenAddress === 'function' ? await gwOcProbeTokenAddress(addr, qAddr).catch(() => []) : [];
       if (!stillLive() || overlay.dataset.which !== 'from') return;
@@ -16281,22 +16448,7 @@ function gwDsBuildPanel() {
     .join('');
   gwUxCss();
   const recent = gwDsGetRecent();
-  const recentHtml = recent.length ? `
-    <div class="gw-ds-recent">
-      <div class="gw-ds-recent-title">${t.recent}</div>
-      <div class="gw-ds-recent-list">
-        ${recent.map((r) => {
-          const explorer = (r.hash && r.chainId) ? gwDsExplorerUrl(r.chainId, r.hash) : '';
-          const modeIco  = r.mode === 'onchain' ? '🔗' : '⚡';
-          const linkHtml = explorer ? ` · <a href="${explorer}" target="_blank" rel="noopener" style="color:#5dd5ff;text-decoration:none">tx ↗</a>` : '';
-          return `<div class="gw-ds-recent-row">
-            <span class="r-pair">${r.amt} ${r.from} → ${r.out} ${r.to}</span>
-            <span class="r-time">${gwDsTimeAgo(r.ts)} · ${modeIco}${linkHtml}</span>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>
-  ` : '';
+  const recentHtml = recent.length ? gwDsRecentHtml(t.recent) : '';
   const wrap = document.createElement('div');
   wrap.className = 'gw-ds-wrap';
   wrap.innerHTML = `
@@ -25779,9 +25931,14 @@ async function gwDsSubmit() {
         }
       }
       const amtEl = document.getElementById('gwDsAmt'); if (amtEl) amtEl.value = '';
+      try { if (window.__gwTkHoldingsCache) window.__gwTkHoldingsCache.at = 0; } catch (_) {}
       setTimeout(() => {
-        const wrap = document.querySelector('.gw-ds-wrap');
-        if (wrap) { wrap.remove(); gwInjectDashSwapPanel(); try { gwDsEnsureSimpleUi(); } catch (_) {} }
+        /* Keep the pair the user just swapped (Uniswap-style): only clear the
+         * amount, refresh "Recent swaps" and balances. Rebuild as a fallback. */
+        if (!(typeof gwDsAfterSwapKeepPair === 'function' && gwDsAfterSwapKeepPair())) {
+          const wrap = document.querySelector('.gw-ds-wrap');
+          if (wrap) { wrap.remove(); gwInjectDashSwapPanel(); try { gwDsEnsureSimpleUi(); } catch (_) {} }
+        }
       }, 800);
     } catch (e) {
       // Stay in-site: DEX should never redirect users to external web apps.

@@ -9345,6 +9345,9 @@ function gwTkIsListableToken(t, opts) {
   if (t.verified) return true;
   const vol = Number(t.volumeUSD24H) || 0;
   if (vol >= GW_TK_MIN_LIST_VOL) return true;
+  /* Browsing one network in the picker: list the whole provider catalog (all
+   * tokens there are priced and routable); unverified ones get a label. */
+  if (opts?.browseAll && /^[A-Z0-9.$_+\-₮]{1,12}$/.test(sym)) return true;
   const q = String(opts?.query || '').trim().toUpperCase();
   if (q) {
     if (q.startsWith('0X') && q.length >= 10
@@ -10648,6 +10651,10 @@ function gwInjectDashSwapCss() {
     }
 
 
+    #gw-tk-list.gw-tk-list--loading { opacity: .45; pointer-events: none; transition: opacity .12s ease; }
+    .gw-tk-unv { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; vertical-align: 1px;
+      font-size: 9.5px; font-weight: 700; letter-spacing: .02em; color: #f5b94d;
+      background: rgba(245,185,77,0.10); border: 1px solid rgba(245,185,77,0.28); }
     /* Network selector (token picker) */
     #gwTkChains.gw-tk-chains--menu { display: none !important; }
     #gw-tk-panel .search.gw-tk-search--net { position: relative; }
@@ -13360,7 +13367,7 @@ async function gwLifiBridgeMonitor({ txHash, bridge, fromChainId, toChainId, opI
       } catch (_) {}
       if (!stillMine()) return;
       if (norm.outcome === 'completed' && norm.success) {
-        try { gwToast(`Bridge complete${norm.assetHint ? ' · ' + norm.assetHint : ''}`, 'success'); } catch (_) {}
+        try { gwToast(gwTx('swap_toast_bridge_done', null, 'Bridge complete') + (norm.assetHint ? ' · ' + norm.assetHint : ''), 'success'); } catch (_) {}
         try { gwSwapOpClear('completed'); } catch (_) {}
         return;
       }
@@ -14888,18 +14895,15 @@ function gwTokenChainHint(sym, currentChainId) {
   try {
     const hit = typeof gwResolveEvmToken === 'function' ? gwResolveEvmToken(cur, s) : null;
     if (hit && hit.address) {
-      return gwUxText(`Сейчас нет ликвидности для ${s} в сети ${curLbl}. Попробуйте другую сумму, оплату в USDT/USDC или другую сеть.`,
-        `No live aggregator route for ${s} on ${curLbl} right now. Try another amount, USDT/USDC, or another network.`);
+      return gwTx('swap_hint_no_liq', { sym: s, chain: curLbl }, `No live route for ${s} on ${curLbl} right now. Try another amount, USDT/USDC, or another network.`);
     }
   } catch (_) {}
   const chains = gwChainsForSym(s).filter((c) => c !== cur);
   if (!chains.length) {
-    return gwUxText(`${s} нет в сети ${curLbl}. Выберите другую сеть или другой токен.`,
-      `${s} is not available on ${curLbl}. Switch network above, or pick another token.`);
+    return gwTx('swap_hint_not_on', { sym: s, chain: curLbl }, `${s} is not available on ${curLbl}. Switch network above, or pick another token.`);
   }
   const labels = chains.slice(0, 5).map(gwChainLabel);
-  return gwUxText(`${s} нет в сети ${curLbl}. Есть в: ${labels.join(', ')}. Переключите сеть и повторите.`,
-    `${s} is not on ${curLbl}. Available on: ${labels.join(', ')}. Switch network above, then retry.`);
+  return gwTx('swap_hint_available', { sym: s, chain: curLbl, list: labels.join(', ') }, `${s} is not on ${curLbl}. Available on: ${labels.join(', ')}. Switch network above, then retry.`);
 }
 
 function gwTkTargetsFor(fromSym, chainId) {
@@ -15105,6 +15109,100 @@ function gwTkTargetsFor(fromSym, chainId) {
   };
 }
 
+/* Search across networks: tokens matching the query on every other network
+ * the picker knows (loaded catalogs incl. Solana/Tron + the liquid-token list
+ * for all EVM chains). Shown under the selected network's results. */
+function gwTkSearchOtherNetworks(query, exceptCid, cap) {
+  const q = String(query || '').trim().toUpperCase();
+  if (q.length < 2) return [];
+  const except = Number(exceptCid) || 0;
+  const out = [];
+  const seen = new Set();
+  const score = (sym, name) => {
+    const n = String(name || '').toUpperCase();
+    if (sym === q) return 0;
+    if (sym.startsWith(q)) return 1;
+    if (n === q || n.startsWith(q + ' ')) return 2;
+    if (sym.includes(q)) return 3;
+    if (n.includes(q)) return 4;
+    return 9;
+  };
+  const add = (row) => {
+    const k = row.chainId + '|' + String(row.address || row.sym).toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(row);
+  };
+  const label = (cid) => (typeof gwChainLabel === 'function' ? gwChainLabel(cid) : String(cid));
+  try {
+    const cats = window.__gwLifiCatalog || {};
+    for (const cidS of Object.keys(cats)) {
+      const cid = Number(cidS);
+      const list = cats[cidS]?.list;
+      if (!cid || cid === except || !Array.isArray(list)) continue;
+      for (const t of list) {
+        const sym = String(t?.sym || '').toUpperCase();
+        if (!sym) continue;
+        const sc = score(sym, t.name);
+        if (sc > 4) continue;
+        if (typeof gwTkIsListableToken === 'function' && !gwTkIsListableToken({ ...t, sym, chainId: cid }, { query: q })) continue;
+        add({
+          sym, name: t.name || sym, logo: t.logo || '', chainId: cid, chain: label(cid),
+          address: t.address || '', decimals: t.decimals, verified: t.verified,
+          priceUSD: t.priceUSD, volumeUSD24H: t.volumeUSD24H, marketCapUSD: t.marketCapUSD, popRank: t.popRank, _sc: sc,
+        });
+      }
+    }
+  } catch (_) {}
+  try {
+    const hold = window.__gwHoldTok?.chains || {};
+    for (const cidS of Object.keys(hold)) {
+      const cid = Number(cidS);
+      if (!cid || cid === except) continue;
+      for (const r of hold[cidS] || []) {
+        if (!Array.isArray(r)) continue;
+        const [address, decimals, symRaw, price, ver] = r;
+        const sym = String(symRaw || '').toUpperCase();
+        const sc = score(sym, '');
+        if (sc > 3 || !/^0x[0-9a-fA-F]{40}$/.test(String(address || ''))) continue;
+        const known = window.__gwLifiByAddr?.[cid]?.get(String(address).toLowerCase());
+        add({
+          sym, name: known?.name || sym,
+          logo: known?.logo || (location.protocol === 'https:' ? `${location.origin}/api/swap/token-logo/${cid}/${address}` : ''),
+          chainId: cid, chain: label(cid), address, decimals, verified: !!ver, priceUSD: price, _sc: sc,
+        });
+      }
+    }
+  } catch (_) {}
+  /* Pull catalogs of networks known to list this ticker, then refresh once. */
+  try {
+    window.__gwTkXnetLoading = window.__gwTkXnetLoading || {};
+    /* Hub networks where most tickers live (Solana, Ethereum, BSC, Base, Arbitrum):
+     * load once on the first real search so "not on this network" can still find it. */
+    const hubs = q.length >= 3 ? [1151111081099710, 1, 56, 8453, 42161] : [];
+    const want = [...new Set([...(typeof gwChainsForSym === 'function' ? gwChainsForSym(q) : []), ...hubs].map(Number))]
+      .filter((c) => c && c !== except && !(window.__gwLifiCatalog || {})[c] && !window.__gwTkXnetLoading[c]);
+    for (const c of want.slice(0, 6)) {
+      window.__gwTkXnetLoading[c] = true;
+      Promise.resolve(typeof gwLifiEnsureChainTokens === 'function' ? gwLifiEnsureChainTokens(c) : null)
+        .then(() => { try { window.__gwTkCatalogRefreshDeb?.(); } catch (_) {} }).catch(() => {});
+    }
+    if (!window.__gwHoldTok?.chains && !window.__gwTkXnetHoldReq && typeof gwHoldingsTokenList === 'function') {
+      window.__gwTkXnetHoldReq = true;
+      gwHoldingsTokenList(1).then(() => { try { window.__gwTkCatalogRefreshDeb?.(); } catch (_) {} }).catch(() => {});
+    }
+  } catch (_) {}
+  /* Same ticker on many networks: real liquidity first, then the main hubs. */
+  const hubRank = (cid) => { const i = [1, 1151111081099710, 56, 8453, 42161, 137, 10, 43114].indexOf(Number(cid)); return i < 0 ? 99 : i; };
+  const liq = (a) => (Number(a.volumeUSD24H) || 0) || (Number(a.marketCapUSD) || 0) * 0.02;
+  out.sort((a, b) => (a._sc - b._sc)
+    || (Number(!!b.verified) - Number(!!a.verified))
+    || ((liq(a) || liq(b)) ? liq(b) - liq(a) : 0)
+    || (hubRank(a.chainId) - hubRank(b.chainId)));
+  return out.slice(0, Number(cap) || 10);
+}
+try { window.gwTkSearchOtherNetworks = gwTkSearchOtherNetworks; } catch (_) {}
+
 /* Network selector in the token picker: one button inside the search field
  * opens a searchable list (instead of 16 chips over four rows). The hidden
  * chip strip stays the source of truth; picking a network clicks its chip. */
@@ -15124,16 +15222,33 @@ function gwTkNetMenuSync() {
       + '<div class="gw-tk-netmenu-list" id="gwTkNetList"></div></div>');
     btn = document.getElementById('gwTkNetBtn');
     menu = document.getElementById('gwTkNetMenu');
-    const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+    const panelEl = () => document.getElementById('gw-tk-panel');
+    /* The picker clips overflow, so a short token list used to cut the menu
+     * (networks below Arc were unreachable). Grow the panel while it is open. */
+    const fitPanel = () => {
+      const panel = panelEl();
+      if (!panel || menu.hidden) return;
+      panel.style.minHeight = '';
+      const pr = panel.getBoundingClientRect();
+      const mr = menu.getBoundingClientRect();
+      const needBottom = mr.top + menu.scrollHeight + 14;
+      if (needBottom > pr.bottom) panel.style.minHeight = Math.ceil(needBottom - pr.top) + 'px';
+    };
+    const close = () => {
+      menu.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      const panel = panelEl();
+      if (panel) panel.style.minHeight = '';
+    };
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const open = menu.hidden;
-      menu.hidden = !open;
-      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (open) {
-        const q = document.getElementById('gwTkNetSearch');
-        if (q) { q.value = ''; gwTkNetMenuFill(''); setTimeout(() => { try { q.focus(); } catch (_) {} }, 0); }
-      }
+      if (!open) { close(); return; }
+      menu.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      const q = document.getElementById('gwTkNetSearch');
+      if (q) { q.value = ''; gwTkNetMenuFill(''); setTimeout(() => { try { q.focus(); } catch (_) {} }, 0); }
+      fitPanel();
     });
     menu.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -15155,7 +15270,12 @@ function gwTkNetMenuSync() {
   const show = !strip.hidden && !!strip.querySelector('.gw-tk-chain');
   btn.hidden = !show;
   search.classList.toggle('gw-tk-search--net', show);
-  if (!show) { menu.hidden = true; return; }
+  if (!show) {
+    menu.hidden = true;
+    const panel = document.getElementById('gw-tk-panel');
+    if (panel) panel.style.minHeight = '';
+    return;
+  }
   const on = strip.querySelector('.gw-tk-chain.on') || strip.querySelector('.gw-tk-chain');
   const cid = Number(on?.dataset.cid) || 0;
   const name = (typeof gwChainLabel === 'function') ? gwChainLabel(cid) : (on?.textContent || '');
@@ -15443,7 +15563,7 @@ async function gwTkRender(q) {
     const xCls = (a.group === 'xchain' || a.crossNetwork) ? ' xchain' : '';
     return `<div class="gw-tk-row${xCls}" data-sym="${a.sym}" data-cid="${cid || ''}" data-addr="${addr}" data-dec="${dec}" data-amt="${a.amt != null ? a.amt : ''}" data-xchain="${a.crossNetwork ? '1' : ''}">
       ${ico}
-      <div class="body"><div class="sym">${a.sym}</div><div class="name">${a.name || a.sym}${chainLbl ? ' · ' + chainLbl : ''}${short}</div></div>
+      <div class="body"><div class="sym">${a.sym}${a.group === 'same' && a.verified === false ? `<span class="gw-tk-unv" title="${gwUxEsc(gwUxText('Токен не проверен — сверьте адрес контракта', 'Unverified token — check the contract address'))}">${gwUxText('не проверен', 'unverified')}</span>` : ''}</div><div class="name">${a.name || a.sym}${chainLbl ? ' · ' + chainLbl : ''}${short}</div></div>
       ${meta}
     </div>`;
   };
@@ -15728,6 +15848,7 @@ async function gwTkRender(q) {
   }
 
   const renderTo = (catalogHint) => {
+    list.classList.remove('gw-tk-list--loading');
     const targets = gwTkTargetsFor(fromSym, catalogChain);
     const xJump = !!window.__gwTkXchainJump;
     const searchRank = (a) => {
@@ -15755,7 +15876,7 @@ async function gwTkRender(q) {
     const listable = (a) => {
       if (a.group === 'popular' || a.group === 'cross' || a.group === 'xchain') return true;
       if (typeof gwTkIsListableToken !== 'function') return true;
-      return gwTkIsListableToken(a, { query });
+      return gwTkIsListableToken(a, { query, browseAll: true });
     };
     const bySearchThenVol = (a, b) => {
       if (query) {
@@ -15801,7 +15922,9 @@ async function gwTkRender(q) {
     const featuredLeft = Math.max(0, featuredAll.length - featured.length);
     const cross = crossAll.slice(0, cLimit);
     const crossLeft = Math.max(0, crossAll.length - cross.length);
-    if (!popular.length && !shownRest.length && !cross.length && !featured.length) {
+    const otherNet = (query && query.length >= 2 && !xJump)
+      ? gwTkSearchOtherNetworks(query, catalogChain, (popular.length || shownRest.length) ? 8 : 16) : [];
+    if (!popular.length && !shownRest.length && !cross.length && !featured.length && !otherNet.length) {
       let hint = catalogHint || '';
       if (!hint && query) {
         const suggest = (typeof gwTokenChainHint === 'function')
@@ -15861,12 +15984,20 @@ async function gwTkRender(q) {
     } else {
       html += sameBlock();
     }
+    if (otherNet.length) {
+      const none = !popular.length && !shownRest.length;
+      html += `<div class="gw-tk-group">${none
+        ? gwUxEsc(gwTx('tk_search_other_none', { sym: query, chain: chainMeta.label || '' }, `${query} is not on ${chainMeta.label || 'this network'} — found on other networks`))
+        : gwUxText('В других сетях', 'On other networks')} · ${otherNet.length}</div>`;
+      html += otherNet.map((a) => rowHtml({ ...a, group: 'xchain', crossNetwork: true, showChainBadge: true })).join('');
+    }
     /* Skip identical rebuilds — full innerHTML was flashing every logo on prefetch. */
     const fp = String(xJump ? 1 : 0) + '|' + (window.__gwUxTokenFilter || 'popular') + '|' + fromSym + '|' + query + '|' + catalogChain + '|'
       + featured.map((a) => a.sym + ':' + a.chainId).join(',') + '|'
       + popular.map((a) => a.sym).join(',') + '|'
       + shownRest.slice(0, 24).map((a) => a.sym + (a.address || '').slice(0, 10)).join(',')
-      + '|' + shownCat + '|' + totalCat + '|L' + limit + 'X' + xLimit + 'C' + cLimit;
+      + '|' + shownCat + '|' + totalCat + '|L' + limit + 'X' + xLimit + 'C' + cLimit
+      + '|O' + otherNet.map((a) => a.chainId + (a.address || '').slice(0, 8)).join(',');
     if (list.dataset.tkFp === fp && list.childElementCount > 0) {
       try {
         const ban = document.getElementById('gwTkXchainBanner');
@@ -15921,11 +16052,11 @@ async function gwTkRender(q) {
     try {
       const inp = document.getElementById('gwTkSearch');
       if (inp) {
-        const n = totalCat || shownCat;
+        const n = shownCat || totalCat;
         inp.placeholder = xJump
           ? tx('tk_search_xchain', 'Search cross-chain destinations…')
           : (n > 0
-            ? gwUxText('Поиск среди ' + n.toLocaleString('ru-RU') + ' токенов', 'Search ' + n.toLocaleString('en-US') + ' tokens') + ' · ' + chainMeta.label + '…'
+            ? gwTx('tk_search_count', { n: n.toLocaleString('en-US') }, 'Search ' + n.toLocaleString('en-US') + ' tokens') + ' · ' + chainMeta.label + '…'
             : 'Search tokens…');
       }
     } catch (_) {}
@@ -15935,7 +16066,13 @@ async function gwTkRender(q) {
   const snapshot = window.__gwLifiCatalog?.[catalogChain];
   const showCached = !!snapshot?.at && snapshot.list?.length > 0;
   if (showCached) renderTo();
-  else {
+  else if (list.querySelector('.gw-tk-row')) {
+    /* Switching network: dim the current rows instead of wiping them (blink). */
+    delete list.dataset.tkFp;
+    list.classList.add('gw-tk-list--loading');
+    const input = document.getElementById('gwTkSearch');
+    if (input) input.placeholder = gwUxText('Поиск токенов', 'Search tokens') + ' · ' + chainMeta.label;
+  } else {
     delete list.dataset.tkFp;
     list.scrollTop = 0;
     list.innerHTML = '<div class="gw-tk-empty" role="status">' +
@@ -17146,7 +17283,14 @@ try { window.gwDsReconnectThenRequote = gwDsReconnectThenRequote; } catch (_) {}
 /* Swap UX: presentation and bound local order plans. */
 function gwUxText(ru, en) {
   const lang = (typeof window.getGromLang === 'function' && window.getGromLang()) || localStorage.getItem('grom_lang') || navigator.language || 'en';
-  return /^(ru|uk)/i.test(lang) ? ru : en;
+  if (/^(ru|uk)/i.test(lang)) return ru;
+  /* es / ar / zh / hi / tr: grom-i18n-extra.js maps the English text. */
+  try {
+    const l = String(lang).slice(0, 2).toLowerCase();
+    const hit = window.GROM_UX_TR && window.GROM_UX_TR[l] && window.GROM_UX_TR[l][en];
+    if (hit) return hit;
+  } catch (_) {}
+  return en;
 }
 function gwUxEsc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function gwUxCss() {
@@ -18683,8 +18827,7 @@ async function gwDsRefreshRate() {
       const nr = window.__gwDsLastNoRouteSameChain;
       if (nr && Date.now() - nr.at < 60000 && gwDsNormSym(nr.toSym) === to) {
         const lbl = (typeof gwChainLabel === 'function') ? gwChainLabel(nr.fromCid) : String(nr.fromCid);
-        bridgeHint2 = '⚠ ' + gwUxText(`Сейчас нет ликвидности ${from} → ${to} в сети ${lbl}. Выберите другой токен для получения или другую сеть.`,
-          `No liquidity for ${from} → ${to} on ${lbl} right now. Pick another receive token or network.`);
+        bridgeHint2 = '⚠ ' + gwTx('swap_no_liq_chain', { from, to, chain: lbl }, `No liquidity for ${from} → ${to} on ${lbl} right now. Pick another receive token or network.`);
       }
       const forceTo = Number(window.__gwDsForceBridgeTo?.chainId)
         || Number(window.__gwDsUserPickedTo?.chainId) || 0;
@@ -18714,9 +18857,7 @@ async function gwDsRefreshRate() {
     if (bridgeDest > 0) {
       const a = (typeof gwChainLabel === 'function') ? gwChainLabel(uiCid) : String(uiCid);
       const bl = (typeof gwChainLabel === 'function') ? gwChainLabel(bridgeDest) : String(bridgeDest);
-      failMsg = gwUxText(
-        `Сейчас нет маршрута ${from} (${a}) → ${to} (${bl}). Попробуйте другую сумму, другой токен для получения или оплату в USDC/ETH.`,
-        `No route ${from} (${a}) → ${to} (${bl}) right now. Try another amount, another receive token, or pay with USDC/ETH.`);
+      failMsg = gwTx('swap_no_route_pair', { from, a, to, b: bl }, `No route ${from} (${a}) → ${to} (${bl}) right now. Try another amount, another receive token, or pay with USDC/ETH.`);
     } else if (typeof gwTokenChainHint === 'function') {
       failMsg = gwTokenChainHint(to, uiCid || 0);
     }
@@ -21203,7 +21344,7 @@ window.gwStocksExecute = async function (quote, opts) {
       ? window.gwProviderSendTx
       : ((p, txp) => p.request({ method: 'eth_sendTransaction', params: [txp] }));
     const hashK = await sendK(provider, { from: account, to: ktx.to, data: ktx.data, value: ktx.value || '0x0' }, 180000, cid);
-    gwToast('Submitted · waiting for confirmation…', 'info');
+    gwToast((typeof gwTx === 'function' ? gwTx('swap_toast_submitted', null, 'Submitted · waiting for confirmation…') : 'Submitted · waiting for confirmation…'), 'info');
     await gwWaitReceipt(provider, hashK, 90000, false, cid);
     return { hash: hashK, namespace: 'evm', crossChain: false, chainId: cid };
   }
@@ -21243,7 +21384,7 @@ window.gwStocksExecute = async function (quote, opts) {
     : ((p, txp) => p.request({ method: 'eth_sendTransaction', params: [txp] }));
   const hash = await sendTx(provider, { from: account, to: tx.to, data: tx.data, value: tx.value || '0x0' }, 180000, execChain);
   const crossChain = !!quote._crossChain;
-  gwToast(crossChain ? 'Submitted · delivery to the destination network is pending' : 'Submitted · waiting for confirmation…', 'info');
+  gwToast(crossChain ? (typeof gwTx === 'function' ? gwTx('swap_toast_submitted_bridge', null, 'Submitted · delivery to the destination network is pending') : 'Submitted · delivery to the destination network is pending') : (typeof gwTx === 'function' ? gwTx('swap_toast_submitted', null, 'Submitted · waiting for confirmation…') : 'Submitted · waiting for confirmation…'), 'info');
   if (!crossChain) await gwWaitReceipt(provider, hash, 90000, false, execChain);
   return { hash, namespace: 'evm', crossChain, chainId: execChain };
 };
@@ -22154,7 +22295,7 @@ async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, p
     window.__gwLastExecNamespace = 'evm';
     window.__gwLastExecConfirmed = false;
   } catch (_) {}
-  if (!crossChain) gwToast('Submitted · waiting for confirmation…', 'info');
+  if (!crossChain) gwToast((typeof gwTx === 'function' ? gwTx('swap_toast_submitted', null, 'Submitted · waiting for confirmation…') : 'Submitted · waiting for confirmation…'), 'info');
   if (deferReceipt) {
     if (window.GromSwapCore?.buildSubmittedExecResult) {
       return window.GromSwapCore.buildSubmittedExecResult({ hash, quote, namespace: 'evm', crossChain });
@@ -23676,7 +23817,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
     data: tx.data,
     value: tx.value || '0x0',
   }, 180000, execChain);
-  if (!execQuote._crossChain) gwToast('Submitted · waiting for confirmation…', 'info');
+  if (!execQuote._crossChain) gwToast((typeof gwTx === 'function' ? gwTx('swap_toast_submitted', null, 'Submitted · waiting for confirmation…') : 'Submitted · waiting for confirmation…'), 'info');
   try { window.__gwLastExecWasBridge = !!execQuote._crossChain; } catch (_) {}
   try {
     window.__gwLastExecQuote = execQuote;
@@ -25603,7 +25744,7 @@ async function gwDsSubmit() {
           if (/squid/i.test(String(bridgeMeta.bridge || ''))) gwSquidBridgeMonitor(monitorArgs);
           else gwLifiBridgeMonitor(monitorArgs);
         } catch (_) {}
-        try { gwToast(gwUxText(`Отправлено: ${amt} ${from} → ${to}. Ждём зачисления в сети получения, обычно 1–2 мин.`, `Sent ${amt} ${from} → ${to}. Waiting for delivery on the destination network, usually 1–2 min.`), 'info'); } catch (_) {}
+        try { gwToast(gwTx('swap_toast_bridge_sent', { amt, from, to }, `Sent ${amt} ${from} → ${to}. Waiting for delivery on the destination network, usually 1–2 min.`), 'info'); } catch (_) {}
         gwDsFlashSuccess(`Submitted (bridging): ${amt} ${from} → ${to}`);
       } else if (norm.confirmed) {
         gwSwapOpUpdate({ stage: 'completed', hash, chainId, namespace: norm.namespace });

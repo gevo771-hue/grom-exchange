@@ -9295,10 +9295,12 @@ function gwTkApplyChainBadge(el, cid, title) {
     el.remove();
     return;
   }
+  if (el.dataset.cid === String(n) && el.isConnected && (el.querySelector('img') || el.classList.contains('gw-tk-chain-badge--dot'))) return;
   const short = gwTkChainShort(n);
   const color = gwTkChainColor(n);
   const tip = title || ((typeof gwChainLabel === 'function') ? gwChainLabel(n) : short);
   const logo = gwChainLogo(n);
+  el.dataset.cid = String(n);
   el.textContent = '';
   el.removeAttribute('style');
   el.className = 'gw-tk-chain-badge';
@@ -10562,7 +10564,7 @@ function gwInjectDashSwapCss() {
     #gw-tk-panel.gw-tk--from #gw-tk-list { max-height: none; }
     #gw-tk-panel.gw-tk--to #gw-tk-list { max-height: min(52vh, 460px); min-height: 0; }
     .gw-tk-xchain-banner {
-      margin: 0 14px 10px; padding: 12px 36px 12px 48px; border-radius: 14px;
+      margin: 0 14px 8px; padding: 7px 30px 7px 40px; border-radius: 12px;
       background: linear-gradient(135deg, rgba(0,194,255,0.16), rgba(136,192,208,0.08));
       border: 1px solid rgba(0,194,255,0.28); position: relative; cursor: pointer;
       transition: background .15s ease, border-color .15s ease, transform .12s ease;
@@ -10578,19 +10580,20 @@ function gwInjectDashSwapCss() {
       border-color: rgba(93,213,255,0.55);
     }
     .gw-tk-xchain-banner::before {
-      content: ""; position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-      width: 24px; height: 24px; border-radius: 8px;
+      content: ""; position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      width: 18px; height: 18px; border-radius: 6px;
       background:
         linear-gradient(135deg, transparent 42%, #5dd5ff 42%, #5dd5ff 58%, transparent 58%),
         linear-gradient(225deg, transparent 42%, #88c0d0 42%, #88c0d0 58%, transparent 58%);
       box-shadow: inset 0 0 0 1.5px rgba(93,213,255,0.55);
     }
     .gw-tk-xchain-banner::after {
-      content: "›"; position: absolute; right: 14px; top: 50%; transform: translateY(-54%);
-      font-size: 22px; font-weight: 300; color: #5dd5ff; line-height: 1; opacity: .85;
+      content: "›"; position: absolute; right: 12px; top: 50%; transform: translateY(-54%);
+      font-size: 18px; font-weight: 300; color: #5dd5ff; line-height: 1; opacity: .85;
     }
-    .gw-tk-xchain-banner .t { font-size: 13px; font-weight: 800; color: #e7eef8; line-height: 1.25; }
-    .gw-tk-xchain-banner .s { font-size: 11.5px; color: #98a8c0; margin-top: 3px; line-height: 1.35; }
+    .gw-tk-xchain-banner .t { font-size: 12.5px; font-weight: 800; color: #e7eef8; line-height: 1.25; }
+    .gw-tk-xchain-banner .s { font-size: 11px; color: #98a8c0; margin-top: 1px; line-height: 1.3;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .gw-tk-group.gw-tk-group--xjump {
       scroll-margin-top: 6px;
       color: #5dd5ff;
@@ -10642,6 +10645,53 @@ function gwInjectDashSwapCss() {
       font-size: 12px; color: #5dd5ff; font-weight: 800;
       padding: 2px 8px; border-radius: 999px;
       background: rgba(0,194,255,0.14); border: 1px solid rgba(0,194,255,0.28);
+    }
+
+
+    /* Network selector (token picker) */
+    #gwTkChains.gw-tk-chains--menu { display: none !important; }
+    #gw-tk-panel .search.gw-tk-search--net { position: relative; }
+    #gw-tk-panel .search.gw-tk-search--net input { padding-right: 156px; }
+    .gw-tk-netbtn {
+      position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+      display: inline-flex; align-items: center; gap: 7px; max-width: 140px;
+      padding: 5px 9px 5px 6px; border-radius: 999px; cursor: pointer; font-family: inherit;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
+      color: #e7eef8; font-size: 12.5px; font-weight: 700;
+    }
+    .gw-tk-netbtn:hover, .gw-tk-netbtn[aria-expanded="true"] { background: rgba(255,255,255,0.10); border-color: rgba(0,194,255,0.35); }
+    .gw-tk-netbtn img { width: 20px; height: 20px; border-radius: 50%; flex: 0 0 20px; }
+    .gw-tk-netbtn .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gw-tk-netbtn .cv { width: 7px; height: 7px; border-right: 2px solid #98a8c0; border-bottom: 2px solid #98a8c0; transform: rotate(45deg) translate(-2px,-2px); flex: 0 0 7px; margin-left: 2px; }
+    .gw-tk-netbtn[aria-expanded="true"] .cv { transform: rotate(-135deg) translate(-2px,-2px); }
+    .gw-tk-netmenu {
+      position: absolute; right: 14px; top: calc(100% - 4px); z-index: 20; width: 270px;
+      padding: 8px; border-radius: 16px; box-sizing: border-box;
+      background: #262e3c; border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 18px 40px -12px rgba(0,0,0,0.65);
+    }
+    .gw-tk-netmenu[hidden] { display: none !important; }
+    .gw-tk-netmenu-search input {
+      width: 100%; box-sizing: border-box; padding: 10px 12px !important; margin: 0 0 6px;
+      border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+      color: #e7eef8; font-size: 14px; outline: none; font-family: inherit;
+    }
+    .gw-tk-netmenu-search input:focus { border-color: rgba(0,194,255,0.35); }
+    .gw-tk-netmenu-list { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 2px; }
+    .gw-tk-netitem {
+      display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 10px; border: 0; border-radius: 10px;
+      background: transparent; color: #e7eef8; font-family: inherit; font-size: 14.5px; font-weight: 600; text-align: left; cursor: pointer;
+    }
+    .gw-tk-netitem:hover { background: rgba(255,255,255,0.06); }
+    .gw-tk-netitem.on { background: rgba(0,194,255,0.10); }
+    .gw-tk-netitem img { width: 24px; height: 24px; border-radius: 50%; flex: 0 0 24px; }
+    .gw-tk-netitem span:first-of-type { flex: 1; }
+    .gw-tk-netitem .ck { color: #5dd5ff; font-weight: 800; }
+    .gw-tk-netempty { padding: 14px 10px; color: #6b7a92; font-size: 13px; text-align: center; }
+    @media (max-width: 480px) {
+      #gw-tk-panel .search.gw-tk-search--net input { padding-right: 132px; }
+      .gw-tk-netbtn { max-width: 118px; right: 18px; font-size: 12px; }
+      .gw-tk-netmenu { left: 14px; right: 14px; width: auto; }
     }
 
     /* Phase 7 v2 — token-picker BUTTON (replaces raw <select> visually) */
@@ -13320,7 +13370,7 @@ async function gwLifiBridgeMonitor({ txHash, bridge, fromChainId, toChainId, opI
         return;
       }
     } catch (_) {}
-    if (stillMine()) setTimeout(tick, 30_000);
+    if (stillMine()) setTimeout(tick, Date.now() - started < 5 * 60_000 ? 12_000 : 30_000);
   };
   tick();
 }
@@ -15055,6 +15105,86 @@ function gwTkTargetsFor(fromSym, chainId) {
   };
 }
 
+/* Network selector in the token picker: one button inside the search field
+ * opens a searchable list (instead of 16 chips over four rows). The hidden
+ * chip strip stays the source of truth; picking a network clicks its chip. */
+function gwTkNetMenuSync() {
+  const strip = document.getElementById('gwTkChains');
+  const search = document.querySelector('#gw-tk-panel .search');
+  if (!strip || !search) return;
+  strip.classList.add('gw-tk-chains--menu');
+  let btn = document.getElementById('gwTkNetBtn');
+  let menu = document.getElementById('gwTkNetMenu');
+  if (!btn) {
+    search.classList.add('gw-tk-search--net');
+    search.insertAdjacentHTML('beforeend',
+      '<button type="button" class="gw-tk-netbtn" id="gwTkNetBtn" aria-haspopup="listbox" aria-expanded="false"></button>'
+      + '<div class="gw-tk-netmenu" id="gwTkNetMenu" role="listbox" hidden>'
+      + '<div class="gw-tk-netmenu-search"><input type="text" id="gwTkNetSearch" autocomplete="off" spellcheck="false" /></div>'
+      + '<div class="gw-tk-netmenu-list" id="gwTkNetList"></div></div>');
+    btn = document.getElementById('gwTkNetBtn');
+    menu = document.getElementById('gwTkNetMenu');
+    const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = menu.hidden;
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) {
+        const q = document.getElementById('gwTkNetSearch');
+        if (q) { q.value = ''; gwTkNetMenuFill(''); setTimeout(() => { try { q.focus(); } catch (_) {} }, 0); }
+      }
+    });
+    menu.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const item = e.target.closest('[data-net-cid]');
+      if (!item) return;
+      const chip = document.querySelector(`#gwTkChains .gw-tk-chain[data-cid="${item.dataset.netCid}"]`);
+      close();
+      if (chip) chip.click();
+    });
+    document.getElementById('gwTkNetSearch')?.addEventListener('input', (e) => gwTkNetMenuFill(e.target.value));
+    document.getElementById('gwTkNetSearch')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close(); btn.focus(); }
+      if (e.key === 'Enter') { const first = document.querySelector('#gwTkNetList [data-net-cid]'); if (first) first.click(); }
+    });
+    document.getElementById('gw-tk-panel')?.addEventListener('click', (e) => {
+      if (!menu.hidden && !e.target.closest('#gwTkNetMenu, #gwTkNetBtn')) close();
+    });
+  }
+  const show = !strip.hidden && !!strip.querySelector('.gw-tk-chain');
+  btn.hidden = !show;
+  search.classList.toggle('gw-tk-search--net', show);
+  if (!show) { menu.hidden = true; return; }
+  const on = strip.querySelector('.gw-tk-chain.on') || strip.querySelector('.gw-tk-chain');
+  const cid = Number(on?.dataset.cid) || 0;
+  const name = (typeof gwChainLabel === 'function') ? gwChainLabel(cid) : (on?.textContent || '');
+  const html = `<img src="${gwChainLogo(cid)}" alt="" width="20" height="20" /><span class="nm">${gwUxEsc(name)}</span><span class="cv" aria-hidden="true"></span>`;
+  if (btn.dataset.cid !== String(cid) || !btn.innerHTML) { btn.innerHTML = html; btn.dataset.cid = String(cid); }
+  btn.title = gwUxText('Сеть: ', 'Network: ') + name;
+  const q = document.getElementById('gwTkNetSearch');
+  if (q) q.placeholder = gwUxText('Поиск сетей', 'Search networks');
+  if (!menu.hidden) gwTkNetMenuFill(q?.value || '');
+}
+
+function gwTkNetMenuFill(query) {
+  const list = document.getElementById('gwTkNetList');
+  const strip = document.getElementById('gwTkChains');
+  if (!list || !strip) return;
+  const q = String(query || '').trim().toLowerCase();
+  const items = [...strip.querySelectorAll('.gw-tk-chain[data-cid]')].map((b) => {
+    const cid = Number(b.dataset.cid);
+    const name = (typeof gwChainLabel === 'function') ? gwChainLabel(cid) : b.textContent.trim();
+    return { cid, name, short: b.textContent.trim(), on: b.classList.contains('on') };
+  }).filter((it) => !q || it.name.toLowerCase().includes(q) || it.short.toLowerCase().includes(q));
+  list.innerHTML = items.map((it) =>
+    `<button type="button" class="gw-tk-netitem${it.on ? ' on' : ''}" data-net-cid="${it.cid}" role="option" aria-selected="${it.on}">`
+    + `<img src="${gwChainLogo(it.cid)}" alt="" width="24" height="24" loading="lazy" /><span>${gwUxEsc(it.name)}</span>`
+    + (it.on ? '<span class="ck" aria-hidden="true">✓</span>' : '') + '</button>').join('')
+    || `<div class="gw-tk-netempty">${gwUxText('Сеть не найдена', 'No network found')}</div>`;
+}
+try { window.gwTkNetMenuSync = gwTkNetMenuSync; } catch (_) {}
+
 function gwTkOpen(which /* 'from' | 'to' */) {
   window.__gwTkRenderGen = (window.__gwTkRenderGen || 0) + 1;
   let ov = document.getElementById('gw-tk-overlay');
@@ -15165,10 +15295,13 @@ function gwTkOpen(which /* 'from' | 'to' */) {
             gwLifiEnsureChainTokens(cid);
           }
           if (typeof gwTkRender === 'function') gwTkRender(document.getElementById('gwTkSearch')?.value || '');
+          try { gwTkNetMenuSync(); } catch (_) {}
         };
+        try { gwTkNetMenuSync(); } catch (_) {}
       } else {
         strip.hidden = true;
         strip.innerHTML = '';
+        try { gwTkNetMenuSync(); } catch (_) {}
       }
     }
   } catch (_) {}
@@ -15884,7 +16017,11 @@ function gwTkSyncButton(which) {
     icoWrap.appendChild(ico);
   }
   if (!ico) ico = btn.querySelector('.ico');
-  if (asset.logo && ico) {
+  const curImg = ico ? ico.querySelector('img') : null;
+  const wantLogo = asset.logo ? gwSafeLogo(asset.logo) : '';
+  if (wantLogo && curImg && curImg.getAttribute('src') === wantLogo) {
+    /* Same token icon already shown — re-creating it makes the button blink. */
+  } else if (asset.logo && ico) {
     ico.textContent = '';
     {
       const safe = gwSafeLogo(asset.logo);
@@ -15901,7 +16038,7 @@ function gwTkSyncButton(which) {
         ico.textContent = s.slice(0, 3);
       }
     }
-  } else if (ico) {
+  } else if (ico && (ico.querySelector('img') || ico.textContent !== sym.slice(0, 3))) {
     ico.textContent = sym.slice(0, 3);
   }
   let cid = 0;
@@ -15929,7 +16066,8 @@ function gwTkSyncButton(which) {
     }
   }
   const lbl = btn.querySelector('.lbl');
-  if (lbl) lbl.textContent = (typeof gwOcUiSym === 'function') ? gwOcUiSym(cid, sym) : sym;
+  const lblText = (typeof gwOcUiSym === 'function') ? gwOcUiSym(cid, sym) : sym;
+  if (lbl && lbl.textContent !== lblText) lbl.textContent = lblText;
   let net = btn.querySelector('.net');
   const fromCid = (typeof gwGetActiveUiChainId === 'function') ? Number(gwGetActiveUiChainId()) : 0;
   const showNet = !!cid;
@@ -15941,7 +16079,8 @@ function gwTkSyncButton(which) {
       if (caret) btn.insertBefore(net, caret);
       else btn.appendChild(net);
     }
-    net.textContent = gwChainLabel(cid);
+    const netText = gwChainLabel(cid);
+    if (net.textContent !== netText) net.textContent = netText;
   } else if (net) {
     net.remove();
   }
@@ -17511,7 +17650,7 @@ async function gwProviderSendTx(provider, txParams, timeoutMs = 180000, chainIdH
           const hash = await gwFindRecentOutboundTx(chainId, from, to, nonceBefore, 16, expect);
           if (hash) {
             console.log('[GROM] recovered tx hash via RPC (WC callback lost)', hash);
-            try { gwToast('Tx found on-chain · WalletConnect reply was lost', 'success'); } catch (_) {}
+            try { gwToast(gwUxText('Транзакция найдена в сети', 'Transaction found on-chain'), 'success'); } catch (_) {}
             return hash;
           }
         }
@@ -18604,8 +18743,21 @@ async function gwDsRefreshBalances() {
   const to   = document.getElementById('gwDsTo')?.value;
   const bFrom = document.getElementById('gwDsBalFrom');
   const bTo   = document.getElementById('gwDsBalTo');
-  if (bFrom) { bFrom.textContent = ''; delete bFrom.dataset.max; delete bFrom.dataset.maxSym; delete bFrom.dataset.maxCid; }
-  if (bTo) bTo.textContent = '';
+  /* Re-reads of the same token/network keep the current text until the new
+   * value arrives; clearing it on every refresh made the panel blink. */
+  let fromCtx = '';
+  let toCtx = '';
+  try {
+    fromCtx = [from, Number(window.__gwDsUserPickedFrom?.chainId) || (typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : 0), gwOcConnectedAddress() || ''].join('|');
+    toCtx = [to, Number(window.__gwDsUserPickedTo?.chainId) || gwTkGetToCatalogChain(gwTkGetFromContext().chainId), gwOcConnectedAddress() || ''].join('|');
+  } catch (_) {}
+  if (bFrom && !bFrom.dataset) bFrom.dataset = {};
+  if (bTo && !bTo.dataset) bTo.dataset = {};
+  if (bFrom && bFrom.dataset.ctx !== fromCtx) {
+    bFrom.textContent = ''; delete bFrom.dataset.max; delete bFrom.dataset.maxSym; delete bFrom.dataset.maxCid;
+    bFrom.dataset.ctx = fromCtx;
+  }
+  if (bTo && bTo.dataset.ctx !== toCtx) { bTo.textContent = ''; bTo.dataset.ctx = toCtx; }
   if (bFrom && from) {
     const fromCid = Number(window.__gwDsUserPickedFrom?.chainId)
       || (typeof gwGetActiveUiChainId === 'function' ? gwGetActiveUiChainId() : 0)
@@ -18622,7 +18774,8 @@ async function gwDsRefreshBalances() {
       delete bFrom.dataset.maxSym;
       delete bFrom.dataset.maxCid;
     }
-    bFrom.textContent = v > 0 ? `${gwDsLang().bal}: ${Number(v).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} ${from}` : '';
+    const fromText = v > 0 ? `${gwDsLang().bal}: ${Number(v).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} ${from}` : '';
+    if (bFrom.textContent !== fromText) bFrom.textContent = fromText;
   }
   if (bTo && to) {
     const destCid = Number(window.__gwDsUserPickedTo?.chainId) || gwTkGetToCatalogChain(gwTkGetFromContext().chainId);
@@ -18640,7 +18793,8 @@ async function gwDsRefreshBalances() {
       const balPart = vDest > 0
         ? `${gwDsLang().bal}: ${Number(vDest).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} ${to} · `
         : '';
-      bTo.textContent = `${balPart}→ ${destLbl}`;
+      const toText = `${balPart}→ ${destLbl}`;
+      if (bTo.textContent !== toText) bTo.textContent = toText;
     } else {
       const v = await gwDsAvailableAmount(to);
       if (!current()) return;
@@ -22000,9 +22154,7 @@ async function gwOnChainSwapExecLifi({ chainId, fromSym, toSym, amtNum, quote, p
     window.__gwLastExecNamespace = 'evm';
     window.__gwLastExecConfirmed = false;
   } catch (_) {}
-  gwToast(crossChain
-    ? 'Bridge submitted on source chain · destination delivery is pending (not complete yet)'
-    : 'Submitted · waiting for confirmation…', 'info');
+  if (!crossChain) gwToast('Submitted · waiting for confirmation…', 'info');
   if (deferReceipt) {
     if (window.GromSwapCore?.buildSubmittedExecResult) {
       return window.GromSwapCore.buildSubmittedExecResult({ hash, quote, namespace: 'evm', crossChain });
@@ -23524,9 +23676,7 @@ async function gwOnChainSwapExecMeta({ chainId, fromSym, toSym, amtNum, quote, p
     data: tx.data,
     value: tx.value || '0x0',
   }, 180000, execChain);
-  gwToast(execQuote._crossChain
-    ? 'Bridge submitted on source chain · destination delivery is pending (not complete yet)'
-    : 'Submitted · waiting for confirmation…', 'info');
+  if (!execQuote._crossChain) gwToast('Submitted · waiting for confirmation…', 'info');
   try { window.__gwLastExecWasBridge = !!execQuote._crossChain; } catch (_) {}
   try {
     window.__gwLastExecQuote = execQuote;
@@ -25412,8 +25562,16 @@ async function gwDsSubmit() {
         requestId: execResult?.requestId || quoteBridgeMeta.requestId || '',
         crossChain: !!execResult?.crossChain || cross || !!quoteBridgeMeta.crossChain,
       };
+      let outTxt = '≈ market';
+      try {
+        const dec = Number(winner?.outDecimals) > 0 ? Number(winner.outDecimals) : null;
+        if (winner?.toAmount && dec != null) {
+          const o = Number(winner.toAmount) / 10 ** dec;
+          if (o > 0 && Number.isFinite(o)) outTxt = '≈ ' + o.toLocaleString('en-US', { maximumFractionDigits: o < 1 ? 8 : 4 });
+        }
+      } catch (_) {}
       gwDsPushRecent({
-        from, to, amt, out: '≈ market', mode: 'onchain', hash, chainId,
+        from, to, amt, out: outTxt, mode: 'onchain', hash, chainId,
         status: norm.status,
         namespace: norm.namespace,
       });
@@ -25445,7 +25603,7 @@ async function gwDsSubmit() {
           if (/squid/i.test(String(bridgeMeta.bridge || ''))) gwSquidBridgeMonitor(monitorArgs);
           else gwLifiBridgeMonitor(monitorArgs);
         } catch (_) {}
-        try { gwToast(`Bridge submitted ${amt} ${from} → ${to}. Waiting for destination — not complete yet.`, 'info'); } catch (_) {}
+        try { gwToast(gwUxText(`Отправлено: ${amt} ${from} → ${to}. Ждём зачисления в сети получения, обычно 1–2 мин.`, `Sent ${amt} ${from} → ${to}. Waiting for delivery on the destination network, usually 1–2 min.`), 'info'); } catch (_) {}
         gwDsFlashSuccess(`Submitted (bridging): ${amt} ${from} → ${to}`);
       } else if (norm.confirmed) {
         gwSwapOpUpdate({ stage: 'completed', hash, chainId, namespace: norm.namespace });

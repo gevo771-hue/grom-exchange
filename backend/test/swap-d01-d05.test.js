@@ -664,8 +664,8 @@ describe('LI.FI status request recovery', () => {
     assert.equal(c.window.__gwSwapOp.id, op.id);
     assert.equal(JSON.parse(c._storage.gw_swap_op).stage, 'bridging');
     assert.equal(c._storage.gw_swap_op_last, undefined);
-    const retry = [...timers.values()].find(t => t.ms === 30000);
-    assert.ok(retry, 'a request timeout schedules another status check');
+    const retry = [...timers.values()].find(t => t.ms === 12000);
+    assert.ok(retry, 'a request timeout schedules another status check (fast cadence in the first minutes)');
     await retry.fn();
     assert.equal(attempts, 2);
     assert.equal(c.window.__gwSwapOp, null);
@@ -682,7 +682,7 @@ describe('LI.FI status request recovery', () => {
     await flush(0);
     assert.equal(bodyRead, false);
     assert.equal(c.window.__gwSwapOp.id, op.id);
-    assert.ok([...timers.values()].some(t => t.ms === 30000));
+    assert.ok([...timers.values()].some(t => t.ms === 12000));
   });
 
   it('a delayed response cannot complete a replacement operation', async () => {

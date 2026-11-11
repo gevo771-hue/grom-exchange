@@ -1341,14 +1341,75 @@
   var SUPPORTED = ['ru', 'en', 'es', 'ar', 'zh', 'hi', 'tr'];
   var LANG_BTNS = { langRu: 'ru', langEn: 'en', langEs: 'es', langAr: 'ar', langZh: 'zh', langHi: 'hi', langTr: 'tr' };
 
-  function getLang() {
-    var s = localStorage.getItem('grom_lang');
-    if (SUPPORTED.indexOf(s) !== -1) return s;
+  /* Default language by visitor country (first visit only; a language the
+   * user picked is never overridden). CIS → Russian, Spain & Latin America →
+   * Spanish, Arab countries → Arabic, China/Taiwan/HK → Chinese, Turkey →
+   * Turkish, India → English. Other countries: browser language, else English. */
+  var GEO_LANG = (function () {
+    var m = {};
+    'RU BY KZ KG UZ TJ AM AZ MD TM'.split(' ').forEach(function (c) { m[c] = 'ru'; });
+    'ES MX AR CO CL PE VE EC GT CU BO DO HN PY SV NI CR PA UY PR GQ'.split(' ').forEach(function (c) { m[c] = 'es'; });
+    'SA AE EG IQ JO KW QA BH OM YE LB SY PS LY TN DZ MA SD MR'.split(' ').forEach(function (c) { m[c] = 'ar'; });
+    'CN TW HK MO'.split(' ').forEach(function (c) { m[c] = 'zh'; });
+    m.TR = 'tr';
+    m.IN = 'en';
+    return m;
+  })();
+
+  function browserLang() {
     var nav = (navigator.language || '').toLowerCase();
+    if (nav.indexOf('uk') === 0 || nav.indexOf('be') === 0 || nav.indexOf('kk') === 0) return 'ru';
     for (var i = 0; i < SUPPORTED.length; i++) {
       if (nav.indexOf(SUPPORTED[i]) === 0) return SUPPORTED[i];
     }
     return 'en';
+  }
+
+  function getLang() {
+    var s = localStorage.getItem('grom_lang');
+    if (SUPPORTED.indexOf(s) !== -1) return s;
+    return browserLang();
+  }
+
+  function langSrc() {
+    try { return localStorage.getItem('grom_lang_src') || ''; } catch (_) { return ''; }
+  }
+
+  /* Ask Cloudflare's edge for the visitor country (loc=XX in /cdn-cgi/trace). */
+  function geoAutoLang() {
+    try {
+      var stored = localStorage.getItem('grom_lang');
+      if (stored && langSrc() !== 'auto') return;
+      if (localStorage.getItem('grom_geo_done')) return;
+    } catch (_) { return; }
+    var apply = function (want) {
+      if (!want || SUPPORTED.indexOf(want) === -1) return;
+      if (langSrc() && langSrc() !== 'auto') return;
+      if (document.readyState === 'loading') {
+        try { localStorage.setItem('grom_lang', want); localStorage.setItem('grom_lang_src', 'auto'); } catch (_) {}
+      } else if (want !== getLang()) {
+        setLang(want, true);
+      }
+    };
+    var pageLoc = document.documentElement.getAttribute('data-grom-locale');
+    if (pageLoc && pageLoc !== 'en' && SUPPORTED.indexOf(pageLoc) !== -1) {
+      try { localStorage.setItem('grom_geo_done', '1'); } catch (_) {}
+      apply(pageLoc);
+      return;
+    }
+    if (typeof fetch !== 'function') return;
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (_) {} }, 2500);
+    fetch('/cdn-cgi/trace', { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (txt) {
+        var m = /(?:^|\n)loc=([A-Z]{2})/.exec(txt || '');
+        try { localStorage.setItem('grom_geo_done', '1'); if (m) localStorage.setItem('grom_geo_cc', m[1]); } catch (_) {}
+        if (!m) return;
+        apply(GEO_LANG[m[1]] || browserLang());
+      })
+      .catch(function () {})
+      .then(function () { clearTimeout(timer); });
   }
 
   function syncLangButtons(lng) {
@@ -1368,9 +1429,10 @@
     });
   }
 
-  function setLang(lng) {
+  function setLang(lng, auto) {
     if (SUPPORTED.indexOf(lng) === -1) return;
     localStorage.setItem('grom_lang', lng);
+    try { localStorage.setItem('grom_lang_src', auto === true ? 'auto' : 'user'); } catch (_) {}
     document.documentElement.lang = document.documentElement.getAttribute('data-grom-locale') || lng;
     // Keep LTR layout for the trading desks; per-element Unicode bidi still
     // renders Arabic text right-to-left within its own boxes.
@@ -1432,6 +1494,8 @@
 
   window.getGromLang = getLang;
   window.setGromLang = setLang;
+  window.gromGeoLang = GEO_LANG;
+  try { geoAutoLang(); } catch (_) {}
   window.t = t;
   window.applyI18n = applyI18n;
   window.GROM_STR = STR;
@@ -1455,7 +1519,10 @@
   document.addEventListener('DOMContentLoaded', function () {
     var initial = getLang();
     try {
-      if (!localStorage.getItem('grom_lang')) localStorage.setItem('grom_lang', initial);
+      if (!localStorage.getItem('grom_lang')) {
+        localStorage.setItem('grom_lang', initial);
+        localStorage.setItem('grom_lang_src', 'auto');
+      }
     } catch (_) {}
     document.documentElement.lang = document.documentElement.getAttribute('data-grom-locale') || initial;
     Object.keys(LANG_BTNS).forEach(function (id) {

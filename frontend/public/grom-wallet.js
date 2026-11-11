@@ -6046,13 +6046,14 @@ async function gwOcNativePrices() {
   }
   const now = Date.now();
   const jobs = new Map();
+  const logos = {};
   try {
     for (const [cidS, meta] of Object.entries(GW_OC_CHAIN_META || {})) {
       const cid = Number(cidS);
       const sym = String(meta?.native || '').toUpperCase();
       if (!cid || cid >= 1e8 || !sym || GW_OC_FEED_NATIVES.has(sym) || jobs.has(sym)) continue;
       const hit = cache[sym];
-      if (hit && hit.px > 0 && now - hit.at < GW_OC_NATIVE_PX_TTL) { out[sym] = hit.px; continue; }
+      if (hit && hit.px > 0 && hit.logo && now - hit.at < GW_OC_NATIVE_PX_TTL) { out[sym] = hit.px; continue; }
       jobs.set(sym, (async () => {
         const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
         const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 1600) : null;
@@ -6065,6 +6066,7 @@ async function gwOcNativePrices() {
           const got = String(j?.symbol || '').toUpperCase();
           const same = got === sym || (sym === 'MATIC' && got === 'POL') || (sym === 'POL' && got === 'MATIC');
           const px = Number(j?.priceUSD);
+          if (same && /^https:\/\//.test(String(j?.logoURI || ''))) logos[sym] = String(j.logoURI);
           return same && px > 0 && px < 1e7 ? px : 0;
         } catch (_) { return 0; } finally { if (timer) clearTimeout(timer); }
       })());
@@ -6072,7 +6074,7 @@ async function gwOcNativePrices() {
   } catch (_) {}
   await Promise.all([...jobs].map(async ([sym, p]) => {
     const px = await p;
-    if (px > 0) { out[sym] = px; cache[sym] = { px, at: now }; }
+    if (px > 0) { out[sym] = px; cache[sym] = { px, at: now, logo: logos[sym] || cache[sym]?.logo || '' }; }
   }));
   if (jobs.size) { try { localStorage.setItem('gw_native_px', JSON.stringify(cache)); } catch (_) {} }
   return out;
@@ -14903,10 +14905,23 @@ async function gwTkLoadHoldings(force, onUpdate) {
         Object.assign(prices, __gwQuotesMem.data?.crypto || {});
         if (prices.MATIC == null && prices.POL != null) prices.MATIC = prices.POL;
       } catch (_) {}
+      try {
+        /* Cached LI.FI prices for HYPE/MON/XPL/OKB/POL so rows do not jump when they arrive. */
+        const np = window.__gwNativePx || JSON.parse(localStorage.getItem('gw_native_px') || '{}') || {};
+        for (const [sym, v] of Object.entries(np)) if (!(Number(prices[sym]) > 0) && Number(v?.px) > 0) prices[sym] = Number(v.px);
+      } catch (_) {}
       const chunks = new Map();
+      /* While a refresh runs, networks that have not answered yet keep their
+       * previous rows; otherwise the list shrank to the first network and grew
+       * back (the "My wallet" blink). A network that failed keeps them too. */
+      const prevRows = sameOwner ? (cache.rows || []).slice() : [];
+      const failedCids = new Set();
+      const chunkCid = (k) => (k === 'tron' ? GW_TRON_CHAIN_ID
+        : (String(k).startsWith('sol-') ? GW_LIFI_SOL_CHAIN : Number(k)));
       const publish = (loading) => {
         if (gwTkHoldingsOwner().key !== owner.key || (loading && !chunks.size)) return;
         const rows = [];
+        const reported = new Set([...chunks.keys()].map(chunkCid));
         for (const assets of chunks.values()) for (const asset of assets) {
           /* A discovered contract is priced by its own catalog price: the same
            * ticker on another chain can be a different asset. */
@@ -14915,6 +14930,14 @@ async function gwTkLoadHoldings(force, onUpdate) {
             : (Number(prices[asset.sym]) || 0)) || gwTkCatalogPrice(asset);
           const info = GW_DS_ASSETS.find(a => a.sym === asset.sym) || {};
           let logo = info.logo || asset.logo || '';
+          if (!logo && !asset.address) {
+            /* Native coin of an extra network (HYPE, MON, XPL, OKB): LI.FI logo, else the network logo. */
+            try {
+              logo = window.__gwNativePx?.[String(asset.sym).toUpperCase()]?.logo
+                || window.__gwLifiByAddr?.[asset.chainId]?.get('0x0000000000000000000000000000000000000000')?.logo
+                || (typeof gwChainLogo === 'function' ? gwChainLogo(asset.chainId) : '') || '';
+            } catch (_) {}
+          }
           if (!logo && asset.discovered) {
             try {
               logo = window.__gwLifiByAddr?.[asset.chainId]?.get(String(asset.address).toLowerCase())?.logo
@@ -14923,6 +14946,10 @@ async function gwTkLoadHoldings(force, onUpdate) {
           }
           rows.push({ ...asset, usd: asset.amt * px, pricePending: !(px > 0), name: info.name || asset.sym, logo });
         }
+        for (const r of prevRows) {
+          const cid = Number(r.chainId);
+          if (!reported.has(cid) && (loading || failedCids.has(cid))) rows.push(r);
+        }
         rows.sort((a, b) => b.usd - a.usd);
         job.rows = rows;
         Object.assign(cache, { ownerKey: owner.key, rows, incomplete: job.incomplete, at: loading ? 0 : Date.now() });
@@ -14930,7 +14957,7 @@ async function gwTkLoadHoldings(force, onUpdate) {
       };
       // Start all balance reads immediately; prices are optional display data.
       const evm = /^0x[a-fA-F0-9]{40}$/.test(owner.addr) ? gwOcFetchAllChains(owner.addr, c => {
-        if (!c.data) { job.incomplete = true; return; }
+        if (!c.data) { job.incomplete = true; failedCids.add(Number(c.chainId)); return; }
         if (c.data.incomplete) job.incomplete = true;
         const meta = c.meta || {};
         const assets = [];
@@ -14951,13 +14978,13 @@ async function gwTkLoadHoldings(force, onUpdate) {
         ? gwTkReadWithin(gwTronFetchAllBalances(owner.tAddr), 8000).then(rows => {
           chunks.set('tron', (rows || []).map(a => ({ ...a, chainId: GW_TRON_CHAIN_ID, chain: 'TRON' })));
           publish(true);
-        }).catch(() => { job.incomplete = true; }) : Promise.resolve();
+        }).catch(() => { job.incomplete = true; failedCids.add(GW_TRON_CHAIN_ID); }) : Promise.resolve();
       const sol = owner.solAddr ? Promise.all(['SOL', 'USDC', 'USDT'].map(async sym => {
         try {
           const amt = await gwTkReadWithin(gwSolAvailableAmount(sym), 8000);
           if (amt > 0) chunks.set('sol-' + sym, [{ sym, amt, chainId: GW_LIFI_SOL_CHAIN, chain: 'Solana' }]);
           publish(true);
-        } catch (_) { job.incomplete = true; }
+        } catch (_) { job.incomplete = true; failedCids.add(GW_LIFI_SOL_CHAIN); }
       })) : Promise.resolve();
       const priceJob = typeof gwOcFetchPrices === 'function'
         ? gwTkReadWithin(gwOcFetchPrices(), 2000).then(p => { prices = { ...prices, ...p }; publish(true); }).catch(() => {})
@@ -15956,23 +15983,43 @@ async function gwTkRender(q) {
         const rank = (a) => (a.sym === query ? 0 : a.sym.startsWith(query) ? 1 : a.sym.includes(query) ? 2 : 3);
         filtered.sort((x, y) => rank(x) - rank(y));
       }
-      const notice = status.loading
+      const notice = (status.loading && !filtered.length)
         ? gwUxText('Обновляем балансы остальных сетей…', 'Updating other networks…')
         : status.incomplete ? gwUxText('Обновлено частично', 'Partially updated') : '';
-      let bodyHtml = filtered.map(a => rowHtml(a,
-        `<div class="gw-tk-bal"><div class="amt">${Number(a.amt).toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>`
-        + `<div class="usd">${a.pricePending ? gwUxText('Курс уточняется', 'Price pending') : '≈ $' + Number(a.usd || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div></div>`
-      )).join('') || `<div class="gw-tk-empty">${status.loading ? tx('tk_loading', 'Loading balances…')
+      const balHtml = (a) => `<div class="gw-tk-bal"><div class="amt">${Number(a.amt).toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>`
+        + `<div class="usd">${a.pricePending ? gwUxText('Курс уточняется', 'Price pending') : '≈ $' + Number(a.usd || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</div></div>`;
+      const rowStrs = filtered.map(a => rowHtml(a, balHtml(a)));
+      const rowKeys = filtered.map(a => `${a.chainId}|${a.sym}|${String(a.address || '').toLowerCase()}`).join('\n');
+      const emptyHtml = rowStrs.length ? '' : `<div class="gw-tk-empty">${status.loading ? tx('tk_loading', 'Loading balances…')
         : status.incomplete ? gwUxText('Балансы пока недоступны.', 'Balances are currently unavailable.')
         : query ? gwUxEsc(gwUxText('Ничего не найдено: ', 'Nothing matches: ') + q)
         : tx('tk_empty_wallet', 'No tokens in your wallet yet — deposit first, then choose what to pay with.')}</div>`;
-      if (smallCount || !hideSmall) bodyHtml += `<div style="display:flex;justify-content:center;padding:8px"><button type="button" class="gw-oc-dust-btn" id="gwTkDustToggle">${hideSmall ? gwOcT('showSmall') + ' (' + smallCount + ')' : gwOcT('hideSmall')}</button></div>`;
-      /* Each network that answers re-publishes the same rows; rebuilding them
-       * recreated every logo and made the list blink. */
-      if (!(list.dataset.tkFp === 'from' && list.__gwFromHtml === bodyHtml)) {
+      const dustLabel = hideSmall ? gwOcT('showSmall') + ' (' + smallCount + ')' : gwOcT('hideSmall');
+      const dustHtml = (smallCount || !hideSmall) ? `<div style="display:flex;justify-content:center;padding:8px"><button type="button" class="gw-oc-dust-btn" id="gwTkDustToggle">${dustLabel}</button></div>` : '';
+      const bodyHtml = rowStrs.join('') + emptyHtml + dustHtml;
+      /* Each network that answers re-publishes the rows. Rebuilding the whole
+       * list recreated every logo and made it blink: skip identical output and,
+       * when only a balance or price moved, replace just that row. */
+      const fullRender = () => {
         list.innerHTML = bodyHtml;
         list.__gwFromHtml = bodyHtml;
+        list.__gwFromRows = rowStrs;
+        list.__gwFromKeys = rowKeys;
         list.dataset.tkFp = 'from';
+      };
+      if (list.dataset.tkFp === 'from' && list.__gwFromHtml === bodyHtml) {
+        /* unchanged */
+      } else if (list.dataset.tkFp === 'from' && rowStrs.length && list.__gwFromKeys === rowKeys
+          && Array.isArray(list.__gwFromRows) && list.querySelectorAll('.gw-tk-row').length === rowStrs.length
+          && !!list.querySelector('#gwTkDustToggle') === !!dustHtml) {
+        const els = list.querySelectorAll('.gw-tk-row');
+        rowStrs.forEach((h, k) => { if (list.__gwFromRows[k] !== h) els[k].outerHTML = h; });
+        const db = list.querySelector('#gwTkDustToggle');
+        if (db && db.textContent !== dustLabel) db.textContent = dustLabel;
+        list.__gwFromHtml = bodyHtml;
+        list.__gwFromRows = rowStrs;
+      } else {
+        fullRender();
       }
       const dustBtn = list.querySelector('#gwTkDustToggle');
       if (dustBtn) dustBtn.onclick = () => { gwOcHideSmall(!hideSmall); renderHoldings(rows, status); };

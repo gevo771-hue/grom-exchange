@@ -6033,8 +6033,54 @@ async function gwFetchMarketQuotes(opts) {
 }
 try { window.gwFetchMarketQuotes = gwFetchMarketQuotes; } catch (_) {}
 
+/* Native coins the market feed does not quote (HYPE, MON, XPL, OKB, POL…):
+ * price them from LI.FI once per 10 min so wallet totals are not $0. */
+const GW_OC_NATIVE_PX_TTL = 10 * 60_000;
+const GW_OC_FEED_NATIVES = new Set(['ETH', 'BNB', 'AVAX', 'USDC', 'USDT', 'BTC']);
+async function gwOcNativePrices() {
+  const out = {};
+  let cache = window.__gwNativePx;
+  if (!cache) {
+    try { cache = JSON.parse(localStorage.getItem('gw_native_px') || '{}') || {}; } catch (_) { cache = {}; }
+    window.__gwNativePx = cache;
+  }
+  const now = Date.now();
+  const jobs = new Map();
+  try {
+    for (const [cidS, meta] of Object.entries(GW_OC_CHAIN_META || {})) {
+      const cid = Number(cidS);
+      const sym = String(meta?.native || '').toUpperCase();
+      if (!cid || cid >= 1e8 || !sym || GW_OC_FEED_NATIVES.has(sym) || jobs.has(sym)) continue;
+      const hit = cache[sym];
+      if (hit && hit.px > 0 && now - hit.at < GW_OC_NATIVE_PX_TTL) { out[sym] = hit.px; continue; }
+      jobs.set(sym, (async () => {
+        const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 1600) : null;
+        try {
+          const base = typeof gwLifiEndpoint === 'function' ? gwLifiEndpoint() : 'https://li.quest/v1';
+          const r = await fetch(`${base}/token?chain=${cid}&token=0x0000000000000000000000000000000000000000`,
+            { headers: { accept: 'application/json' }, signal: ctrl ? ctrl.signal : undefined });
+          if (!r.ok) return 0;
+          const j = await r.json();
+          const got = String(j?.symbol || '').toUpperCase();
+          const same = got === sym || (sym === 'MATIC' && got === 'POL') || (sym === 'POL' && got === 'MATIC');
+          const px = Number(j?.priceUSD);
+          return same && px > 0 && px < 1e7 ? px : 0;
+        } catch (_) { return 0; } finally { if (timer) clearTimeout(timer); }
+      })());
+    }
+  } catch (_) {}
+  await Promise.all([...jobs].map(async ([sym, p]) => {
+    const px = await p;
+    if (px > 0) { out[sym] = px; cache[sym] = { px, at: now }; }
+  }));
+  if (jobs.size) { try { localStorage.setItem('gw_native_px', JSON.stringify(cache)); } catch (_) {} }
+  return out;
+}
+
 async function gwOcFetchPrices() {
   const out = { USDT: 1, USDC: 1, USDD: 1, TUSD: 1, USDJ: 1, SUN: 0.0165 };
+  const nativeP = gwOcNativePrices().catch(() => ({}));
   try {
     const j = await gwFetchMarketQuotes();
     const crypto = j?.crypto || {};
@@ -6044,6 +6090,12 @@ async function gwOcFetchPrices() {
       if (Number.isFinite(n) && n > 0) out[asset] = n;
     }
     if (out.MATIC == null && out.POL != null) out.MATIC = out.POL;
+  } catch (_) {}
+  try {
+    const nat = await nativeP;
+    for (const [sym, px] of Object.entries(nat || {})) if (!(Number(out[sym]) > 0)) out[sym] = px;
+    if (out.MATIC == null && out.POL != null) out.MATIC = out.POL;
+    if (out.POL == null && out.MATIC != null) out.POL = out.MATIC;
   } catch (_) {}
   return out;
 }
@@ -14809,6 +14861,8 @@ function gwTkCatalogPrice(asset) {
       if (r && Number(r[3]) > 0) return Number(r[3]);
       return 0;
     }
+    const np = window.__gwNativePx?.[sym];
+    if (np && Number(np.px) > 0) return Number(np.px);
     if (map) {
       for (const k of ['0x0000000000000000000000000000000000000000', '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee']) {
         const t = map.get(k);

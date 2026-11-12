@@ -330,7 +330,8 @@
   if (parts[0] === 'pt-BR') parts.shift();
   else if (LOCALES[parts[0]]) parts.shift();
   var seg = parts[0] || '';
-  var fromPath = Object.prototype.hasOwnProperty.call(PATH, seg) ? PATH[seg] : '';
+  /* Root (no path segment) is not a deep link: it falls through to `home` below. */
+  var fromPath = (seg && Object.prototype.hasOwnProperty.call(PATH, seg)) ? PATH[seg] : '';
   var hash = (location.hash || '').replace(/^#/, '').split('?')[0];
   /* Root entry: wallet connected → main (dashboard); else landing. Deep links keep path/hash. */
   var walletHome = false;
@@ -339,6 +340,16 @@
     if (localStorage.getItem('grom:logged_out') === '1') walletHome = false;
   } catch (_) {}
   var home = walletHome ? 'dashboard' : 'landing';
+  /* The site root is served as the slim landing document, which has no product
+   * pages. With a connected wallet go straight to the app shell from <head>,
+   * before the landing can paint (it used to flash for a moment). */
+  if (walletHome && !seg && !hash && /^\/(?:index\.html)?$/.test(location.pathname || '/')) {
+    try {
+      document.documentElement.classList.add('grom-boot-redirect');
+      location.replace('/app.html' + (location.search || '') + '#dashboard');
+      return;
+    } catch (_) {}
+  }
   var route = fromPath || ((hash && ALLOW[hash]) ? hash : home);
   /* /stocks#futures must not lock Stocks forever — honor intentional hash. */
   if (hash && ALLOW[hash] && fromPath && hash !== fromPath) {
@@ -353,6 +364,8 @@
 <style id="grom-route-boot-css">
   /* Stale-cache gate — body stays invisible until version.json matches APP_VER */
   html.grom-ver-pending body { visibility: hidden !important; }
+  /* Root → app shell redirect in progress: keep the landing unpainted. */
+  html.grom-boot-redirect body { visibility: hidden !important; }
   /* Prevent landing flash on refresh — overridden once JS router is ready */
   html:not(.grom-js-ready)[data-grom-route] main > .page { display: none !important; }
   html:not(.grom-js-ready)[data-grom-route="landing"] #page-landing,
@@ -2061,6 +2074,7 @@
     cursor: pointer;
     box-shadow: 0 6px 18px rgba(136, 192, 208, 0.22);
   }
+  .wallet-chip .wallet-short { display: none; }
   .wallet-chip .avatar {
     width: 22px; height: 22px; border-radius: 50%;
     background: linear-gradient(135deg, var(--steel1), var(--steel4));
@@ -5413,9 +5427,37 @@
     .topbar .right { gap: 6px; margin-left: auto; justify-content: flex-end; }
     .topbar .right .has-tip { padding: 7px 9px !important; font-size: 12px; }
     .topbar .right > .btn-ghost:not(.has-tip) { display: none; }
+    /* Phone header shows the full brand lockup and the wallet label (2026-11-12).
+     * Guests get the short "Connect" text; a connected wallet shows its address. */
+    .topbar .left { flex: 0 0 auto; gap: 6px; }
+    .grom-logo { gap: 6px; }
+    .topbar-brand-lockup .tb-name { font-size: 14px; letter-spacing: 0.14em; }
+    .topbar-brand-lockup .tb-sub { display: block; font-size: 7.5px; letter-spacing: 0.2em; margin-top: 2px; white-space: nowrap; }
+    .wallet-chip { padding: 5px 10px 5px 5px; gap: 6px; min-width: 0; flex: 0 1 auto; }
+    .wallet-chip .avatar { width: 20px; height: 20px; flex: 0 0 auto; }
+    .wallet-chip #walletLabel,
+    .wallet-chip .wallet-short { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .wallet-chip:not(.has-addr) #walletLabel { display: none; }
+    .wallet-chip:not(.has-addr) .wallet-short { display: inline; }
+  }
+  @media (max-width: 400px) {
+    .topbar { gap: 6px; }
+    .topbar .burger { width: 34px; height: 34px; }
+    .topbar .topbar-ico-group .topbar-ico,
+    .topbar .topbar-ico-group #notifBtn,
+    .topbar .topbar-ico-group .lang-pop-wrap > .topbar-ico { width: 25px !important; }
+    .topbar-brand-lockup .tb-name { font-size: 13px; letter-spacing: 0.1em; }
+    .wallet-chip #walletLabel,
+    .wallet-chip .wallet-short { font-size: 11px; }
+  }
+  @media (max-width: 380px) {
+    .wallet-chip.has-addr { padding-left: 10px; }
+    .wallet-chip.has-addr .avatar { display: none; }
+  }
+  @media (max-width: 340px) {
     .topbar-brand-lockup { display: none; }
-    .wallet-chip span:not(.avatar) { display: none; }
-    .wallet-chip { padding: 6px 8px; }
+  }
+  @media (max-width: 900px) {
 
     /* Sidebar becomes a drawer — pin to same visual viewport box */
     .shell { grid-template-columns: 1fr !important; }
@@ -6432,6 +6474,7 @@
     <span class="wallet-chip" id="walletChip" role="button" tabindex="0" onclick="gwWalletChipClick(event)">
       <span class="avatar"></span>
       <span id="walletLabel" data-i18n="auth_login">Connect Wallet</span>
+      <span class="wallet-short" data-i18n="top_connect_short">Connect</span>
     </span>
   </div>
 </header>
@@ -7582,6 +7625,8 @@ window.GROM_SAFARI = /iPhone|iPad|iPod/i.test(navigator.userAgent || '')
   || (/\bSafari\b/i.test(navigator.userAgent || '') && !/\b(Chrome|CriOS|Chromium|Edg|OPR|FxiOS)\b/i.test(navigator.userAgent || ''));
 window.GROM_STABLE_UI = !!(window.GROM_SAFARI || window.GROM_MOBILE);
 window.GROM_LANDING = !(location.hash || '').replace(/^#/, '') || (location.hash || '') === '#landing';
+/* Root entry with a connected wallet opens the dashboard, so it is not a landing boot. */
+if (window.GROM_LANDING && (location.hash || '') !== '#landing' && document.documentElement.getAttribute('data-grom-route') === 'dashboard') window.GROM_LANDING = false;
 if (window.GROM_SAFARI) try { document.documentElement.classList.add('grom-safari'); } catch (_) {}
 if (window.GROM_STABLE_UI) try { document.documentElement.classList.add('grom-stable-ui'); } catch (_) {}
 if (window.GROM_LANDING) try { document.documentElement.classList.add('grom-landing'); } catch (_) {}
@@ -8807,7 +8852,8 @@ if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefau
   if (parts[0] === 'pt-BR') parts.shift();
   else if (LOCALES[parts[0]]) parts.shift();
   var seg = parts[0] || '';
-  var fromPath = Object.prototype.hasOwnProperty.call(PATH, seg) ? PATH[seg] : '';
+  /* Root (no path segment) is not a deep link: it falls through to `home` below. */
+  var fromPath = (seg && Object.prototype.hasOwnProperty.call(PATH, seg)) ? PATH[seg] : '';
   var pending = '';
   try { pending = sessionStorage.getItem('grom_spa_page') || ''; sessionStorage.removeItem('grom_spa_page'); } catch (_) {}
   if (seg !== 'app.html') pending = '';
@@ -9068,6 +9114,16 @@ var GROM_CONN = { connected: false, label: '', method: '' };
 function setWalletLabel(txt) {
   var el = document.getElementById('walletLabel');
   if (el) el.textContent = txt;
+  /* Phone header: `.has-addr` shows the label, otherwise the short "Connect" text. */
+  var chip = document.getElementById('walletChip');
+  if (chip) {
+    var s = String(txt || '').trim().toLowerCase();
+    var guest = !s || s === 'connect wallet' || s === 'wallet';
+    if (!guest && typeof window.t === 'function') {
+      try { guest = s === String(window.t('auth_login')).toLowerCase() || s === String(window.t('top_connect')).toLowerCase(); } catch (_) {}
+    }
+    chip.classList.toggle('has-addr', !guest);
+  }
 }
 function updateAuthUi() {
   var actions = document.getElementById('authActions');

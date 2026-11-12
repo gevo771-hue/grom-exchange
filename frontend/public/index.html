@@ -222,22 +222,45 @@
   else window.addEventListener('load', function () { setTimeout(boot, 800); });
 })();
 </script>
+<script>
+/* Splash continuity: the root page hands off to /app.html mid-intro. */
+(function () {
+  try {
+    var t0 = +sessionStorage.getItem('grom_splash_t0') || 0;
+    sessionStorage.removeItem('grom_splash_t0');
+    var el = Date.now() - t0;
+    if (t0 && el >= 0 && el < 6000) {
+      var r = document.documentElement;
+      r.classList.add('gsp-cont');
+      r.style.setProperty('--gsp-shift', (-el) + 'ms');
+      r.setAttribute('data-gsp-elapsed', String(el));
+    }
+  } catch (_) {}
+})();
+</script>
 <style id="grom-authed-critical">
   html:not(.grom-authed) [data-authed-only] { display: none !important; }
   html:not(.grom-spot-ready) #spotChart { visibility: hidden !important; }
   html:not(.grom-spot-ready) .spot-chart-shell .chart-wrap { min-height: 280px; background: rgba(136,192,208,.06); border-radius: 12px; }
-  /* Boot splash — GROM Nardo Grey, crisp transparent lockup. */
+  /* Boot splash v3 (2026-11-12) — "thunder strike" intro on GROM Nardo Grey.
+   * Emblem focuses in, a light streak + shockwave flash across it, a chrome
+   * sheen sweeps the logo, wordmark wipes in, a thin loader runs until ready.
+   * Logo art is the approved sprite (colors untouched); effects are light only.
+   * Intro runs once `.gsp-go` is set (sprite ready). `html.gsp-cont` = the
+   * root → /app.html hop: animations continue from --gsp-shift (no restart). */
   #gromSplash {
     position: fixed; inset: 0; z-index: 99999;
     display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
     background-color: #343a46;
     background-image:
       radial-gradient(ellipse 1100px 520px at 50% -10%, rgba(136, 192, 208, 0.12), transparent 58%),
       radial-gradient(ellipse 720px 420px at 90% 16%, rgba(129, 161, 193, 0.10), transparent 55%),
       linear-gradient(180deg, #3b4252 0%, #343a46 46%, #2e3747 100%);
-    background-position: center, center, center;
-    background-repeat: no-repeat, no-repeat, no-repeat;
-    transition: opacity .32s ease, visibility .32s ease;
+    background-repeat: no-repeat;
+    transition: opacity .42s ease .06s, visibility 0s linear .5s;
+    --gsp-w: min(232px, 56vw);
+    --gsp-d: var(--gsp-shift, 0ms);
   }
   #gromSplash::before {
     content: "";
@@ -245,26 +268,91 @@
     opacity: 0.22;
     background-image: radial-gradient(rgba(216, 222, 233, 0.14) 0.7px, transparent 0.8px);
     background-size: 7px 7px;
+    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 46%, #000 0%, transparent 100%);
+            mask-image: radial-gradient(ellipse 70% 60% at 50% 46%, #000 0%, transparent 100%);
   }
   #gromSplash::after {
     content: "";
     position: absolute; inset: 0; pointer-events: none;
     background-image:
       radial-gradient(ellipse 46% 36% at 16% 88%, rgba(94, 129, 172, 0.10), transparent 60%),
-      radial-gradient(ellipse 48% 38% at 80% 78%, rgba(136, 192, 208, 0.08), transparent 62%);
+      radial-gradient(ellipse 48% 38% at 80% 78%, rgba(136, 192, 208, 0.08), transparent 62%),
+      radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(18, 22, 30, 0.42) 100%);
     background-repeat: no-repeat;
   }
   #gromSplash.is-done { opacity: 0; visibility: hidden; pointer-events: none; }
+  #gromSplash .gsp-aurora {
+    position: absolute; left: 50%; top: 46%;
+    width: max(150vmax, 900px); aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    background:
+      conic-gradient(from 0deg at 50% 50%,
+        transparent 0deg, rgba(64, 140, 255, 0.10) 50deg, transparent 110deg,
+        rgba(136, 192, 208, 0.09) 190deg, transparent 250deg,
+        rgba(94, 129, 172, 0.10) 310deg, transparent 360deg);
+    -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 0%, transparent 42%);
+            mask-image: radial-gradient(circle at 50% 50%, #000 0%, transparent 42%);
+    opacity: 0;
+    will-change: transform;
+  }
+  #gromSplash .gsp-stage {
+    position: relative; z-index: 1;
+    width: var(--gsp-w);
+    transform: translateY(-2vh);
+    transition: transform .5s cubic-bezier(.4, 0, .2, 1), opacity .36s ease;
+  }
+  #gromSplash.is-done .gsp-stage { transform: translateY(-2vh) scale(1.08); opacity: 0; }
+  #gromSplash:not(.gsp-go) .gsp-stage { visibility: hidden; }
+  html.gsp-cont #gromSplash .gsp-stage { visibility: visible; }
+  /* FX layers are centred on the emblem (sprite rows 0–780 → centre at 39% of width). */
+  #gromSplash .gsp-halo,
+  #gromSplash .gsp-wave,
+  #gromSplash .gsp-streak {
+    position: absolute; left: 50%; top: calc(var(--gsp-w) * 0.39);
+    pointer-events: none;
+  }
+  #gromSplash .gsp-halo {
+    width: 175%; aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(58, 146, 255, 0.34) 0%, rgba(58, 146, 255, 0.12) 36%, transparent 66%);
+    opacity: 0;
+  }
+  #gromSplash .gsp-wave {
+    width: 82%; aspect-ratio: 1;
+    border-radius: 50%;
+    border: 1.5px solid rgba(160, 214, 255, 0.7);
+    box-shadow: 0 0 22px rgba(64, 150, 255, 0.45), inset 0 0 14px rgba(64, 150, 255, 0.25);
+    transform: translate(-50%, -50%) scale(.5);
+    opacity: 0;
+  }
+  #gromSplash .gsp-streak {
+    width: min(1100px, 140vw); height: 3px;
+    border-radius: 2px;
+    transform: translate(-50%, -50%) scaleX(0);
+    background: linear-gradient(90deg, transparent 0%, rgba(136, 192, 208, 0) 8%, rgba(150, 205, 255, 0.55) 34%, rgba(235, 247, 255, 1) 50%, rgba(150, 205, 255, 0.55) 66%, rgba(136, 192, 208, 0) 92%, transparent 100%);
+    box-shadow: 0 0 18px 3px rgba(64, 150, 255, 0.55), 0 0 2px rgba(255, 255, 255, 0.9);
+    opacity: 0;
+  }
+  /* Flare at the strike point. */
+  #gromSplash .gsp-flare {
+    position: absolute; left: 50%; top: calc(var(--gsp-w) * 0.39);
+    width: 64%; aspect-ratio: 3 / 1;
+    transform: translate(-50%, -50%) scale(.2);
+    pointer-events: none;
+    background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(255, 255, 255, 0.95) 0%, rgba(170, 215, 255, 0.55) 18%, rgba(64, 150, 255, 0.18) 46%, transparent 72%);
+    mix-blend-mode: screen;
+    opacity: 0;
+  }
   #gromSplash .grom-splash-lockup {
     position: relative;
     z-index: 1;
-    width: min(220px, 52vw);
+    width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: clamp(9px, 2.3vw, 13px);
-    transform: translateY(-1vh);
     filter: drop-shadow(0 18px 32px rgba(0, 0, 0, 0.58));
   }
   #gromSplash .grom-splash-part {
@@ -274,6 +362,14 @@
   }
   #gromSplash .grom-splash-emblem { aspect-ratio: 1000 / 780; }
   #gromSplash .grom-splash-word { aspect-ratio: 1000 / 200; }
+  #gromSplash .gsp-art {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    aspect-ratio: 1;
+  }
+  #gromSplash .grom-splash-word .gsp-art { top: -400%; }
   #gromSplash .grom-splash-mark {
     position: absolute;
     left: 0;
@@ -282,7 +378,122 @@
     height: auto;
     display: block;
   }
-  #gromSplash .grom-splash-word .grom-splash-mark { top: -400%; }
+  /* Chrome sheen, clipped to the logo pixels by the sprite's own alpha. */
+  #gromSplash .gsp-sheen {
+    position: absolute; inset: 0;
+    background: linear-gradient(112deg, transparent 0%, transparent 40%, rgba(255, 255, 255, 0.5) 47%, rgba(214, 238, 255, 0.85) 50%, rgba(255, 255, 255, 0.42) 53%, transparent 60%, transparent 100%);
+    background-size: 320% 100%;
+    background-position: 130% 0;
+    background-repeat: no-repeat;
+    -webkit-mask: url(/assets/grom-splash-logo-v2.webp) 0 0 / 100% 100% no-repeat;
+            mask: url(/assets/grom-splash-logo-v2.webp) 0 0 / 100% 100% no-repeat;
+    mix-blend-mode: screen;
+    opacity: 0.9;
+  }
+  #gromSplash .gsp-bar {
+    position: relative;
+    width: 46%; height: 2px;
+    margin-top: clamp(12px, 3vw, 18px);
+    border-radius: 2px;
+    overflow: hidden;
+    background: rgba(216, 222, 233, 0.14);
+    opacity: 0;
+  }
+  #gromSplash .gsp-bar i {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 42%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, #88c0d0 40%, #4fa3ff 70%, transparent);
+    box-shadow: 0 0 10px rgba(79, 163, 255, 0.6);
+    transform: translateX(-110%);
+  }
+  /* ---- timeline (ms): 0 emblem → 560 streak/strike → 700 sheen → 1000 loader ---- */
+  #gromSplash.gsp-go .gsp-aurora,
+  html.gsp-cont #gromSplash .gsp-aurora {
+    animation: gsp-fade-in 1.2s ease var(--gsp-d) both, gsp-spin 16s linear var(--gsp-d) infinite;
+  }
+  #gromSplash.gsp-go .gsp-halo,
+  html.gsp-cont #gromSplash .gsp-halo {
+    animation: gsp-halo 3.2s ease-in-out calc(120ms + var(--gsp-d)) infinite both;
+  }
+  #gromSplash.gsp-go .grom-splash-emblem,
+  html.gsp-cont #gromSplash .grom-splash-emblem {
+    animation: gsp-emblem 1.25s cubic-bezier(.2, .8, .2, 1) var(--gsp-d) both;
+  }
+  #gromSplash.gsp-go .gsp-streak,
+  html.gsp-cont #gromSplash .gsp-streak {
+    animation: gsp-streak .95s cubic-bezier(.2, .8, .2, 1) calc(520ms + var(--gsp-d)) both;
+  }
+  #gromSplash.gsp-go .gsp-flare,
+  html.gsp-cont #gromSplash .gsp-flare {
+    animation: gsp-flare .8s cubic-bezier(.2, .8, .2, 1) calc(560ms + var(--gsp-d)) both;
+  }
+  #gromSplash.gsp-go .gsp-wave,
+  html.gsp-cont #gromSplash .gsp-wave {
+    animation: gsp-wave 1.05s cubic-bezier(.15, .7, .3, 1) calc(560ms + var(--gsp-d)) both;
+  }
+  #gromSplash.gsp-go .gsp-sheen,
+  html.gsp-cont #gromSplash .gsp-sheen {
+    animation: gsp-sheen 2.8s cubic-bezier(.45, 0, .2, 1) calc(680ms + var(--gsp-d)) infinite;
+  }
+  #gromSplash.gsp-go .grom-splash-word,
+  html.gsp-cont #gromSplash .grom-splash-word {
+    animation: gsp-word .7s cubic-bezier(.3, .7, .2, 1) calc(420ms + var(--gsp-d)) both;
+  }
+  #gromSplash.gsp-go .gsp-bar,
+  html.gsp-cont #gromSplash .gsp-bar {
+    animation: gsp-fade-in .45s ease calc(950ms + var(--gsp-d)) both;
+  }
+  #gromSplash.gsp-go .gsp-bar i,
+  html.gsp-cont #gromSplash .gsp-bar i {
+    animation: gsp-load 1.15s cubic-bezier(.45, 0, .25, 1) calc(950ms + var(--gsp-d)) infinite;
+  }
+  @keyframes gsp-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes gsp-spin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+  @keyframes gsp-halo {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.7); }
+    18% { opacity: .9; transform: translate(-50%, -50%) scale(1); }
+    55% { opacity: .55; transform: translate(-50%, -50%) scale(1.08); }
+    100% { opacity: .9; transform: translate(-50%, -50%) scale(1); }
+  }
+  @keyframes gsp-emblem {
+    0% { opacity: 0; transform: scale(.8); filter: blur(14px) brightness(1) drop-shadow(0 0 0 rgba(70, 160, 255, 0)); }
+    42% { opacity: 1; transform: scale(1); filter: blur(0) brightness(1) drop-shadow(0 0 0 rgba(70, 160, 255, 0)); }
+    54% { opacity: 1; transform: scale(1.035); filter: blur(0) brightness(1.32) drop-shadow(0 0 22px rgba(70, 160, 255, 0.85)); }
+    100% { opacity: 1; transform: scale(1); filter: blur(0) brightness(1) drop-shadow(0 0 8px rgba(70, 160, 255, 0.22)); }
+  }
+  @keyframes gsp-streak {
+    0% { opacity: 0; transform: translate(-50%, -50%) scaleX(0); }
+    18% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -50%) scaleX(1); }
+  }
+  @keyframes gsp-flare {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.2); }
+    16% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5, .6); }
+  }
+  @keyframes gsp-wave {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.5); }
+    12% { opacity: .95; }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(2.3); }
+  }
+  @keyframes gsp-sheen {
+    0% { background-position: 130% 0; }
+    34%, 100% { background-position: -30% 0; }
+  }
+  @keyframes gsp-word {
+    0% { opacity: 0; clip-path: inset(0 100% 0 0); transform: translateY(6px); }
+    100% { opacity: 1; clip-path: inset(0 0 0 0); transform: translateY(0); }
+  }
+  @keyframes gsp-load {
+    0% { transform: translateX(-110%); }
+    100% { transform: translateX(250%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #gromSplash *, #gromSplash *::before, #gromSplash *::after { animation: none !important; }
+    #gromSplash .gsp-aurora, #gromSplash .gsp-halo, #gromSplash .gsp-bar { opacity: 1; }
+    #gromSplash .gsp-halo { transform: translate(-50%, -50%); }
+  }
   /* Modals: never paint until explicit .open — kills Deposit FOUC on Settings */
   #walletModal:not(.open),
   #connectModal:not(.open) {
@@ -346,7 +557,22 @@
   if (walletHome && !seg && !hash && /^\/(?:index\.html)?$/.test(location.pathname || '/')) {
     try {
       document.documentElement.classList.add('grom-boot-redirect');
-      location.replace('/app.html' + (location.search || '') + '#dashboard');
+      /* Chrome stops parsing this document as soon as the hop starts, so the
+       * splash script triggers it after the splash's first frame; 600 ms is
+       * the fallback (render-blocking CSS not cached yet). */
+      var hopTo = '/app.html' + (location.search || '') + '#dashboard';
+      var hopped = false;
+      window.__gromBootHop = function () {
+        if (hopped) return;
+        hopped = true;
+        location.replace(hopTo);
+      };
+      setTimeout(window.__gromBootHop, 600);
+      /* Safety net: if the hop never happens, show the page again. */
+      setTimeout(function () {
+        document.documentElement.classList.remove('grom-boot-redirect');
+        try { if (typeof window.gromDismissSplash === 'function') window.gromDismissSplash(); } catch (_) {}
+      }, 8000);
       return;
     } catch (_) {}
   }
@@ -364,8 +590,8 @@
 <style id="grom-route-boot-css">
   /* Stale-cache gate — body stays invisible until version.json matches APP_VER */
   html.grom-ver-pending body { visibility: hidden !important; }
-  /* Root → app shell redirect in progress: keep the landing unpainted. */
-  html.grom-boot-redirect body { visibility: hidden !important; }
+  /* Root → app shell redirect in progress: only the splash is painted. */
+  html.grom-boot-redirect body > :not(#gromSplash) { visibility: hidden !important; }
   /* Prevent landing flash on refresh — overridden once JS router is ready */
   html:not(.grom-js-ready)[data-grom-route] main > .page { display: none !important; }
   html:not(.grom-js-ready)[data-grom-route="landing"] #page-landing,
@@ -6266,38 +6492,79 @@
 </head>
 <body>
 <div id="gromSplash" aria-hidden="true">
-  <div class="grom-splash-lockup" role="img" aria-label="GROM">
-    <div class="grom-splash-part grom-splash-emblem" aria-hidden="true">
-      <img class="grom-splash-mark" src="/assets/grom-splash-logo-v2.webp" width="1000" height="1000" alt="" decoding="async" fetchpriority="high" />
-    </div>
-    <div class="grom-splash-part grom-splash-word" aria-hidden="true">
-      <img class="grom-splash-mark" src="/assets/grom-splash-logo-v2.webp" width="1000" height="1000" alt="" decoding="async" />
+  <div class="gsp-aurora"></div>
+  <div class="gsp-stage">
+    <div class="gsp-halo"></div>
+    <div class="gsp-streak"></div>
+    <div class="gsp-wave"></div>
+    <div class="gsp-flare"></div>
+    <div class="grom-splash-lockup" role="img" aria-label="GROM">
+      <div class="grom-splash-part grom-splash-emblem" aria-hidden="true">
+        <div class="gsp-art"><img class="grom-splash-mark" src="/assets/grom-splash-logo-v2.webp" width="1000" height="1000" alt="" decoding="async" fetchpriority="high" /><span class="gsp-sheen"></span></div>
+      </div>
+      <div class="grom-splash-part grom-splash-word" aria-hidden="true">
+        <div class="gsp-art"><img class="grom-splash-mark" src="/assets/grom-splash-logo-v2.webp" width="1000" height="1000" alt="" decoding="async" /><span class="gsp-sheen"></span></div>
+      </div>
+      <div class="gsp-bar"><i></i></div>
     </div>
   </div>
 </div>
 <script>
 (function () {
+  var root = document.documentElement;
+  var sp = document.getElementById('gromSplash');
+  var img = sp && sp.querySelector('img');
+  var cont = root.classList.contains('gsp-cont');
+  var elapsed = cont ? (+root.getAttribute('data-gsp-elapsed') || 0) : 0;
+  var tStart = 0;
+  var ready = false;
   var done = false;
+  var route = root.getAttribute('data-grom-route') || '';
+  var reduce = false;
+  try { reduce = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) {}
+  /* Guests on the landing keep the short splash; app routes let the intro finish. */
+  var minMs = (route === 'landing' || reduce) ? 480 : 1150;
+  var capMs = (route === 'landing') ? 1500 : 2600;
+  function now() { return Date.now(); }
   function hide() {
-    if (done) return;
+    if (done || !sp) return;
+    /* Root → app shell hop in progress: keep the splash up until the app paints. */
+    if (root.classList.contains('grom-boot-redirect')) return;
     done = true;
-    var el = document.getElementById('gromSplash');
-    if (!el) return;
-    el.classList.add('is-done');
-    setTimeout(function () { try { el.remove(); } catch (_) {} }, 420);
+    sp.classList.add('is-done');
+    setTimeout(function () { try { sp.remove(); } catch (_) {} }, 600);
   }
-  var minMs = 480;
-  var t0 = Date.now();
   function maybe() {
-    var left = minMs - (Date.now() - t0);
+    if (!tStart) return;
+    var left = minMs - (now() - tStart);
     if (left > 0) setTimeout(hide, left);
     else hide();
   }
+  function go() {
+    if (tStart || !sp) return;
+    tStart = now() - elapsed;
+    sp.classList.add('gsp-go');
+    if (root.classList.contains('grom-boot-redirect')) {
+      try { sessionStorage.setItem('grom_splash_t0', String(tStart)); } catch (_) {}
+    }
+    setTimeout(hide, Math.max(0, capMs - (now() - tStart)));
+    if (ready) maybe();
+  }
   window.gromDismissSplash = hide;
-  if (document.readyState !== 'loading') maybe();
-  else document.addEventListener('DOMContentLoaded', maybe, { once: true });
-  window.addEventListener('pageshow', hide);
-  setTimeout(hide, 1500);
+  if (cont || !img || img.complete) go();
+  if (root.classList.contains('grom-boot-redirect') && typeof window.__gromBootHop === 'function') {
+    requestAnimationFrame(function () { setTimeout(window.__gromBootHop, 0); });
+  }
+  else {
+    img.addEventListener('load', go, { once: true });
+    img.addEventListener('error', go, { once: true });
+    setTimeout(go, 450);
+  }
+  function onReady() { ready = true; maybe(); }
+  if (document.readyState !== 'loading') onReady();
+  else document.addEventListener('DOMContentLoaded', onReady, { once: true });
+  window.addEventListener('pageshow', function (e) { if (e.persisted) hide(); });
+  setTimeout(hide, capMs + 900);
 })();
 </script>
 

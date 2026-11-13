@@ -258,7 +258,7 @@
       radial-gradient(ellipse 720px 420px at 90% 16%, rgba(129, 161, 193, 0.10), transparent 55%),
       linear-gradient(180deg, #3b4252 0%, #343a46 46%, #2e3747 100%);
     background-repeat: no-repeat;
-    transition: opacity .42s ease .06s, visibility 0s linear .5s;
+    transition: opacity .42s ease .06s;
     --gsp-w: min(232px, 56vw);
     --gsp-d: var(--gsp-shift, 0ms);
   }
@@ -280,7 +280,8 @@
       radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(18, 22, 30, 0.42) 100%);
     background-repeat: no-repeat;
   }
-  #gromSplash.is-done { opacity: 0; visibility: hidden; pointer-events: none; }
+  /* Visibility flips only after the fade-out (not on the way in). */
+  #gromSplash.is-done { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .42s ease .06s, visibility 0s linear .5s; }
   #gromSplash .gsp-aurora {
     position: absolute; left: 50%; top: 46%;
     width: max(150vmax, 900px); aspect-ratio: 1;
@@ -589,7 +590,8 @@
 </script>
 <style id="grom-route-boot-css">
   /* Stale-cache gate — body stays invisible until version.json matches APP_VER */
-  html.grom-ver-pending body { visibility: hidden !important; }
+  /* The boot splash stays visible during the version check (it is the same in every build). */
+  html.grom-ver-pending body > :not(#gromSplash) { visibility: hidden !important; }
   /* Root → app shell redirect in progress: only the splash is painted. */
   html.grom-boot-redirect body > :not(#gromSplash) { visibility: hidden !important; }
   /* Prevent landing flash on refresh — overridden once JS router is ready */

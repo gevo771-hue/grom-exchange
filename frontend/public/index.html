@@ -280,6 +280,9 @@
       radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(18, 22, 30, 0.42) 100%);
     background-repeat: no-repeat;
   }
+  /* One-frame repaint nudge after the splash is removed (see hide()). */
+  html.gsp-repaint .topbar,
+  html.gsp-repaint .shell > main { opacity: .999 !important; }
   /* Visibility flips only after the fade-out (not on the way in). */
   #gromSplash.is-done { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .42s ease .06s, visibility 0s linear .5s; }
   #gromSplash .gsp-aurora {
@@ -6534,7 +6537,18 @@
     if (root.classList.contains('grom-boot-redirect')) return;
     done = true;
     sp.classList.add('is-done');
-    setTimeout(function () { try { sp.remove(); } catch (_) {} }, 600);
+    setTimeout(function () {
+      try { sp.style.display = 'none'; sp.remove(); } catch (_) {}
+      /* iOS home-screen app kept a stale, half-faded splash frame over static
+       * areas (the header looked foggy until the next route change): make the
+       * header and the page repaint once after the splash is gone. */
+      try {
+        root.classList.add('gsp-repaint');
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () { root.classList.remove('gsp-repaint'); });
+        });
+      } catch (_) {}
+    }, 600);
   }
   function maybe() {
     if (!tStart) return;

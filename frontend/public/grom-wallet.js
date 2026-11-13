@@ -7333,57 +7333,69 @@ function gwMpDexPnl(value, changePct) {
 }
 
 async function gwMpDexFetchOnchain() {
-  const out = { usd: 0, chainsN: 0, assetsN: 0, pnl24h: 0 };
+  const out = { usd: 0, chainsN: 0, assetsN: 0, pnl24h: 0, incomplete: false };
   const prices = await gwOcFetchPrices().catch(() => ({ USDT: 1, USDC: 1, __change24h: {} }));
   const changes = prices.__change24h || {};
-  const evm = gwOcConnectedAddress();
-  if (evm && /^0x[a-fA-F0-9]{40}$/.test(evm)) {
-    const chains = await gwOcFetchAllChains(evm).catch(() => []);
-    for (const c of chains) {
-      if (!c || !c.data) continue;
-      let usd = 0;
-      let assets = 0;
-      const nativeAmt = Number(c.data.nativeEth) || 0;
-      if (nativeAmt > .0000001) {
-        const sym = String(c.meta?.native || '').toUpperCase();
-        const value = nativeAmt * (Number(prices[sym]) || 0);
-        usd += value;
-        out.pnl24h += gwMpDexPnl(value, changes[sym]);
-        assets++;
-      }
-      for (const [rawSym, raw] of Object.entries(c.data.tokens || {})) {
-        const sym = String(rawSym).toUpperCase();
-        const amt = Number(raw) || 0;
-        if (!(amt > .0001)) continue;
-        const value = amt * (Number(prices[sym]) || Number(c.data.tokenMeta?.[rawSym]?.priceUSD)
-          || (/^USD[CT]$/.test(sym) ? 1 : 0));
-        usd += value;
-        out.pnl24h += gwMpDexPnl(value, changes[sym]);
-        assets++;
-      }
-      if (assets) out.assetsN += assets;
-      if (usd > .005) { out.usd += usd; out.chainsN++; }
-    }
-  }
-  const tron = typeof gwTronSavedAddr === 'function' ? gwTronSavedAddr() : '';
-  if (tron && typeof gwTronFetchAllBalances === 'function') {
+  /* EVM + TRON come from the same per-account snapshot as the wallet card
+   * (gwOcCardRead): one read, and a network that times out keeps its last
+   * known balances instead of dropping to $0. A separate read here made the
+   * Wallet hero say $6 while the card below said $30 (Arbitrum timed out). */
+  const rawEvm = gwOcConnectedAddress();
+  const evm = /^0x[a-fA-F0-9]{40}$/.test(rawEvm || '') ? rawEvm : '';
+  const rawTron = typeof gwTronSavedAddr === 'function' ? gwTronSavedAddr() : '';
+  const tron = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(rawTron || '') ? rawTron : '';
+  if (evm || tron) {
+    let entry = null;
     try {
-      const rows = await gwTronFetchAllBalances(tron);
-      let usd = 0;
-      let assets = 0;
-      for (const row of rows || []) {
-        const sym = String(row.sym || '').toUpperCase();
-        const amt = Number(row.amt) || 0;
-        if (!(amt > .0001)) continue;
-        const px = /^USD[CT]$/.test(sym) ? 1 : (Number(prices[sym]) || 0);
-        const value = amt * px;
-        usd += value;
-        out.pnl24h += gwMpDexPnl(value, changes[sym]);
-        assets++;
-      }
-      out.assetsN += assets;
-      if (usd > .005) { out.usd += usd; out.chainsN++; }
+      const read = gwOcCardRead(evm, tron, false);
+      entry = await read.done;
     } catch (_) {}
+    if (entry) {
+      out.incomplete = !!entry.incomplete || !entry.known;
+      const px = { ...prices, ...(entry.prices || {}) };
+      for (const c of entry.chains || []) {
+        if (!c || !c.data) continue;
+        let usd = 0;
+        let assets = 0;
+        const nativeAmt = Number(c.data.nativeEth) || 0;
+        if (nativeAmt > .0000001) {
+          const sym = String(c.meta?.native || '').toUpperCase();
+          const value = nativeAmt * (Number(px[sym]) || 0);
+          usd += value;
+          out.pnl24h += gwMpDexPnl(value, changes[sym]);
+          assets++;
+        }
+        for (const [rawSym, raw] of Object.entries(c.data.tokens || {})) {
+          const sym = String(rawSym).toUpperCase();
+          const amt = Number(raw) || 0;
+          if (!(amt > .0001)) continue;
+          const value = amt * (Number(px[rawSym]) || Number(px[sym]) || Number(c.data.tokenMeta?.[rawSym]?.priceUSD)
+            || (/^USD[CT]$/.test(sym) ? 1 : 0));
+          usd += value;
+          out.pnl24h += gwMpDexPnl(value, changes[sym]);
+          assets++;
+        }
+        if (assets) out.assetsN += assets;
+        if (usd > .005) { out.usd += usd; out.chainsN++; }
+      }
+      if (tron) {
+        let usd = 0;
+        let assets = 0;
+        for (const row of entry.tRows || []) {
+          const sym = String(row.sym || '').toUpperCase();
+          const amt = Number(row.amt) || 0;
+          if (!(amt > .0001)) continue;
+          const value = amt * (/^USD[CT]$/.test(sym) ? 1 : (Number(px[sym]) || 0));
+          usd += value;
+          out.pnl24h += gwMpDexPnl(value, changes[sym]);
+          assets++;
+        }
+        out.assetsN += assets;
+        if (usd > .005) { out.usd += usd; out.chainsN++; }
+      }
+    } else {
+      out.incomplete = true;
+    }
   }
   const sol = typeof gwSolPubkey === 'function' ? gwSolPubkey() : '';
   if (sol && typeof gwSolAvailableAmount === 'function') {
@@ -7438,8 +7450,15 @@ async function gwMpDexLoad(force) {
       assetsN: (Number(onchain.assetsN) || 0) + (Number(trade.assetsN) || 0) + (Number(pred.positionsN) || 0) + (Number(xst.positionsN) || 0),
       onchain, trade, pred, xst,
     };
-    _gwMpDexCache = { at: Date.now(), data };
-    gwMpDexSaveSnap(data);
+    /* A partial read (a network not answered yet) is retried soon and only
+     * replaces the saved first-paint snapshot when it is not lower. */
+    const partial = !!onchain.incomplete;
+    _gwMpDexCache = { at: partial ? Date.now() - GW_MP_DEX_TTL + 8000 : Date.now(), data };
+    let prevTotal = 0;
+    if (partial) {
+      try { prevTotal = Number(JSON.parse(localStorage.getItem(GW_MP_DEX_SNAP_KEY) || 'null')?.data?.total) || 0; } catch (_) {}
+    }
+    if (!partial || data.total >= prevTotal) gwMpDexSaveSnap(data);
     return data;
   }).finally(() => { _gwMpDexInflight = null; });
   return _gwMpDexInflight;

@@ -143,16 +143,20 @@ function gwSafeName(name, fb) {
   return String(name || fb || '').trim().slice(0, 64).replace(/[<>"`]/g, '') || gwSafeSym(fb) || 'Token';
 }
 
-function gwTokenImgHtml(logo, sym) {
+function gwTokenImgHtml(logo, sym, alt) {
   var safe = gwSafeLogo(logo);
+  var altSafe = gwSafeLogo(alt);
   var s = gwSafeSym(sym);
   var fb = gwEscHtml(s.slice(0, 3));
   try {
     window.__gwTkLogoBad = window.__gwTkLogoBad || Object.create(null);
     if (safe && window.__gwTkLogoBad[safe]) safe = '';
   } catch (_) {}
+  try { if (altSafe && window.__gwTkLogoBad[altSafe]) altSafe = ''; } catch (_) {}
+  if (!safe && altSafe) { safe = altSafe; altSafe = ''; }
+  if (altSafe === safe) altSafe = '';
   if (!safe) return '<span class="ico">' + fb + '</span>';
-  return '<img class="ico" src="' + gwEscAttr(safe) + '" alt="' + gwEscAttr(s) + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-gw-fb="' + gwEscAttr(s.slice(0, 3)) + '" data-gw-logo="' + gwEscAttr(safe) + '" />';
+  return '<img class="ico" src="' + gwEscAttr(safe) + '" alt="' + gwEscAttr(s) + '" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-gw-fb="' + gwEscAttr(s.slice(0, 3)) + '" data-gw-logo="' + gwEscAttr(safe) + '"' + (altSafe ? ' data-gw-alt="' + gwEscAttr(altSafe) + '"' : '') + ' />';
 }
 
 /** Prefer curated / known-good logos for majors — LiFi often returns wrong CDN for clones. */
@@ -182,6 +186,85 @@ function gwTkBestLogo(sym, hint) {
 }
 try { window.gwTkBestLogo = gwTkBestLogo; } catch (_) {}
 
+/* Any EVM token by chain + contract: public icon CDN (cached a year, CORS open).
+ * Used when the token list has no logo or its logo is broken (2026-11-14). */
+function gwTokenAddrLogo(chainId, address) {
+  const cid = Number(chainId);
+  const a = String(address || '').toLowerCase();
+  if (!cid || !/^0x[0-9a-f]{40}$/.test(a) || /^0x0{40}$/.test(a) || /^0xe{40}$/.test(a)) return '';
+  return 'https://token-icons.llamao.fi/icons/tokens/' + cid + '/' + a + '?h=64&w=64';
+}
+try { window.gwTokenAddrLogo = gwTokenAddrLogo; } catch (_) {}
+
+/* Token tags next to the symbol in the swap list, like Uniswap (2026-11-14). */
+const GW_TAG_SETS = {
+  stable: new Set(['USDC', 'USDT', 'DAI', 'BUSD', 'FDUSD', 'TUSD', 'FRAX', 'FRXUSD', 'USDE', 'SUSDE', 'USDS', 'SUSDS', 'PYUSD', 'USDG', 'USD1', 'LUSD', 'BOLD', 'GHO', 'CRVUSD', 'USDC.E', 'USDCE', 'USDBC', 'USDT0', 'USDT.E', 'USDP', 'GUSD', 'EURC', 'EURS', 'EURE', 'USD0', 'SUSD', 'MIM', 'DOLA', 'RLUSD', 'AUSD', 'USDA', 'USDX', 'USDD', 'DEUSD', 'USR', 'USDL', 'USDM', 'USDB', 'USDZ', 'EUSD', 'USDF', 'USDTB', 'JUPUSD', 'USDH', 'USDXL', 'FEUSD', 'USDAI', 'HONEY', 'AXLUSDC', 'USDC.AXL']),
+  major: new Set(['BTC', 'WBTC', 'CBBTC', 'BTCB', 'TBTC', 'CIRBTC', 'LBTC', 'SOLVBTC', 'UBTC', 'FBTC', 'KBTC', 'ETH', 'WETH', 'BNB', 'WBNB', 'SOL', 'WSOL', 'POL', 'WPOL', 'MATIC', 'WMATIC', 'AVAX', 'WAVAX', 'TRX', 'WTRX', 'HYPE', 'WHYPE', 'MON', 'WMON', 'XRP', 'ADA', 'DOT', 'LTC', 'SUI', 'APT', 'S', 'WS', 'OP', 'ARB', 'MNT', 'WMNT', 'CELO', 'XDAI', 'WXDAI', 'LINK', 'BCH', 'XLM', 'NEAR', 'ATOM', 'TIA', 'SEI', 'BERA', 'WBERA', 'CRO', 'WCRO']),
+  lst: new Set(['STETH', 'WSTETH', 'RETH', 'CBETH', 'WEETH', 'EETH', 'EZETH', 'RSETH', 'METH', 'CMETH', 'SWETH', 'OETH', 'FRXETH', 'SFRXETH', 'ANKRETH', 'OSETH', 'ETHX', 'PUFETH', 'RSWETH', 'WRSETH', 'MSOL', 'JITOSOL', 'BSOL', 'JUPSOL', 'INF', 'STSOL', 'BNSOL', 'HSOL', 'SSOL', 'SLISBNB', 'STKBNB', 'ANKRBNB', 'KHYPE', 'STHYPE', 'WSTHYPE', 'SAVAX', 'GGAVAX', 'STMATIC', 'MATICX', 'STS', 'WSTUSR', 'STKAAVE']),
+  meme: new Set(['DOGE', 'SHIB', 'PEPE', 'BONK', 'WIF', 'FLOKI', 'BRETT', 'POPCAT', 'MOG', 'TURBO', 'NEIRO', 'PNUT', 'TRUMP', 'MELANIA', 'MEW', 'BOME', 'PENGU', 'FARTCOIN', 'SPX', 'GOAT', 'MOODENG', 'WOJAK', 'MEME', 'BABYDOGE', 'DEGEN', 'TOSHI', 'MICHI', 'KEYCAT', 'AIDOGE', 'LADYS', 'ELON', 'KISHU', 'SAMO', 'MYRO', 'SLERF', 'GIGA', 'CHILLGUY', 'PUMP', 'DOG', 'PURR', 'HFUN', 'BILLY', 'PONKE', 'SUNDOG', 'HIPPO', 'APU', 'ANDY', 'PEIPEI', 'NPC', 'HARAMBE', 'RETARDIO', 'FWOG', 'MUMU', 'SIGMA', 'BODEN', 'SNEK', 'NOT', 'DOGS', 'CHEEMS', 'BOBO', 'LANDWOLF', 'WEN', 'MIHAO', 'USELESS', 'ANIME', 'BUCK', 'WOLF', 'TOSHI', 'SKI', 'MIGGLES', 'BENJI', 'MOCHI', 'COQ', 'KEKIUS', 'VINE', 'JAILSTOOL', 'LUIGI', 'NUB', 'ZEREBRO', 'AI16Z', 'ACT', 'GRIFFAIN', 'TROLL', 'BAN', 'MOODENG', 'POPDOG', 'PEPECOIN', 'BITCOIN', 'HPOS10I']),
+  defi: new Set(['UNI', 'AAVE', 'CRV', 'CVX', 'SNX', 'CAKE', 'LDO', 'MKR', 'SKY', 'COMP', 'SUSHI', '1INCH', 'BAL', 'GMX', 'PENDLE', 'JUP', 'RAY', 'ORCA', 'JTO', 'DYDX', 'YFI', 'RPL', 'FXS', 'GNS', 'RDNT', 'AERO', 'VELO', 'EIGEN', 'ENA', 'ETHFI', 'MORPHO', 'KMNO', 'DRIFT', 'ZRO', 'STG', 'LQTY', 'RUNE', 'INJ', 'SPELL', 'QUICK', 'JOE', 'THE', 'BIFI', 'FLUID', 'INST', 'EUL', 'SYRUP', 'CETUS', 'ONDO', 'GRT', 'BAND', 'API3', 'UMA', 'LRC', 'ZRX', 'KNC', 'BNT', 'ALPHA', 'MAGIC', 'GRAIL', 'VRTX', 'KINTO', 'HYPER', 'SOLV', 'RESOLV', 'USUAL', 'FRAXTAL', 'VIRTUAL', 'W', 'PYTH', 'JLP', 'GLP', 'GLV', 'GM', 'MET', 'METEORA']),
+};
+const GW_TAG_ORDER = ['stock', 'etf', 'stable', 'major', 'lst', 'meme', 'defi'];
+const GW_TAG_FALLBACK = { stable: 'Stablecoins', major: 'Majors', stock: 'Stocks', etf: 'ETFs', meme: 'Meme', lst: 'Staking', defi: 'DeFi' };
+/* Tokenized stocks / ETFs come from the stocks list by contract (short keys, see /api/market/stocks/tokens). */
+function gwTkStockTags() {
+  const st = window.__gwTkStockTags || (window.__gwTkStockTags = { map: null, loading: false, at: 0 });
+  if (st.map || st.loading) return st.map;
+  try {
+    const raw = JSON.parse(localStorage.getItem('gw_stock_tags_v1') || 'null');
+    if (raw && raw.at && Date.now() - raw.at < 12 * 3600e3 && raw.etf && raw.stock) {
+      const m = new Map();
+      raw.stock.forEach((k) => m.set(k, 'stock'));
+      raw.etf.forEach((k) => m.set(k, 'etf'));
+      st.map = m;
+      return st.map;
+    }
+  } catch (_) {}
+  st.loading = true;
+  fetch('/api/market/stocks/tokens', { credentials: 'omit' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    if (!j || !Array.isArray(j.stock)) return;
+    const m = new Map();
+    j.stock.forEach((k) => m.set(k, 'stock'));
+    (j.etf || []).forEach((k) => m.set(k, 'etf'));
+    st.map = m;
+    try { localStorage.setItem('gw_stock_tags_v1', JSON.stringify({ at: Date.now(), stock: j.stock, etf: j.etf || [] })); } catch (_) {}
+    try {
+      const ov = document.getElementById('gw-tk-overlay');
+      const q = document.getElementById('gwTkSearch');
+      if (ov && ov.classList.contains('open') && typeof gwTkRender === 'function') gwTkRender(q ? q.value.trim() : '');
+    } catch (_) {}
+  }).catch(() => {}).finally(() => { st.loading = false; st.at = Date.now(); });
+  return null;
+}
+function gwTokenTag(a) {
+  if (!a) return '';
+  const sym = String(a.sym || '').toUpperCase();
+  const addr = String(a.address || '');
+  const cid = Number(a.chainId) || 0;
+  const map = gwTkStockTags();
+  if (map && addr) {
+    const key = /^0x[0-9a-fA-F]{40}$/.test(addr) ? cid + ':' + addr.slice(2, 14).toLowerCase() : 'sol:' + addr.slice(0, 12);
+    const hit = map.get(key);
+    if (hit) return hit;
+  }
+  const nm = String(a.name || '');
+  if (/\bETF\b/.test(nm) && /tokeni[sz]ed|xstock|\bstock\b|ondo|backed|\bfund\b|trust\b/i.test(nm)) return 'etf';
+  if (/tokeni[sz]ed (stock|equity)|xstock|\(ondo tokeni[sz]ed\)|reality tokeni[sz]ed/i.test(nm)) return 'stock';
+  if (GW_TAG_SETS.stable.has(sym)) return 'stable';
+  if (GW_TAG_SETS.major.has(sym)) return 'major';
+  if (GW_TAG_SETS.lst.has(sym)) return 'lst';
+  if (GW_TAG_SETS.meme.has(sym) || /pump$|bonk$/.test(addr)) return 'meme';
+  if (GW_TAG_SETS.defi.has(sym)) return 'defi';
+  return '';
+}
+function gwTokenTagHtml(a) {
+  const tag = gwTokenTag(a);
+  if (!tag) return '';
+  const label = gwTx('tag_' + tag, null, GW_TAG_FALLBACK[tag]);
+  return '<span class="gw-tk-tag gw-tk-tag-' + tag + '">' + gwEscHtml(label) + '</span>';
+}
+try { window.gwTokenTag = gwTokenTag; } catch (_) {}
+
 function gwBindSafeImgFallback(root) {
   try {
     window.__gwTkLogoBad = window.__gwTkLogoBad || Object.create(null);
@@ -193,6 +276,13 @@ function gwBindSafeImgFallback(root) {
           const key = img.getAttribute('data-gw-logo') || img.src || '';
           if (key) window.__gwTkLogoBad[key] = 1;
         } catch (_) {}
+        var alt = img.getAttribute('data-gw-alt');
+        if (alt) {
+          img.removeAttribute('data-gw-alt');
+          img.setAttribute('data-gw-logo', alt);
+          img.src = alt;
+          return;
+        }
         var fb = img.getAttribute('data-gw-fb') || '?';
         var span = document.createElement('span');
         span.className = img.className || 'ico';
@@ -6155,11 +6245,16 @@ function gwInjectOnchainCardCss() {
     .gw-oc-chain-usd { font-size: 12.5px; color: #98a8c0; font-variant-numeric: tabular-nums; }
     .gw-oc-toks { display: flex; flex-direction: column; gap: 6px; }
     .gw-oc-tok-row {
-      display: grid; grid-template-columns: minmax(52px, auto) 1fr auto; gap: 10px; align-items: baseline;
+      display: grid; grid-template-columns: minmax(52px, auto) 1fr auto; gap: 10px; align-items: center;
       padding: 7px 10px; border-radius: 9px; background: rgba(255,255,255,0.025);
       border: 1px solid rgba(255,255,255,0.04);
     }
-    .gw-oc-tok-sym { font-weight: 700; font-size: 13px; color: #e7eef8; letter-spacing: 0.02em; }
+    .gw-oc-tok-sym { font-weight: 700; font-size: 13px; color: #e7eef8; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
+    .gw-oc-tok-ico { width: 24px; height: 24px; flex: none; display: inline-flex; }
+    .gw-oc-tok-ico .ico { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 8.5px; font-weight: 800; color: #cfe0f2; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10); overflow: hidden; }
+    .gw-oc-tok-ico img.ico { object-fit: cover; background: rgba(255,255,255,.04); }
+    .gw-oc-tok-row.gw-oc-dust .gw-oc-tok-ico { opacity: .55; }
     .gw-oc-tok-amt { font-family: 'SF Mono', ui-monospace, monospace; font-size: 12px; color: #9bb3c7;
       font-variant-numeric: tabular-nums; text-align: right; }
     .gw-oc-tok-usd { font-family: 'SF Mono', ui-monospace, monospace; font-size: 12px; color: #cfdfee;
@@ -6489,7 +6584,7 @@ async function gwRenderOnchainCard(opts = {}) {
         const amt = Number(c.data.nativeEth);
         const usd = amt * (prices[sym] || 0);
         chainUsd += usd;
-        items.push({ sym, amt, usd });
+        items.push({ sym, amt, usd, cid: c.chainId });
       }
       // ERC-20s
       for (const [sym, amtRaw] of Object.entries(c.data.tokens || {})) {
@@ -6497,7 +6592,8 @@ async function gwRenderOnchainCard(opts = {}) {
         if (!(amt > 0.0001)) continue;
         const usd = amt * (prices[sym] || Number(c.data.tokenMeta?.[sym]?.priceUSD) || 0);
         chainUsd += usd;
-        items.push({ sym, amt, usd });
+        const addr = (typeof ONCHAIN_TOKENS !== 'undefined' && ONCHAIN_TOKENS[c.chainId]?.[sym]) || c.data.tokenMeta?.[sym]?.address || '';
+        items.push({ sym, amt, usd, cid: c.chainId, addr, logo: c.data.tokenMeta?.[sym]?.logo || '' });
       }
       if (items.length === 0) continue;
       totalUsd += chainUsd;
@@ -6537,8 +6633,12 @@ async function gwRenderOnchainCard(opts = {}) {
       dustCount += hiddenN;
       const tokRows = (shownItems.length ? shownItems : g.items).map((it) => {
         const dust = gwOcIsDust(it) ? ' gw-oc-dust' : '';
+        /* Token logos (2026-11-14): curated majors → token list logo → icon by contract → initials. */
+        const addrLogo = it.addr ? gwTokenAddrLogo(it.cid, it.addr)
+          : (it.cid && typeof gwChainLogo === 'function' ? (gwChainLogo(it.cid) || '') : '');
+        const best = gwTkBestLogo(it.sym, it.logo) || addrLogo;
         return `<div class="gw-oc-tok-row${dust}">
-          <span class="gw-oc-tok-sym">${it.sym}</span>
+          <span class="gw-oc-tok-sym"><span class="gw-oc-tok-ico">${gwTokenImgHtml(best, it.sym, addrLogo)}</span>${gwEscHtml(it.sym)}</span>
           <span class="gw-oc-tok-amt">${fmtAmt(it.sym, it.amt)}</span>
           <span class="gw-oc-tok-usd">${fmtUsd(it.usd)}</span>
         </div>`;
@@ -6582,6 +6682,7 @@ async function gwRenderOnchainCard(opts = {}) {
       </div>
       ${list}
     `;
+    try { gwBindSafeImgFallback(card); } catch (_) {}
     document.getElementById('gwOcRefresh')?.addEventListener('click', () => gwRenderOnchainCard({ force: true }));
     document.getElementById('gwOcDustToggle')?.addEventListener('click', () => {
       gwOcHideSmall(!hideSmall);
@@ -10723,6 +10824,12 @@ function gwInjectDashSwapCss() {
     .gw-tk-bal .usd { font-size: 11px; color: #6b7a92; margin-top: 2px; }
     .gw-tk-group { padding: 12px 12px 6px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #6b7a92; font-weight: 800; }
     .gw-tk-row .sym { font-weight: 800; font-size: 13.5px; }
+    .gw-tk-row .sym .gw-tk-tag { display: inline-block; margin-left: 7px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700;
+      line-height: 15px; letter-spacing: .01em; vertical-align: 1px; color: #a9b8cc; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12); }
+    .gw-tk-row .sym .gw-tk-tag-stock, .gw-tk-row .sym .gw-tk-tag-etf { color: #8fe3ff; border-color: rgba(126,228,255,.32); background: rgba(126,228,255,.07); }
+    .gw-tk-row .sym .gw-tk-tag-stable { color: #7fe0b0; border-color: rgba(18,215,125,.28); background: rgba(18,215,125,.06); }
+    .gw-tk-row .sym .gw-tk-tag-meme { color: #ffb0d8; border-color: rgba(255,120,190,.28); background: rgba(255,120,190,.06); }
+    .gw-tk-row .sym .gw-tk-tag-lst { color: #c9b6ff; border-color: rgba(160,130,255,.30); background: rgba(160,130,255,.07); }
     .gw-tk-row .name { font-size: 11.5px; color: #98a8c0; }
     .gw-tk-empty { padding: 30px 16px; text-align: center; color: #6b7a92; font-size: 13px; }
     .gw-tk-more {
@@ -15783,11 +15890,14 @@ async function gwTkRender(q) {
   const tx = (k, fb) => (typeof gwTx === 'function' ? gwTx(k, null, fb) : fb);
 
   const rowHtml = (a, extra) => {
-    const logoUrl = (typeof gwTkBestLogo === 'function')
+    const nativeAddr = !a.address || /^0x0{40}$|^0xe{40}$/i.test(String(a.address));
+    const addrLogo = gwTokenAddrLogo(a.chainId, a.address)
+      || (nativeAddr && a.chainId && typeof gwChainLogo === 'function' ? (gwChainLogo(a.chainId) || '') : '');
+    const logoUrl = ((typeof gwTkBestLogo === 'function')
       ? gwTkBestLogo(a.sym, a.logo)
-      : (a.logo || '');
+      : (a.logo || '')) || addrLogo;
     const icoInner = logoUrl
-      ? gwTokenImgHtml(logoUrl, a.sym)
+      ? gwTokenImgHtml(logoUrl, a.sym, addrLogo)
       : `<span class="ico">${String(a.sym || '?').slice(0, 3)}</span>`;
     const cid = Number(a.chainId) || 0;
     const showBadge = !!cid && (a.group === 'xchain' || a.crossNetwork || a.amt != null || a.showChainBadge);
@@ -15805,7 +15915,7 @@ async function gwTkRender(q) {
     const xCls = (a.group === 'xchain' || a.crossNetwork) ? ' xchain' : '';
     return `<div class="gw-tk-row${xCls}" data-sym="${a.sym}" data-cid="${cid || ''}" data-addr="${addr}" data-dec="${dec}" data-amt="${a.amt != null ? a.amt : ''}" data-xchain="${a.crossNetwork ? '1' : ''}">
       ${ico}
-      <div class="body"><div class="sym">${a.sym}${a.group === 'same' && a.verified === false ? `<span class="gw-tk-unv" title="${gwUxEsc(gwUxText('Токен не проверен — сверьте адрес контракта', 'Unverified token — check the contract address'))}">${gwUxText('не проверен', 'unverified')}</span>` : ''}</div><div class="name">${a.name || a.sym}${chainLbl ? ' · ' + chainLbl : ''}${short}</div></div>
+      <div class="body"><div class="sym">${a.sym}${gwTokenTagHtml(a)}${a.group === 'same' && a.verified === false ? `<span class="gw-tk-unv" title="${gwUxEsc(gwUxText('Токен не проверен — сверьте адрес контракта', 'Unverified token — check the contract address'))}">${gwUxText('не проверен', 'unverified')}</span>` : ''}</div><div class="name">${a.name || a.sym}${chainLbl ? ' · ' + chainLbl : ''}${short}</div></div>
       ${meta}
     </div>`;
   };
@@ -16442,13 +16552,15 @@ function gwTkSyncButton(which) {
   }
   if (!ico) ico = btn.querySelector('.ico');
   const curImg = ico ? ico.querySelector('img') : null;
-  const wantLogo = asset.logo ? gwSafeLogo(asset.logo) : '';
+  /* No logo in the token list → icon by contract (2026-11-14). */
+  const logoSrc = asset.logo || (typeof gwTokenAddrLogo === 'function' ? gwTokenAddrLogo(asset.chainId, asset.address) : '');
+  const wantLogo = logoSrc ? gwSafeLogo(logoSrc) : '';
   if (wantLogo && curImg && curImg.getAttribute('src') === wantLogo) {
     /* Same token icon already shown — re-creating it makes the button blink. */
-  } else if (asset.logo && ico) {
+  } else if (logoSrc && ico) {
     ico.textContent = '';
     {
-      const safe = gwSafeLogo(asset.logo);
+      const safe = gwSafeLogo(logoSrc);
       const s = gwSafeSym(sym);
       if (safe) {
         const img = document.createElement('img');

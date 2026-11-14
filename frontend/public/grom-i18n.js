@@ -7,6 +7,13 @@
 
   var STR = {
     ru: {
+      tag_stable: "Стейблкоины",
+      tag_major: "Основные",
+      tag_stock: "Акции",
+      tag_etf: "ETF",
+      tag_meme: "Мемы",
+      tag_lst: "Стейкинг",
+      tag_defi: "DeFi",
       nav_landing: "Лендинг",
       nav_home: "Главная",
       nav_dashboard: "Главное",
@@ -390,6 +397,13 @@
       help_legal_priv_a: "Можем обрабатывать адрес кошелька и данные сессии для входа и поддержки. Документы личности для базового DEX не требуются."
     },
     en: {
+      tag_stable: "Stablecoins",
+      tag_major: "Majors",
+      tag_stock: "Stocks",
+      tag_etf: "ETFs",
+      tag_meme: "Meme",
+      tag_lst: "Staking",
+      tag_defi: "DeFi",
       nav_landing: "Landing",
       nav_home: "Home",
       nav_dashboard: "Main",
@@ -773,6 +787,13 @@
       qa_mkt_d: "10 000+ tokens live"
     },
     es: {
+      tag_stable: "Stablecoins",
+      tag_major: "Principales",
+      tag_stock: "Acciones",
+      tag_etf: "ETF",
+      tag_meme: "Meme",
+      tag_lst: "Staking",
+      tag_defi: "DeFi",
       wc_toast_confirm_wallet: "Confirma en {wallet} y vuelve al navegador",
       wc_toast_sign_siwe: "Vuelve al navegador y firma el mensaje en tu billetera para iniciar sesión",
       wc_toast_siwe_rejected_mobile: "Firma el mensaje en tu billetera (abre Trust); sin firma no se completa el acceso.",
@@ -883,6 +904,13 @@
       lp_final_tiny: "11 networks · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
     },
     ar: {
+      tag_stable: "عملات مستقرة",
+      tag_major: "رئيسية",
+      tag_stock: "أسهم",
+      tag_etf: "صناديق ETF",
+      tag_meme: "ميم",
+      tag_lst: "تخزين",
+      tag_defi: "DeFi",
       wc_toast_confirm_wallet: "أكد في {wallet} ثم عد إلى المتصفح",
       wc_toast_sign_siwe: "عد إلى المتصفح ووقّع الرسالة في المحفظة لتسجيل الدخول",
       wc_toast_siwe_rejected_mobile: "وقّع الرسالة في المحفظة (افتح Trust) — لن يكتمل الدخول بدون توقيع.",
@@ -993,6 +1021,13 @@
       lp_final_tiny: "11 networks · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
     },
     zh: {
+      tag_stable: "稳定币",
+      tag_major: "主流币",
+      tag_stock: "股票",
+      tag_etf: "ETF",
+      tag_meme: "Meme",
+      tag_lst: "质押",
+      tag_defi: "DeFi",
       wc_toast_confirm_wallet: "请在 {wallet} 中确认，然后返回浏览器",
       wc_toast_sign_siwe: "请返回浏览器并在钱包中签名以登录",
       wc_toast_siwe_rejected_mobile: "请在钱包中签名（打开 Trust）——没有签名无法完成登录。",
@@ -1103,6 +1138,13 @@
       lp_final_tiny: "11 networks · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
     },
     hi: {
+      tag_stable: "स्टेबलकॉइन",
+      tag_major: "प्रमुख",
+      tag_stock: "स्टॉक्स",
+      tag_etf: "ETF",
+      tag_meme: "मीम",
+      tag_lst: "स्टेकिंग",
+      tag_defi: "DeFi",
       wc_toast_confirm_wallet: "{wallet} में पुष्टि करें, फिर ब्राउज़र पर वापस आएँ",
       wc_toast_sign_siwe: "ब्राउज़र पर वापस जाएँ और लॉगिन के लिए वॉलेट में संदेश साइन करें",
       wc_toast_siwe_rejected_mobile: "वॉलेट में संदेश साइन करें (Trust खोलें) — बिना साइन-इन पूरा नहीं होगा।",
@@ -1213,6 +1255,13 @@
       lp_final_tiny: "11 networks · 10 000+ tokens · aggregators · No email · Wallet-only · Self-custody"
     },
     tr: {
+      tag_stable: "Stabil coinler",
+      tag_major: "Majör",
+      tag_stock: "Hisseler",
+      tag_etf: "ETF",
+      tag_meme: "Meme",
+      tag_lst: "Staking",
+      tag_defi: "DeFi",
       wc_toast_confirm_wallet: "{wallet} içinde onayla, sonra tarayıcıya dön",
       wc_toast_sign_siwe: "Tarayıcıya dön ve giriş için cüzdanda mesajı imzala",
       wc_toast_siwe_rejected_mobile: "Cüzdanda mesajı imzala (Trust'ı aç) — imza olmadan giriş tamamlanmaz.",

@@ -728,7 +728,7 @@ export function parentProjectMetadata() {
     name: 'GROM',
     website: 'https://grom.exchange',
     twitter: 'https://x.com/gromexchange',
-    telegram: 'https://t.me/grom_finence_hub',
+    telegram: 'https://t.me/Grom_DeFi',
     contact: 'support.grom@gmail.com',
     products: [
       {

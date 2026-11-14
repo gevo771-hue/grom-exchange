@@ -129,7 +129,7 @@ export const config = {
     walletConnectProjectId: env('GROM_WALLETCONNECT_PROJECT_ID', ''),
     supportedChains: envList('GROM_SUPPORTED_CHAINS', '1,137,56,42161,8453').map(Number),
     siweDomain: env('GROM_SIWE_DOMAIN', 'localhost:5273'),
-    siweStatement: env('GROM_SIWE_STATEMENT', 'Sign in to GROM Finance Hub'),
+    siweStatement: env('GROM_SIWE_STATEMENT', 'Sign in to GROM DeFi Hub'),
   },
   /* Public RPC / explorer helpers for Instant Swap balances (no hot-wallet keys). */
   signers: {

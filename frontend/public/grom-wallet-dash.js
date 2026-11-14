@@ -821,7 +821,7 @@ function gwRenderCrossMargin() {
       </div>
       <div class="gw-cm-actions">
         <button class="gw-cm-btn primary" id="gwCmJoin">${t.a1}</button>
-        <a class="gw-cm-btn ghost" href="https://t.me/grom_finence_hub" target="_blank" rel="noopener">${t.a2}</a>
+        <a class="gw-cm-btn ghost" href="https://t.me/Grom_DeFi" target="_blank" rel="noopener">${t.a2}</a>
       </div>
     </div>
   `;

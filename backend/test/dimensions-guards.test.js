@@ -23,7 +23,7 @@ describe('dimensions coverage metadata', () => {
     const meta = parentProjectMetadata();
     assert.equal(meta.name, 'GROM');
     assert.equal(meta.contact, 'support.grom@gmail.com');
-    assert.equal(meta.telegram, 'https://t.me/grom_finence_hub');
+    assert.equal(meta.telegram, 'https://t.me/Grom_DeFi');
     assert.deepEqual(
       meta.products.map((p) => p.id).sort(),
       ['perps', 'predict', 'swap', 'xstocks']

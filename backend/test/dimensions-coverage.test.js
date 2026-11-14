@@ -191,7 +191,7 @@ describe('buildMetaPayload readiness', () => {
     assert.equal(meta.coverageByProduct.swap.status, 'unsynced');
     assert.equal(meta.coverageByProduct.swap.watermark, null);
     assert.deepEqual(meta.chainsCovered.swap, {});
-    assert.equal(meta.parent.telegram, 'https://t.me/grom_finence_hub');
+    assert.equal(meta.parent.telegram, 'https://t.me/Grom_DeFi');
   });
 
   it('reports ready per chain only where coverage exists', async () => {

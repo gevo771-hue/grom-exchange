@@ -436,6 +436,6 @@ export const ORG_JSON_LD = `{
   "logo": "https://grom.exchange/assets/grom-logo-icon.png",
   "sameAs": [
     "https://x.com/GromExchange",
-    "https://t.me/grom_finence_hub"
+    "https://t.me/Grom_DeFi"
   ]
 }`;

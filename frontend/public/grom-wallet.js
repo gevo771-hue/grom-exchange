@@ -5897,7 +5897,7 @@ const GW_TG_TR = {
   tr: { h: 'GROM resmi Telegram kanalı', sub: 'Ürün güncellemeleri, ekip desteği ve topluluk. Swap · Perps · Predict · Stocks.', b1: 'Ekiple doğrudan iletişim', b2: 'Ürün haberleri ilk elden', b3: 'Cüzdan ve işlem desteği', cta: 'Kanalı aç →', foot: 'Tek resmi kanal' },
 };
 function gwTgLang() { let l='en'; try { const s=localStorage.getItem('grom_lang'); if (s&&GW_TG_TR[s]) l=s; } catch (_) {} return GW_TG_TR[l]||GW_TG_TR.en; }
-const GW_TG_URL = 'https://t.me/grom_finence_hub';
+const GW_TG_URL = 'https://t.me/Grom_DeFi';
 
 function gwInjectTelegramCss() {
   if (document.getElementById('gw-tg-help-css')) return;
@@ -31203,7 +31203,7 @@ function gwRenderCrossMargin() {
       </div>
       <div class="gw-cm-actions">
         <button class="gw-cm-btn primary" id="gwCmJoin">${t.a1}</button>
-        <a class="gw-cm-btn ghost" href="https://t.me/grom_finence_hub" target="_blank" rel="noopener">${t.a2}</a>
+        <a class="gw-cm-btn ghost" href="https://t.me/Grom_DeFi" target="_blank" rel="noopener">${t.a2}</a>
       </div>
     </div>
   `;

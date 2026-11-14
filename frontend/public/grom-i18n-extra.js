@@ -334,7 +334,7 @@
       px_swap_fail: 'Trade failed'
     },
     es: {
-      landing_kicker: 'FINANCE HUB', landing_logo_img_alt: 'GROM Finance Hub', landing_title: 'Opera más inteligente. Opera con GROM.',
+      landing_kicker: 'DEFI HUB', landing_logo_img_alt: 'GROM DeFi Hub', landing_title: 'Opera más inteligente. Opera con GROM.',
       landing_lead: 'DEX no custodial. Swap cross-chain con meta-agregador. Tus claves, tus firmas.',
       landing_cta_trade: 'Empezar a operar', landing_cta_demo: 'Cuenta demo',
       feat1_title: 'SPOT', feat1_desc: "Comparamos las rutas disponibles. Firma en tu billetera y liquida en la cadena.",
@@ -342,7 +342,7 @@
       feat3_title: 'ALMACENAMIENTO EN FRÍO', feat3_desc: 'Hasta 95% de fondos en cold wallets multisig.',
       feat4_title: 'ANÁLISIS PRO', feat4_desc: 'Indicadores, libro de órdenes y señales en un solo desk.',
       dash_bc: 'Panel', dash_title: 'Buenos días, trader', dash_sub: 'Resumen de tu cartera y lista de seguimiento.',
-      dash_welcome_h: 'Bienvenido a GROM Finance Hub', dash_welcome_p: 'Spot, opciones binarias y DeFi — desde una sola billetera no custodial.',
+      dash_welcome_h: 'Bienvenido a GROM DeFi Hub', dash_welcome_p: 'Spot, opciones binarias y DeFi — desde una sola billetera no custodial.',
 
 
       pg_spot_title: 'BTC/USDT', pg_spot_sub: 'Libro de órdenes y velas en vivo — Binance, Kraken y Coinbase con failover automático.',
@@ -422,7 +422,7 @@
       px_load_more: 'Cargar más'
     },
     ar: {
-      landing_kicker: 'FINANCE HUB', landing_logo_img_alt: 'GROM Finance Hub', landing_title: 'تداول بذكاء. تداول مع GROM.',
+      landing_kicker: 'DEFI HUB', landing_logo_img_alt: 'GROM DeFi Hub', landing_title: 'تداول بذكاء. تداول مع GROM.',
       landing_lead: 'DEX غير وصائي. مبادلة عبر السلاسل بمجمّع مسارات. مفاتيحك وتوقيعاتك.',
       landing_cta_trade: 'ابدأ التداول', landing_cta_demo: 'حساب تجريبي',
       feat1_title: 'سبوت', feat1_desc: "نقارن المسارات المتاحة. وقّع في محفظتك لتتم التسوية على السلسلة.",
@@ -430,7 +430,7 @@
       feat3_title: 'تخزين بارد', feat3_desc: 'حتى 95% من الأموال في محافظ باردة متعددة التوقيع.',
       feat4_title: 'تحليلات احترافية', feat4_desc: 'مؤشرات ودفتر أوامر وإشارات في منصة واحدة.',
       dash_bc: 'لوحة التحكم', dash_title: 'صباح الخير أيها المتداول', dash_sub: 'ملخص محفظتك وقائمة المتابعة.',
-      dash_welcome_h: 'مرحبًا بك في GROM Finance Hub', dash_welcome_p: 'سبوت وأسواق التنبؤ وDeFi — من محفظة واحدة غير حفظية.',
+      dash_welcome_h: 'مرحبًا بك في GROM DeFi Hub', dash_welcome_p: 'سبوت وأسواق التنبؤ وDeFi — من محفظة واحدة غير حفظية.',
 
 
       pg_spot_title: 'BTC/USDT', pg_spot_sub: 'دفتر أوامر وشموع مباشرة — Binance وKraken وCoinbase مع تبديل تلقائي.',
@@ -510,7 +510,7 @@
       px_load_more: 'تحميل المزيد'
     },
     zh: {
-      landing_kicker: 'FINANCE HUB', landing_logo_img_alt: 'GROM Finance Hub', landing_title: '更聪明地交易。与 GROM 同行。',
+      landing_kicker: 'DEFI HUB', landing_logo_img_alt: 'GROM DeFi Hub', landing_title: '更聪明地交易。与 GROM 同行。',
       landing_lead: '非托管 DEX。跨链元聚合兑换。密钥在你手中。',
       landing_cta_trade: '开始交易', landing_cta_demo: '模拟账户',
       feat1_title: '现货', feat1_desc: "比较可用路径。在钱包中签名，链上结算。",
@@ -518,7 +518,7 @@
       feat3_title: '冷存储', feat3_desc: '最多 95% 资金存放在多签冷钱包。',
       feat4_title: '专业分析', feat4_desc: '指标、订单簿与信号，一屏搞定。',
       dash_bc: '仪表盘', dash_title: '早上好，交易者', dash_sub: '投资组合与自选概览。',
-      dash_welcome_h: '欢迎使用 GROM Finance Hub', dash_welcome_p: '现货、预测市场与 DeFi — 一个非托管钱包搞定。',
+      dash_welcome_h: '欢迎使用 GROM DeFi Hub', dash_welcome_p: '现货、预测市场与 DeFi — 一个非托管钱包搞定。',
 
 
       pg_spot_title: 'BTC/USDT', pg_spot_sub: '实时订单簿与K线 — Binance、Kraken、Coinbase 自动切换。',
@@ -598,7 +598,7 @@
       px_load_more: '加载更多'
     },
     hi: {
-      landing_kicker: 'FINANCE HUB', landing_logo_img_alt: 'GROM Finance Hub', landing_title: 'समझदारी से ट्रेड करें। GROM के साथ।',
+      landing_kicker: 'DEFI HUB', landing_logo_img_alt: 'GROM DeFi Hub', landing_title: 'समझदारी से ट्रेड करें। GROM के साथ।',
       landing_lead: 'नॉन-कस्टोडियल DEX। क्रॉस-चेन मेटा-एग्रीगेटर स्वैप। आपकी कुंजियाँ।',
       landing_cta_trade: 'ट्रेडिंग शुरू करें', landing_cta_demo: 'डेमो अकाउंट',
       feat1_title: 'SPOT', feat1_desc: "उपलब्ध रूट की तुलना करें। वॉलेट में साइन करें और ऑन-चेन सेटल करें।",
@@ -606,7 +606,7 @@
       feat3_title: 'कोल्ड स्टोरेज', feat3_desc: '95% तक फंड मल्टी-सिग कोल्ड वॉलेट में।',
       feat4_title: 'PRO एनालिटिक्स', feat4_desc: 'इंडिकेटर, ऑर्डरबुक और सिग्नल एक डेस्क में।',
       dash_bc: 'डैशबोर्ड', dash_title: 'सुप्रभात, ट्रेडर', dash_sub: 'पोर्टफोलियो और वॉचलिस्ट का सारांश।',
-      dash_welcome_h: 'GROM Finance Hub में आपका स्वागत है', dash_welcome_p: 'Spot, बाइनरी और DeFi — एक नॉन-कस्टोडियल वॉलेट से।',
+      dash_welcome_h: 'GROM DeFi Hub में आपका स्वागत है', dash_welcome_p: 'Spot, बाइनरी और DeFi — एक नॉन-कस्टोडियल वॉलेट से।',
 
 
       pg_spot_title: 'BTC/USDT', pg_spot_sub: 'लाइव ऑर्डरबुक और कैंडल — Binance, Kraken और Coinbase failover के साथ।',
@@ -686,7 +686,7 @@
       px_load_more: 'और दिखाएँ'
     },
     tr: {
-      landing_kicker: 'FINANCE HUB', landing_logo_img_alt: 'GROM Finance Hub', landing_title: 'Daha akıllı işlem yapın. GROM ile.',
+      landing_kicker: 'DEFI HUB', landing_logo_img_alt: 'GROM DeFi Hub', landing_title: 'Daha akıllı işlem yapın. GROM ile.',
       landing_lead: 'Non-custodial DEX. Cross-chain meta-agregatör swap. Anahtarlar sende.',
       landing_cta_trade: 'İşleme başla', landing_cta_demo: 'Demo hesap',
       feat1_title: 'SPOT', feat1_desc: "Mevcut rotaları karşılaştırın. Cüzdanınızda imzalayın, zincir üzerinde sonuçlandırın.",
@@ -694,7 +694,7 @@
       feat3_title: 'SOĞUK DEPOLAMA', feat3_desc: 'Fonların %95\'ine kadar multisig soğuk cüzdan.',
       feat4_title: 'PRO ANALİZ', feat4_desc: 'Göstergeler, emir defteri ve sinyaller tek masada.',
       dash_bc: 'Panel', dash_title: 'Günaydın, trader', dash_sub: 'Portföy ve izleme listesi özeti.',
-      dash_welcome_h: "GROM Finance Hub'a hoş geldiniz", dash_welcome_p: 'Spot, ikili opsiyon ve DeFi — tek non-custodial cüzdandan.',
+      dash_welcome_h: "GROM DeFi Hub'a hoş geldiniz", dash_welcome_p: 'Spot, ikili opsiyon ve DeFi — tek non-custodial cüzdandan.',
 
 
       pg_spot_title: 'BTC/USDT', pg_spot_sub: 'Canlı emir defteri ve mumlar — Binance, Kraken ve Coinbase otomatik yedekleme.',

@@ -431,13 +431,33 @@ export function createStockLiquidity({ fetchPairs, now = Date.now, ttlMs = 20 * 
   return { forItem, peek, variantKey };
 }
 
-/** Register /stocks, /stocks/detail, /stocks/spark and /stocks/indices on the market router. */
+/** Company logo from the public logo host (PNG). Returns null when there is no logo. */
+export async function fetchStockLogoFmp(sym) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 6000);
+  try {
+    const url = 'https://financialmodelingprep.com/image-stock/' + encodeURIComponent(String(sym).replace(/\./g, '-')) + '.png';
+    const r = await fetch(url, { signal: ctl.signal, headers: { accept: 'image/*' } });
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error('logo_http_' + r.status);
+    const type = String(r.headers.get('content-type') || '');
+    if (!/^image\//i.test(type)) return null;
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!buf.length || buf.length > 400_000) return null;
+    return { buf, type };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/** Register /stocks, /stocks/detail, /stocks/spark, /stocks/indices, /stocks/logo/:sym and /stocks/tokens on the market router. */
 export function registerStocksRoutes(router, {
   universe,
   liquidity,
   fetchReference,
   fetchSpark,
   fetchIndices,
+  fetchLogo = fetchStockLogoFmp,
 } = {}) {
   if (!universe || !liquidity) throw new TypeError('universe and liquidity are required');
   const limiter = (max) => rateLimit({
@@ -526,6 +546,80 @@ export function registerStocksRoutes(router, {
       return res.set('Cache-Control', 'public, max-age=300').json({ series });
     } catch (_) {
       return res.json({ series: {} });
+    }
+  });
+
+  /* Stock logos through our own domain (2026-11-14): the logo host sends no Cache-Control,
+   * so phones re-checked every logo on every visit and lists showed blank tiles first.
+   * Only tickers from the stocks list are served (no open proxy). */
+  const LOGO_TTL = 7 * 24 * 3600_000;
+  const LOGO_MISS_TTL = 6 * 3600_000;
+  const LOGO_ERR_TTL = 5 * 60_000;
+  const LOGO_MAX = 3000;
+  const logoCache = new Map();
+  const logoInflight = new Map();
+  let knownSyms = { ts: 0, set: new Set() };
+  const stockSymSet = async () => {
+    if (Date.now() - knownSyms.ts < 10 * 60_000 && knownSyms.set.size) return knownSyms.set;
+    const set = new Set((await universe.get()).map((it) => String(it.sym || '').toUpperCase()));
+    knownSyms = { ts: Date.now(), set };
+    return set;
+  };
+  const loadLogo = (sym) => {
+    if (logoInflight.has(sym)) return logoInflight.get(sym);
+    const p = (async () => {
+      let hit;
+      try {
+        const got = await fetchLogo(sym);
+        hit = got && got.buf && got.buf.length ? { buf: got.buf, type: got.type || 'image/png', at: Date.now() } : { miss: true, at: Date.now(), ttl: LOGO_MISS_TTL };
+      } catch (_) {
+        hit = { miss: true, at: Date.now(), ttl: LOGO_ERR_TTL };
+      }
+      if (logoCache.size >= LOGO_MAX) logoCache.delete(logoCache.keys().next().value);
+      logoCache.set(sym, hit);
+      return hit;
+    })();
+    logoInflight.set(sym, p);
+    return p.finally(() => logoInflight.delete(sym));
+  };
+  router.get('/stocks/logo/:sym', limiter(1200), async (req, res) => {
+    const sym = String(req.params.sym || '').replace(/\.png$/i, '').toUpperCase();
+    if (!TICKER.test(sym)) return res.status(400).set('Cache-Control', 'public, max-age=3600').end();
+    try {
+      if (!(await stockSymSet()).has(sym)) return res.status(404).set('Cache-Control', 'public, max-age=3600').end();
+      let hit = logoCache.get(sym);
+      if (!hit || Date.now() - hit.at > (hit.miss ? hit.ttl : LOGO_TTL)) hit = await loadLogo(sym);
+      if (hit.miss) return res.status(404).set('Cache-Control', 'public, max-age=' + Math.round(hit.ttl / 1000)).end();
+      return res.set('Content-Type', hit.type)
+        .set('Cache-Control', 'public, max-age=604800, stale-while-revalidate=2592000')
+        .set('Access-Control-Allow-Origin', '*')
+        .send(hit.buf);
+    } catch (_) {
+      return res.status(502).set('Cache-Control', 'no-store').end();
+    }
+  });
+
+  /* Which token contracts are tokenized stocks / ETFs — lets the swap token list tag them.
+   * Short keys: "<chainId>:<first 12 hex of the address>" (Solana: "sol:<first 12 chars>"). */
+  let tokenTags = { ts: 0, body: null };
+  router.get('/stocks/tokens', limiter(30), async (_req, res) => {
+    try {
+      if (!tokenTags.body || Date.now() - tokenTags.ts > 10 * 60_000) {
+        const etf = [];
+        const stock = [];
+        for (const it of await universe.get()) {
+          const out = it.k === 'etf' ? etf : stock;
+          for (const v of it.variants) {
+            const a = String(v.a || '');
+            if (v.c === 'solana') { if (a) out.push('sol:' + a.slice(0, 12)); continue; }
+            if (EVM_ADDR.test(a)) out.push(Number(v.c) + ':' + a.slice(2, 14).toLowerCase());
+          }
+        }
+        tokenTags = { ts: Date.now(), body: { v: 1, etf: [...new Set(etf)], stock: [...new Set(stock)] } };
+      }
+      return res.set('Cache-Control', 'public, max-age=21600, stale-while-revalidate=86400').json(tokenTags.body);
+    } catch (_) {
+      return res.status(502).json({ v: 1, etf: [], stock: [] });
     }
   });
 

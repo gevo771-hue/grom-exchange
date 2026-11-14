@@ -158,3 +158,61 @@ test('home page top list: largest USD caps only, small payload', async () => {
     server.close();
   }
 });
+
+test('stock logos: served from our domain with a week of cache, fetched once, only known tickers', async () => {
+  const universe = createStocksUniverse({ getCatalog: async () => catalog, fetchLifiTokens: async () => lifi, coldLifiWaitMs: 50 });
+  const liquidity = createStockLiquidity({ fetchPairs: async () => [] });
+  let calls = 0;
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+  const app = express();
+  const r = express.Router();
+  registerStocksRoutes(r, { universe, liquidity, fetchLogo: async (sym) => { calls++; return sym === 'TSLA' ? { buf: png, type: 'image/png' } : null; } });
+  app.use('/api/market', r);
+  const server = app.listen(0);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}/api/market`;
+    const a = await fetch(`${base}/stocks/logo/TSLA.png`);
+    assert.equal(a.status, 200);
+    assert.equal(a.headers.get('content-type'), 'image/png');
+    assert.match(a.headers.get('cache-control'), /max-age=604800/);
+    assert.deepEqual(Buffer.from(await a.arrayBuffer()), png);
+    const b = await fetch(`${base}/stocks/logo/tsla.png`);
+    assert.equal(b.status, 200);
+    assert.equal(calls, 1, 'second request comes from the cache');
+    const unknown = await fetch(`${base}/stocks/logo/NOPE.png`);
+    assert.equal(unknown.status, 404, 'tickers outside the stocks list are not proxied');
+    assert.equal(calls, 1);
+    const bad = await fetch(`${base}/stocks/logo/..%2Fetc.png`);
+    assert.equal(bad.status, 400);
+  } finally {
+    server.close();
+  }
+});
+
+test('stock token tags: short chain:address keys, ETFs apart from stocks', async () => {
+  const universe = createStocksUniverse({ getCatalog: async () => catalog, fetchLifiTokens: async () => lifi, coldLifiWaitMs: 50 });
+  const liquidity = createStockLiquidity({ fetchPairs: async () => [] });
+  const app = express();
+  const r = express.Router();
+  registerStocksRoutes(r, { universe, liquidity });
+  app.use('/api/market', r);
+  const server = app.listen(0);
+  try {
+    const base = `http://127.0.0.1:${server.address().port}/api/market`;
+    const j = await (await fetch(`${base}/stocks/tokens`)).json();
+    assert.equal(j.v, 1);
+    assert.ok(Array.isArray(j.etf) && Array.isArray(j.stock));
+    const items = await universe.get();
+    const tsla = items.find((x) => x.sym === 'TSLA');
+    const v = tsla.variants.find((x) => x.c !== 'solana');
+    assert.ok(j.stock.includes(Number(v.c) + ':' + String(v.a).slice(2, 14).toLowerCase()));
+    const ivv = items.find((x) => x.sym === 'IVV');
+    if (ivv && ivv.k === 'etf') {
+      const ev = ivv.variants.find((x) => x.c !== 'solana');
+      if (ev) assert.ok(j.etf.includes(Number(ev.c) + ':' + String(ev.a).slice(2, 14).toLowerCase()));
+    }
+    assert.ok(j.stock.every((k) => /^(\d+|sol):[0-9a-zA-Z]{12}$/.test(k)));
+  } finally {
+    server.close();
+  }
+});

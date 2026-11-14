@@ -1345,18 +1345,21 @@
     try { hw.removeAttribute('aria-busy'); } catch (_) {}
 
     var active = parseTab();
+    /* Russian page: the four product tabs stay in English (owner, 2026-11-14), like «Trade» in the header. */
+    var enTabs = lang() === 'ru';
+    var tabLabel = function (key, en) { return enTabs ? en : t(key); };
     var tabs = [
-      { id: 'swap', label: t('tab_swap'), icon: ICON.swap, html: renderSwap(data.eth) },
-      { id: 'perps', label: t('tab_perps'), icon: ICON.perps, html: renderPerps(data.perps) },
-      { id: 'predict', label: t('tab_predict'), icon: ICON.predict, html: renderPredict(data.predict) },
-      { id: 'stocks', label: t('tab_stocks'), icon: ICON.stocks, html: renderStocks(data.stocks) },
+      { id: 'swap', label: tabLabel('tab_swap', 'Swap'), icon: ICON.swap, html: renderSwap(data.eth) },
+      { id: 'perps', label: tabLabel('tab_perps', 'Futures'), icon: ICON.perps, html: renderPerps(data.perps) },
+      { id: 'predict', label: tabLabel('tab_predict', 'Predictions'), icon: ICON.predict, html: renderPredict(data.predict) },
+      { id: 'stocks', label: tabLabel('tab_stocks', 'Stocks'), icon: ICON.stocks, html: renderStocks(data.stocks) },
     ];
     if (!tabs.some(function (x) { return x.id === active; })) active = 'swap';
 
     hw.innerHTML =
       '<div class="lv2-hw-tabs" role="tablist">' +
         tabs.map(function (tab) {
-          return '<button type="button" class="lv2-hw-tab" role="tab" data-tab="' + tab.id + '" aria-selected="' + (tab.id === active) + '">' +
+          return '<button type="button" class="lv2-hw-tab" role="tab" data-tab="' + tab.id + '" aria-selected="' + (tab.id === active) + '"' + (enTabs ? ' data-no-tr' : '') + '>' +
             tab.icon + esc(tab.label) + '</button>';
         }).join('') +
       '</div>' +

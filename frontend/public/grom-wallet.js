@@ -21553,7 +21553,64 @@ function gwStocksGuard(q, opts) {
 }
 
 /** Execute a guarded stock quote: refresh, re-check, approve if needed, sign. */
+/* Stocks: one place for the permission step (2026-11-13 real test).
+ * - exact amount, not unlimited: Trust Wallet flags unlimited approvals in red
+ *   and adds a "more than needed" warning;
+ * - a slow receipt or a lost wallet reply must not abort the trade when the
+ *   permission is already on-chain — the chain is checked before failing;
+ * - errors carry the step so the UI can say what failed. */
+function gwStocksIsUserReject(e) {
+  const code = e && (e.code ?? e?.data?.code);
+  if (code === 4001 || code === 'ACTION_REJECTED' || code === 5000) return true;
+  return /user (rejected|denied|cancel)|rejected by user|request rejected|user disapproved|cancelled by user|canceled by user/i.test(String(e?.message || e || ''));
+}
+function gwStocksTagErr(e, step) {
+  const err = (e instanceof Error) ? e : new Error(String(e?.message || e || 'Wallet error'));
+  if (e && e.code != null && err.code == null) { try { err.code = e.code; } catch (_) {} }
+  if (!err.gsStep) { try { err.gsStep = step; } catch (_) {} }
+  return err;
+}
+async function gwStocksEnsureAllowance(provider, { token, spender, account, chainId, amount, sym, onStep }) {
+  const need = BigInt(amount);
+  let allow = 0n;
+  try { allow = await gwErc20Allowance(provider, token, account, spender, chainId); } catch (_) { allow = 0n; }
+  if (allow >= need) return false;
+  try { if (typeof onStep === 'function') onStep('approve'); } catch (_) {}
+  try {
+    await gwErc20ApproveMax(provider, token, spender, account, chainId, need, true);
+  } catch (e) {
+    if (gwStocksIsUserReject(e)) throw gwStocksTagErr(e, 'approve');
+    /* Timed-out receipt or lost reply: give the chain a moment before giving up. */
+    const slow = /timed? ?out|timeout|check your wallet/i.test(String(e?.message || e || ''));
+    const until = Date.now() + (slow ? 45000 : 6000);
+    while (Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 3000));
+      try { if (await gwErc20Allowance(provider, token, account, spender, chainId) >= need) return true; } catch (_) {}
+    }
+    throw gwStocksTagErr(e, 'approve');
+  }
+  return true;
+}
+window.gwStocksIsUserReject = gwStocksIsUserReject;
+
+/** Exact balance of a pay token for the connected EVM account; null when it cannot be read. */
+window.gwStocksTokenBalance = async function (tok) {
+  if (!tok || gwStocksIsSolChain(tok.chainId)) return null;
+  const acc = gwReadOnlyAddress();
+  const cid = Number(tok.chainId);
+  if (!acc || !cid) return null;
+  try {
+    if (tok.isNative || /^0x0{40}$/i.test(String(tok.address || '')) || /^0xe{40}$/i.test(String(tok.address || ''))) {
+      const hex = await gwRpcTry(cid, 'eth_getBalance', [acc, 'latest']);
+      return Number(BigInt(hex || '0x0')) / 1e18;
+    }
+    const raw = await gwRpcTry(cid, 'eth_call', [{ to: tok.address, data: padAddressData(acc) }, 'latest']);
+    return Number(BigInt(raw || '0x0')) / (10 ** (Number(tok.decimals) || 18));
+  } catch (_) { return null; }
+};
+
 window.gwStocksExecute = async function (quote, opts) {
+  const onStep = opts && typeof opts.onStep === 'function' ? opts.onStep : null;
   if (!quote || quote.impactBlocked) throw new Error('This quote is blocked by price protection — refresh it');
   if (quote.aggregator === 'Jupiter') {
     const p = window.solana || window.phantom?.solana;
@@ -21572,7 +21629,9 @@ window.gwStocksExecute = async function (quote, opts) {
     gwToast('Confirm in Phantom', 'info');
     const txB64 = await gwSolSwap({ quoteResponse: fresh, userPubkey: pk });
     if (pk !== gwXstocksSolPayAccount()) throw new Error('Solana wallet changed — review the trade');
-    const signature = await gwSolSignAndSendBase64(p, txB64);
+    try { if (onStep) onStep('swap'); } catch (_) {}
+    let signature;
+    try { signature = await gwSolSignAndSendBase64(p, txB64); } catch (e) { throw gwStocksTagErr(e, 'swap'); }
     gwToast('Submitted on Solana…', 'info');
     return { signature, namespace: 'solana', crossChain: false };
   }
@@ -21596,11 +21655,7 @@ window.gwStocksExecute = async function (quote, opts) {
     const amountInK = BigInt(quote._amountIn);
     if (!nativeIn) {
       const spender = re.approvalAddress || ktx.to;
-      const allowK = await gwErc20Allowance(provider, from.address, account, spender, cid);
-      if (allowK < amountInK) {
-        gwToast('Approve ' + (from.sym || 'token') + ' in your wallet', 'info');
-        await gwErc20ApproveMax(provider, from.address, spender, account, cid, amountInK);
-      }
+      await gwStocksEnsureAllowance(provider, { token: from.address, spender, account, chainId: cid, amount: amountInK, sym: from.sym, onStep });
     }
     gwAssertNativeTxValue({
       isNative: nativeIn, amountIn: amountInK, txValue: ktx.value || '0x0', fromSym: from.sym || 'token',
@@ -21615,7 +21670,11 @@ window.gwStocksExecute = async function (quote, opts) {
     const sendK = (typeof window.gwProviderSendTx === 'function')
       ? window.gwProviderSendTx
       : ((p, txp) => p.request({ method: 'eth_sendTransaction', params: [txp] }));
-    const hashK = await sendK(provider, { from: account, to: ktx.to, data: ktx.data, value: ktx.value || '0x0' }, 180000, cid);
+    try { if (typeof onStep === 'function') onStep('swap'); } catch (_) {}
+    let hashK;
+    try {
+      hashK = await sendK(provider, { from: account, to: ktx.to, data: ktx.data, value: ktx.value || '0x0' }, 180000, cid);
+    } catch (e) { throw gwStocksTagErr(e, 'swap'); }
     gwToast((typeof gwTx === 'function' ? gwTx('swap_toast_submitted', null, 'Submitted · waiting for confirmation…') : 'Submitted · waiting for confirmation…'), 'info');
     await gwWaitReceipt(provider, hashK, 90000, false, cid);
     return { hash: hashK, namespace: 'evm', crossChain: false, chainId: cid };
@@ -21637,11 +21696,7 @@ window.gwStocksExecute = async function (quote, opts) {
   const amountIn = BigInt(params.fromAmount);
   if (!isNative) {
     const spender = raw.estimate?.approvalAddress || tx.to;
-    const allow = await gwErc20Allowance(provider, params.from.address, account, spender, execChain);
-    if (allow < amountIn) {
-      gwToast('Approve ' + (params.from.sym || 'token') + ' in your wallet', 'info');
-      await gwErc20ApproveMax(provider, params.from.address, spender, account, execChain, amountIn);
-    }
+    await gwStocksEnsureAllowance(provider, { token: params.from.address, spender, account, chainId: execChain, amount: amountIn, sym: params.from.sym, onStep });
   }
   gwAssertNativeTxValue({
     isNative, amountIn, txValue: tx.value || '0x0', fromSym: params.from.sym || 'token',
@@ -21654,7 +21709,11 @@ window.gwStocksExecute = async function (quote, opts) {
   const sendTx = (typeof window.gwProviderSendTx === 'function')
     ? window.gwProviderSendTx
     : ((p, txp) => p.request({ method: 'eth_sendTransaction', params: [txp] }));
-  const hash = await sendTx(provider, { from: account, to: tx.to, data: tx.data, value: tx.value || '0x0' }, 180000, execChain);
+  try { if (typeof onStep === 'function') onStep('swap'); } catch (_) {}
+  let hash;
+  try {
+    hash = await sendTx(provider, { from: account, to: tx.to, data: tx.data, value: tx.value || '0x0' }, 180000, execChain);
+  } catch (e) { throw gwStocksTagErr(e, 'swap'); }
   const crossChain = !!quote._crossChain;
   gwToast(crossChain ? (typeof gwTx === 'function' ? gwTx('swap_toast_submitted_bridge', null, 'Submitted · delivery to the destination network is pending') : 'Submitted · delivery to the destination network is pending') : (typeof gwTx === 'function' ? gwTx('swap_toast_submitted', null, 'Submitted · waiting for confirmation…') : 'Submitted · waiting for confirmation…'), 'info');
   if (!crossChain) await gwWaitReceipt(provider, hash, 90000, false, execChain);

@@ -28,6 +28,7 @@
       nets_p: 'Ethereum, BNB Chain, Solana, Arbitrum, Base, Robinhood Chain, HyperEVM, Monad and more. Your funds stay with you.',
       nets_cta: 'Connect wallet', nets_cta2: 'Make a swap',
       all: 'All markets', story: 'Story {i} of {n}', region: 'Market highlights',
+      nl_h: 'New listings', nl_sub: 'last 24 h', nl_toast: '{sym} is in the swap',
     },
     ru: {
       eb_stocks: 'АКЦИИ 24/7', eb_crypto: 'КРИПТОРЫНОК', eb_pred: 'ПРОГНОЗ ДНЯ', eb_nets: '17+ СЕТЕЙ',
@@ -44,13 +45,14 @@
       nets_p: 'Ethereum, BNB Chain, Solana, Arbitrum, Base, Robinhood Chain, HyperEVM, Monad и другие. Средства всегда у вас.',
       nets_cta: 'Подключить кошелёк', nets_cta2: 'Сделать своп',
       all: 'Все рынки', story: 'История {i} из {n}', region: 'Главное на рынках',
+      nl_h: 'Новые листинги', nl_sub: 'за 24 ч', nl_toast: '{sym} подставлен в своп',
     },
   };
-  I18N.es = {"eb_stocks": "ACCIONES 24/7", "eb_crypto": "MERCADO CRIPTO", "eb_pred": "PREDICCIÓN DEL DÍA", "eb_nets": "17+ REDES", "stock_h": "{name} {chg} en el día", "stock_p": "{n} acciones tokenizadas en 9 redes. Compra con cualquier token de tu wallet, incluso de noche y en fines de semana.", "stock_cta": "Ver acciones", "btc_h": "Bitcoin {price}", "btc_p": "{chg} en 24h. Cambia cualquier token por cualquier otro: la ruta por más de 17 redes se crea en un clic.", "btc_cta": "Hacer swap", "pred_p": "El mercado da a «{opt}» un {p}%. Compra «Sí» o «No»: el precio de la participación es la probabilidad.", "pred_p2": "El mercado lo sitúa en un {p}%. Compra «Sí» o «No»: el precio de la participación es la probabilidad.", "pred_cta": "Ver predicciones", "pred_vol": "Volumen 24h {v}", "chance": "probabilidad", "nets_h": "Una wallet, todas las redes", "nets_p": "Ethereum, BNB Chain, Solana, Arbitrum, Base, Robinhood Chain, HyperEVM, Monad y más. Tus fondos siempre son tuyos.", "nets_cta": "Conectar wallet", "nets_cta2": "Hacer un swap", "all": "Todos los mercados", "story": "Historia {i} de {n}", "region": "Lo destacado del mercado"};
-  I18N.tr = {"eb_stocks": "HİSSELER 7/24", "eb_crypto": "KRİPTO PİYASASI", "eb_pred": "GÜNÜN TAHMİNİ", "eb_nets": "17+ AĞ", "stock_h": "{name} bugün {chg}", "stock_p": "9 ağda {n} tokenize hisse. Cüzdanındaki herhangi bir token ile al — gece ve hafta sonu bile.", "stock_cta": "Hisseleri aç", "btc_h": "Bitcoin {price}", "btc_p": "24s'te {chg}. Herhangi bir token'ı herhangi biriyle takas et — 17+ ağ üzerinden rota tek tıkla kurulur.", "btc_cta": "Hemen takas et", "pred_p": "Piyasa «{opt}» için %{p} veriyor. «Evet» veya «Hayır» al — pay fiyatı olasılıktır.", "pred_p2": "Piyasa olasılığı %{p} olarak görüyor. «Evet» veya «Hayır» al — pay fiyatı olasılıktır.", "pred_cta": "Tahminleri gör", "pred_vol": "24s hacim {v}", "chance": "olasılık", "nets_h": "Tek cüzdan — tüm ağlar", "nets_p": "Ethereum, BNB Chain, Solana, Arbitrum, Base, Robinhood Chain, HyperEVM, Monad ve daha fazlası. Fonların her zaman sende.", "nets_cta": "Cüzdan bağla", "nets_cta2": "Takas yap", "all": "Tüm piyasalar", "story": "Hikâye {i} / {n}", "region": "Piyasanın öne çıkanları"};
-  I18N.zh = {"eb_stocks": "股票 24/7", "eb_crypto": "加密市场", "eb_pred": "今日预测", "eb_nets": "17+ 网络", "stock_h": "{name} 今日 {chg}", "stock_p": "9 个网络上的 {n} 只代币化股票。用钱包里的任何代币购买——夜间和周末也可以。", "stock_cta": "查看股票", "btc_h": "比特币 {price}", "btc_p": "24 小时 {chg}。任意代币互换——跨 17+ 网络的路线一键生成。", "btc_cta": "立即兑换", "pred_p": "市场给「{opt}」的概率是 {p}%。买入「是」或「否」——份额价格就是概率。", "pred_p2": "市场给出的概率是 {p}%。买入「是」或「否」——份额价格就是概率。", "pred_cta": "查看预测", "pred_vol": "24 小时成交量 {v}", "chance": "概率", "nets_h": "一个钱包，所有网络", "nets_p": "Ethereum、BNB Chain、Solana、Arbitrum、Base、Robinhood Chain、HyperEVM、Monad 等。资金始终由你掌控。", "nets_cta": "连接钱包", "nets_cta2": "去兑换", "all": "所有市场", "story": "第 {i}/{n} 个故事", "region": "市场要闻"};
-  I18N.ar = {"eb_stocks": "أسهم 24/7", "eb_crypto": "سوق الكريبتو", "eb_pred": "توقّع اليوم", "eb_nets": "+17 شبكة", "stock_h": "{name} {chg} اليوم", "stock_p": "{n} سهمًا مرمّزًا على 9 شبكات. اشترِ بأي رمز في محفظتك — حتى ليلًا وفي عطلة نهاية الأسبوع.", "stock_cta": "عرض الأسهم", "btc_h": "بيتكوين {price}", "btc_p": "{chg} خلال 24س. بدّل أي رمز بأي رمز — يُبنى المسار عبر أكثر من 17 شبكة بنقرة واحدة.", "btc_cta": "بدّل الآن", "pred_p": "يقدّر السوق «{opt}» بنسبة {p}%. اشترِ «نعم» أو «لا» — سعر الحصة هو الاحتمال.", "pred_p2": "يقدّر السوق الاحتمال بنسبة {p}%. اشترِ «نعم» أو «لا» — سعر الحصة هو الاحتمال.", "pred_cta": "عرض التوقعات", "pred_vol": "حجم 24س {v}", "chance": "احتمال", "nets_h": "محفظة واحدة — كل الشبكات", "nets_p": "Ethereum وBNB Chain وSolana وArbitrum وBase وRobinhood Chain وHyperEVM وMonad وغيرها. أموالك تبقى معك دائمًا.", "nets_cta": "ربط المحفظة", "nets_cta2": "إجراء تبديل", "all": "كل الأسواق", "story": "القصة {i} من {n}", "region": "أبرز أحداث السوق"};
-  I18N.hi = {"eb_stocks": "स्टॉक्स 24/7", "eb_crypto": "क्रिप्टो बाज़ार", "eb_pred": "आज की भविष्यवाणी", "eb_nets": "17+ नेटवर्क", "stock_h": "{name} आज {chg}", "stock_p": "9 नेटवर्क पर {n} टोकनाइज़्ड स्टॉक्स। अपने वॉलेट के किसी भी टोकन से खरीदें — रात और वीकेंड पर भी।", "stock_cta": "स्टॉक्स खोलें", "btc_h": "बिटकॉइन {price}", "btc_p": "24 घंटे में {chg}। किसी भी टोकन को किसी भी टोकन से स्वैप करें — 17+ नेटवर्क पर रूट एक क्लिक में बनता है।", "btc_cta": "अभी स्वैप करें", "pred_p": "बाज़ार «{opt}» को {p}% पर आंकता है। «हाँ» या «नहीं» खरीदें — शेयर की कीमत ही संभावना है।", "pred_p2": "बाज़ार इसे {p}% पर आंकता है। «हाँ» या «नहीं» खरीदें — शेयर की कीमत ही संभावना है।", "pred_cta": "भविष्यवाणियाँ देखें", "pred_vol": "24 घंटे का वॉल्यूम {v}", "chance": "संभावना", "nets_h": "एक वॉलेट — हर नेटवर्क", "nets_p": "Ethereum, BNB Chain, Solana, Arbitrum, Base, Robinhood Chain, HyperEVM, Monad और भी। आपके फंड हमेशा आपके पास।", "nets_cta": "वॉलेट कनेक्ट करें", "nets_cta2": "स्वैप करें", "all": "सभी बाज़ार", "story": "कहानी {i} / {n}", "region": "बाज़ार की मुख्य बातें"};
+  I18N.es = {"nl_h": "Nuevos listados", "nl_sub": "últimas 24 h", "nl_toast": "{sym} está en el swap", "eb_stocks": "ACCIONES 24/7", "eb_crypto": "MERCADO CRIPTO", "eb_pred": "PREDICCIÓN DEL DÍA", "eb_nets": "17+ REDES", "stock_h": "{name} {chg} en el día", "stock_p": "{n} acciones tokenizadas en 9 redes. Compra con cualquier token de tu wallet, incluso de noche y en fines de semana.", "stock_cta": "Ver acciones", "btc_h": "Bitcoin {price}", "btc_p": "{chg} en 24h. Cambia cualquier token por cualquier otro: la ruta por más de 17 redes se crea en un clic.", "btc_cta": "Hacer swap", "pred_p": "El mercado da a «{opt}» un {p}%. Compra «Sí» o «No»: el precio de la participación es la probabilidad.", "pred_p2": "El mercado lo sitúa en un {p}%. Compra «Sí» o «No»: el precio de la participación es la probabilidad.", "pred_cta": "Ver predicciones", "pred_vol": "Volumen 24h {v}", "chance": "probabilidad", "nets_h": "Una wallet, todas las redes", "nets_p": "Ethereum, BNB Chain, Solana, Arbitrum, Base, Robinhood Chain, HyperEVM, Monad y más. Tus fondos siempre son tuyos.", "nets_cta": "Conectar wallet", "nets_cta2": "Hacer un swap", "all": "Todos los mercados", "story": "Historia {i} de {n}", "region": "Lo destacado del mercado"};
+  I18N.tr = {"nl_h": "Yeni listelemeler", "nl_sub": "son 24 saat", "nl_toast": "{sym} takasa eklendi", "eb_stocks": "HİSSELER 7/24", "eb_crypto": "KRİPTO PİYASASI", "eb_pred": "GÜNÜN TAHMİNİ", "eb_nets": "17+ AĞ", "stock_h": "{name} bugün {chg}", "stock_p": "9 ağda {n} tokenize hisse. Cüzdanındaki herhangi bir token ile al — gece ve hafta sonu bile.", "stock_cta": "Hisseleri aç", "btc_h": "Bitcoin {price}", "btc_p": "24s'te {chg}. Herhangi bir token'ı herhangi biriyle takas et — 17+ ağ üzerinden rota tek tıkla kurulur.", "btc_cta": "Hemen takas et", "pred_p": "Piyasa «{opt}» için %{p} veriyor. «Evet» veya «Hayır» al — pay fiyatı olasılıktır.", "pred_p2": "Piyasa olasılığı %{p} olarak görüyor. «Evet» veya «Hayır» al — pay fiyatı olasılıktır.", "pred_cta": "Tahminleri gör", "pred_vol": "24s hacim {v}", "chance": "olasılık", "nets_h": "Tek cüzdan — tüm ağlar", "nets_p": "Ethereum, BNB Chain, Solana, Arbitrum, Base, Robinhood Chain, HyperEVM, Monad ve daha fazlası. Fonların her zaman sende.", "nets_cta": "Cüzdan bağla", "nets_cta2": "Takas yap", "all": "Tüm piyasalar", "story": "Hikâye {i} / {n}", "region": "Piyasanın öne çıkanları"};
+  I18N.zh = {"nl_h": "新上线", "nl_sub": "近 24 小时", "nl_toast": "已将 {sym} 填入兑换", "eb_stocks": "股票 24/7", "eb_crypto": "加密市场", "eb_pred": "今日预测", "eb_nets": "17+ 网络", "stock_h": "{name} 今日 {chg}", "stock_p": "9 个网络上的 {n} 只代币化股票。用钱包里的任何代币购买——夜间和周末也可以。", "stock_cta": "查看股票", "btc_h": "比特币 {price}", "btc_p": "24 小时 {chg}。任意代币互换——跨 17+ 网络的路线一键生成。", "btc_cta": "立即兑换", "pred_p": "市场给「{opt}」的概率是 {p}%。买入「是」或「否」——份额价格就是概率。", "pred_p2": "市场给出的概率是 {p}%。买入「是」或「否」——份额价格就是概率。", "pred_cta": "查看预测", "pred_vol": "24 小时成交量 {v}", "chance": "概率", "nets_h": "一个钱包，所有网络", "nets_p": "Ethereum、BNB Chain、Solana、Arbitrum、Base、Robinhood Chain、HyperEVM、Monad 等。资金始终由你掌控。", "nets_cta": "连接钱包", "nets_cta2": "去兑换", "all": "所有市场", "story": "第 {i}/{n} 个故事", "region": "市场要闻"};
+  I18N.ar = {"nl_h": "إدراجات جديدة", "nl_sub": "آخر 24 ساعة", "nl_toast": "تمت إضافة {sym} إلى التبديل", "eb_stocks": "أسهم 24/7", "eb_crypto": "سوق الكريبتو", "eb_pred": "توقّع اليوم", "eb_nets": "+17 شبكة", "stock_h": "{name} {chg} اليوم", "stock_p": "{n} سهمًا مرمّزًا على 9 شبكات. اشترِ بأي رمز في محفظتك — حتى ليلًا وفي عطلة نهاية الأسبوع.", "stock_cta": "عرض الأسهم", "btc_h": "بيتكوين {price}", "btc_p": "{chg} خلال 24س. بدّل أي رمز بأي رمز — يُبنى المسار عبر أكثر من 17 شبكة بنقرة واحدة.", "btc_cta": "بدّل الآن", "pred_p": "يقدّر السوق «{opt}» بنسبة {p}%. اشترِ «نعم» أو «لا» — سعر الحصة هو الاحتمال.", "pred_p2": "يقدّر السوق الاحتمال بنسبة {p}%. اشترِ «نعم» أو «لا» — سعر الحصة هو الاحتمال.", "pred_cta": "عرض التوقعات", "pred_vol": "حجم 24س {v}", "chance": "احتمال", "nets_h": "محفظة واحدة — كل الشبكات", "nets_p": "Ethereum وBNB Chain وSolana وArbitrum وBase وRobinhood Chain وHyperEVM وMonad وغيرها. أموالك تبقى معك دائمًا.", "nets_cta": "ربط المحفظة", "nets_cta2": "إجراء تبديل", "all": "كل الأسواق", "story": "القصة {i} من {n}", "region": "أبرز أحداث السوق"};
+  I18N.hi = {"nl_h": "नई लिस्टिंग", "nl_sub": "पिछले 24 घंटे", "nl_toast": "{sym} स्वैप में जोड़ा गया", "eb_stocks": "स्टॉक्स 24/7", "eb_crypto": "क्रिप्टो बाज़ार", "eb_pred": "आज की भविष्यवाणी", "eb_nets": "17+ नेटवर्क", "stock_h": "{name} आज {chg}", "stock_p": "9 नेटवर्क पर {n} टोकनाइज़्ड स्टॉक्स। अपने वॉलेट के किसी भी टोकन से खरीदें — रात और वीकेंड पर भी।", "stock_cta": "स्टॉक्स खोलें", "btc_h": "बिटकॉइन {price}", "btc_p": "24 घंटे में {chg}। किसी भी टोकन को किसी भी टोकन से स्वैप करें — 17+ नेटवर्क पर रूट एक क्लिक में बनता है।", "btc_cta": "अभी स्वैप करें", "pred_p": "बाज़ार «{opt}» को {p}% पर आंकता है। «हाँ» या «नहीं» खरीदें — शेयर की कीमत ही संभावना है।", "pred_p2": "बाज़ार इसे {p}% पर आंकता है। «हाँ» या «नहीं» खरीदें — शेयर की कीमत ही संभावना है।", "pred_cta": "भविष्यवाणियाँ देखें", "pred_vol": "24 घंटे का वॉल्यूम {v}", "chance": "संभावना", "nets_h": "एक वॉलेट — हर नेटवर्क", "nets_p": "Ethereum, BNB Chain, Solana, Arbitrum, Base, Robinhood Chain, HyperEVM, Monad और भी। आपके फंड हमेशा आपके पास।", "nets_cta": "वॉलेट कनेक्ट करें", "nets_cta2": "स्वैप करें", "all": "सभी बाज़ार", "story": "कहानी {i} / {n}", "region": "बाज़ार की मुख्य बातें"};
   function lang() {
     var l = '';
     try { l = typeof window.getGromLang === 'function' ? window.getGromLang() : (localStorage.getItem('grom_lang') || ''); } catch (_) {}
@@ -306,15 +308,98 @@
   function bindOnce() {
     if (bound) return; bound = true;
     document.addEventListener('visibilitychange', function () { if (host) host.classList.toggle('ghh-hidden', document.hidden); });
-    window.addEventListener('grom:lang-change', function () { if (active()) { D.pred = null; load().then(render); } });
+    window.addEventListener('grom:lang-change', function () { if (active()) { D.pred = null; load().then(render); nlRender(); } });
     ['grom:wallet-connected', 'grom:wallet-disconnected'].forEach(function (ev) { window.addEventListener(ev, function () { if (active()) render(); }); });
     var rz = 0;
     window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(function () { if (active() && stories[cur] && stories[cur].id === 'stocks') paint(cur, true); }, 200); });
     refreshT = setInterval(function () {
       if (!active() || document.hidden) return;
       load().then(function () { var keep = cur; stories = build(); if (keep >= stories.length) keep = 0; render(); paint(keep, true); });
+      nlRefresh();
     }, 90000);
   }
+
+  /* ---------- «New listings» strip above the stories: coins listed in the last 24 h, as a running row of chips ---------- */
+  var NL_NET_ICON = { eth: 'ethereum', bsc: 'bsc', base: 'base', arbitrum: 'arbitrum', polygon: 'polygon', optimism: 'optimism', avax: 'avalanche', linea: 'linea', solana: 'solana' };
+  var NL = { rows: null, ts: 0, pending: null };
+  function nlLoad() {
+    if (NL.pending) return NL.pending;
+    NL.pending = getJson(API + '/market/new-listings').then(function (j) {
+      NL.rows = (j && Array.isArray(j.rows)) ? j.rows : [];
+      NL.ts = Date.now();
+    }).catch(function () { if (!NL.rows) NL.rows = []; }).finally(function () { NL.pending = null; });
+    return NL.pending;
+  }
+  function nlPct(c) {
+    if (c == null || !isFinite(c)) return '';
+    /* A brand-new coin can move thousands of percent — show the multiple instead. */
+    if (c >= 1000) return '×' + nf(c / 100 + 1, 0);
+    return (c > 0 ? '+' : '') + nf(c, Math.abs(c) >= 100 ? 0 : 2) + '%';
+  }
+  function nlChip(r, i) {
+    var c = r.chg;
+    var dir = c > 0 ? 'up' : (c < 0 ? 'dn' : '');
+    var arrow = c > 0 ? '▲' : (c < 0 ? '▼' : '');
+    var letter = esc(String(r.sym || '?').slice(0, 1));
+    /* The letter sits under the logo and shows if the logo fails to load. */
+    var logo = '<span class="gnl-av">' + letter + '</span>'
+      + (r.img ? '<img src="' + esc(r.img) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">' : '');
+    var net = NL_NET_ICON[r.chain] ? '<img class="gnl-net" src="' + CHAIN_ICON + NL_NET_ICON[r.chain] + '.svg" alt="" loading="lazy">' : '';
+    return '<button type="button" class="gnl-chip" data-nl="' + i + '" title="' + esc(r.name || r.sym) + '">'
+      + '<span class="gnl-logo">' + logo + net + '</span><b>' + esc(r.sym) + '</b>'
+      + (dir || c === 0 ? '<em class="' + dir + '">' + arrow + ' ' + esc(nlPct(c)) + '</em>' : '')
+      + '</button>';
+  }
+  function nlRender() {
+    var dash = document.getElementById('page-dashboard');
+    var anchor = document.getElementById('dashBannersWrap');
+    if (!dash || !anchor) return;
+    var sec = document.getElementById('gromNewListings');
+    var rows = (NL.rows || []).filter(function (r) { return r && r.sym && r.address && Number.isInteger(r.decimals); });
+    /* Fewer than 4 coins looks broken as a running row — the strip waits (e.g. first hours after the first start). */
+    if (rows.length < 4) { if (sec) sec.hidden = true; return; }
+    if (!sec) {
+      sec = document.createElement('section');
+      sec.id = 'gromNewListings';
+      sec.className = 'gnl';
+      anchor.parentNode.insertBefore(sec, anchor);
+      sec.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-nl]');
+        if (!b) return;
+        var r = (sec.__rows || [])[Number(b.getAttribute('data-nl'))];
+        if (r) nlPick(r);
+      });
+    }
+    /* The dashboard is assembled in stages — keep the strip right above the stories (owner, 15.11). */
+    if (anchor.previousElementSibling !== sec) anchor.parentNode.insertBefore(sec, anchor);
+    sec.hidden = false;
+    var chips = rows.map(nlChip).join('');
+    var key = lang() + '|' + rows.map(function (r) { return r.id + ':' + r.chg; }).join(',');
+    if (sec.__key === key) return;
+    sec.__key = key;
+    sec.__rows = rows;
+    /* The row runs at a steady speed whatever the number of coins. */
+    sec.style.setProperty('--gnl-dur', Math.max(30, rows.length * 4) + 's');
+    /* «NEW» in English in every language, styled like the swap's «LIVE» badge, on the same line as the row (owner, 15.11). */
+    sec.innerHTML = '<span class="gnl-badge" data-no-tr translate="no" title="' + esc(t('nl_h') + ' · ' + t('nl_sub')) + '">NEW</span>'
+      + '<div class="gnl-view" role="region" aria-label="' + esc(t('nl_h')) + '"><div class="gnl-track">'
+      + '<div class="gnl-set">' + chips + '</div><div class="gnl-set" aria-hidden="true">' + chips.replace(/<button /g, '<button tabindex="-1" ') + '</div>'
+      + '</div></div>';
+  }
+  function nlPick(r) {
+    var meta = { sym: r.sym, chain: r.chain, chainId: r.chainId, tokenAddress: r.address, name: r.name || r.sym, img: r.img || '', decimals: r.decimals };
+    try { if (typeof window.gwDsPickToken === 'function') window.gwDsPickToken(r.sym, 'to', meta); } catch (_) {}
+    var swap = document.querySelector('#page-dashboard .gw-ds-wrap');
+    if (swap) {
+      swap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      swap.style.outline = '2px solid rgba(93,213,255,0.7)';
+      swap.style.outlineOffset = '4px';
+      swap.style.borderRadius = '20px';
+      setTimeout(function () { swap.style.outline = 'none'; }, 1600);
+    }
+    try { if (typeof window.gwToast === 'function') window.gwToast(t('nl_toast', { sym: r.sym }), 'success'); } catch (_) {}
+  }
+  function nlRefresh() { return nlLoad().then(nlRender); }
 
   function mount(el) {
     if (!el) return;
@@ -326,6 +411,7 @@
       stories = build(); render();
     }
     if (!D.ts || Date.now() - D.ts > 60000) load().then(function () { if (host) render(); });
+    if (!NL.ts || Date.now() - NL.ts > 60000) nlRefresh(); else nlRender();
   }
 
   window.gromHomeStories = { mount: mount };

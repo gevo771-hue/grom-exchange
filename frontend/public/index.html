@@ -5321,6 +5321,7 @@
   .mkt-row .pair-meta { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mkt-head { font-size: 11px; color: var(--silver5); text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid rgba(200,212,232,0.06); }
   .mkt-row { border-bottom: 1px solid rgba(200,212,232,0.05); font-size: 13px; }
+  .mkt-empty { padding: 26px 18px; color: var(--silver4); font-size: 13.5px; line-height: 1.5; text-align: center; }
   .mkt-row:hover { background: linear-gradient(90deg, rgba(59, 69, 88, 0.42), rgba(12, 19, 31, 0.18)); }
   .mkt-row .star { color: var(--silver5); cursor: pointer; }
   .mkt-row .star.on { color: var(--warn); }
@@ -20189,9 +20190,9 @@ function renderMarketsEnhanced() {
     if (fActiveEmpty && fActiveEmpty.dataset.filter === 'favorites') {
       emptyMsg = 'No favorites yet — tap the ★ on any market row to pin it here.';
     } else if (!window.__gromHlActive && !(window.__hlMarkets && window.__hlMarkets.length)) {
-      emptyMsg = 'Loading Hyperliquid markets…';
+      emptyMsg = 'Loading markets…';
     } else if (marketsCat === 'prelaunch') {
-      emptyMsg = 'No pre-launch markets listed on Hyperliquid right now.';
+      emptyMsg = 'No pre-launch markets right now.';
     } else if (marketsCat === 'tradfi' || marketsCat === 'hip3') {
       emptyMsg = 'HIP-3 / TradFi markets still loading — try All, or reopen Markets in a moment.';
       try {
@@ -20218,7 +20219,8 @@ function renderMarketsEnhanced() {
         if (window.gromHL && typeof window.gromHL.recoverMeta === 'function') window.gromHL.recoverMeta();
       } catch (_) {}
     }
-    el.innerHTML = '<div class="mkt-row" style="grid-template-columns:1fr;padding:18px;color:var(--silver4)">' + emptyMsg + '</div>';
+    /* Not a .mkt-row: on phones that grid squeezed the text into the 20 px star column (owner, 15.11). */
+    el.innerHTML = '<div class="mkt-empty">' + emptyMsg + '</div>';
     if (counter) counter.innerHTML = '';
     if (!window.__marketsEmptyRetry) {
       window.__marketsEmptyRetry = setTimeout(function () {

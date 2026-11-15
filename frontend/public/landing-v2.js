@@ -1145,7 +1145,7 @@
       prp_sub: '350+ markets',
       prp_cta: 'Trade perps', vol: '24h vol',
       prd_sub: 'Crypto, politics, finance, sports, esports and culture',
-      prd_cta: 'Open predictions', yes: 'Yes', no: 'No', ends: 'Ends {d}', today: 'Today {t}',
+      prd_cta: 'Open predictions', yes: 'Yes', no: 'No', ends: 'Ends {d}', today: 'Today {t}', tmr: 'Tomorrow {t}',
       c_crypto: 'Crypto', c_politics: 'Politics', c_economy: 'Economy', c_sport: 'Sports', c_world: 'World',
       swp_sub: '10,000+ tokens',
       swp_cta: 'Swap tokens',
@@ -1164,7 +1164,7 @@
       prp_sub: '350+ рынков',
       prp_cta: 'Торговать perps', vol: 'Объём 24ч',
       prd_sub: 'Крипта, политика, финансы, спорт, киберспорт и культура',
-      prd_cta: 'Открыть прогнозы', yes: 'Да', no: 'Нет', ends: 'До {d}', today: 'Сегодня {t}',
+      prd_cta: 'Открыть прогнозы', yes: 'Да', no: 'Нет', ends: 'До {d}', today: 'Сегодня {t}', tmr: 'Завтра {t}',
       c_crypto: 'Крипта', c_politics: 'Политика', c_economy: 'Экономика', c_sport: 'Спорт', c_world: 'Мир',
       swp_sub: '10 000+ токенов',
       swp_cta: 'Обменять токены',
@@ -1183,7 +1183,7 @@
       prp_sub: '350+ ринків',
       prp_cta: 'Торгувати perps', vol: 'Обсяг 24 год',
       prd_sub: 'Крипта, політика, фінанси, спорт, кіберспорт і культура',
-      prd_cta: 'Відкрити прогнози', yes: 'Так', no: 'Ні', ends: 'До {d}', today: 'Сьогодні {t}',
+      prd_cta: 'Відкрити прогнози', yes: 'Так', no: 'Ні', ends: 'До {d}', today: 'Сьогодні {t}', tmr: 'Завтра {t}',
       c_crypto: 'Крипта', c_politics: 'Політика', c_economy: 'Економіка', c_sport: 'Спорт', c_world: 'Світ',
       swp_sub: '10 000+ токенів',
       swp_cta: 'Обміняти токени',
@@ -1202,7 +1202,7 @@
       prp_sub: 'Más de 350 mercados',
       prp_cta: 'Operar perps', vol: 'Vol. 24 h',
       prd_sub: 'Cripto, política, finanzas, deportes, esports y cultura',
-      prd_cta: 'Abrir predicciones', yes: 'Sí', no: 'No', ends: 'Cierra {d}', today: 'Hoy {t}',
+      prd_cta: 'Abrir predicciones', yes: 'Sí', no: 'No', ends: 'Cierra {d}', today: 'Hoy {t}', tmr: 'Mañana {t}',
       c_crypto: 'Cripto', c_politics: 'Política', c_economy: 'Economía', c_sport: 'Deportes', c_world: 'Mundo',
       swp_sub: 'Más de 10 000 tokens',
       swp_cta: 'Intercambiar tokens',
@@ -1221,7 +1221,7 @@
       prp_sub: 'أكثر من 350 سوقًا',
       prp_cta: 'تداول العقود الدائمة', vol: 'حجم 24س',
       prd_sub: 'كريبتو، سياسة، مال، رياضة، رياضات إلكترونية وثقافة',
-      prd_cta: 'افتح التوقعات', yes: 'نعم', no: 'لا', ends: 'ينتهي {d}', today: 'اليوم {t}',
+      prd_cta: 'افتح التوقعات', yes: 'نعم', no: 'لا', ends: 'ينتهي {d}', today: 'اليوم {t}', tmr: 'غدًا {t}',
       c_crypto: 'كريبتو', c_politics: 'سياسة', c_economy: 'اقتصاد', c_sport: 'رياضة', c_world: 'العالم',
       swp_sub: 'أكثر من 10,000 رمز',
       swp_cta: 'بدّل الرموز',
@@ -1240,7 +1240,7 @@
       prp_sub: '350+ 个市场',
       prp_cta: '交易永续合约', vol: '24h 成交额',
       prd_sub: '加密、政治、金融、体育、电竞和文化',
-      prd_cta: '打开预测', yes: '是', no: '否', ends: '{d} 截止', today: '今天 {t}',
+      prd_cta: '打开预测', yes: '是', no: '否', ends: '{d} 截止', today: '今天 {t}', tmr: '明天 {t}',
       c_crypto: '加密', c_politics: '政治', c_economy: '经济', c_sport: '体育', c_world: '世界',
       swp_sub: '10,000+ 种代币',
       swp_cta: '兑换代币',
@@ -1259,7 +1259,7 @@
       prp_sub: '350+ मार्केट',
       prp_cta: 'पर्प्स ट्रेड करें', vol: '24घं वॉल्यूम',
       prd_sub: 'क्रिप्टो, राजनीति, फ़ाइनेंस, खेल, ई-स्पोर्ट्स और संस्कृति',
-      prd_cta: 'प्रेडिक्शन खोलें', yes: 'हाँ', no: 'नहीं', ends: '{d} तक', today: 'आज {t}',
+      prd_cta: 'प्रेडिक्शन खोलें', yes: 'हाँ', no: 'नहीं', ends: '{d} तक', today: 'आज {t}', tmr: 'कल {t}',
       c_crypto: 'क्रिप्टो', c_politics: 'राजनीति', c_economy: 'अर्थव्यवस्था', c_sport: 'खेल', c_world: 'दुनिया',
       swp_sub: '10,000+ टोकन',
       swp_cta: 'टोकन स्वैप करें',
@@ -1278,7 +1278,7 @@
       prp_sub: '350+ piyasa',
       prp_cta: 'Perp işlem yap', vol: '24s hacim',
       prd_sub: 'Kripto, siyaset, finans, spor, e-spor ve kültür',
-      prd_cta: 'Tahminleri aç', yes: 'Evet', no: 'Hayır', ends: '{d} bitiyor', today: 'Bugün {t}',
+      prd_cta: 'Tahminleri aç', yes: 'Evet', no: 'Hayır', ends: '{d} bitiyor', today: 'Bugün {t}', tmr: 'Yarın {t}',
       c_crypto: 'Kripto', c_politics: 'Siyaset', c_economy: 'Ekonomi', c_sport: 'Spor', c_world: 'Dünya',
       swp_sub: '10.000+ token',
       swp_cta: 'Token takas et',
@@ -1478,12 +1478,23 @@
       return l3Json('/api/market/predict?limit=80&offset=0&lang=' + encodeURIComponent(lang()), 15000).then(function (j) {
         var list = (j && j.markets) || [];
         var now = Date.now();
-        var pool = { crypto: [], politics: [], economy: [], sport: [], world: [] };
+        var pool = { match: [], crypto: [], politics: [], economy: [], sport: [], world: [] };
         list.forEach(function (m) {
           var ends = Date.parse(m.endsAt || '') || 0;
-          if (ends && ends < now + 3 * 3600_000) return;
           var vol = Number(m.vol24 != null ? m.vol24 : m.vol) || 0;
           if (vol < 20000) return;
+          /* Upcoming games: «Team A 55% · Team B 45%» cards with the kick-off time, like a broker app. */
+          var mt = m.match;
+          if (mt && mt.a && mt.b && mt.pa > 0 && mt.pb > 0) {
+            if (Math.min(mt.pa, mt.pb) < 5) return; // a foregone result is not worth a card
+            if (ends > now + 10 * 60_000 && ends < now + 4 * 86400_000) {
+              pool.match.push({ id: m.id || m.slug, q: l3FixTitle(m.q || m.title), cat: 'sport', isMatch: true,
+                outs: [{ n: String(mt.a), p: Math.round(Number(mt.pa)) }, { n: String(mt.b), p: Math.round(Number(mt.pb)) }],
+                vol: vol, ends: ends, img: String(m.img || '') });
+            }
+            return;
+          }
+          if (ends && ends < now + 3 * 3600_000) return;
           var rows = (m.rows || []).filter(function (r) {
             var n = String(r.n || '');
             var p = Number(r.p);
@@ -1501,7 +1512,7 @@
             ? [{ n: t3('yes'), p: Math.round(Number(rows[0].p)) }, { n: t3('no'), p: Math.round(Number(rows[0].pNo != null ? rows[0].pNo : 100 - rows[0].p)) }]
             : rows.slice(0, 2).map(function (r) { return { n: String(r.n || ''), p: Math.round(Number(r.p)) }; });
           var cat = l3PredCat(m);
-          pool[cat].push({ id: m.id || m.slug, q: l3FixTitle(m.q || m.title), cat: cat, outs: outs, vol: vol, ends: ends });
+          pool[cat].push({ id: m.id || m.slug, q: l3FixTitle(m.q || m.title), cat: cat, outs: outs, vol: vol, ends: ends, img: String(m.img || '') });
         });
         Object.keys(pool).forEach(function (k) { pool[k].sort(function (a, b) { return b.vol - a.vol; }); });
         var pick = [];
@@ -1513,10 +1524,18 @@
             seen[m.id] = 1; pick.push(m); n--;
           }
         }
-        take('crypto', 2); take('politics', 1); take('economy', 1); take('sport', 2);
-        if (pick.length < 6) take('world', 6 - pick.length);
-        ['politics', 'economy', 'crypto', 'sport'].forEach(function (c) { if (pick.length < 6) take(c, 6 - pick.length); });
-        return pick.length ? { cards: pick.slice(0, 6), total: Number(j.total) || list.length } : null;
+        take('match', 2); take('crypto', 2); take('politics', 2); take('economy', 1); take('sport', 1);
+        if (pick.length < 8) take('world', 8 - pick.length);
+        ['sport', 'match', 'politics', 'economy', 'crypto'].forEach(function (c) { if (pick.length < 8) take(c, 8 - pick.length); });
+        /* Mix the kinds so the first row (and the 6 cards a phone shows) is not one topic. */
+        var lanes = {};
+        pick.forEach(function (m) { var k = m.isMatch ? 'match' : m.cat; (lanes[k] = lanes[k] || []).push(m); });
+        var order = ['match', 'crypto', 'politics', 'economy', 'sport', 'world'];
+        var mixed = [];
+        for (var round = 0; mixed.length < pick.length && round < 8; round++) {
+          order.forEach(function (k) { if (lanes[k] && lanes[k][round]) mixed.push(lanes[k][round]); });
+        }
+        return mixed.length ? { cards: mixed.slice(0, 8), total: Number(j.total) || list.length } : null;
       });
     });
   }
@@ -1636,13 +1655,15 @@
         '<b>' + esc(it.label) + '</b><span>' + esc(l3Pct(c)) + '</span></button>';
     }).join('');
   }
-  function l3CardHead(title, sub, chip) {
-    return '<div class="l3-map-head"><div><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></div>' + (chip || '') + '</div>';
+  /* Titles open their market with a ›, like a broker app; no «24h change» caption (owner, 15.11). */
+  var L3_CHEV = '<svg class="l3-chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg>';
+  function l3CardHead(title, chip, go) {
+    return '<div class="l3-map-head"><button type="button" class="l3-head-link" data-lv2-go="' + go + '">' + esc(title) + L3_CHEV + '</button>' + (chip || '') + '</div>';
   }
   function l3MapHtml() {
     var items = ((_l3.top && _l3.top.items) || []).filter(function (s) { return s.mc > 0 && s.s !== 'GOOG' && s.s !== 'BRK.A'; }).slice(0, 18);
     var spx = _l3.idx && _l3.idx.by['^GSPC'];
-    var head = l3CardHead('Market map', '24h change', spx ? '<span class="l3-chip ' + l3Dir(spx.chg) + '">S&amp;P 500 ' + l3Arrow(spx.chg) + esc(l3Pct(spx.chg)) + '</span>' : '');
+    var head = l3CardHead('Market map', spx ? '<span class="l3-chip ' + l3Dir(spx.chg) + '">S&amp;P 500 ' + l3Arrow(spx.chg) + esc(l3Pct(spx.chg)) + '</span>' : '', 'xstocks');
     if (!items.length) return head + '<div class="l3-map-box is-skel"></div>';
     return head + '<div class="l3-map-box">' + l3Tiles(items.map(function (s) {
       return { v: Math.sqrt(s.mc), c: s.c, label: s.s, title: s.n || s.s, attr: 'data-l3-stock="' + esc(s.s) + '"' };
@@ -1651,7 +1672,7 @@
   function l3CryptoMapHtml() {
     var heat = (_l3.perps && _l3.perps.heat) || [];
     var btc = _l3.perps && _l3.perps.rows && _l3.perps.rows.BTC;
-    var head = l3CardHead('Crypto map', '24h change', btc ? '<span class="l3-chip ' + l3Dir(btc.chg) + '">BTC ' + l3Arrow(btc.chg) + esc(l3Pct(btc.chg)) + '</span>' : '');
+    var head = l3CardHead('Crypto map', btc ? '<span class="l3-chip ' + l3Dir(btc.chg) + '">BTC ' + l3Arrow(btc.chg) + esc(l3Pct(btc.chg)) + '</span>' : '', 'futures');
     if (!heat.length) return head + '<div class="l3-map-box is-skel"></div>';
     return head + '<div class="l3-map-box">' + l3Tiles(heat.map(function (h) {
       return { v: Math.sqrt(h.vol), c: h.chg, label: h.coin, title: h.coin + '-PERP', attr: 'data-l3-perp="' + esc(h.coin) + '"' };
@@ -1659,7 +1680,7 @@
   }
   function l3PredMiniHtml() {
     var cards = (_l3.predict && _l3.predict.cards) || [];
-    var head = l3CardHead('Predictions', 'Top markets', '');
+    var head = l3CardHead('Predictions', '', 'predict');
     if (!cards.length) return head + '<div class="l3-map-box is-skel"></div>';
     var rows = cards.slice(0, 4).map(function (m) {
       var o = m.outs[0] || { n: '', p: 0 };
@@ -1832,6 +1853,19 @@
       return t3('ends', { d: d.toLocaleDateString(l3Loc(), opts) });
     } catch (_) { return ''; }
   }
+  /* Kick-off time of a game: «Сегодня 21:05», «Завтра 18:00», «22 нояб. 17:30». */
+  function l3MatchWhen(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    var now = new Date();
+    try {
+      var tm = d.toLocaleTimeString(l3Loc(), { hour: '2-digit', minute: '2-digit' });
+      if (d.toDateString() === now.toDateString()) return t3('today', { t: tm });
+      var tmr = new Date(now.getTime() + 86400_000);
+      if (d.toDateString() === tmr.toDateString()) return t3('tmr', { t: tm });
+      return d.toLocaleDateString(l3Loc(), { day: 'numeric', month: 'short' }) + ' ' + tm;
+    } catch (_) { return ''; }
+  }
   var L3_CAT_ICON = {
     crypto: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 7h5.5a2.5 2.5 0 010 5H9zm0 5h6a2.5 2.5 0 010 5H9zM9 5v14M11 5v2m0 10v2"/></svg>',
     politics: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 21h18M5 21V10m4 11V10m6 11V10m4 11V10M2 10l10-6 10 6z"/></svg>',
@@ -1839,29 +1873,38 @@
     sport: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7l4 3-1.5 5h-5L8 10z"/></svg>',
     world: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg>',
   };
+  /* Compact event cards like a broker app's match cards: when · question · two outcomes · one split bar. */
   function l3PredCards() {
     var cards = _l3.predict && _l3.predict.cards;
-    if (!cards) return l3Skel(6, 'l3-prd');
+    if (!cards) return l3Skel(8, 'l3-prd');
     return cards.map(function (m) {
-      var outs = m.outs.map(function (o, i) {
-        var p = Math.max(1, Math.min(99, o.p));
-        return '<span class="l3-out' + (i === 0 ? ' is-lead' : '') + '"><span class="l3-out-n">' + esc(o.n) + '</span><b>' + p + '%</b>' +
-          '<span class="l3-out-bar"><i style="width:' + p + '%"></i></span></span>';
+      var o = m.outs.slice(0, 2).map(function (x) { return { n: x.n, p: Math.max(1, Math.min(99, x.p)) }; });
+      var outs = o.map(function (x, i) {
+        return '<span class="l3-out' + (i === 0 ? ' is-lead' : '') + '"><i class="l3-out-dot" aria-hidden="true"></i><span class="l3-out-n">' + esc(x.n) + '</span><b>' + x.p + '%</b></span>';
       }).join('');
-      return '<button type="button" class="l3-card l3-prd" data-lv2-go="predict">' +
-        '<span class="l3-prd-top"><span class="l3-cat is-' + m.cat + '">' + (L3_CAT_ICON[m.cat] || '') + esc(t3('c_' + m.cat)) + '</span><span class="l3-when">' + esc(l3When(m.ends)) + '</span></span>' +
-        '<span class="l3-prd-q">' + esc(m.q) + '</span>' +
-        '<span class="l3-outs">' + outs + '</span>' +
-        '<span class="l3-meta">' + esc(t3('vol')) + ' ' + esc(l3Big(m.vol)) + '</span>' +
+      /* Two sides of one question (Yes/No, Team A/Team B) share one split bar; otherwise the bar is the
+         leading outcome's chance — two separate markets must not look like shares of one whole. */
+      var pair = o.length === 2 && Math.abs(o[0].p + o[1].p - 100) <= 3;
+      var split = pair
+        ? '<span class="l3-split" aria-hidden="true"><i style="flex-grow:' + o[0].p + '"></i><i style="flex-grow:' + o[1].p + '"></i></span>'
+        : '<span class="l3-split is-one" aria-hidden="true"><i style="flex-grow:' + o[0].p + '"></i><i style="flex-grow:' + (100 - o[0].p) + '"></i></span>';
+      var img = /^https:\/\//.test(m.img || '')
+        ? '<img class="l3-prd-img" src="' + esc(m.img) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">'
+        : '<span class="l3-prd-img is-' + m.cat + '" aria-hidden="true">' + (L3_CAT_ICON[m.cat] || '') + '</span>';
+      return '<button type="button" class="l3-card l3-prd' + (pair ? '' : ' is-one') + '" data-lv2-go="predict">' +
+        '<span class="l3-prd-top"><span class="l3-when">' + esc(m.isMatch ? l3MatchWhen(m.ends) : l3When(m.ends)) + '</span><span class="l3-prd-vol">' + esc(l3Big(m.vol)) + '</span></span>' +
+        '<span class="l3-prd-head">' + img + '<span class="l3-prd-q">' + esc(m.q) + '</span></span>' +
+        '<span class="l3-outs">' + outs + '</span>' + split +
       '</button>';
     }).join('');
   }
 
-  function l3SecHead(key, title, sub, cta, ctaAttr) {
+  /* The section title itself opens the market («Stocks ›»); the separate CTA buttons are gone (owner, 15.11). */
+  function l3SecHead(title, sub, hint, go) {
     return '<div class="l3-sec-head">' +
-      '<div class="l3-sec-txt"><h2 class="l3-sec-title"><span class="l3-dot" aria-hidden="true"></span>' + esc(title) + '</h2>' +
-      '<p class="l3-sec-sub">' + esc(sub) + '</p></div>' +
-      '<button type="button" class="l3-cta l3-cta-' + key + '" ' + ctaAttr + '>' + esc(cta) + '</button>' +
+      '<h2 class="l3-sec-title"><button type="button" class="l3-sec-link" data-lv2-go="' + go + '" title="' + esc(hint) + '">' +
+        '<span class="l3-dot" aria-hidden="true"></span>' + esc(title) + L3_CHEV + '</button></h2>' +
+      '<p class="l3-sec-sub">' + esc(sub) + '</p>' +
     '</div>';
   }
 
@@ -1871,13 +1914,13 @@
     return {
       now: '<div class="l3-now-head"><h2>' + esc(t3('now_h')) + '</h2>' + (state ? '<span class="l3-state' + (/REGULAR/i.test(idx.state) ? ' is-open' : '') + '"><i></i>' + esc(state) + '</span>' : '') + '</div>' +
         '<div class="l3-rail l3-rail-mkt">' + l3MarketCards() + '</div>',
-      stocks: l3SecHead('stk', 'Stocks', t3('stk_sub'), t3('stk_cta'), 'data-lv2-go="xstocks"') +
+      stocks: l3SecHead('Stocks', t3('stk_sub'), t3('stk_cta'), 'xstocks') +
         '<div class="l3-rail l3-grid-6">' + l3StockCards() + '</div>' + l3MoverChips(),
-      perps: l3SecHead('prp', 'Perps', t3('prp_sub'), t3('prp_cta'), 'data-lv2-go="futures"') +
+      perps: l3SecHead('Perps', t3('prp_sub'), t3('prp_cta'), 'futures') +
         '<div class="l3-rail l3-grid-6">' + l3PerpCards() + '</div>',
-      predict: l3SecHead('prd', 'Predictions', t3('prd_sub'), t3('prd_cta'), 'data-lv2-go="predict"') +
-        '<div class="l3-rail l3-grid-3">' + l3PredCards() + '</div>',
-      swaphead: l3SecHead('swp', 'Swap', t3('swp_sub'), t3('swp_cta'), 'data-lv2-go="dashboard"'),
+      predict: l3SecHead('Predictions', t3('prd_sub'), t3('prd_cta'), 'predict') +
+        '<div class="l3-rail l3-grid-4">' + l3PredCards() + '</div>',
+      swaphead: l3SecHead('Swap', t3('swp_sub'), t3('swp_cta'), 'dashboard'),
       swapdemo: '<div class="l3-swap-demo lv2-hw">' + renderSwap(_live.eth) + '</div>',
       foot: '<p class="l3-foot">' + esc(t3('foot')) + '</p>',
     };

@@ -1197,6 +1197,10 @@ function startStockWarmers() {
   }, 20_000);
   kick.unref?.();
   every(55_000, warmIndices);
+  /* New listings: keep the coin-list snapshot moving even when nobody opens the home page. */
+  const warmListings = async () => { const { newListingsService } = await import('./new-listings.js'); await newListingsService().refreshList(); };
+  setTimeout(() => { warmListings().catch(() => {}); }, 45_000).unref?.();
+  every(30 * 60_000, warmListings);
   every(14 * 60_000, warmSpark);
   every(3 * 60_000, warmLiquidity);
 }
@@ -1616,6 +1620,17 @@ export function createMarketRouter() {
       return res.json(payload || fallbackQuotes());
     } catch (_) {
       return res.json(_quotesCache.data || fallbackQuotes());
+    }
+  });
+
+  /** Home «New listings»: coins listed in the last 24 h that GROM can swap (see new-listings.js). */
+  r.get('/new-listings', async (_req, res) => {
+    try {
+      const { newListingsService } = await import('./new-listings.js');
+      const payload = await newListingsService().get();
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120').json(payload);
+    } catch (e) {
+      res.status(502).json({ rows: [], count: 0, error: String(e?.message || e) });
     }
   });
 

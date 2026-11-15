@@ -134,6 +134,14 @@ test('market cap and turnover of non-US listings are not shown as USD', () => {
   const row = compactStockRow(items[0]);
   assert.equal(row.mc, null);
   assert.equal(row.v, null);
+  assert.equal(row.ev, null);
+});
+
+test('list rows carry exchange turnover separately from pool volume', () => {
+  const items = buildStocksUniverse({ catalog: [{ sym: 'NVDA', yahooSym: 'NVDA', tokenSym: 'NVDAx', name: 'NVIDIA xStock', addrs: { 1: A(31) }, solMint: '', vol24: '$3.2M', exVol: 3.1e10 }], lifiTokens: {} });
+  const row = compactStockRow(items[0]);
+  assert.equal(row.v, 3.2e6);
+  assert.equal(row.ev, 3.1e10);
 });
 
 test('home page top list: largest USD caps only, small payload', async () => {

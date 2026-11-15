@@ -29693,12 +29693,17 @@ async function gwRenderTrending(opts) {
   const activeNet = String(ctx.getNet() || 'all');
 
   let wrap = document.getElementById(ctx.wrapId);
+  /* Landing v3 (2026-11-15): the card sits next to the swap preview in #l3TrendHost. */
+  const l3Host = ctx.instance === 'landing' ? document.getElementById('l3TrendHost') : null;
+  if (wrap && l3Host && wrap.parentNode !== l3Host) l3Host.appendChild(wrap);
   const isRefresh = !!(wrap && document.getElementById(ctx.listId));
   if (!wrap) {
     wrap = document.createElement('div');
     wrap.id = ctx.wrapId;
     wrap.className = 'gw-tr-wrap';
-    if (ctx.instance === 'landing') {
+    if (ctx.instance === 'landing' && l3Host) {
+      l3Host.appendChild(wrap);
+    } else if (ctx.instance === 'landing') {
       const root = opts.root || document.getElementById('landing-v2-root');
       const diagram = root?.querySelector('.lv2-diagram-sec');
       if (root && diagram) root.insertBefore(wrap, diagram);

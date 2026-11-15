@@ -626,15 +626,15 @@
   html.lv2-on #page-landing #gwLandingAggHost,
   html.lv2-on #page-landing #gwLandingCmpHost,
   #page-landing > .landing-wrap { display: none !important; }
-  /* Hero right: reserve swap-widget space; hide until .lv2-hw is mounted */
+  /* Hero right: reserve market-map space; hide until landing-v2.js mounts .l3-map */
   html.lv2-on #page-landing .lp-hero-right {
     min-width: 0;
     min-height: 320px;
   }
-  html.lv2-on #page-landing .lp-hero-right:not(:has(.lv2-hw .lv2-hw-tabs)) {
+  html.lv2-on #page-landing .lp-hero-right:not(:has(.l3-map)) {
     visibility: hidden;
   }
-  html.lv2-on #page-landing .lp-hero-right:has(.lv2-hw .lv2-hw-tabs) {
+  html.lv2-on #page-landing .lp-hero-right:has(.l3-map) {
     visibility: visible;
   }
   /* Dashboard hero: its frame is visible from first paint (see grom-dashboard-shell.css). */
@@ -6968,7 +6968,7 @@
         <div class="lp-hero">
           <div class="lp-hero-left">
             <span class="lp-eyebrow" data-i18n="lp_hero_eyebrow">⚡ Non-custodial DEX · multiple chains · 10 000+ tokens</span>
-            <h1 class="lp-h1" data-i18n-html="lp_hero_h1"><span class="lv2-h1-line">One wallet.</span><br><span class="lv2-h1-line lv2-accent">All of DeFi.</span></h1>
+            <h1 class="lp-h1" data-no-tr><span class="lv2-h1-line l3-h1-mk"><span class="l3-w is-stk">Stocks.</span> <span class="l3-w is-prp">Perps.</span> <span class="l3-w is-prd">Predictions.</span></span><br><span class="lv2-h1-line lv2-accent">One wallet.</span></h1>
             <p class="lp-h1-sub" data-i18n="lp_hero_sub">Compare available swap and bridge routes for your tokens and networks. Review the current quote and confirm each transaction in your own wallet.</p>
             <div class="lp-cta-row">
               <button class="lp-btn-primary" onclick="openConnectModal()" data-i18n="lp_hero_cta1">Connect wallet →</button>
@@ -6976,8 +6976,7 @@
             </div>
           </div>
           <div class="lp-hero-right">
-            <!-- Swap / perps / predict / stocks widget mounted by landing-v2.js -->
-            <div class="lv2-hw" id="lv2HeroWidget" aria-busy="true"></div>
+            <!-- Market map mounted by landing-v2.js -->
           </div>
         </div>
 
@@ -8826,6 +8825,7 @@ window.gromSyncPrettyPath = function gromSyncPrettyPath(page) {
     var routeParams = new URLSearchParams(location.search);
     if (page !== 'predict') routeParams.delete('event');
     if (page !== 'xstocks') routeParams.delete('sym');
+    if (page !== 'futures') routeParams.delete('perp');
     var routeQuery = routeParams.toString();
     var next = newPath + (routeQuery ? '?' + routeQuery : '') + newHash;
     var cur = location.pathname + location.search + location.hash;
@@ -10186,6 +10186,19 @@ var futDeskState = { pair: 'BTC/USDT', leverage: 25, mode: 'cross', side: 'long'
 try {
   var __tm = localStorage.getItem('grom_trade_mode');
   if (__tm === 'spot' || __tm === 'perp') futDeskState.tradeMode = __tm;
+} catch (_) {}
+/* Landing perps cards open the desk on their coin: /futures?perp=ETH (2026-11-15). Read once, then drop it from the URL. */
+try {
+  var __perpUrl = new URL(location.href);
+  var __perp = String(__perpUrl.searchParams.get('perp') || '').toUpperCase();
+  if (__perp) {
+    if (/^[A-Z0-9]{2,12}$/.test(__perp)) {
+      futDeskState.tradeMode = 'perp';
+      futDeskState.pair = futDeskState.lastPerpPair = __perp + '/USDT';
+    }
+    __perpUrl.searchParams.delete('perp');
+    history.replaceState(history.state, '', __perpUrl.pathname + __perpUrl.search + __perpUrl.hash);
+  }
 } catch (_) {}
 try {
   var __siq = localStorage.getItem('grom_fut_size_in_quote');

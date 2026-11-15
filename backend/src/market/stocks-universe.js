@@ -217,6 +217,8 @@ export function compactStockRow(item) {
     ca: num(item.chgAbs),
     mc: foreign ? null : (item.mcNum || parseCompactUsd(item.mc)),
     v: foreign ? null : (item.volNum || parseCompactUsd(item.vol24)),
+    /* Exchange (US listing) 24h $ turnover — the same unit for every ticker, unlike v (pool volume when a pool exists). */
+    ev: foreign ? null : num(item.exVol),
     pe: num(item.pe),
     k: item.k || null,
     h: item.halted ? 1 : 0,
@@ -362,6 +364,7 @@ export function createStocksUniverse({
       if (m.mc && m.mc !== '—') it.mc = m.mc;
       if (m.mcNum) it.mcNum = m.mcNum;
       if (m.vol24 && m.vol24 !== '—') it.vol24 = m.vol24;
+      if (m.exVol) it.exVol = m.exVol;
       if (m.pe) it.pe = m.pe;
     }
     built = { key, catalog, items };

@@ -7711,7 +7711,7 @@ function gwDashActive() {
 
 /**
  * Canonical #page-dashboard vertical order.
- * Dashboard order: banners → portfolio → Instant Swap → Limit/DCA → Trending
+ * Dashboard order: new listings → banners → portfolio → Instant Swap → Limit/DCA → Trending
  * → stats → predict/watch grid. Reconcile after racey mounts.
  */
 function gwDashReconcileOrder() {
@@ -7719,6 +7719,7 @@ function gwDashReconcileOrder() {
   if (!page) return;
   const seq = [];
   const push = (el) => { if (el && el.parentNode === page) seq.push(el); };
+  push(document.getElementById('gromNewListings')); // «New listings» strip above the stories (grom-home-hero.js)
   push(page.querySelector(':scope > .dash-banners-wrap'));
   push(document.getElementById('gwMpSlot'));
   push(page.querySelector(':scope > .gw-ds-wrap'));

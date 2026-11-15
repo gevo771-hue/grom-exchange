@@ -1611,6 +1611,10 @@ html.lv2-on body:has(#page-landing.active) #gromSeoRouteCopy .grom-seo-details{w
 @media (min-width: 3400px) {
   html.lv2-on #page-landing, html.lv2-on body:has(#page-landing.active) #gromSeoRouteCopy { zoom: 1.75; }
 }
+/* 5K/8K: same ×2.3 step as the header (index.html --gx-z), otherwise the landing looked smaller than the header. */
+@media (min-width: 4600px) {
+  html.lv2-on #page-landing, html.lv2-on body:has(#page-landing.active) #gromSeoRouteCopy { zoom: 2.3; }
+}
 
 /* ======================= Landing v3 — market floor (2026-11-15) =======================
  * Dark trading-floor canvas, one colour per market:

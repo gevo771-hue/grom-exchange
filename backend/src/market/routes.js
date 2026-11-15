@@ -221,7 +221,7 @@ async function fetchBackedXstocksCatalog() {
       mc: '—',
       // A catalog refresh must not erase already observed prices while the
       // independent metrics refresh runs. Keep their original timestamps.
-      ...(prior ? Object.fromEntries(['price', 'fairPrice', 'fairPriceSource', 'fairPriceAt', 'chg', 'chgSource', 'vol24', 'mc']
+      ...(prior ? Object.fromEntries(['price', 'fairPrice', 'fairPriceSource', 'fairPriceAt', 'chg', 'chgSource', 'vol24', 'exVol', 'mc']
         .map((key) => [key, prior[key]])) : {}),
     });
   }
@@ -320,6 +320,8 @@ async function fetchYahooEquityMetrics(items) {
         const pe = Number(r.trailingPE);
         out.set(row.key, {
           vol24: fmtCompactUsd(dollarVol),
+          /* Exchange $ turnover kept apart from on-chain pool volume (vol24 is overwritten by DexScreener). */
+          exVol: dollarVol > 0 && String(r.currency || '').toUpperCase() === 'USD' ? dollarVol : null,
           mc: fmtCompactUsd(mc),
           mcNum: Number.isFinite(mc) && mc > 0 && String(r.currency || '').toUpperCase() === 'USD' ? mc : null,
           equityPx: Number.isFinite(px) && px > 0 ? px : 0,
@@ -415,6 +417,7 @@ async function enrichXstocksMetrics(items) {
       if (m.pe) it.pe = m.pe;
       /* Keep Yahoo equity $ volume as fallback; Dex pool vol preferred below. */
       if (m.vol24 && m.vol24 !== '—') it.vol24 = m.vol24;
+      if (m.exVol) it.exVol = m.exVol;
     }
   }
   try { await fetchDexScreenerTokenPrices(items); } catch (_) {}
@@ -544,6 +547,7 @@ function normalizePolymarket(events, { maxEvents = PREDICT_MAX_EVENTS, maxOutcom
     const mk = Array.isArray(ev.markets) ? ev.markets : [];
     const eventEnded = !!(ev.endDate && !isCurrentPmEnd(ev.endDate));
     let rows = [];
+    let match = null;
     for (const m of mk) {
       if (m.closed || m.archived) continue;
       if (m.enableOrderBook === false) continue;
@@ -556,6 +560,18 @@ function normalizePolymarket(events, { maxEvents = PREDICT_MAX_EVENTS, maxOutcom
       if (!Number.isFinite(yes)) continue;
       const noRaw = prices.length > 1 ? Number(prices[1]) : NaN;
       const noPx = Number.isFinite(noRaw) ? noRaw : (1 - yes);
+      /* Game winner line («Team A vs Team B»): the list keeps only the top-priced rows, which for games are
+         totals and props — expose the two sides separately for compact match cards. */
+      if (!match && (m.sportsMarketType === 'moneyline' || (m.slug && m.slug === ev.slug))
+        && Array.isArray(outs) && outs.length === 2 && prices.length === 2 && Number.isFinite(noRaw)
+        && !/^(yes|no)$/i.test(String(outs[0])) && !/^(yes|no)$/i.test(String(outs[1]))) {
+        match = {
+          a: String(outs[0]).trim().slice(0, 40),
+          b: String(outs[1]).trim().slice(0, 40),
+          pa: Math.max(1, Math.min(99, Math.round(yes * 100))),
+          pb: Math.max(1, Math.min(99, Math.round(noRaw * 100))),
+        };
+      }
       const tokenYes = Array.isArray(tokens) ? String(tokens[0] || '') : '';
       const tokenNo = Array.isArray(tokens) ? String(tokens[1] || '') : '';
       let name = (m.groupItemTitle && String(m.groupItemTitle).trim())
@@ -606,6 +622,7 @@ function normalizePolymarket(events, { maxEvents = PREDICT_MAX_EVENTS, maxOutcom
       time: pmTime(ev.endDate, locale),
       live: pmEventIsLive(ev),
       source: 'polymarket',
+      ...(match ? { match } : {}),
       rows,
     });
     if (out.length >= maxEvents) break;

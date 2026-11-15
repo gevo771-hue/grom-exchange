@@ -1136,7 +1136,7 @@
   var L3TX = {
     en: {
       sub: 'Buy Apple and Nvidia, trade Bitcoin with up to 40× leverage and take a side on world events — straight from your wallet. No KYC, no deposits to GROM.',
-      sub_m: 'Stocks, perps up to 40× and predictions — from your own wallet. No KYC, no deposits.',
+      sub_m: 'Stocks, perps, swap and predictions — from your own wallet. No KYC, no deposits.',
       trust: ['No KYC', 'No deposits', 'You sign every trade'],
       now_h: 'Markets now', mkt_open: 'US market open', mkt_closed: 'US market closed — last close',
       gold: 'Gold',
@@ -1155,7 +1155,7 @@
     },
     ru: {
       sub: 'Покупай акции Apple и Nvidia, торгуй биткоином с плечом до 40× и делай прогнозы на события в мире — прямо из своего кошелька. Без KYC и без депозитов на GROM.',
-      sub_m: 'Акции, perps с плечом до 40× и прогнозы — из своего кошелька. Без KYC и депозитов.',
+      sub_m: 'Акции, perps, своп и прогнозы — из своего кошелька. Без KYC и депозитов.',
       trust: ['Без KYC', 'Без депозитов', 'Каждую сделку подписываешь ты'],
       now_h: 'Рынки сейчас', mkt_open: 'Биржа США открыта', mkt_closed: 'Биржа США закрыта — цены закрытия',
       gold: 'Золото',
@@ -1174,7 +1174,7 @@
     },
     ua: {
       sub: 'Купуй акції Apple і Nvidia, торгуй біткоїном з плечем до 40× і роби прогнози на події у світі — прямо зі свого гаманця. Без KYC і без депозитів на GROM.',
-      sub_m: 'Акції, perps з плечем до 40× і прогнози — зі свого гаманця. Без KYC і депозитів.',
+      sub_m: 'Акції, perps, своп і прогнози — зі свого гаманця. Без KYC і депозитів.',
       trust: ['Без KYC', 'Без депозитів', 'Кожну угоду підписуєш ти'],
       now_h: 'Ринки зараз', mkt_open: 'Біржа США відкрита', mkt_closed: 'Біржа США закрита — ціни закриття',
       gold: 'Золото',
@@ -1193,7 +1193,7 @@
     },
     es: {
       sub: 'Compra acciones de Apple y Nvidia, opera bitcoin con apalancamiento de hasta 40× y predice eventos del mundo, directamente desde tu billetera. Sin KYC ni depósitos en GROM.',
-      sub_m: 'Acciones, perps hasta 40× y predicciones, desde tu billetera. Sin KYC ni depósitos.',
+      sub_m: 'Acciones, perps, swap y predicciones — desde tu billetera. Sin KYC ni depósitos.',
       trust: ['Sin KYC', 'Sin depósitos', 'Tú firmas cada operación'],
       now_h: 'Mercados ahora', mkt_open: 'Bolsa de EE. UU. abierta', mkt_closed: 'Bolsa de EE. UU. cerrada — precios de cierre',
       gold: 'Oro',
@@ -1212,7 +1212,7 @@
     },
     ar: {
       sub: 'اشترِ أسهم Apple وNvidia، وتداول البيتكوين برافعة حتى 40×، وتوقّع أحداث العالم — مباشرةً من محفظتك. بلا KYC وبلا إيداع لدى GROM.',
-      sub_m: 'أسهم، وعقود دائمة حتى 40×، وتوقعات — من محفظتك. بلا KYC وبلا إيداع.',
+      sub_m: 'أسهم وعقود دائمة وتبديل وتوقعات — من محفظتك. بلا KYC وبلا إيداع.',
       trust: ['بلا KYC', 'بلا إيداع', 'أنت توقّع كل صفقة'],
       now_h: 'الأسواق الآن', mkt_open: 'السوق الأمريكية مفتوحة', mkt_closed: 'السوق الأمريكية مغلقة — أسعار الإغلاق',
       gold: 'الذهب',
@@ -1231,7 +1231,7 @@
     },
     zh: {
       sub: '买入苹果和英伟达股票，以最高 40 倍杠杆交易比特币，预测全球事件——全部直接用你的钱包完成。无需 KYC，无需向 GROM 存款。',
-      sub_m: '股票、最高 40 倍永续合约和预测——用你自己的钱包。无需 KYC，无需存款。',
+      sub_m: '股票、永续合约、兑换和预测——用你自己的钱包。无需 KYC，无需存款。',
       trust: ['无需 KYC', '无需存款', '每笔交易由你签名'],
       now_h: '市场动态', mkt_open: '美股交易中', mkt_closed: '美股休市——显示收盘价',
       gold: '黄金',
@@ -1250,7 +1250,7 @@
     },
     hi: {
       sub: 'Apple और Nvidia के शेयर खरीदें, 40× तक लीवरेज के साथ बिटकॉइन ट्रेड करें और दुनिया की घटनाओं पर प्रेडिक्शन करें — सीधे अपने वॉलेट से। न KYC, न GROM में जमा।',
-      sub_m: 'शेयर, 40× तक पर्प्स और प्रेडिक्शन — अपने वॉलेट से। न KYC, न जमा।',
+      sub_m: 'शेयर, पर्प्स, स्वैप और प्रेडिक्शन — अपने वॉलेट से। न KYC, न जमा।',
       trust: ['न KYC', 'न जमा', 'हर ट्रेड आप साइन करते हैं'],
       now_h: 'बाज़ार अभी', mkt_open: 'US बाज़ार खुला है', mkt_closed: 'US बाज़ार बंद — क्लोज़िंग कीमतें',
       gold: 'सोना',
@@ -1269,7 +1269,7 @@
     },
     tr: {
       sub: 'Apple ve Nvidia hissesi al, bitcoin’i 40×’e kadar kaldıraçla işle ve dünya olaylarını tahmin et — doğrudan cüzdanından. KYC yok, GROM’a para yatırma yok.',
-      sub_m: 'Hisseler, 40×’e kadar perp ve tahminler — kendi cüzdanından. KYC yok, para yatırma yok.',
+      sub_m: 'Hisseler, perp, takas ve tahminler — kendi cüzdanından. KYC yok, para yatırma yok.',
       trust: ['KYC yok', 'Para yatırma yok', 'Her işlemi sen imzalarsın'],
       now_h: 'Piyasalar şimdi', mkt_open: 'ABD borsası açık', mkt_closed: 'ABD borsası kapalı — kapanış fiyatları',
       gold: 'Altın',
@@ -1413,10 +1413,15 @@
         var ctx = (j && j[1]) || [];
         var live = 0;
         var rows = {};
+        var heat = [];
         for (var i = 0; i < uni.length; i++) {
           if (!uni[i] || uni[i].isDelisted) continue;
           live++;
           var name = String(uni[i].name || '').toUpperCase();
+          if (ctx[i]) {
+            var hm = Number(ctx[i].markPx) || 0, hp = Number(ctx[i].prevDayPx) || 0, hv = Number(ctx[i].dayNtlVlm) || 0;
+            if (hm > 0 && hp > 0 && hv > 0 && /^[A-Z0-9]{2,10}$/.test(name)) heat.push({ coin: name, vol: hv, chg: (hm / hp - 1) * 100 });
+          }
           if (L3_PERPS.indexOf(name) < 0 || !ctx[i]) continue;
           var mark = Number(ctx[i].markPx) || 0;
           var prev = Number(ctx[i].prevDayPx) || 0;
@@ -1429,7 +1434,8 @@
             vol: Number(ctx[i].dayNtlVlm) || 0,
           };
         }
-        return Object.keys(rows).length ? { rows: rows, live: live } : null;
+        heat.sort(function (a, b) { return b.vol - a.vol; });
+        return Object.keys(rows).length ? { rows: rows, live: live, heat: heat.slice(0, 18) } : null;
       });
     });
   }
@@ -1451,7 +1457,8 @@
     });
   }
 
-  var L3_SKIP_ROW = /(^|\s)(O\/U|[1-4]Q|[12]H)\b|spread|handicap|over\/under|^[+\-−]\d/i;
+  /* Sub-market names (totals, handicaps, «Match Winner», «Game 2 Winner», draws) are not outcomes a reader can follow. */
+  var L3_SKIP_ROW = /(^|\s)(O\/U|[1-4]Q|[12]H)\b|spread|handicap|over\/under|^[+\-−]\d|winner|game\s*\d|map\s*\d|set\s*\d|^draw\b|ничья|победитель/i;
   var L3_PLACEHOLDER = /^(команда|team|другая|другой|other|otro|otra|diğer|其他|अन्य|أخرى)(\s|$)/i;
   function l3PredCat(m) {
     var cat = String(m.cat || '').toLowerCase();
@@ -1614,42 +1621,117 @@
     }
     return out;
   }
-  function l3MapHtml() {
-    var items = ((_l3.top && _l3.top.items) || []).filter(function (s) { return s.mc > 0 && s.s !== 'GOOG' && s.s !== 'BRK.A'; }).slice(0, 18);
-    var head = '<div class="l3-map-head"><div><b>Market map</b><span>24h change</span></div>' +
-      (_l3.idx && _l3.idx.by['^GSPC'] ? '<span class="l3-chip ' + l3Dir(_l3.idx.by['^GSPC'].chg) + '">S&amp;P 500 ' + l3Arrow(_l3.idx.by['^GSPC'].chg) + esc(l3Pct(_l3.idx.by['^GSPC'].chg)) + '</span>' : '') +
-      '</div>';
-    if (!items.length) return head + '<div class="l3-map-box is-skel"></div>';
+  function l3Tiles(items, span) {
     var W = 100, H = 72;
-    var rects = l3Squarify(items.map(function (s) { return { v: Math.sqrt(s.mc), s: s }; }), W, H);
-    var tiles = rects.map(function (r) {
-      var s = r.it.s;
-      var c = Number(s.c) || 0;
-      var k = Math.min(1, Math.abs(c) / 3);
+    var rects = l3Squarify(items, W, H);
+    return rects.map(function (r) {
+      var it = r.it;
+      var c = Number(it.c) || 0;
+      var k = Math.min(1, Math.abs(c) / span);
       var a = (0.42 + 0.58 * k).toFixed(2);
       var bg = c >= 0 ? 'rgba(14,196,112,' + a + ')' : 'rgba(255,72,56,' + a + ')';
       var area = r.w * r.h;
       var size = area > 900 ? 'is-xl' : area > 420 ? 'is-l' : area > 170 ? 'is-m' : area > 70 ? 'is-s' : 'is-xs';
-      return '<button type="button" class="l3-tile ' + size + '" data-l3-stock="' + esc(s.s) + '" style="left:' + (r.x / W * 100).toFixed(3) + '%;top:' + (r.y / H * 100).toFixed(3) + '%;width:' + (r.w / W * 100).toFixed(3) + '%;height:' + (r.h / H * 100).toFixed(3) + '%;--tile:' + bg + '" title="' + esc(s.n || s.s) + '">' +
-        '<b>' + esc(s.s) + '</b><span>' + esc(l3Pct(c)) + '</span></button>';
+      return '<button type="button" class="l3-tile ' + size + '" ' + it.attr + ' style="left:' + (r.x / W * 100).toFixed(3) + '%;top:' + (r.y / H * 100).toFixed(3) + '%;width:' + (r.w / W * 100).toFixed(3) + '%;height:' + (r.h / H * 100).toFixed(3) + '%;--tile:' + bg + '" title="' + esc(it.title || it.label) + '">' +
+        '<b>' + esc(it.label) + '</b><span>' + esc(l3Pct(c)) + '</span></button>';
     }).join('');
-    return head + '<div class="l3-map-box">' + tiles + '</div>';
   }
+  function l3CardHead(title, sub, chip) {
+    return '<div class="l3-map-head"><div><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></div>' + (chip || '') + '</div>';
+  }
+  function l3MapHtml() {
+    var items = ((_l3.top && _l3.top.items) || []).filter(function (s) { return s.mc > 0 && s.s !== 'GOOG' && s.s !== 'BRK.A'; }).slice(0, 18);
+    var spx = _l3.idx && _l3.idx.by['^GSPC'];
+    var head = l3CardHead('Market map', '24h change', spx ? '<span class="l3-chip ' + l3Dir(spx.chg) + '">S&amp;P 500 ' + l3Arrow(spx.chg) + esc(l3Pct(spx.chg)) + '</span>' : '');
+    if (!items.length) return head + '<div class="l3-map-box is-skel"></div>';
+    return head + '<div class="l3-map-box">' + l3Tiles(items.map(function (s) {
+      return { v: Math.sqrt(s.mc), c: s.c, label: s.s, title: s.n || s.s, attr: 'data-l3-stock="' + esc(s.s) + '"' };
+    }), 3) + '</div>';
+  }
+  function l3CryptoMapHtml() {
+    var heat = (_l3.perps && _l3.perps.heat) || [];
+    var btc = _l3.perps && _l3.perps.rows && _l3.perps.rows.BTC;
+    var head = l3CardHead('Crypto map', '24h change', btc ? '<span class="l3-chip ' + l3Dir(btc.chg) + '">BTC ' + l3Arrow(btc.chg) + esc(l3Pct(btc.chg)) + '</span>' : '');
+    if (!heat.length) return head + '<div class="l3-map-box is-skel"></div>';
+    return head + '<div class="l3-map-box">' + l3Tiles(heat.map(function (h) {
+      return { v: Math.sqrt(h.vol), c: h.chg, label: h.coin, title: h.coin + '-PERP', attr: 'data-l3-perp="' + esc(h.coin) + '"' };
+    }), 6) + '</div>';
+  }
+  function l3PredMiniHtml() {
+    var cards = (_l3.predict && _l3.predict.cards) || [];
+    var head = l3CardHead('Predictions', 'Top markets', '');
+    if (!cards.length) return head + '<div class="l3-map-box is-skel"></div>';
+    var rows = cards.slice(0, 4).map(function (m) {
+      var o = m.outs[0] || { n: '', p: 0 };
+      var p = Math.max(1, Math.min(99, o.p));
+      return '<button type="button" class="l3-pm" data-lv2-go="predict">' +
+        '<span class="l3-pm-ico is-' + m.cat + '">' + (L3_CAT_ICON[m.cat] || '') + '</span>' +
+        '<span class="l3-pm-q"><span class="l3-pm-t">' + esc(m.q) + '</span><small>' + esc(o.n) + '</small></span>' +
+        '<span class="l3-pm-p"><b>' + p + '%</b><i><em style="width:' + p + '%"></em></i></span>' +
+      '</button>';
+    }).join('');
+    return head + '<div class="l3-map-box l3-pm-box">' + rows + '</div>';
+  }
+  /* Hero right: swipeable cards like a broker app — the next card peeks at the edge. */
   function mountMap() {
     var right = document.querySelector('#page-landing .lp-hero-right');
     if (!right) return;
     right.querySelectorAll('.landing-hero-icon, .landing-hero-logo-frame, .landing-brand-anim, .lv2-hw').forEach(function (n) {
       try { n.remove(); } catch (_) {}
     });
-    var card = right.querySelector('.l3-map');
-    if (!card) {
-      card = document.createElement('div');
-      card.className = 'l3-map';
-      card.setAttribute('data-no-tr', '');
-      right.appendChild(card);
+    var car = right.querySelector('.l3-car');
+    if (!car) {
+      right.querySelectorAll('.l3-map').forEach(function (n) { try { n.remove(); } catch (_) {} });
+      car = document.createElement('div');
+      car.className = 'l3-car';
+      car.setAttribute('data-no-tr', '');
+      car.innerHTML =
+        '<div class="l3-car-track">' +
+          '<div class="l3-map l3-car-card" data-car="stocks"></div>' +
+          '<div class="l3-map l3-car-card" data-car="crypto"></div>' +
+          '<div class="l3-map l3-car-card" data-car="pred"></div>' +
+        '</div>' +
+        '<div class="l3-car-nav">' +
+          '<button type="button" class="l3-car-arr" data-car-step="-1" aria-label="Previous">‹</button>' +
+          '<span class="l3-car-dots"><button type="button" class="on" data-car-i="0" aria-label="1"></button><button type="button" data-car-i="1" aria-label="2"></button><button type="button" data-car-i="2" aria-label="3"></button></span>' +
+          '<button type="button" class="l3-car-arr" data-car-step="1" aria-label="Next">›</button>' +
+        '</div>';
+      right.appendChild(car);
+      var track = car.querySelector('.l3-car-track');
+      var cardsEl = function () { return track.querySelectorAll('.l3-car-card'); };
+      var current = function () {
+        var list = cardsEl(), best = 0, bestD = Infinity;
+        for (var i = 0; i < list.length; i++) {
+          var d = Math.abs(list[i].offsetLeft - track.offsetLeft - track.scrollLeft);
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        return best;
+      };
+      var goTo = function (i) {
+        var list = cardsEl();
+        i = Math.max(0, Math.min(list.length - 1, i));
+        try { track.scrollTo({ left: list[i].offsetLeft - track.offsetLeft, behavior: 'smooth' }); } catch (_) { track.scrollLeft = list[i].offsetLeft - track.offsetLeft; }
+      };
+      var syncDots = function () {
+        var i = current();
+        car.querySelectorAll('.l3-car-dots button').forEach(function (b, k) { b.classList.toggle('on', k === i); });
+      };
+      track.addEventListener('scroll', function () {
+        clearTimeout(track._l3t);
+        track._l3t = setTimeout(syncDots, 60);
+      }, { passive: true });
+      car.addEventListener('click', function (e) {
+        var dot = e.target.closest('[data-car-i]');
+        if (dot) { e.preventDefault(); goTo(Number(dot.getAttribute('data-car-i'))); return; }
+        var step = e.target.closest('[data-car-step]');
+        if (step) { e.preventDefault(); goTo(current() + Number(step.getAttribute('data-car-step'))); }
+      });
     }
-    var html = l3MapHtml();
-    if (card.__l3 !== html) { card.innerHTML = html; card.__l3 = html; }
+    var parts = { stocks: l3MapHtml(), crypto: l3CryptoMapHtml(), pred: l3PredMiniHtml() };
+    Object.keys(parts).forEach(function (k) {
+      var el = car.querySelector('[data-car="' + k + '"]');
+      if (el && el.__l3 !== parts[k]) { el.innerHTML = parts[k]; el.__l3 = parts[k]; }
+    });
   }
 
   function l3MarketCards() {

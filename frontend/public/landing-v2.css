@@ -2120,6 +2120,9 @@ html.lv2-on #page-landing .lp-final-cta .lp-final-h {
   html.lv2-on #page-landing .l3-sec-title { font-size: 22px; }
   html.lv2-on #page-landing .l3-sec-head { align-items: center; }
   html.lv2-on #page-landing .l3-sec-sub { font-size: 12px; line-height: 1.3; max-width: 58%; }
+  /* A long note (Predictions) goes on its own line under the title on phones (owner, 15.11). */
+  html.lv2-on #page-landing .l3-sec-head.is-long { flex-wrap: wrap; align-items: baseline; row-gap: 4px; }
+  html.lv2-on #page-landing .l3-sec-head.is-long .l3-sec-sub { flex: 1 0 100%; max-width: none; margin-left: 0; text-align: left; font-size: 13px; line-height: 1.4; }
   /* Phone: cards in a two-column grid (predictions one per row), nothing cut at the screen edge. */
   html.lv2-on #page-landing .l3-rail,
   html.lv2-on #page-landing .l3-rail-mkt,

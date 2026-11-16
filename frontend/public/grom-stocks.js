@@ -496,7 +496,16 @@
     var box = img.parentNode;
     if (!box || !box.classList || !box.classList.contains('gs-lg')) return;
     var key = img.currentSrc || img.src;
-    var tone = LOGO_TONE[key] || (LOGO_TONE[key] = logoTone(img));
+    var tone = LOGO_TONE[key] || logoTone(img);
+    /* iPhone can fire «load» before the picture is decoded: the sample comes out blank and the logo
+       turned into initials — and stayed so, as the verdict was cached (owner, 15.11). Decode and look again;
+       never remember «empty». */
+    if (tone === 'empty' && !img.__toneRetry && typeof img.decode === 'function') {
+      img.__toneRetry = 1;
+      img.decode().then(function () { onImgLoad({ target: img }); }, function () { onImgLoad({ target: img }); });
+      return;
+    }
+    if (tone !== 'empty') LOGO_TONE[key] = tone;
     if (tone === 'empty') { if (img.getAttribute('data-fb')) { onImgError(e); } else logoInitials(box, img); return; }
     box.classList.toggle('dk', tone === 'dark');
     box.classList.add('ok');
@@ -774,14 +783,29 @@
           + '<div class="r num"><b>' + px(priceOf(r)) + '</b><small class="' + cls(r.c) + '">' + pct(r.c) + '</small></div></div>';
       }).join('');
   }
-  /* Called by the 60 s refresh: the trends card used to keep the numbers from the first render. */
+  /* Called by the 60 s refresh: the trends card used to keep the numbers from the first render.
+     Same five stocks → only the numbers change; the logos are not re-created (no reload, no flicker). */
   function paintTrends() {
     var el = root && root.querySelector('#gsTrends');
     if (!el || !S.rows) return;
-    var html = trendsInner(S.rows);
-    if (el.__h === html) return;
-    el.innerHTML = html;
-    el.__h = html;
+    var list = trendRows(S.rows);
+    var cur = Array.prototype.map.call(el.querySelectorAll('.gs-trend'), function (r) { return r.getAttribute('data-go'); });
+    if (cur.join(',') === list.map(function (r) { return r.s; }).join(',')) {
+      var sub = el.querySelector('.gs-h2 small');
+      if (sub) sub.textContent = t(list.byMc ? 'trends_sub_mc' : 'trends_sub');
+      el.querySelectorAll('.gs-trend').forEach(function (rowEl, i) {
+        var r = list[i];
+        var vol = r.ev > 0 ? t('vol') + ' ' + usdS(r.ev) : '';
+        var nm = rowEl.querySelector('.nm small');
+        if (nm) nm.textContent = vol + (r.mc ? (vol ? ' | ' : '') + t('mcap') + ' ' + usdS(r.mc) : '');
+        var pb = rowEl.querySelector('.r b');
+        if (pb) pb.textContent = px(priceOf(r));
+        var cs = rowEl.querySelector('.r small');
+        if (cs) { cs.className = cls(r.c); cs.textContent = pct(r.c); }
+      });
+      return;
+    }
+    el.innerHTML = trendsInner(S.rows);
     el.querySelectorAll('[data-go]').forEach(function (e) { e.addEventListener('click', function () { go(e.getAttribute('data-go')); }); });
   }
   function paintSelect(id, opts, cur, onPick) {

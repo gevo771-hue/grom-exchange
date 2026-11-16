@@ -18616,7 +18616,12 @@ var GROM_XSTOCKS = [
     }
   }
   function bootHeavy() {
-    ensureXstocksPage(); ensureNav();
+    ensureNav();
+    /* Stocks are mounted ahead of time for an instant switch, but only once the current page is up
+       (it pulled the 1 700-stock list and drew the table during the first paint — 15.11 speed check). */
+    var warmStocks = function () { try { ensureXstocksPage(); } catch (_) {} };
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(warmStocks, { timeout: 5000 });
+    else setTimeout(warmStocks, 4000);
     gwxWarmPredictCache();
     ensurePredictPoll();
     renderPredictWidgets();

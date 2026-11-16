@@ -11193,9 +11193,6 @@ function gwInjectDashSwapCss() {
     .gw-ds-loss { margin: 10px 0; padding: 11px 13px; border-radius: 12px; font-size: 13px; line-height: 1.45; }
     .gw-ds-loss.warn { background: rgba(245,185,77,0.08); border: 1px solid rgba(245,185,77,0.28); color: #f3dcae; }
     .gw-ds-loss.bad { background: rgba(255,92,92,0.09); border: 1px solid rgba(255,92,92,0.35); color: #ffc9c9; font-weight: 600; }
-    .gw-ds-loss.pulse { animation: gwDsLossPulse .5s ease 2; }
-    @keyframes gwDsLossPulse { 50% { box-shadow: 0 0 0 4px rgba(255,92,92,0.25); } }
-    @media (prefers-reduced-motion: reduce) { .gw-ds-loss.pulse { animation: none; } }
 
     /* Wallet refused without a prompt (stale WalletConnect link) → one-tap reconnect */
     .gw-ds-reconnect { margin-top: 10px; padding: 12px 14px; border-radius: 12px; display: flex; gap: 12px; align-items: center;
@@ -26154,9 +26151,10 @@ async function gwOnChainSwapExecInline() {
 }
 
 /* Swap loss guard (16.11): PONS showed $3.70 in the wallet, a sale returned $0.41 — the coin has almost
-   no liquidity to sell into. Warn from 10% value lost; from 30% the swap needs a second tap. */
+   no liquidity to sell into. Warn from 10% value lost (red from 30%). Only a warning: the owner
+   wants the user to decide (16.11). */
 const GW_DS_LOSS_WARN = 0.10;
-const GW_DS_LOSS_CONFIRM = 0.30;
+const GW_DS_LOSS_RED = 0.30;
 function gwDsQuoteLoss() {
   try {
     const q = window.__gwLastAggQuotes;
@@ -26188,27 +26186,12 @@ function gwDsLossGuardPaint() {
     el.setAttribute('role', 'alert');
     cta.parentNode.insertBefore(el, cta);
   }
-  el.className = 'gw-ds-loss ' + (L.loss >= GW_DS_LOSS_CONFIRM ? 'bad' : 'warn');
+  el.className = 'gw-ds-loss ' + (L.loss >= GW_DS_LOSS_RED ? 'bad' : 'warn');
   const usd = (n) => '$' + (n >= 100 ? n.toFixed(0) : n.toFixed(2));
   el.textContent = gwUxText(
     'Потеря на обмене ≈ {pct}%: отдаёшь ≈ {in}, получишь ≈ {out}. По этой паре мало ликвидности — попробуй сумму меньше.',
     'Loss on this swap ≈ {pct}%: you give ≈ {in} and get ≈ {out}. There is little liquidity for this pair — try a smaller amount.',
   ).replace('{pct}', String(L.pct)).replace('{in}', usd(L.inUsd)).replace('{out}', usd(L.outUsd));
-}
-/** true = stop this tap (first tap on a heavy-loss quote asks to tap again). */
-function gwDsLossGuardBlocks() {
-  const L = gwDsQuoteLoss();
-  if (!L || L.loss < GW_DS_LOSS_CONFIRM) return false;
-  const c = window.__gwDsLossConfirm;
-  if (c && c.key === L.key && Date.now() - c.at < 30_000) { window.__gwDsLossConfirm = null; return false; }
-  window.__gwDsLossConfirm = { key: L.key, at: Date.now() };
-  gwDsLossGuardPaint();
-  const el = document.getElementById('gwDsLossWarn');
-  if (el) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
-  try {
-    gwToast(gwUxText('Нажми «Обменять» ещё раз, чтобы подтвердить обмен с потерей {pct}%.', 'Tap Swap again to confirm the swap with a {pct}% loss.').replace('{pct}', String(L.pct)), 'warn');
-  } catch (_) {}
-  return true;
 }
 try { window.gwDsQuoteLoss = gwDsQuoteLoss; window.gwDsLossGuardPaint = gwDsLossGuardPaint; } catch (_) {}
 
@@ -26304,7 +26287,6 @@ async function gwDsSubmit() {
   const amtStr = (typeof gwDsReadSwapAmtStr === 'function') ? gwDsReadSwapAmtStr() : String(document.getElementById('gwDsAmt')?.value || '');
   const amt  = Number(amtStr);
   if (!(amt > 0) || !amtStr) { gwToast('Enter an amount', 'warn'); return; }
-  if (mode === 'onchain') { try { if (gwDsLossGuardBlocks()) return; } catch (_) {} }
   try {
     const fromU = String(from || '').toUpperCase();
     if (/^(ETH|BNB|AVAX|MATIC|ARB)$/.test(fromU)) {

@@ -6,6 +6,7 @@ import config from '../config/index.js';
 import { logUserActivity } from './log.js';
 import { classifyIssue } from './classify.js';
 import { logSitePageview, normalizeVisitorId } from './views.js';
+import { listWalletTokens } from './wallet-tokens.js';
 
 const PRODUCTS = ['swap', 'spot', 'futures', 'predict', 'xstocks', 'wallet', 'auth', 'markets', 'system', 'other'];
 
@@ -111,6 +112,19 @@ export default function createActivityRouter({ requireAuth }) {
       res.json({ ok: true });
     } catch (err) {
       if (err.name === 'ZodError') return res.status(400).json({ error: 'validation', details: err.issues });
+      next(err);
+    }
+  });
+
+  /** Tokens this wallet bought on GROM — lets the wallet page show them on every device. */
+  r.get('/wallet-tokens', viewLimiter, async (req, res, next) => {
+    try {
+      const wallet = String(req.query.wallet || '').trim();
+      if (!/^0x[0-9a-fA-F]{40}$/.test(wallet)) return res.status(400).json({ error: 'wallet' });
+      const tokens = await listWalletTokens(wallet);
+      res.set('Cache-Control', 'private, max-age=60');
+      res.json({ tokens });
+    } catch (err) {
       next(err);
     }
   });

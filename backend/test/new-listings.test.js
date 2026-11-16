@@ -23,11 +23,11 @@ test('diffNewCoins returns only ids that were not known', () => {
   assert.deepEqual(got.map((c) => c.id), ['b']);
 });
 
-test('buildRows: all of the last 24 h newest first, then big coins of the week, 20–30 in total', () => {
+test('buildRows: all of the last 24 h newest first, then big coins of the last 14 days, 20–30 in total', () => {
   const now = Date.parse('2026-11-15T20:00:00Z');
   const H = 3600e3;
   const fresh = [
-    { id: 'old8d', at: now - 8 * 24 * H, chain: 'eth', chainId: 1, address: EVM },
+    { id: 'old15d', at: now - 15 * 24 * H, chain: 'eth', chainId: 1, address: EVM },
     { id: 'a', at: now - 5 * H, chain: 'eth', chainId: 1, address: EVM },
     { id: 'b', at: now - 1 * H, chain: 'solana', chainId: 1151111081099710, address: SOL },
     { id: 'nodec', at: now - 2 * H, chain: 'eth', chainId: 1, address: EVM },
@@ -38,11 +38,11 @@ test('buildRows: all of the last 24 h newest first, then big coins of the week, 
   ];
   const mk = (id, vol, extra) => ({ id, symbol: id, name: id, current_price: 1, total_volume: vol, ...extra });
   const markets = [
-    mk('old8d', 9e9), mk('a', 2e5, { symbol: 'aaa', image: 'https://x/a.png', price_change_percentage_24h: 12.5 }),
+    mk('old15d', 9e9), mk('a', 2e5, { symbol: 'aaa', image: 'https://x/a.png', price_change_percentage_24h: 12.5 }),
     mk('b', 9e4, { symbol: 'bbb', image: 'http://insecure' }), mk('nodec', 1e6), mk('dead', 10),
     mk('big3d', 5e6), mk('small3d', 2e4), mk('mid2d', 3e5),
   ];
-  const dec = new Map([['old8d', 18], ['a', 18], ['b', 9], ['dead', 18], ['big3d', 18], ['small3d', 18], ['mid2d', 18]]);
+  const dec = new Map([['old15d', 18], ['a', 18], ['b', 9], ['dead', 18], ['big3d', 18], ['small3d', 18], ['mid2d', 18]]);
   const rows = buildRows(fresh, markets, dec, { now });
   assert.deepEqual(rows.map((r) => r.id), ['b', 'a', 'big3d', 'mid2d']);
   assert.equal(rows[0].img, '');
@@ -114,7 +114,7 @@ test('new listings: DEX top-up keeps only new tokens with real liquidity', () =>
       pool('p2', 'b', 'wprl', { vol: 5_000_000, liq: 11_000_000 }), // fake liquidity against an obscure token
       pool('p3', 'c', 'weth'), // established coin, new pool
       pool('p4', 'd', 'weth', { vol: 50_000_000 }), // brand name
-      pool('p5', 'e', 'weth', { ageH: 24 * 9 }), // older than a week
+      pool('p5', 'e', 'weth', { ageH: 24 * 15 }), // older than 14 days
       pool('p6', 'f', 'weth'), // named like a top coin
     ],
   };

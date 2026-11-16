@@ -4967,7 +4967,7 @@ function gwMyTokensSyncServer(owner) {
     let added = false;
     try {
       const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
-      const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 5000) : null;
+      const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 12000) : null;
       const r = await fetch('/api/activity/wallet-tokens?wallet=' + w, { headers: { accept: 'application/json' }, signal: ctrl ? ctrl.signal : undefined });
       if (timer) clearTimeout(timer);
       const j = r.ok ? await r.json() : null;
@@ -4996,6 +4996,15 @@ function gwMyTokensSyncServer(owner) {
   return job;
 }
 try { window.gwMyTokensSyncServer = gwMyTokensSyncServer; } catch (_) {}
+/* The server list arrived after the wallet was drawn (first look-up of old swaps can take a few
+   seconds) → redraw once with the new tokens. */
+function gwMyTokensLateRefresh() {
+  try { clearTimeout(window.__gwMyTokLateT); } catch (_) {}
+  window.__gwMyTokLateT = setTimeout(() => {
+    try { window.__gwOcBalCache = {}; } catch (_) {}
+    try { if (document.getElementById('gwOnchainCard') && typeof gwRenderOnchainCard === 'function') gwRenderOnchainCard({ force: true }); } catch (_) {}
+  }, 300);
+}
 
 /** LI.FI price for «my tokens» (5 min cache); waits at most ~2.5 s. */
 async function gwMyTokensPrices(chainId, rows) {
@@ -5167,7 +5176,11 @@ async function gwExplorerTokens(chainId, owner) {
 
 /** Non-zero balances of discovery tokens on one chain (skips curated contracts). */
 async function gwOcDiscoverTokens(chainId, owner, skipAddrs) {
-  try { await Promise.race([gwMyTokensSyncServer(owner), new Promise((r) => setTimeout(r, 2500))]); } catch (_) {}
+  try {
+    const sync = gwMyTokensSyncServer(owner);
+    const inTime = await Promise.race([sync.then(() => true), new Promise((r) => setTimeout(() => r(false), 2500))]);
+    if (!inTime) sync.then((added) => { if (added) gwMyTokensLateRefresh(); }).catch(() => {});
+  } catch (_) {}
   const base = (await gwHoldingsTokenList(chainId)).slice();
   try {
     const seenA = new Set(base.map((t) => String(t.address).toLowerCase()));

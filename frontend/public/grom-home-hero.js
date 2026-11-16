@@ -320,7 +320,8 @@
   }
 
   /* ---------- «New listings» strip above the stories: coins listed in the last 24 h, as a running row of chips ---------- */
-  var NL_NET_ICON = { eth: 'ethereum', bsc: 'bsc', base: 'base', arbitrum: 'arbitrum', polygon: 'polygon', optimism: 'optimism', avax: 'avalanche', linea: 'linea', solana: 'solana' };
+  var NL_NET_ICON = { eth: 'ethereum', bsc: 'bsc', base: 'base', arbitrum: 'arbitrum', polygon: 'polygon', optimism: 'optimism', avax: 'avalanche', linea: 'linea',
+    robinhood: 'robinhood', hyperevm: 'hyperevm', monad: 'monad', arc: 'arc', plasma: 'plasma', xlayer: 'xlayer', solana: 'solana', tron: 'tron' };
   var NL = { rows: null, ts: 0, pending: null };
   function nlLoad() {
     if (NL.pending) return NL.pending;

@@ -3676,7 +3676,17 @@ function gwResolvedWalletAddress() {
 }
 
 /** Address for balances / swap UI — does not require live signing provider. */
+/* gwDisplayAddress ↔ gwOcConnectedAddress call each other as fallbacks. With no wallet connected they
+   recursed until the stack overflowed (caught silently): ~10k frames, each scanning the injected
+   providers — seconds of CPU on every page for every visitor without a wallet (15.11 speed check).
+   A nested call now returns null, so gwOcConnectedAddress goes on with its own sources. */
+let _gwDisplayAddrBusy = false;
 function gwDisplayAddress() {
+  if (_gwDisplayAddrBusy) return null;
+  _gwDisplayAddrBusy = true;
+  try { return gwDisplayAddressNow(); } finally { _gwDisplayAddrBusy = false; }
+}
+function gwDisplayAddressNow() {
   if (gwHasSigningProvider()) {
     const live = gwResolvedWalletAddress();
     if (live) return live;
@@ -4907,6 +4917,66 @@ function gwHoldTokState() {
   return st;
 }
 
+/* ---------------------------------------------------------------------------
+ * «My tokens»: contracts this browser bought or picked in GROM. The discovery
+ * list holds only the ~200 most liquid tokens per network, so a fresh token
+ * bought here (e.g. MACCA on Ethereum via Trending, 15.11) arrived in the
+ * wallet but never showed on the site. These are scanned too, priced via LI.FI.
+ * Stored on this device only: [address, decimals, sym, logo, addedAt] per chain.
+ * ------------------------------------------------------------------------- */
+const GW_MY_TOK_LS = 'gw_my_tokens_v1';
+const GW_MY_TOK_MAX = 40;
+function gwMyTokensRead() {
+  try {
+    const j = JSON.parse(localStorage.getItem(GW_MY_TOK_LS) || '{}');
+    return j && typeof j === 'object' ? j : {};
+  } catch (_) { return {}; }
+}
+function gwMyTokensRemember(t) {
+  try {
+    const cid = Number(t && t.chainId);
+    const a = String((t && (t.address || t.tokenAddress)) || '');
+    if (!(cid > 0 && cid < 1e8) || !/^0x[0-9a-fA-F]{40}$/.test(a) || /^0x0{40}$/i.test(a)) return false;
+    const d = Number(t.decimals);
+    if (!Number.isInteger(d) || d < 0 || d > 36) return false;
+    const sym = gwSafeSym(String(t.sym || t.symbol || '').toUpperCase());
+    if (!sym || sym === '???') return false;
+    const all = gwMyTokensRead();
+    const low = a.toLowerCase();
+    const keep = (Array.isArray(all[cid]) ? all[cid] : [])
+      .filter((x) => Array.isArray(x) && String(x[0]).toLowerCase() !== low && Date.now() - Number(x[4] || 0) < 180 * 86400_000);
+    const logo = String(t.logo || t.logoURI || t.img || '');
+    keep.unshift([a, d, sym, /^https:\/\//.test(logo) ? logo : '', Date.now()]);
+    all[cid] = keep.slice(0, GW_MY_TOK_MAX);
+    localStorage.setItem(GW_MY_TOK_LS, JSON.stringify(all));
+    try { window.__gwOcBalCache = {}; } catch (_) {}
+    return true;
+  } catch (_) { return false; }
+}
+try { window.gwMyTokensRemember = gwMyTokensRemember; } catch (_) {}
+
+/** LI.FI price for «my tokens» (5 min cache); waits at most ~2.5 s. */
+async function gwMyTokensPrices(chainId, rows) {
+  const cache = window.__gwMyTokPx = window.__gwMyTokPx || {};
+  const base = typeof gwLifiEndpoint === 'function' ? gwLifiEndpoint() : 'https://li.quest/v1';
+  const jobs = rows.map(async (r) => {
+    const k = chainId + ':' + String(r[0]).toLowerCase();
+    const hit = cache[k];
+    if (hit && Date.now() - hit.at < 5 * 60_000) return;
+    try {
+      const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 2500) : null;
+      const res = await fetch(`${base}/token?chain=${chainId}&token=${r[0]}`, { headers: { accept: 'application/json' }, signal: ctrl ? ctrl.signal : undefined });
+      if (timer) clearTimeout(timer);
+      const j = res.ok ? await res.json() : null;
+      const px = Number(j && j.priceUSD);
+      cache[k] = { at: Date.now(), px: px > 0 && px < 1e9 ? px : null, logo: /^https:\/\//.test(String(j && j.logoURI || '')) ? String(j.logoURI) : '' };
+    } catch (_) { cache[k] = { at: Date.now() - 4 * 60_000, px: null, logo: '' }; }
+  });
+  await Promise.race([Promise.all(jobs), new Promise((r) => setTimeout(r, 2600))]);
+  return cache;
+}
+
 /** [{ sym, address, decimals, priceUSD, verified }] to scan on `chainId`. */
 async function gwHoldingsTokenList(chainId) {
   const st = gwHoldTokState();
@@ -4953,6 +5023,20 @@ async function gwHoldingsTokenList(chainId) {
         if (seen.has(a)) continue;
         seen.add(a);
         out.push({ sym: x.sym, address: x.address, decimals: Number(x.decimals), priceUSD: Number(x.priceUSD) || null, verified: !!x.verified, logo: x.logo || '' });
+      }
+    }
+  } catch (_) {}
+  /* Tokens bought or picked in GROM on this device (see gwMyTokensRemember). */
+  try {
+    const mine = (gwMyTokensRead()[chainId] || []).filter((r) => Array.isArray(r) && /^0x[0-9a-fA-F]{40}$/.test(String(r[0])) && !seen.has(String(r[0]).toLowerCase()));
+    if (mine.length) {
+      const px = await gwMyTokensPrices(chainId, mine);
+      for (const r of mine) {
+        const a = String(r[0]).toLowerCase();
+        if (seen.has(a)) continue;
+        seen.add(a);
+        const hit = px[chainId + ':' + a] || {};
+        out.push({ sym: gwSafeSym(String(r[2] || '').toUpperCase()), address: String(r[0]), decimals: Number(r[1]), priceUSD: hit.px || null, verified: false, logo: r[3] || hit.logo || '' });
       }
     }
   } catch (_) {}
@@ -11093,6 +11177,16 @@ function gwDsMarkRecentDelivered(hash, receiving) {
     if (!row) return false;
     const dec = Number(receiving?.token?.decimals);
     const amt = Number(receiving?.amount);
+    const gotSym = String(receiving?.token?.symbol || '').toUpperCase();
+    /* Bridge + swap on arrival (e.g. Relay): the status reports the bridged ETH, not the token that was
+       bought — «→ 0.00144 ETH» was shown for a MACCA purchase (15.11). Keep the quoted token then. */
+    if (row.to && gotSym && gotSym !== String(row.to).toUpperCase()) {
+      row.done = true;
+      if (receiving?.txHash) row.destHash = String(receiving.txHash);
+      localStorage.setItem('gw_ds_recent', JSON.stringify(list));
+      try { gwDsRefreshRecent(); } catch (_) {}
+      return row;
+    }
     if (Number.isFinite(dec) && dec >= 0 && amt > 0) {
       const o = amt / 10 ** dec;
       row.out = o.toLocaleString('en-US', { maximumFractionDigits: o < 1 ? 8 : 4 });
@@ -11103,7 +11197,7 @@ function gwDsMarkRecentDelivered(hash, receiving) {
     if (receiving?.txHash) row.destHash = String(receiving.txHash);
     localStorage.setItem('gw_ds_recent', JSON.stringify(list));
     try { gwDsRefreshRecent(); } catch (_) {}
-    return true;
+    return row;
   } catch (_) { return false; }
 }
 function gwDsRecentHtml(title) {
@@ -13655,7 +13749,14 @@ async function gwLifiBridgeMonitor({ txHash, bridge, fromChainId, toChainId, opI
             gotTxt = o.toLocaleString('en-US', { maximumFractionDigits: o < 1 ? 8 : 4 }) + ' ' + (rc?.token?.symbol || norm.assetHint || '');
           }
         } catch (_) {}
-        try { gwDsMarkRecentDelivered(txHash, j?.receiving); } catch (_) {}
+        try {
+          const row = gwDsMarkRecentDelivered(txHash, j?.receiving);
+          const gotSym = String(j?.receiving?.token?.symbol || '').toUpperCase();
+          if (row && row.to && gotSym && gotSym !== String(row.to).toUpperCase()) {
+            gotTxt = String(row.out || '').replace(/^≈\s*/, '≈ ').replace(/^≈ market$/, '') + ' ' + row.to;
+            gotTxt = gotTxt.trim();
+          }
+        } catch (_) {}
         try { gwToast(gwTx('swap_toast_bridge_done', null, 'Bridge complete') + (gotTxt ? ' · ' + gotTxt : ''), 'success'); } catch (_) {}
         try { gwSwapOpClear('completed'); } catch (_) {}
         return;
@@ -16184,6 +16285,7 @@ async function gwTkRender(q) {
         list.innerHTML = `<div class="gw-tk-empty">${gwUxText('В кошельке нет токена с этим адресом.', 'Your wallet holds no token at this address.')}</div>`;
         return;
       }
+      try { found.forEach((a) => gwMyTokensRemember({ chainId: a.chainId, address: a.address, decimals: a.decimals, sym: a.sym })); } catch (_) {}
       list.innerHTML = found.map(a => rowHtml({ ...a, discovered: true, name: a.sym,
         chain: GW_OC_CHAIN_META[a.chainId]?.label || String(a.chainId), showChainBadge: true },
         `<div class="gw-tk-bal"><div class="amt">${Number(a.amt).toLocaleString('en-US', { maximumFractionDigits: 6 })}</div>`
@@ -18610,15 +18712,18 @@ async function gwDsRefreshRate() {
       const payCid = (typeof gwGetActiveUiChainId === 'function')
         ? Number(gwGetActiveUiChainId()) || 0
         : Number(window.__gwDsUserPickedFrom?.chainId) || 0;
-      /* Ignore sticky Tron/Sol TO after user switched pay network to EVM. */
-      const staleNonevmTo = tCid
+      /* Ignore sticky Tron/Sol TO after user switched pay network to EVM.
+         A pick made just now (token picker, Trending, New listings) is never «sticky»: picking Tron, then
+         Solana reset the Solana pick to USDC (15.11). */
+      const freshPick = tAt && Date.now() - tAt < 8000;
+      const staleNonevmTo = !freshPick && tCid
         && payCid
         && tCid !== payCid
         && (tCid === GW_TRON_CHAIN_ID || tCid === GW_LIFI_SOL_CHAIN || tCid === 1151111081099710)
         && payCid !== GW_TRON_CHAIN_ID
         && payCid !== GW_LIFI_SOL_CHAIN
         && payCid !== 1151111081099710;
-      const staleVsCatalog = tCid && cat && tCid !== cat
+      const staleVsCatalog = !freshPick && tCid && cat && tCid !== cat
         && (tCid === GW_TRON_CHAIN_ID || tCid === GW_LIFI_SOL_CHAIN || tCid === 1151111081099710)
         && cat !== GW_TRON_CHAIN_ID
         && cat !== GW_LIFI_SOL_CHAIN
@@ -26160,6 +26265,13 @@ async function gwDsSubmit() {
         status: norm.status,
         namespace: norm.namespace,
       });
+      /* The bought token must show in the wallet even if it is not on the discovery list. */
+      try {
+        const pt = window.__gwDsUserPickedTo;
+        if (pt && pt.address && String(pt.sym || '').toUpperCase() === String(to || '').toUpperCase()) {
+          gwMyTokensRemember({ chainId: pt.chainId, address: pt.address, decimals: pt.decimals, sym: pt.sym });
+        }
+      } catch (_) {}
       /* Balances just moved — drop the portfolio cache so Wallet's hero total
        * can't keep showing the pre-swap number for the next 10 minutes. */
       if (norm.status === 'bridging' || cross) {
@@ -29423,6 +29535,9 @@ function gwDsPickToken(sym, which, meta) {
   try { gwTkSyncButton(which); } catch (_) {}
   const num = Number(meta?.chainId) || GW_DX_CHAIN_TO_NUM[String(meta?.chain || '').toLowerCase()] || 0;
   const tokAddr = meta.tokenAddress || meta.address || null;
+  if (which === 'to' && tokAddr) {
+    try { gwMyTokensRemember({ chainId: meta.chainId || meta.chain_id, address: tokAddr, decimals: meta.decimals, sym: meta.sym || sym, logo: meta.img || meta.logo || '' }); } catch (_) {}
+  }
   try {
     if (which === 'to') {
       window.__gwDsUserPickedTo = {

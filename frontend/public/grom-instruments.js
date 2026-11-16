@@ -535,14 +535,40 @@ setInterval(function () {
 window.GROM_INSTRUMENTS = REG;
 window.GROM_NETWORKS = NETWORKS;
 
+/* Index of REG for gromGetInstrument: the market lists call it for every row on every repaint, and a
+   linear scan of the whole registry each time showed up in the 15.11 speed check. Same answer as the
+   scan: the earliest REG entry matching symbol, symbol+USDT or base+quote. Rebuilt when REG changes size. */
+var REG_IDX = null;
+var REG_IDX_LEN = -1;
+function regIndex() {
+  if (REG_IDX && REG_IDX_LEN === REG.length) return REG_IDX;
+  var bySym = Object.create(null), byBq = Object.create(null);
+  for (var i = 0; i < REG.length; i++) {
+    var it = REG[i];
+    if (!(it.symbol in bySym)) bySym[it.symbol] = i;
+    var bq = it.base + it.quote;
+    if (!(bq in byBq)) byBq[bq] = i;
+  }
+  REG_IDX = { bySym: bySym, byBq: byBq };
+  REG_IDX_LEN = REG.length;
+  return REG_IDX;
+}
 window.gromGetInstrument = function (sym) {
   if (!sym) return null;
   var s = String(sym).toUpperCase().replace(/\//g, '');
-  for (var i = 0; i < REG.length; i++) {
-    var it = REG[i];
-    if (it.symbol === s) return it;
-    if (it.symbol === s + 'USDT') return it;
-    if ((it.base + it.quote) === s) return it;
+  var ix = regIndex();
+  var best = -1;
+  [ix.bySym[s], ix.bySym[s + 'USDT'], ix.byBq[s]].forEach(function (i) {
+    if (i != null && (best < 0 || i < best)) best = i;
+  });
+  if (best < 0) return null;
+  var it = REG[best];
+  if (it.symbol === s || it.symbol === s + 'USDT' || (it.base + it.quote) === s) return it;
+  /* An entry was edited in place: the index is stale — rebuild it and look again with the plain scan. */
+  REG_IDX = null;
+  for (var k = 0; k < REG.length; k++) {
+    var r = REG[k];
+    if (r.symbol === s || r.symbol === s + 'USDT' || (r.base + r.quote) === s) return r;
   }
   return null;
 };

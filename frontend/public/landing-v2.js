@@ -1900,8 +1900,8 @@
   }
 
   /* The section title itself opens the market («Stocks ›»); the separate CTA buttons are gone (owner, 15.11). */
-  function l3SecHead(title, sub, hint, go) {
-    return '<div class="l3-sec-head">' +
+  function l3SecHead(title, sub, hint, go, cls) {
+    return '<div class="l3-sec-head' + (cls ? ' ' + cls : '') + '">' +
       '<h2 class="l3-sec-title"><button type="button" class="l3-sec-link" data-lv2-go="' + go + '" title="' + esc(hint) + '">' +
         '<span class="l3-dot" aria-hidden="true"></span>' + esc(title) + L3_CHEV + '</button></h2>' +
       '<p class="l3-sec-sub">' + esc(sub) + '</p>' +
@@ -1918,7 +1918,7 @@
         '<div class="l3-rail l3-grid-6">' + l3StockCards() + '</div>' + l3MoverChips(),
       perps: l3SecHead('Perps', t3('prp_sub'), t3('prp_cta'), 'futures') +
         '<div class="l3-rail l3-grid-6">' + l3PerpCards() + '</div>',
-      predict: l3SecHead('Predictions', t3('prd_sub'), t3('prd_cta'), 'predict') +
+      predict: l3SecHead('Predictions', t3('prd_sub'), t3('prd_cta'), 'predict', 'is-long') +
         '<div class="l3-rail l3-grid-4">' + l3PredCards() + '</div>',
       swaphead: l3SecHead('Swap', t3('swp_sub'), t3('swp_cta'), 'dashboard'),
       swapdemo: '<div class="l3-swap-demo lv2-hw">' + renderSwap(_live.eth) + '</div>',
@@ -2178,11 +2178,32 @@
         }, 20_000);
       }
     };
-    if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(run, { timeout: window.GROM_LANDING ? 1200 : 800 });
-    } else {
-      setTimeout(run, window.GROM_LANDING ? 200 : 80);
-    }
+    /* App pages (Главное, Акции, Trade…) also load this script: the landing board, its six data loads and
+       the perps candles ran there for nothing, hidden (15.11 speed check). Start only when the landing shows. */
+    var started = false;
+    var start = function () {
+      if (started) return;
+      started = true;
+      if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(run, { timeout: window.GROM_LANDING ? 1200 : 800 });
+      } else {
+        setTimeout(run, window.GROM_LANDING ? 200 : 80);
+      }
+    };
+    if (window.GROM_LANDING || isOnLanding()) { start(); return; }
+    var poll = 0;
+    var onRoute = function () {
+      if (!isOnLanding()) return;
+      window.removeEventListener('grom:route-change', onRoute);
+      window.removeEventListener('hashchange', onRoute);
+      clearInterval(poll);
+      start();
+    };
+    window.addEventListener('grom:route-change', onRoute);
+    window.addEventListener('hashchange', onRoute);
+    /* Safety net if the route was set before this script booted. */
+    var n = 0;
+    poll = setInterval(function () { if (++n > 20) { clearInterval(poll); return; } onRoute(); }, 1500);
   }
 
   function onWalletConnected() {

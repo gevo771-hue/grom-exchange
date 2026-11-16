@@ -6451,6 +6451,12 @@ function gwInjectOnchainCardCss() {
       font-size: 8.5px; font-weight: 800; color: #cfe0f2; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.10); overflow: hidden; }
     .gw-oc-tok-ico img.ico { object-fit: cover; background: rgba(255,255,255,.04); }
     .gw-oc-tok-row.gw-oc-dust .gw-oc-tok-ico { opacity: .55; }
+    .gw-oc-tok-row.gw-oc-sell { grid-template-columns: minmax(52px, auto) 1fr auto 10px; cursor: pointer;
+      transition: background .15s ease, border-color .15s ease; -webkit-tap-highlight-color: transparent; }
+    .gw-oc-tok-row.gw-oc-sell:hover, .gw-oc-tok-row.gw-oc-sell:focus-visible { background: rgba(93,213,255,0.07); border-color: rgba(93,213,255,0.28); outline: none; }
+    .gw-oc-tok-row.gw-oc-sell:active { background: rgba(93,213,255,0.12); }
+    .gw-oc-tok-go { color: #6b7a92; font-size: 16px; line-height: 1; text-align: right; }
+    .gw-oc-tok-row.gw-oc-sell:hover .gw-oc-tok-go { color: #5dd5ff; }
     .gw-oc-tok-amt { font-family: 'SF Mono', ui-monospace, monospace; font-size: 12px; color: #9bb3c7;
       font-variant-numeric: tabular-nums; text-align: right; }
     .gw-oc-tok-usd { font-family: 'SF Mono', ui-monospace, monospace; font-size: 12px; color: #cfdfee;
@@ -6710,6 +6716,67 @@ function gwOcCardRead(addr, tronAddr, force, onUpdate) {
 }
 try { document.addEventListener('grom:wallet-disconnected', () => { __gwOcCardSnapshots.clear(); __gwOcCardRenderId++; }); } catch (_) {}
 
+/** Wallet token row → Instant swap with that token to sell (stable → native coin, else → USDC/USDT). */
+function gwOcSellToken(row) {
+  const d = row && row.dataset;
+  const cid = Number(d && d.cid) || 0;
+  const sym = String((d && d.sym) || '');
+  if (!cid || !sym) return;
+  const isNative = d.native === '1';
+  const nat = String(d.nat || '');
+  const stable = /^(USDC|USDT|USDT0|USDC\.E|USDBC|DAI|FDUSD|USDE|PYUSD|USD₮0)$/i.test(sym);
+  const curated = (typeof ONCHAIN_TOKENS !== 'undefined' && ONCHAIN_TOKENS[cid]) || {};
+  const pickTo = () => {
+    const opts = stable ? [nat, 'USDC', 'USDT'] : (isNative ? ['USDC', 'USDT'] : ['USDC', 'USDT', nat]);
+    for (const s2 of opts) {
+      if (!s2 || s2.toUpperCase() === sym.toUpperCase()) continue;
+      if (s2 === nat) return { sym: s2, meta: { sym: s2, chainId: cid } };
+      if (curated[s2]) return { sym: s2, meta: { sym: s2, chainId: cid, tokenAddress: curated[s2], decimals: (typeof gwOcCanonicalDecimals === 'function' ? gwOcCanonicalDecimals(cid, s2) : null) } };
+    }
+    return null;
+  };
+  const apply = () => {
+    const fromMeta = { sym, chainId: cid, name: sym };
+    if (!isNative && /^0x[0-9a-fA-F]{40}$/.test(String(d.addr || ''))) fromMeta.tokenAddress = d.addr;
+    if (d.dec !== '' && d.dec != null) fromMeta.decimals = Number(d.dec);
+    try { gwDsPickToken(sym, 'from', fromMeta); } catch (_) {}
+    const to = pickTo();
+    if (to) { try { gwDsPickToken(to.sym, 'to', to.meta); } catch (_) {} }
+    setTimeout(() => {
+      if (isNative) {
+        /* Native coin: MAX keeps gas for the swap itself. */
+        try { document.querySelector('.gw-ds-chip[data-pct="100"]')?.click(); } catch (_) {}
+      } else {
+        const amtEl = document.getElementById('gwDsAmt');
+        const bal = Number(d.amt) || 0;
+        if (amtEl && bal > 0) {
+          const digits = Math.min(8, Number.isInteger(Number(d.dec)) && d.dec !== '' ? Number(d.dec) : 8);
+          const scale = 10 ** digits;
+          amtEl.value = (Math.floor(bal * scale) / scale).toFixed(digits).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+          document.querySelectorAll('.gw-ds-chip').forEach((c) => c.classList.toggle('on', c.dataset.pct === '100'));
+          try { amtEl.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+          try { gwDsRefreshRate(); } catch (_) {}
+        }
+      }
+      const swap = document.querySelector('.gw-ds-wrap');
+      if (swap) {
+        swap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        swap.style.outline = '2px solid rgba(93,213,255,0.7)';
+        swap.style.outlineOffset = '4px';
+        swap.style.borderRadius = '20px';
+        setTimeout(() => { swap.style.outline = 'none'; }, 1600);
+      }
+    }, 450);
+  };
+  try { if (typeof show === 'function') show('dashboard'); } catch (_) {}
+  let tries = 0;
+  const wait = () => {
+    if (document.getElementById('gwDsFrom') && document.getElementById('gwDsAmt')) return apply();
+    if (++tries < 40) setTimeout(wait, 100);
+  };
+  setTimeout(wait, 250);
+}
+
 async function gwRenderOnchainCard(opts = {}) {
   const renderId = ++__gwOcCardRenderId;
   const page = document.getElementById('page-wallet');
@@ -6780,7 +6847,7 @@ async function gwRenderOnchainCard(opts = {}) {
         const amt = Number(c.data.nativeEth);
         const usd = amt * (prices[sym] || 0);
         chainUsd += usd;
-        items.push({ sym, amt, usd, cid: c.chainId });
+        items.push({ sym, amt, usd, cid: c.chainId, nat: c.meta.native, native: true, dec: 18 });
       }
       // ERC-20s
       for (const [sym, amtRaw] of Object.entries(c.data.tokens || {})) {
@@ -6789,7 +6856,8 @@ async function gwRenderOnchainCard(opts = {}) {
         const usd = amt * (prices[sym] || Number(c.data.tokenMeta?.[sym]?.priceUSD) || 0);
         chainUsd += usd;
         const addr = (typeof ONCHAIN_TOKENS !== 'undefined' && ONCHAIN_TOKENS[c.chainId]?.[sym]) || c.data.tokenMeta?.[sym]?.address || '';
-        items.push({ sym, amt, usd, cid: c.chainId, addr, logo: c.data.tokenMeta?.[sym]?.logo || '' });
+        const dec = Number(c.data.tokenMeta?.[sym]?.decimals);
+        items.push({ sym, amt, usd, cid: c.chainId, addr, logo: c.data.tokenMeta?.[sym]?.logo || '', nat: c.meta.native, dec: Number.isInteger(dec) ? dec : null });
       }
       if (items.length === 0) continue;
       totalUsd += chainUsd;
@@ -6833,10 +6901,14 @@ async function gwRenderOnchainCard(opts = {}) {
         const addrLogo = it.addr ? gwTokenAddrLogo(it.cid, it.addr)
           : (it.cid && typeof gwChainLogo === 'function' ? (gwChainLogo(it.cid) || '') : '');
         const best = gwTkBestLogo(it.sym, it.logo) || addrLogo;
-        return `<div class="gw-oc-tok-row${dust}">
+        /* Tap a token → swap with it as «you pay» (sell), owner 16.11. EVM networks only for now. */
+        const sell = it.cid && GW_OC_CHAIN_META[it.cid]
+          ? ` gw-oc-sell" role="button" tabindex="0" title="${gwEscHtml(gwUxText('Продать в свопе', 'Sell in swap'))}" data-cid="${it.cid}" data-sym="${gwEscHtml(it.sym)}" data-addr="${gwEscHtml(it.addr || '')}" data-dec="${it.dec == null ? '' : it.dec}" data-amt="${Number(it.amt) || 0}" data-nat="${gwEscHtml(it.nat || '')}" data-native="${it.native ? 1 : 0}`
+          : '';
+        return `<div class="gw-oc-tok-row${dust}${sell}">
           <span class="gw-oc-tok-sym"><span class="gw-oc-tok-ico">${gwTokenImgHtml(best, it.sym, addrLogo)}</span>${gwEscHtml(it.sym)}</span>
           <span class="gw-oc-tok-amt">${fmtAmt(it.sym, it.amt)}</span>
-          <span class="gw-oc-tok-usd">${fmtUsd(it.usd)}</span>
+          <span class="gw-oc-tok-usd">${fmtUsd(it.usd)}</span>${sell ? '<span class="gw-oc-tok-go" aria-hidden="true">›</span>' : ''}
         </div>`;
       }).join('');
       const more = hiddenN > 0 && shownItems.length
@@ -6886,6 +6958,10 @@ async function gwRenderOnchainCard(opts = {}) {
     });
 
     card.querySelectorAll('.gw-oc-show-hidden').forEach(button => button.addEventListener('click', () => { gwOcHideSmall(false); gwRenderOnchainCard(); }));
+    card.querySelectorAll('.gw-oc-sell').forEach((row) => {
+      row.addEventListener('click', () => gwOcSellToken(row));
+      row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); gwOcSellToken(row); } });
+    });
     if (snapshot.loading) {
       const hint = document.createElement('div');
       hint.className = 'gw-oc-empty';
@@ -11112,6 +11188,14 @@ function gwInjectDashSwapCss() {
     .gw-ds-tkbtn .ico-wrap .gw-tk-chain-badge { width: 12px; height: 12px; font-size: 0; border-width: 1.5px; }
     .gw-ds-tkbtn .caret { color: #98a8c0; font-size: 10px; margin-left: 2px; }
     .gw-ds-tkbtn .net { font-size: 10px; font-weight: 700; color: #6b7a92; margin-left: 2px; }
+
+    /* Heavy loss on the quote (thin liquidity) */
+    .gw-ds-loss { margin: 10px 0; padding: 11px 13px; border-radius: 12px; font-size: 13px; line-height: 1.45; }
+    .gw-ds-loss.warn { background: rgba(245,185,77,0.08); border: 1px solid rgba(245,185,77,0.28); color: #f3dcae; }
+    .gw-ds-loss.bad { background: rgba(255,92,92,0.09); border: 1px solid rgba(255,92,92,0.35); color: #ffc9c9; font-weight: 600; }
+    .gw-ds-loss.pulse { animation: gwDsLossPulse .5s ease 2; }
+    @keyframes gwDsLossPulse { 50% { box-shadow: 0 0 0 4px rgba(255,92,92,0.25); } }
+    @media (prefers-reduced-motion: reduce) { .gw-ds-loss.pulse { animation: none; } }
 
     /* Wallet refused without a prompt (stale WalletConnect link) → one-tap reconnect */
     .gw-ds-reconnect { margin-top: 10px; padding: 12px 14px; border-radius: 12px; display: flex; gap: 12px; align-items: center;
@@ -18760,6 +18844,7 @@ async function gwDsRefreshRate() {
   };
 
   try { window.__gwLastAggQuotes = null; } catch (_) {}
+  try { gwDsLossGuardPaint(); } catch (_) {}
   const t = gwDsLang();
   const routeEl = document.getElementById('gwDsRoute');
   const outEl   = document.getElementById('gwDsOut');
@@ -19311,6 +19396,7 @@ async function gwDsRefreshRate() {
           const winnerOut = Number(winner.toAmount) / 10 ** outDec;
           applyOut(winnerOut);
           painted = true;
+          try { setTimeout(gwDsLossGuardPaint, 0); } catch (_) {}
           const rate = amt > 0 ? (winnerOut / amt).toFixed(8).replace(/0+$/, '').replace(/\.$/, '') : '';
           const gasUsd = winner.gasUsd != null && Number.isFinite(Number(winner.gasUsd)) ? Number(winner.gasUsd).toFixed(2) : null;
           const cmp = useQuotes.slice(0, 5).map((q, i) => {
@@ -26067,6 +26153,65 @@ async function gwOnChainSwapExecInline() {
   throw new Error('Inline DEX fallback retired — Instant Swap requires verified GROM fee 20 bps');
 }
 
+/* Swap loss guard (16.11): PONS showed $3.70 in the wallet, a sale returned $0.41 — the coin has almost
+   no liquidity to sell into. Warn from 10% value lost; from 30% the swap needs a second tap. */
+const GW_DS_LOSS_WARN = 0.10;
+const GW_DS_LOSS_CONFIRM = 0.30;
+function gwDsQuoteLoss() {
+  try {
+    const q = window.__gwLastAggQuotes;
+    if (!q || !Array.isArray(q.quotes) || !q.quotes.length) return null;
+    if (typeof gwDsGetMode === 'function' && gwDsGetMode() !== 'onchain') return null;
+    const from = gwDsNormSym(document.getElementById('gwDsFrom')?.value || '');
+    const to = gwDsNormSym(document.getElementById('gwDsTo')?.value || '');
+    const amt = typeof gwDsReadSwapAmt === 'function' ? Number(gwDsReadSwapAmt()) : Number(document.getElementById('gwDsAmt')?.value);
+    if (gwDsNormSym(q.fromSym) !== from || gwDsNormSym(q.toSym) !== to) return null;
+    if (!(amt > 0) || Math.abs(Number(q.amtNum) - amt) > 1e-9 * Math.max(1, amt)) return null;
+    const w = q.quotes.filter(gwAggCanExec)[0] || q.quotes[0];
+    const inUsd = Number(w && w.amountInUsd);
+    const outUsd = Number(w && w.amountOutUsd);
+    /* Both sides need a real price; a coin without one is not judged here. */
+    if (!(inUsd >= 0.5) || !(outUsd > 0)) return null;
+    const loss = 1 - outUsd / inUsd;
+    return { loss, inUsd, outUsd, pct: Math.round(loss * 100), key: [q.chainId, from, to, q.amtNum, Math.round(loss * 100)].join('|') };
+  } catch (_) { return null; }
+}
+function gwDsLossGuardPaint() {
+  const cta = document.getElementById('gwDsCta');
+  if (!cta || !cta.parentNode) return;
+  const L = gwDsQuoteLoss();
+  let el = document.getElementById('gwDsLossWarn');
+  if (!L || L.loss < GW_DS_LOSS_WARN) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'gwDsLossWarn';
+    el.setAttribute('role', 'alert');
+    cta.parentNode.insertBefore(el, cta);
+  }
+  el.className = 'gw-ds-loss ' + (L.loss >= GW_DS_LOSS_CONFIRM ? 'bad' : 'warn');
+  const usd = (n) => '$' + (n >= 100 ? n.toFixed(0) : n.toFixed(2));
+  el.textContent = gwUxText(
+    'Потеря на обмене ≈ {pct}%: отдаёшь ≈ {in}, получишь ≈ {out}. По этой паре мало ликвидности — попробуй сумму меньше.',
+    'Loss on this swap ≈ {pct}%: you give ≈ {in} and get ≈ {out}. There is little liquidity for this pair — try a smaller amount.',
+  ).replace('{pct}', String(L.pct)).replace('{in}', usd(L.inUsd)).replace('{out}', usd(L.outUsd));
+}
+/** true = stop this tap (first tap on a heavy-loss quote asks to tap again). */
+function gwDsLossGuardBlocks() {
+  const L = gwDsQuoteLoss();
+  if (!L || L.loss < GW_DS_LOSS_CONFIRM) return false;
+  const c = window.__gwDsLossConfirm;
+  if (c && c.key === L.key && Date.now() - c.at < 30_000) { window.__gwDsLossConfirm = null; return false; }
+  window.__gwDsLossConfirm = { key: L.key, at: Date.now() };
+  gwDsLossGuardPaint();
+  const el = document.getElementById('gwDsLossWarn');
+  if (el) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+  try {
+    gwToast(gwUxText('Нажми «Обменять» ещё раз, чтобы подтвердить обмен с потерей {pct}%.', 'Tap Swap again to confirm the swap with a {pct}% loss.').replace('{pct}', String(L.pct)), 'warn');
+  } catch (_) {}
+  return true;
+}
+try { window.gwDsQuoteLoss = gwDsQuoteLoss; window.gwDsLossGuardPaint = gwDsLossGuardPaint; } catch (_) {}
+
 /** Wallet-side generic failure that WalletConnect wallets (Trust) return when the session is stale. */
 function gwWcStaleReject(reason) {
   const viaWc = /wc|walletconnect/i.test(String(window.GROM_CONN?.method || ''));
@@ -26159,6 +26304,7 @@ async function gwDsSubmit() {
   const amtStr = (typeof gwDsReadSwapAmtStr === 'function') ? gwDsReadSwapAmtStr() : String(document.getElementById('gwDsAmt')?.value || '');
   const amt  = Number(amtStr);
   if (!(amt > 0) || !amtStr) { gwToast('Enter an amount', 'warn'); return; }
+  if (mode === 'onchain') { try { if (gwDsLossGuardBlocks()) return; } catch (_) {} }
   try {
     const fromU = String(from || '').toUpperCase();
     if (/^(ETH|BNB|AVAX|MATIC|ARB)$/.test(fromU)) {

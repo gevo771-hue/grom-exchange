@@ -4955,6 +4955,48 @@ function gwMyTokensRemember(t) {
 }
 try { window.gwMyTokensRemember = gwMyTokensRemember; } catch (_) {}
 
+/* Tokens this wallet bought on GROM from any device (server list) → merged into the on-device list.
+   Once per wallet per 10 min; waits at most ~2.5 s, then the wallet page goes on without it. */
+function gwMyTokensSyncServer(owner) {
+  const w = String(owner || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(w)) return Promise.resolve(false);
+  const st = window.__gwMyTokSync = window.__gwMyTokSync || {};
+  const hit = st[w];
+  if (hit && (hit.inflight || Date.now() - hit.at < 10 * 60_000)) return hit.inflight || Promise.resolve(false);
+  const job = (async () => {
+    let added = false;
+    try {
+      const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 5000) : null;
+      const r = await fetch('/api/activity/wallet-tokens?wallet=' + w, { headers: { accept: 'application/json' }, signal: ctrl ? ctrl.signal : undefined });
+      if (timer) clearTimeout(timer);
+      const j = r.ok ? await r.json() : null;
+      const rows = Array.isArray(j && j.tokens) ? j.tokens : [];
+      if (rows.length) {
+        const all = gwMyTokensRead();
+        for (const row of rows.slice().reverse()) {
+          const [cid, a, d, sym] = Array.isArray(row) ? row : [];
+          if (!(Number(cid) > 0 && Number(cid) < 1e8) || !/^0x[0-9a-fA-F]{40}$/.test(String(a || ''))) continue;
+          if (!Number.isInteger(Number(d)) || Number(d) < 0 || Number(d) > 36) continue;
+          const s2 = gwSafeSym(String(sym || '').toUpperCase());
+          if (!s2 || s2 === '???') continue;
+          const list = Array.isArray(all[cid]) ? all[cid] : [];
+          if (list.some((x) => Array.isArray(x) && String(x[0]).toLowerCase() === String(a).toLowerCase())) continue;
+          list.push([String(a), Number(d), s2, '', Date.now()]);
+          all[cid] = list.slice(-GW_MY_TOK_MAX);
+          added = true;
+        }
+        if (added) localStorage.setItem(GW_MY_TOK_LS, JSON.stringify(all));
+      }
+    } catch (_) {}
+    st[w] = { at: Date.now() };
+    return added;
+  })();
+  st[w] = { at: 0, inflight: job };
+  return job;
+}
+try { window.gwMyTokensSyncServer = gwMyTokensSyncServer; } catch (_) {}
+
 /** LI.FI price for «my tokens» (5 min cache); waits at most ~2.5 s. */
 async function gwMyTokensPrices(chainId, rows) {
   const cache = window.__gwMyTokPx = window.__gwMyTokPx || {};
@@ -5075,9 +5117,66 @@ function gwMc3DecodeBalances(hex, n) {
   return out;
 }
 
+/* Tokens the address holds, from the public block explorer (Blockscout). Covers coins bought
+   outside GROM or on another device (MACCA bought on the phone did not show on the PC, 16.11).
+   Only priced tokens without a scam flag — airdropped spam («Visit … to claim») stays out.
+   10 min cache per network and address; any failure just returns nothing. */
+const GW_BLOCKSCOUT = {
+  1: 'https://eth.blockscout.com',
+  42161: 'https://arbitrum.blockscout.com',
+  8453: 'https://base.blockscout.com',
+  10: 'https://explorer.optimism.io',
+  137: 'https://polygon.blockscout.com',
+};
+async function gwExplorerTokens(chainId, owner) {
+  const base = GW_BLOCKSCOUT[Number(chainId)];
+  if (!base || !/^0x[0-9a-fA-F]{40}$/.test(String(owner || ''))) return [];
+  const cache = window.__gwExplorerTok = window.__gwExplorerTok || {};
+  const key = chainId + ':' + String(owner).toLowerCase();
+  const hit = cache[key];
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.rows;
+  if (hit && hit.inflight) return hit.inflight;
+  const job = (async () => {
+    let rows = [];
+    try {
+      const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 4500) : null;
+      const r = await fetch(`${base}/api/v2/addresses/${owner}/token-balances`, { headers: { accept: 'application/json' }, signal: ctrl ? ctrl.signal : undefined });
+      if (timer) clearTimeout(timer);
+      const j = r.ok ? await r.json() : [];
+      for (const it of Array.isArray(j) ? j : []) {
+        const t = it && it.token;
+        if (!t || String(t.type || '').toUpperCase() !== 'ERC-20') continue;
+        if (t.reputation && String(t.reputation).toLowerCase() !== 'ok') continue;
+        const address = String(t.address_hash || t.address || '');
+        const decimals = Number(t.decimals);
+        const px = Number(t.exchange_rate);
+        if (!/^0x[0-9a-fA-F]{40}$/.test(address) || !Number.isInteger(decimals) || decimals > 36 || !(px > 0)) continue;
+        if (!(String(it.value || '0') !== '0')) continue;
+        const sym = gwSafeSym(String(t.symbol || '').toUpperCase());
+        if (!sym || sym === '???') continue;
+        rows.push({ sym, address, decimals, priceUSD: px, verified: false, logo: /^https:\/\//.test(String(t.icon_url || '')) ? String(t.icon_url) : '' });
+      }
+    } catch (_) { rows = []; }
+    cache[key] = { at: Date.now(), rows };
+    return rows;
+  })();
+  cache[key] = { at: 0, rows: [], inflight: job };
+  return job;
+}
+
 /** Non-zero balances of discovery tokens on one chain (skips curated contracts). */
 async function gwOcDiscoverTokens(chainId, owner, skipAddrs) {
-  const list = (await gwHoldingsTokenList(chainId)).filter(t => !skipAddrs.has(t.address.toLowerCase()));
+  try { await Promise.race([gwMyTokensSyncServer(owner), new Promise((r) => setTimeout(r, 2500))]); } catch (_) {}
+  const base = (await gwHoldingsTokenList(chainId)).slice();
+  try {
+    const seenA = new Set(base.map((t) => String(t.address).toLowerCase()));
+    for (const t of await gwExplorerTokens(chainId, owner)) {
+      const a = t.address.toLowerCase();
+      if (!seenA.has(a)) { seenA.add(a); base.push(t); }
+    }
+  } catch (_) {}
+  const list = base.filter(t => !skipAddrs.has(t.address.toLowerCase()));
   if (!list.length) return [];
   const chunks = [];
   for (let i = 0; i < list.length; i += GW_MC3_CHUNK) chunks.push(list.slice(i, i + GW_MC3_CHUNK));
@@ -11000,6 +11099,15 @@ function gwInjectDashSwapCss() {
     .gw-ds-tkbtn .ico-wrap .gw-tk-chain-badge { width: 12px; height: 12px; font-size: 0; border-width: 1.5px; }
     .gw-ds-tkbtn .caret { color: #98a8c0; font-size: 10px; margin-left: 2px; }
     .gw-ds-tkbtn .net { font-size: 10px; font-weight: 700; color: #6b7a92; margin-left: 2px; }
+
+    /* Wallet refused without a prompt (stale WalletConnect link) → one-tap reconnect */
+    .gw-ds-reconnect { margin-top: 10px; padding: 12px 14px; border-radius: 12px; display: flex; gap: 12px; align-items: center;
+      background: rgba(245,185,77,0.08); border: 1px solid rgba(245,185,77,0.28); color: #f3dcae; font-size: 13px; line-height: 1.45; }
+    .gw-ds-reconnect span { flex: 1 1 auto; }
+    .gw-ds-reconnect button { flex: 0 0 auto; padding: 9px 14px; border-radius: 10px; border: 0; cursor: pointer;
+      background: #f5b94d; color: #1b1405; font-weight: 800; font-size: 13px; white-space: nowrap; }
+    .gw-ds-reconnect button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    @media (max-width: 560px) { .gw-ds-reconnect { flex-direction: column; align-items: stretch; } .gw-ds-reconnect button { width: 100%; padding: 11px 14px; } }
 
     /* Phase 7 v2 — price impact bar */
     .gw-ds-pimp { margin-top: 6px; }
@@ -24584,6 +24692,7 @@ function gwTxLogPush(entry) {
           amt: e.amt != null ? String(e.amt) : undefined,
           amountAsset: e.amountAsset, size: e.size, sizeAsset: e.sizeAsset, side: e.side, contract: e.contract,
           market: e.market, outcome: e.outcome, orderId: e.orderId, price: e.price, aggregator: e.aggregator,
+          toToken: e.toToken, toDec: e.toDec,
         },
         tx_hash: /^(?:0x[a-f\d]{64}|hl:\d+|[1-9A-HJ-NP-Za-km-z]{64,88})$/i.test(String(e.hash || e.tx_hash || '')) ? (e.hash || e.tx_hash) : undefined,
         amount: e.amt != null ? Number(e.amt) : (e.amount != null ? Number(e.amount) : undefined),
@@ -25921,6 +26030,18 @@ async function gwOnChainSwapExec(fromSym, toSym, amtNum) {
           fromChainId: winner?._fromChainId || result?.fromChainId || chainId,
           toChainId: cross ? (winner?._toChainId || result?.toChainId || null) : chainId,
           bridge: winner?.tool || winner?.bridge || result?.bridge || '',
+          ...(() => {
+            /* Bought contract → server list, so the token shows on the user's other devices too. */
+            try {
+              const pt = window.__gwDsUserPickedTo;
+              if (pt && /^0x[0-9a-fA-F]{40}$/.test(String(pt.address || ''))
+                && String(pt.sym || '').toUpperCase() === String(toSym || '').toUpperCase()
+                && Number.isInteger(Number(pt.decimals))) {
+                return { toToken: String(pt.address), toDec: Number(pt.decimals) };
+              }
+            } catch (_) {}
+            return {};
+          })(),
         });
       }
     } catch (_) {}
@@ -25933,6 +26054,38 @@ async function gwOnChainSwapExecInline() {
   throw new Error('Inline DEX fallback retired — Instant Swap requires verified GROM fee 20 bps');
 }
 
+/** Wallet-side generic failure that WalletConnect wallets (Trust) return when the session is stale. */
+function gwWcStaleReject(reason) {
+  const viaWc = /wc|walletconnect/i.test(String(window.GROM_CONN?.method || ''));
+  return viaWc && /an error has occurred|please,? try again/i.test(String(reason || ''));
+}
+/** «Reconnect wallet» bar under the swap button; gone on the next swap. */
+function gwDsShowReconnect(msg) {
+  const cta = document.getElementById('gwDsCta');
+  if (!cta || !cta.parentNode) return;
+  let bar = document.getElementById('gwDsReconnect');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'gwDsReconnect';
+    bar.className = 'gw-ds-reconnect';
+    bar.setAttribute('role', 'alert');
+    cta.parentNode.insertBefore(bar, cta.nextSibling);
+  }
+  bar.innerHTML = '<span></span><button type="button"></button>';
+  bar.querySelector('span').textContent = msg;
+  const btn = bar.querySelector('button');
+  btn.textContent = gwUxText('Переподключить кошелёк', 'Reconnect wallet');
+  btn.addEventListener('click', async () => {
+    bar.remove();
+    try { if (window.gromWallet && typeof window.gromWallet.disconnect === 'function') await window.gromWallet.disconnect(); } catch (_) {}
+    setTimeout(() => { try { if (typeof window.openConnectModal === 'function') window.openConnectModal(); } catch (_) {} }, 350);
+  });
+}
+function gwDsHideReconnect() {
+  try { document.getElementById('gwDsReconnect')?.remove(); } catch (_) {}
+}
+try { window.gwWcStaleReject = gwWcStaleReject; window.gwDsShowReconnect = gwDsShowReconnect; window.gwUxText = window.gwUxText || gwUxText; } catch (_) {}
+
 function gwDsFlashSuccess(msg) {
   const t = document.createElement('div');
   t.className = 'gw-ds-toast';
@@ -25944,6 +26097,7 @@ function gwDsFlashSuccess(msg) {
 }
 
 async function gwDsSubmit() {
+  try { gwDsHideReconnect(); } catch (_) {}
   if (window.__gwNativeMaxPending && window.__gwNativeMaxPending === window.__gwNativeMaxRequest) {
     gwToast(gwGasUiRu() ? 'Подождите расчёт суммы с учётом газа.' : 'Wait for the gas-adjusted MAX amount.', 'info');
     return;
@@ -26396,6 +26550,14 @@ async function gwDsSubmit() {
         msg = `Result unknown — check wallet Activity. Do not tap Swap again until confirmed.`;
       } else if (/session lost|reconnect|not connected|no provider/i.test(reason)) {
         msg = `Wallet session expired — please reconnect from the modal that opened`;
+      } else if (!hasSubmittedSwap && gwWcStaleReject(reason)) {
+        /* Trust over WalletConnect answers «An error has occurred. Please, try again.» at once, with no window,
+           when its link with this site went stale (14.11 from the PC, 16.11 again). Reconnecting fixes it. */
+        msg = gwUxText(
+          'Кошелёк отклонил запрос, не показав окно — связь сайта с кошельком устарела. Переподключите кошелёк и нажмите «Обменять» ещё раз.',
+          'Your wallet refused the request without showing it — its link with this site went stale. Reconnect the wallet and tap Swap again.',
+        );
+        try { gwDsShowReconnect(msg); } catch (_) {}
       } else if (rejected) {
         msg = `You cancelled the transaction in your wallet`;
       } else if (/insufficient funds|insufficient balance|exceeds balance/i.test(reason)) {

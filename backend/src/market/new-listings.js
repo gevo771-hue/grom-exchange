@@ -1,7 +1,7 @@
 /**
  * «New listings» strip on the home page: coins CoinGecko listed recently that GROM can swap —
  * a contract on one of the swap networks that the swap's route provider (LI.FI) knows.
- * Every listing of the last 24 h is shown; listings of the last 7 days stay while they trade
+ * Every listing of the last 24 h is shown; listings of the last 14 days stay while they trade
  * big; the strip holds 20–30 coins (owner, 15.11).
  *
  * Without a CoinGecko Pro key the public coin list is diffed against the previous snapshot,
@@ -11,7 +11,7 @@
  * in the swap form, so a token LI.FI does not know is not shown.
  *
  * CoinGecko lists only 6–8 coins a day (16.11), so the strip is topped up to 20 with new DEX
- * tokens (owner's choice, 16.11): GeckoTerminal pools ≤ 7 days old that trade ≥ $100K a day with
+ * tokens (owner's choice, 16.11): GeckoTerminal pools ≤ 14 days old that trade ≥ $100K a day with
  * ≥ $25K liquidity against ETH/USDC/USDT/BNB/SOL…, not already on CoinGecko, not named like a
  * top coin or a big brand, passing a GoPlus security check (no honeypot, taxes ≤ 10%, spread
  * holders) and routable by LI.FI.
@@ -27,6 +27,8 @@ const GOPLUS = 'https://api.gopluslabs.io/api/v1';
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const WEEK = 7 * DAY;
+/* A coin counts as new for 14 days (owner, 16.11). */
+const NEW_MAX = 14 * DAY;
 
 /** CoinGecko platform id → swap network: every network of the GROM swap that has tokens (GW_DS_CHAINS). */
 export const NL_PLATFORMS = {
@@ -77,7 +79,7 @@ const NL_BRANDS = /\b(anthropic|openai|chatgpt|claude|gemini|google|alphabet|app
  */
 export function pickDexCandidates(pages, {
   now = Date.now(), oldAddrs = new Set(), majorSyms = new Set(), majorNames = new Set(),
-  maxAgeMs = WEEK, minVol = 100_000, minLiq = 25_000,
+  maxAgeMs = NEW_MAX, minVol = 100_000, minLiq = 25_000,
 } = {}) {
   const best = new Map();
   for (const { net, json } of pages || []) {
@@ -173,8 +175,8 @@ export function diffNewCoins(list, known) {
 /**
  * Rows for the strip, 20–30 coins:
  *  1) every listing of the last 24 h that trades (≥ minVol), newest first;
- *  2) listings of the last 7 days that trade big (≥ bigVol), by volume;
- *  3) if still under `min`, the next-best of the week (≥ fillVol), by volume.
+ *  2) listings of the last 14 days that trade big (≥ bigVol), by volume;
+ *  3) if still under `min`, the next-best of those 14 days (≥ fillVol), by volume.
  */
 export function buildRows(fresh, markets, decimals, {
   now = Date.now(), limit = 30, min = 20, minVol = 5000, bigVol = 1_000_000, fillVol = 100_000, dex = [],
@@ -184,7 +186,7 @@ export function buildRows(fresh, markets, decimals, {
   const week = [];
   for (const f of fresh || []) {
     const age = now - f.at;
-    if (!(age >= 0 && age <= WEEK)) continue;
+    if (!(age >= 0 && age <= NEW_MAX)) continue;
     const m = byId.get(f.id);
     const price = Number(m?.current_price);
     if (!(price > 0)) continue;
@@ -243,7 +245,7 @@ export function createNewListings({
 } = {}) {
   const cgBase = apiKey ? CG_PRO : CG_FREE;
   const cgHeaders = { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0', ...(apiKey ? { 'x-cg-pro-api-key': apiKey } : {}) };
-  /* known: every coin id seen so far; fresh: listings of the last 8 days; dec: decimals by coin id (-1: LI.FI does not know it). */
+  /* known: every coin id seen so far; fresh: listings of the last 15 days; dec: decimals by coin id (-1: LI.FI does not know it). */
   let state = { known: null, fresh: [], dec: {}, listTs: 0 };
   let markets = { ts: 0, rows: [] };
   let listing = null;
@@ -286,10 +288,10 @@ export function createNewListings({
       have.add(id);
       markets.ts = 0; // new coins: fetch their prices on the next request instead of serving the old set
     }
-    state.fresh = state.fresh.filter((f) => now() - f.at <= WEEK + DAY);
+    state.fresh = state.fresh.filter((f) => now() - f.at <= NEW_MAX + DAY);
   }
 
-  /* Contracts of every coin CoinGecko had before this week: a «new» DEX pool of one of them is not a new coin. */
+  /* Contracts of every coin CoinGecko had before (minus the fresh ones): a «new» DEX pool of one of them is not a new coin. */
   function rememberOldAddrs(list) {
     const fresh = new Set(state.fresh.map((f) => f.id));
     const out = new Map();
@@ -310,9 +312,9 @@ export function createNewListings({
     oldCoins = coins;
   }
 
-  /* A coin CoinGecko listed this week but before our first snapshot looks «old» to the diff
+  /* A coin CoinGecko listed in the last 14 days but before our first snapshot looks «old» to the diff
      (MACCA, GATO, 16.11). Its logo upload time (image URL `?<unix>`) and a price history that
-     starts this week (ATH and ATL both within 8 days) say it is new: add it as a listing. */
+     starts within 14 days (ATH and ATL both within 15 days) say it is new: add it as a listing. */
   async function promoteRecentCg(hits) {
     const ids = [...new Set(hits.map((r) => oldAddrs.get(r.address)).filter(Boolean))].slice(0, 100);
     if (!ids.length) return;
@@ -325,8 +327,8 @@ export function createNewListings({
       const ts = Number(String(m.image || '').split('?')[1]) * 1000;
       const ath = Date.parse(m.ath_date || '');
       const atl = Date.parse(m.atl_date || '');
-      if (!(ts > 0 && t - ts >= 0 && t - ts <= WEEK)) continue;
-      if (!(ath > 0 && atl > 0 && t - ath <= WEEK + DAY && t - atl <= WEEK + DAY)) continue;
+      if (!(ts > 0 && t - ts >= 0 && t - ts <= NEW_MAX)) continue;
+      if (!(ath > 0 && atl > 0 && t - ath <= NEW_MAX + DAY && t - atl <= NEW_MAX + DAY)) continue;
       const coin = oldCoins.get(String(m.id));
       if (coin) add.push({ ...coin, at: ts });
     }
@@ -426,7 +428,7 @@ export function createNewListings({
       if (apiKey) {
         /* Pro: the latest 200 listings with their activation time — no warm-up needed. */
         const { data } = await get(`${cgBase}/coins/list/new`, { timeout: 15000, headers: cgHeaders });
-        const recent = (Array.isArray(data) ? data : []).filter((c) => t - Number(c.activated_at) * 1000 <= WEEK);
+        const recent = (Array.isArray(data) ? data : []).filter((c) => t - Number(c.activated_at) * 1000 <= NEW_MAX);
         const { data: all } = await get(`${cgBase}/coins/list`, { params: { include_platform: true }, timeout: 30000, headers: cgHeaders });
         const byId = new Map((Array.isArray(all) ? all : []).map((c) => [c.id, c]));
         addFresh(recent.map((c) => ({ ...byId.get(c.id), id: c.id, at: Number(c.activated_at) * 1000 })), t);
@@ -484,7 +486,7 @@ export function createNewListings({
   async function refreshMarkets() {
     if (marketing) return marketing;
     marketing = (async () => {
-      const ids = state.fresh.filter((f) => now() - f.at <= WEEK && state.dec[f.id] !== -1).map((f) => f.id).slice(-600);
+      const ids = state.fresh.filter((f) => now() - f.at <= NEW_MAX && state.dec[f.id] !== -1).map((f) => f.id).slice(-600);
       if (!ids.length) { markets = { ts: now(), rows: [] }; return; }
       const rows = [];
       for (let i = 0; i < ids.length; i += 200) {
@@ -516,7 +518,7 @@ export function createNewListings({
     }
     if (dexOn && oldAddrs && !dexing && now() - dex.ts > dexEveryMs) refreshDex().catch(() => {});
     const dec = new Map(Object.entries(state.dec).map(([k, v]) => [k, Number(v)]));
-    const rows = buildRows(state.fresh, markets.rows, dec, { now: now(), dex: dex.rows.filter((r) => now() - Date.parse(r.listedAt) <= WEEK) });
+    const rows = buildRows(state.fresh, markets.rows, dec, { now: now(), dex: dex.rows.filter((r) => now() - Date.parse(r.listedAt) <= NEW_MAX) });
     return { rows, count: rows.length, warming: !state.known, ts: markets.ts || now() };
   }
 

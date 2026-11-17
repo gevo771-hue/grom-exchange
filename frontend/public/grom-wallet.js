@@ -15765,6 +15765,96 @@ function gwTkTargetsFor(fromSym, chainId) {
 /* Search across networks: tokens matching the query on every other network
  * the picker knows (loaded catalogs incl. Solana/Tron + the liquid-token list
  * for all EVM chains). Shown under the selected network's results. */
+/* Swap picker beyond LI.FI's token list (owner, 17.11: ROCCO, GTA6, MIHAO, DACITY from
+   «Trending on DEXs» and NEW were «not on Ethereum»). Tokens the user just saw in Trending and
+   NEW come first; then the server's DEX-wide search (/api/swap/token-search, LI.FI-checked). */
+const GW_TK_DEX_Q = (window.__gwTkDexQ = window.__gwTkDexQ || new Map());
+function gwTkCleanText(s, max) {
+  return String(s == null ? '' : s).replace(/[<>"'&`\\]/g, '').trim().slice(0, max);
+}
+function gwTkSeenTokenRows() {
+  const out = [];
+  try {
+    const mem = window.__gwTrMemCache;
+    if (mem && typeof mem.forEach === 'function') {
+      mem.forEach((e) => {
+        for (const r of (e && e.rows) || []) {
+          out.push({ sym: r.sym, name: r.name, chainId: r.chainId, address: r.tokenAddress, decimals: r.decimals,
+            logo: r.img, priceUSD: r.priceUsd, volumeUSD24H: r.volumeUsd });
+        }
+      });
+    }
+  } catch (_) {}
+  try {
+    for (const r of window.__gromNewRows || []) {
+      out.push({ sym: r.sym, name: r.name, chainId: r.chainId, address: r.address, decimals: r.decimals,
+        logo: r.img, priceUSD: r.price, volumeUSD24H: r.vol });
+    }
+  } catch (_) {}
+  return out;
+}
+function gwTkExtraSearch(rawQuery, onUpdate) {
+  const q = String(rawQuery || '').trim();
+  if (q.length < 2) return { rows: [], loading: false };
+  const Q = q.toUpperCase();
+  const rows = [];
+  const seen = new Set();
+  const push = (t, src) => {
+    const cid = Number(t && t.chainId);
+    const dec = Number(t && t.decimals);
+    const addr = String((t && t.address) || '');
+    if (!cid || !Number.isInteger(dec) || dec < 0 || dec > 36) return;
+    const okAddr = cid === GW_LIFI_SOL_CHAIN ? /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr) : /^0x[0-9a-fA-F]{40}$/.test(addr);
+    if (!okAddr) return;
+    const sym = gwTkCleanText(t.sym, 16).toUpperCase();
+    if (!sym) return;
+    const k = cid + ':' + addr.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    rows.push({
+      sym, name: gwTkCleanText(t.name || sym, 60) || sym, chainId: cid, address: addr, decimals: dec,
+      logo: /^https:\/\//.test(String(t.logo || '')) ? String(t.logo) : '',
+      priceUSD: Number(t.priceUSD) > 0 ? Number(t.priceUSD) : null, volumeUSD24H: Number(t.volumeUSD24H) || 0,
+      verified: false, _src: src,
+    });
+  };
+  for (const t of gwTkSeenTokenRows()) {
+    const s2 = String(t.sym || '').toUpperCase();
+    const n2 = String(t.name || '').toUpperCase();
+    if (s2.includes(Q) || n2.includes(Q) || String(t.address || '').toUpperCase() === Q) push(t, 'seen');
+  }
+  const k = q.toLowerCase();
+  let hit = GW_TK_DEX_Q.get(k);
+  if (hit && !hit.pending && Date.now() - hit.at > 5 * 60_000) { GW_TK_DEX_Q.delete(k); hit = null; }
+  if (!hit) {
+    /* One request per pause in typing; a query left behind is dropped, not left «searching». */
+    const prevK = window.__gwTkDexPendingK;
+    if (prevK && prevK !== k && GW_TK_DEX_Q.get(prevK)?.pending && !GW_TK_DEX_Q.get(prevK)?.started) GW_TK_DEX_Q.delete(prevK);
+    clearTimeout(window.__gwTkDexT);
+    hit = { at: 0, rows: [], pending: true, started: false };
+    GW_TK_DEX_Q.set(k, hit);
+    window.__gwTkDexPendingK = k;
+    window.__gwTkDexT = setTimeout(async () => {
+      hit.started = true;
+      try {
+        const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 12000) : null;
+        const r = await fetch('/api/swap/token-search?q=' + encodeURIComponent(q), { headers: { accept: 'application/json' }, signal: ctrl ? ctrl.signal : undefined });
+        if (timer) clearTimeout(timer);
+        const j = r.ok ? await r.json() : null;
+        hit.rows = Array.isArray(j && j.tokens) ? j.tokens : [];
+      } catch (_) { hit.rows = []; }
+      hit.pending = false;
+      hit.at = Date.now();
+      if (GW_TK_DEX_Q.size > 200) GW_TK_DEX_Q.delete(GW_TK_DEX_Q.keys().next().value);
+      try { if (typeof onUpdate === 'function') onUpdate(q); } catch (_) {}
+    }, 320);
+  }
+  for (const t of hit.rows || []) push(t, 'dex');
+  return { rows, loading: !!hit.pending };
+}
+try { window.gwTkExtraSearch = gwTkExtraSearch; } catch (_) {}
+
 function gwTkSearchOtherNetworks(query, exceptCid, cap) {
   const q = String(query || '').trim().toUpperCase();
   if (q.length < 2) return [];
@@ -16624,9 +16714,26 @@ async function gwTkRender(q) {
     const featuredLeft = Math.max(0, featuredAll.length - featured.length);
     const cross = crossAll.slice(0, cLimit);
     const crossLeft = Math.max(0, crossAll.length - cross.length);
-    const otherNet = (query && query.length >= 2 && !xJump)
+    const otherNetLocal = (query && query.length >= 2 && !xJump)
       ? gwTkSearchOtherNetworks(query, catalogChain, (popular.length || shownRest.length) ? 8 : 16) : [];
-    if (!popular.length && !shownRest.length && !cross.length && !featured.length && !otherNet.length) {
+    /* Tokens beyond the catalog: Trending/NEW first, then the DEX-wide search (redraws when it answers). */
+    const extra = (query && query.length >= 2 && !xJump)
+      ? gwTkExtraSearch(q, (asked) => {
+        const cur = document.getElementById('gwTkSearch')?.value || '';
+        if (cur.trim().toLowerCase() === String(asked).toLowerCase()) gwTkRender(cur);
+      })
+      : { rows: [], loading: false };
+    const haveK = new Set([...popular, ...rest, ...crossAll, ...featuredAll, ...otherNetLocal]
+      .map((a) => (Number(a.chainId) || Number(catalogChain)) + ':' + String(a.address || '').toLowerCase()));
+    const extraNew = extra.rows.filter((r) => !haveK.has(r.chainId + ':' + String(r.address).toLowerCase()));
+    const extraSame = extraNew.filter((r) => r.chainId === Number(catalogChain)).slice(0, 12);
+    const otherNet = otherNetLocal.concat(extraNew.filter((r) => r.chainId !== Number(catalogChain)).slice(0, 12));
+    if (!popular.length && !shownRest.length && !cross.length && !featured.length && !otherNet.length && !extraSame.length) {
+      if (extra.loading) {
+        list.dataset.tkFp = 'dex-search|' + query + '|' + catalogChain;
+        list.innerHTML = `<div class="gw-tk-empty">${gwUxText('Ищем токен на DEX…', 'Searching DEX for this token…')}</div>`;
+        return;
+      }
       let hint = catalogHint || '';
       if (!hint && query) {
         const suggest = (typeof gwTokenChainHint === 'function')
@@ -16686,20 +16793,26 @@ async function gwTkRender(q) {
     } else {
       html += sameBlock();
     }
+    if (extraSame.length) {
+      html += `<div class="gw-tk-group">${gwUxText('Найдено на DEX', 'Found on DEX')}${label} · ${extraSame.length}</div>`;
+      html += extraSame.map((a) => rowHtml({ ...a, group: 'same', showChainBadge: true, chain: chainMeta.label || '' })).join('');
+    }
     if (otherNet.length) {
-      const none = !popular.length && !shownRest.length;
+      const none = !popular.length && !shownRest.length && !extraSame.length;
       html += `<div class="gw-tk-group">${none
         ? gwUxEsc(gwTx('tk_search_other_none', { sym: query, chain: chainMeta.label || '' }, `${query} is not on ${chainMeta.label || 'this network'} — found on other networks`))
         : gwUxText('В других сетях', 'On other networks')} · ${otherNet.length}</div>`;
       html += otherNet.map((a) => rowHtml({ ...a, group: 'xchain', crossNetwork: true, showChainBadge: true })).join('');
     }
+    if (extra.loading) html += `<div class="gw-tk-group gw-tk-group--wait">${gwUxText('Ищем ещё на DEX…', 'Searching DEX…')}</div>`;
     /* Skip identical rebuilds — full innerHTML was flashing every logo on prefetch. */
     const fp = String(xJump ? 1 : 0) + '|' + (window.__gwUxTokenFilter || 'popular') + '|' + fromSym + '|' + query + '|' + catalogChain + '|'
       + featured.map((a) => a.sym + ':' + a.chainId).join(',') + '|'
       + popular.map((a) => a.sym).join(',') + '|'
       + shownRest.slice(0, 24).map((a) => a.sym + (a.address || '').slice(0, 10)).join(',')
       + '|' + shownCat + '|' + totalCat + '|L' + limit + 'X' + xLimit + 'C' + cLimit
-      + '|O' + otherNet.map((a) => a.chainId + (a.address || '').slice(0, 8)).join(',');
+      + '|O' + otherNet.map((a) => a.chainId + (a.address || '').slice(0, 8)).join(',')
+      + '|D' + extraSame.map((a) => (a.address || '').slice(0, 8)).join(',') + (extra.loading ? '…' : '');
     if (list.dataset.tkFp === fp && list.childElementCount > 0) {
       try {
         const ban = document.getElementById('gwTkXchainBanner');
@@ -29703,6 +29816,7 @@ const GW_TR_NETS = [
   { key: 'optimism', gt: 'optimism', label: 'OP', chainId: 10 },
   { key: 'avax', gt: 'avax', label: 'AVAX', chainId: 43114 },
   { key: 'linea', gt: 'linea', label: 'LINEA', chainId: 59144 },
+  { key: 'robinhood', gt: 'robinhood', label: 'Robinhood', chainId: 4663 },
 ];
 
 function gwInjectTrendingCss() {
@@ -29798,7 +29912,7 @@ function gwInjectTrendingCss() {
 const GW_DX_CHAIN_TO_NUM = {
   ethereum: 1, eth: 1, bsc: 56, binance: 56, arbitrum: 42161, arb: 42161,
   polygon: 137, polygon_pos: 137, matic: 137, base: 8453, optimism: 10, op: 10,
-  avalanche: 43114, avax: 43114, linea: 59144,
+  avalanche: 43114, avax: 43114, linea: 59144, robinhood: 4663,
 };
 
 function gwDsEnsureTokenOption(sym, meta) {

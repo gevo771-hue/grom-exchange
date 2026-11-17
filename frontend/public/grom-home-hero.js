@@ -327,6 +327,7 @@
     if (NL.pending) return NL.pending;
     NL.pending = getJson(API + '/market/new-listings').then(function (j) {
       NL.rows = (j && Array.isArray(j.rows)) ? j.rows : [];
+      try { window.__gromNewRows = NL.rows; } catch (e) {} // the swap picker searches these too
       NL.ts = Date.now();
     }).catch(function () { if (!NL.rows) NL.rows = []; }).finally(function () { NL.pending = null; });
     return NL.pending;

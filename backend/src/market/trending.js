@@ -17,6 +17,7 @@ export const TRENDING_NETS = [
   { key: 'optimism', gt: 'optimism', label: 'OP', chainId: 10 },
   { key: 'avax', gt: 'avax', label: 'AVAX', chainId: 43114 },
   { key: 'linea', gt: 'linea', label: 'LINEA', chainId: 59144 },
+  { key: 'robinhood', gt: 'robinhood', label: 'Robinhood', chainId: 4663 },
 ];
 
 const TTL = 90_000;

@@ -207,16 +207,25 @@ const GW_TAG_SETS = {
 const GW_TAG_ORDER = ['stock', 'etf', 'stable', 'major', 'lst', 'meme', 'defi'];
 const GW_TAG_FALLBACK = { stable: 'Stablecoins', major: 'Majors', stock: 'Stocks', etf: 'ETFs', meme: 'Meme', lst: 'Staking', defi: 'DeFi' };
 /* Tokenized stocks / ETFs come from the stocks list by contract (short keys, see /api/market/stocks/tokens). */
+function gwTkStockTicks(tick) {
+  const m = new Map();
+  for (const [t, keys] of Object.entries(tick || {})) {
+    if (!/^[A-Z][A-Z0-9]{0,6}(?:\.[A-Z])?$/.test(t) || !Array.isArray(keys)) continue;
+    for (const k of keys) m.set(String(k), t);
+  }
+  return m;
+}
 function gwTkStockTags() {
-  const st = window.__gwTkStockTags || (window.__gwTkStockTags = { map: null, loading: false, at: 0 });
+  const st = window.__gwTkStockTags || (window.__gwTkStockTags = { map: null, tick: null, loading: false, at: 0 });
   if (st.map || st.loading) return st.map;
   try {
-    const raw = JSON.parse(localStorage.getItem('gw_stock_tags_v1') || 'null');
+    const raw = JSON.parse(localStorage.getItem('gw_stock_tags_v2') || 'null');
     if (raw && raw.at && Date.now() - raw.at < 12 * 3600e3 && raw.etf && raw.stock) {
       const m = new Map();
       raw.stock.forEach((k) => m.set(k, 'stock'));
       raw.etf.forEach((k) => m.set(k, 'etf'));
       st.map = m;
+      st.tick = gwTkStockTicks(raw.tick);
       return st.map;
     }
   } catch (_) {}
@@ -227,15 +236,38 @@ function gwTkStockTags() {
     j.stock.forEach((k) => m.set(k, 'stock'));
     (j.etf || []).forEach((k) => m.set(k, 'etf'));
     st.map = m;
-    try { localStorage.setItem('gw_stock_tags_v1', JSON.stringify({ at: Date.now(), stock: j.stock, etf: j.etf || [] })); } catch (_) {}
+    st.tick = gwTkStockTicks(j.tick);
+    try { localStorage.removeItem('gw_stock_tags_v1'); } catch (_) {}
+    try { localStorage.setItem('gw_stock_tags_v2', JSON.stringify({ at: Date.now(), stock: j.stock, etf: j.etf || [], tick: j.tick || {} })); } catch (_) {}
     try {
       const ov = document.getElementById('gw-tk-overlay');
       const q = document.getElementById('gwTkSearch');
+      const l = document.getElementById('gw-tk-list');
+      if (l) l.dataset.tkFp = ''; // same rows, new logos and tags: draw again
       if (ov && ov.classList.contains('open') && typeof gwTkRender === 'function') gwTkRender(q ? q.value.trim() : '');
+      try { gwTkSyncButton('from'); gwTkSyncButton('to'); } catch (_) {}
     } catch (_) {}
   }).catch(() => {}).finally(() => { st.loading = false; st.at = Date.now(); });
   return null;
 }
+/* Tokenized stock / ETF → the company logo from the Stocks section (owner, 17.11: Robinhood Chain
+   stocks all showed the chain's feather, HyperEVM xStocks showed initials). */
+const GW_STOCK_LOGO = ((typeof location !== 'undefined' && location.protocol === 'https:') ? location.origin : 'https://grom.exchange') + '/api/market/stocks/logo/';
+function gwTkStockLogo(a) {
+  try {
+    if (!a) return '';
+    const addr = String(a.address || '');
+    const cid = Number(a.chainId) || 0;
+    if (!addr) return '';
+    gwTkStockTags();
+    const st = window.__gwTkStockTags;
+    if (!st || !st.tick) return '';
+    const key = /^0x[0-9a-fA-F]{40}$/.test(addr) ? cid + ':' + addr.slice(2, 14).toLowerCase() : 'sol:' + addr.slice(0, 12);
+    const t = st.tick.get(key);
+    return t ? GW_STOCK_LOGO + encodeURIComponent(t) + '.png' : '';
+  } catch (_) { return ''; }
+}
+try { window.gwTkStockLogo = gwTkStockLogo; } catch (_) {}
 function gwTokenTag(a) {
   if (!a) return '';
   const sym = String(a.sym || '').toUpperCase();
@@ -265,6 +297,94 @@ function gwTokenTagHtml(a) {
 }
 try { window.gwTokenTag = gwTokenTag; } catch (_) {}
 
+/* Logos the token list leaves blank (owner, 17.11): asked from the server (DexScreener /
+   GeckoTerminal images) for the rows on screen, kept on the device for a week. */
+const GW_TK_LOGO_LS = 'gw_tk_logos_v1';
+function gwTkLogoKey(chainId, address) {
+  const cid = Number(chainId) || 0;
+  const a = String(address || '').trim();
+  if (!cid || !a) return '';
+  if (/^0x[0-9a-fA-F]{40}$/.test(a)) return /^0x0{40}$|^0xe{40}$/i.test(a) ? '' : cid + ':' + a.toLowerCase();
+  return /^[1-9A-HJ-NP-Za-km-z]{25,44}$/.test(a) ? cid + ':' + a : '';
+}
+function gwTkLogoStore() {
+  if (window.__gwTkExtraLogos) return window.__gwTkExtraLogos;
+  const m = new Map();
+  try {
+    const raw = JSON.parse(localStorage.getItem(GW_TK_LOGO_LS) || '{}');
+    const now = Date.now();
+    for (const [k, v] of Object.entries(raw || {})) {
+      if (Array.isArray(v) && typeof v[0] === 'string' && now - Number(v[1] || 0) < 7 * 86400e3) m.set(k, v);
+    }
+  } catch (_) {}
+  window.__gwTkExtraLogos = m;
+  return m;
+}
+function gwTkExtraLogo(a) {
+  try {
+    const k = gwTkLogoKey(a && a.chainId, a && a.address);
+    const hit = k ? gwTkLogoStore().get(k) : null;
+    return hit && hit[0] ? hit[0] : '';
+  } catch (_) { return ''; }
+}
+function gwTkQueueLogoFetch() {
+  clearTimeout(window.__gwTkLogoT);
+  window.__gwTkLogoT = setTimeout(gwTkFetchMissingLogos, 250);
+}
+async function gwTkFetchMissingLogos() {
+  const list = document.getElementById('gw-tk-list');
+  if (!list) return;
+  const store = gwTkLogoStore();
+  const asked = window.__gwTkLogoAsked = window.__gwTkLogoAsked || new Map();
+  const byChain = new Map();
+  let more = false;
+  for (const row of list.querySelectorAll('.gw-tk-row')) {
+    if (row.querySelector('.gw-tk-ico-wrap img.ico')) continue; // has a logo
+    const k = gwTkLogoKey(row.dataset.cid, row.dataset.addr);
+    if (!k || store.has(k) || Date.now() - (asked.get(k) || 0) < 6 * 3600e3) continue; // a miss is asked again in 6 h
+    const cid = k.split(':')[0];
+    const arr = byChain.get(cid) || [];
+    if (arr.length < 30) { arr.push(k.slice(cid.length + 1)); byChain.set(cid, arr); } else more = true;
+  }
+  if (!byChain.size) return;
+  if (more) setTimeout(gwTkQueueLogoFetch, 600); // the next 30 after this batch
+  let changed = false;
+  await Promise.all([...byChain].map(async ([cid, addrs]) => {
+    const t = Date.now();
+    addrs.forEach((a) => asked.set(cid + ':' + a, t));
+    try {
+      const r = await fetch('/api/swap/token-logos?chain=' + cid + '&a=' + encodeURIComponent(addrs.join(',')), { headers: { accept: 'application/json' } });
+      const j = r.ok ? await r.json() : null;
+      /* A source was busy: the rest are asked again in 2 minutes instead of 6 hours. */
+      if (!j || j.retry) addrs.forEach((a) => asked.set(cid + ':' + a, t - 6 * 3600e3 + 120e3));
+      for (const [a, url] of Object.entries((j && j.logos) || {})) {
+        const k = gwTkLogoKey(cid, a);
+        if (k && /^https:\/\//.test(String(url))) { store.set(k, [String(url), t]); changed = true; }
+      }
+    } catch (_) { addrs.forEach((a) => asked.set(cid + ':' + a, t - 6 * 3600e3 + 120e3)); }
+  }));
+  if (!changed) return;
+  try {
+    const obj = {};
+    [...store].slice(-4000).forEach(([k, v]) => { obj[k] = v; });
+    localStorage.setItem(GW_TK_LOGO_LS, JSON.stringify(obj));
+  } catch (_) {}
+  /* Put the logos into the rows already drawn (no full redraw, no jump). */
+  for (const row of list.querySelectorAll('.gw-tk-row')) {
+    const wrap = row.querySelector('.gw-tk-ico-wrap');
+    const span = wrap && wrap.querySelector('span.ico');
+    if (!span) continue;
+    const hit = store.get(gwTkLogoKey(row.dataset.cid, row.dataset.addr));
+    if (!hit || !hit[0]) continue;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = gwTokenImgHtml(hit[0], row.dataset.sym || '', '');
+    const img = tmp.firstElementChild;
+    if (img && img.tagName === 'IMG') { span.replaceWith(img); }
+  }
+  try { gwBindSafeImgFallback(list); } catch (_) {}
+}
+try { window.gwTkExtraLogo = gwTkExtraLogo; window.gwTkQueueLogoFetch = gwTkQueueLogoFetch; } catch (_) {}
+
 function gwBindSafeImgFallback(root) {
   try {
     window.__gwTkLogoBad = window.__gwTkLogoBad || Object.create(null);
@@ -288,6 +408,7 @@ function gwBindSafeImgFallback(root) {
         span.className = img.className || 'ico';
         span.textContent = fb;
         if (img.parentNode) img.parentNode.replaceChild(span, img);
+        try { if (span.closest && span.closest('#gw-tk-list')) gwTkQueueLogoFetch(); } catch (_) {}
       });
     });
   } catch (_) {}
@@ -11074,6 +11195,7 @@ function gwInjectDashSwapCss() {
       color: #e7eef8; font-size: 14px; }
     .gw-tk-row:hover { background: rgba(255,255,255,0.04); }
     .gw-tk-row .gw-tk-ico-wrap { position: relative; width: 28px; height: 28px; flex-shrink: 0; }
+    .gw-tk-ico-wrap img.gw-stk-logo { background: #fff; object-fit: contain; padding: 2px; box-sizing: border-box; border-radius: 50%; }
     .gw-tk-row .ico { width: 28px; height: 28px; border-radius: 50%;
       display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
       background: linear-gradient(135deg, rgba(0,194,255,0.14), rgba(110,141,255,0.10)); border: 1px solid rgba(0,194,255,0.20); color: #5dd5ff; overflow: hidden; }
@@ -16287,11 +16409,15 @@ async function gwTkRender(q) {
     const nativeAddr = !a.address || /^0x0{40}$|^0xe{40}$/i.test(String(a.address));
     const addrLogo = gwTokenAddrLogo(a.chainId, a.address)
       || (nativeAddr && a.chainId && typeof gwChainLogo === 'function' ? (gwChainLogo(a.chainId) || '') : '');
-    const logoUrl = ((typeof gwTkBestLogo === 'function')
-      ? gwTkBestLogo(a.sym, a.logo)
-      : (a.logo || '')) || addrLogo;
+    const stockLogo = gwTkStockLogo(a);
+    const extraLogo = gwTkExtraLogo(a);
+    const ownLogo = (typeof gwTkBestLogo === 'function') ? gwTkBestLogo(a.sym, a.logo) : (a.logo || '');
+    const listLogo = ownLogo || extraLogo || addrLogo;
+    const logoUrl = stockLogo || listLogo;
     const icoInner = logoUrl
-      ? gwTokenImgHtml(logoUrl, a.sym, addrLogo)
+      ? (stockLogo
+        ? gwTokenImgHtml(logoUrl, a.sym, '').replace('<img class="ico"', '<img class="ico gw-stk-logo"')
+        : gwTokenImgHtml(logoUrl, a.sym, (ownLogo && extraLogo && extraLogo !== ownLogo) ? extraLogo : addrLogo))
       : `<span class="ico">${String(a.sym || '?').slice(0, 3)}</span>`;
     const cid = Number(a.chainId) || 0;
     const showBadge = !!cid && (a.group === 'xchain' || a.crossNetwork || a.amt != null || a.showChainBadge);
@@ -16603,6 +16729,9 @@ async function gwTkRender(q) {
     if (Number(catalogChain) === GW_LIFI_SOL_CHAIN && !base.label) {
       return { label: 'Solana', native: 'SOL' };
     }
+    if (Number(catalogChain) === 728126428 && !base.label) {
+      return { label: 'TRON', native: 'TRX' }; // the search box read "· undefined…" on TRON (17.11)
+    }
     return base;
   })();
 
@@ -16825,6 +16954,7 @@ async function gwTkRender(q) {
     list.innerHTML = html;
     try { if (typeof gwBindSafeImgFallback === 'function') gwBindSafeImgFallback(list); } catch (_) {}
     wire();
+    try { gwTkQueueLogoFetch(); } catch (_) {}
     try { if (!xJump && keepY > 0) list.scrollTop = keepY; } catch (_) {}
     const wireMore = (id, key, step) => {
       const el = document.getElementById(id);
@@ -16871,7 +17001,7 @@ async function gwTkRender(q) {
         inp.placeholder = xJump
           ? tx('tk_search_xchain', 'Search cross-chain destinations…')
           : (n > 0
-            ? gwTx('tk_search_count', { n: n.toLocaleString('en-US') }, 'Search ' + n.toLocaleString('en-US') + ' tokens') + ' · ' + chainMeta.label + '…'
+            ? gwTx('tk_search_count', { n: n.toLocaleString('en-US') }, 'Search ' + n.toLocaleString('en-US') + ' tokens') + (chainMeta.label ? ' · ' + chainMeta.label : '') + '…'
             : 'Search tokens…');
       }
     } catch (_) {}
@@ -16970,8 +17100,10 @@ function gwTkSyncButton(which) {
   }
   if (!ico) ico = btn.querySelector('.ico');
   const curImg = ico ? ico.querySelector('img') : null;
-  /* No logo in the token list → icon by contract (2026-11-14). */
-  const logoSrc = asset.logo || (typeof gwTokenAddrLogo === 'function' ? gwTokenAddrLogo(asset.chainId, asset.address) : '');
+  /* Tokenized stock → company logo; no logo in the token list → icon by contract (2026-11-14). */
+  const stockSrc = typeof gwTkStockLogo === 'function' ? gwTkStockLogo(asset) : '';
+  const logoSrc = stockSrc || asset.logo || (typeof gwTkExtraLogo === 'function' ? gwTkExtraLogo(asset) : '')
+    || (typeof gwTokenAddrLogo === 'function' ? gwTokenAddrLogo(asset.chainId, asset.address) : '');
   const wantLogo = logoSrc ? gwSafeLogo(logoSrc) : '';
   if (wantLogo && curImg && curImg.getAttribute('src') === wantLogo) {
     /* Same token icon already shown — re-creating it makes the button blink. */
@@ -16984,7 +17116,10 @@ function gwTkSyncButton(which) {
         const img = document.createElement('img');
         img.src = safe;
         img.alt = s;
-        img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+        /* Company logos sit on a light disc, as in «Stocks» (dark logos vanished on the dark button). */
+        img.style.cssText = stockSrc
+          ? 'width:100%;height:100%;object-fit:contain;background:#fff;padding:2px;box-sizing:border-box;border-radius:50%'
+          : 'width:100%;height:100%;object-fit:cover';
         img.referrerPolicy = 'no-referrer';
         img.addEventListener('error', function () { ico.textContent = s.slice(0, 3); });
         ico.appendChild(img);
@@ -19875,7 +20010,7 @@ const GW_OC_SWAP = {
       WBTC: '0x68f180fcCe6836688e9084f035309E29Bf0A2095',
       LINK: '0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6',
       SNX:  '0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4',
-      VELO: '0x9560e827aF36c94D2Ac33a39bCE1Fe93824DbC91',
+      VELO: '0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db',
     },
     decimals: { ETH: 18, USDT: 6, USDC: 6, DAI: 18, OP: 18, WBTC: 8, LINK: 18, SNX: 18, VELO: 18 },
   },
@@ -19889,7 +20024,7 @@ const GW_OC_SWAP = {
       USDT: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
       DAI:  '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb',
       AERO: '0x940181a94A35A4569E4529A3CDfB74e38FD98631',
-      DEGEN:'0x4ed4E862860beD51a9570b96d289A925b733153C',
+      DEGEN:'0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed',
       BRETT:'0x532f27101965dd16442E59d40670FaF5eBB142E4',
       TOSHI:'0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4',
     },
@@ -19907,8 +20042,8 @@ const GW_OC_SWAP = {
       WETH: '0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB',
       ETH:  '0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB',
       WBTC: '0x50b7545627a5162F82A992c33b87aDc75187B218',
-      JOE:  '0x6e84a6216eA6ea0F74c6bAf7822E8640d11AbEeA',
-      LINK: '0x5947BB275c521149BE59162bDF653e559208E3C0',
+      JOE:  '0x6e84a6216eA6dACC71eE8E6b0a5B7322EEbC0fDd',
+      LINK: '0x5947BB275c521040051D82396192181b413227A3',
       PNG:  '0x60781C2586D68229fde47564546784ab3fACA982',
       GMX:  '0x62edc0692BD897D2295872a9FFCac5425011c661',
     },

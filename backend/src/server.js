@@ -258,6 +258,22 @@ async function main() {
       next(err);
     }
   });
+  /** Swap picker search beyond LI.FI's list: new DEX tokens by name/symbol/contract (no user data). */
+  const tokenSearchLimiter = rateLimit({
+    windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false, validate: { trustProxy: false },
+  });
+  app.get('/api/swap/token-search', tokenSearchLimiter, async (req, res, next) => {
+    try {
+      const { tokenSearch, normalizeQuery } = await import('./liquidity/token-search.js');
+      const q = normalizeQuery(req.query.q);
+      if (q.length < 2) return res.json({ tokens: [] });
+      const tokens = await tokenSearch(q);
+      res.set('Cache-Control', 'public, max-age=120');
+      res.json({ tokens });
+    } catch (err) {
+      next(err);
+    }
+  });
   app.get('/api/swap/token-logo/:chainId/:address', async (req, res) => {
     const { holdingsTokenLogo } = await import('./liquidity/holdings-tokens.js');
     const url = /^0x[0-9a-fA-F]{40}$/.test(req.params.address)

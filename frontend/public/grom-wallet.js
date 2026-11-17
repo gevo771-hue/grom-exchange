@@ -220,7 +220,9 @@ function gwTkStockTags() {
   if (st.map || st.loading) return st.map;
   try {
     const raw = JSON.parse(localStorage.getItem('gw_stock_tags_v2') || 'null');
-    if (raw && raw.at && Date.now() - raw.at < 12 * 3600e3 && raw.etf && raw.stock) {
+    /* Only a v2 copy with tickers (a v1 answer has no company logos). */
+    if (raw && raw.v === 2 && raw.tick && Object.keys(raw.tick).length
+      && raw.at && Date.now() - raw.at < 12 * 3600e3 && raw.etf && raw.stock) {
       const m = new Map();
       raw.stock.forEach((k) => m.set(k, 'stock'));
       raw.etf.forEach((k) => m.set(k, 'etf'));
@@ -230,7 +232,8 @@ function gwTkStockTags() {
     }
   } catch (_) {}
   st.loading = true;
-  fetch('/api/market/stocks/tokens', { credentials: 'omit' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+  /* ?v=2: the edge cache still held the old answer without tickers for hours (17.11). */
+  fetch('/api/market/stocks/tokens?v=2', { credentials: 'omit' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
     if (!j || !Array.isArray(j.stock)) return;
     const m = new Map();
     j.stock.forEach((k) => m.set(k, 'stock'));
@@ -238,7 +241,9 @@ function gwTkStockTags() {
     st.map = m;
     st.tick = gwTkStockTicks(j.tick);
     try { localStorage.removeItem('gw_stock_tags_v1'); } catch (_) {}
-    try { localStorage.setItem('gw_stock_tags_v2', JSON.stringify({ at: Date.now(), stock: j.stock, etf: j.etf || [], tick: j.tick || {} })); } catch (_) {}
+    if (j.tick && Object.keys(j.tick).length) {
+      try { localStorage.setItem('gw_stock_tags_v2', JSON.stringify({ v: 2, at: Date.now(), stock: j.stock, etf: j.etf || [], tick: j.tick })); } catch (_) {}
+    }
     try {
       const ov = document.getElementById('gw-tk-overlay');
       const q = document.getElementById('gwTkSearch');

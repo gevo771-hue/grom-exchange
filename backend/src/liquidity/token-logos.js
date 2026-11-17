@@ -3,8 +3,9 @@
  * Plasma, X Layer, Solana and TRON lists showed letters instead of logos — BONK, WIF, JUP, SUN…).
  *
  * DexScreener `tokens/v1` (≤ 30 contracts per call, 300 req/min) gives each token's image when
- * the token is the base of one of its pools; GeckoTerminal `tokens/multi` fills the rest when its
- * gentle budget allows. Answers are cached per token: found 7 days, not found 1 day.
+ * the token is the base of one of its pools; for Solana, Jupiter's token list; GeckoTerminal
+ * `tokens/multi` fills the rest when its
+ * gentle budget allows. Answers are cached per token: found 7 days, not found 1 day (2 minutes when a source was busy).
  *
  * A verified token bridged to another network (OP on Arbitrum, ARB on BSC, sfrxETH on Linea…)
  * takes the logo of the same coin elsewhere: LI.FI links one coin across networks by `coinKey`.
@@ -15,6 +16,9 @@ import config from '../config/index.js';
 
 const DS = 'https://api.dexscreener.com/tokens/v1';
 const LIFI_TOKENS = 'https://li.quest/v1/tokens';
+/* Solana: Jupiter's token list has the icon of almost every mint (LI.FI's Solana logos sit on a
+   storage service that no longer answers). */
+const JUP_SEARCH = 'https://lite-api.jup.ag/tokens/v2/search';
 const GT = 'https://api.geckoterminal.com/api/v2/networks';
 
 /** Swap network → DexScreener slug / GeckoTerminal network. */
@@ -34,7 +38,7 @@ export const LOGO_CHAINS = {
   9745: { ds: 'plasma', gt: 'plasma' },
   196: { ds: 'xlayer', gt: 'x-layer' },
   728126428: { ds: 'tron', gt: 'tron' },
-  1151111081099710: { ds: 'solana', gt: 'solana' },
+  1151111081099710: { ds: 'solana', gt: 'solana', jup: true },
 };
 
 const EVM_ADDR = /^0x[0-9a-fA-F]{40}$/;
@@ -162,19 +166,33 @@ export function createTokenLogos({
     const missing = [];
     for (const k of keys) {
       const hit = cache.get(chainId + ':' + k);
-      if (fresh(hit)) { if (hit.url) result[k] = hit.url; } else missing.push(k);
+      if (fresh(hit)) {
+        if (hit.url) result[k] = hit.url;
+        else if (hit.partial) meta.partial = true; // still waiting for a busy source
+      } else missing.push(k);
     }
     if (!missing.length) return result;
     const found = {};
     try {
       const { data } = await get(`${DS}/${chain.ds}/${missing.join(',')}`, { timeout: 6000, headers: { Accept: 'application/json' } });
       Object.assign(found, logosFromPairs(data, missing));
-    } catch (_) { return result; } // no answer: do not cache a miss
+    } catch (_) { meta.partial = true; return result; } // no answer: do not cache a miss
     let complete = true; // every source answered — only then a miss is kept for a day
     if (missing.some((k) => !found[k]) && COIN_CHAINS.includes(Number(chainId))) {
       const index = await coinIndex();
       if (!index) complete = false;
       for (const k of missing) if (!found[k]) { const u = coinLogo(index, chainId, k); if (u) found[k] = u; }
+    }
+    if (chain.jup && missing.some((k) => !found[k])) {
+      const ask = missing.filter((k) => !found[k]);
+      try {
+        const { data } = await get(JUP_SEARCH, { params: { query: ask.join(',') }, timeout: 6000, headers: { Accept: 'application/json' } });
+        for (const t of Array.isArray(data) ? data : []) {
+          const k = String(t?.id || '');
+          const url = safeUrl(t?.icon);
+          if (url && ask.includes(k)) found[k] = url;
+        }
+      } catch (_) { complete = false; }
     }
     const rest = missing.filter((k) => !found[k]);
     /* GeckoTerminal: one call per gap; a request a moment behind another waits its turn (≤ 3 s). */
@@ -198,7 +216,8 @@ export function createTokenLogos({
     }
     const t = now();
     for (const k of missing) {
-      cache.set(chainId + ':' + k, { url: found[k] || '', at: t, ttl: found[k] ? 7 * 86400e3 : (complete ? 86400e3 : 600e3) });
+      const partial = !found[k] && !complete; // a source was busy: ask again in 2 minutes
+      cache.set(chainId + ':' + k, { url: found[k] || '', at: t, ttl: found[k] ? 7 * 86400e3 : (partial ? 120e3 : 86400e3), partial });
       if (found[k]) result[k] = found[k];
     }
     if (!complete) meta.partial = true;

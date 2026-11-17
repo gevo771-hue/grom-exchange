@@ -92,7 +92,7 @@ test('token logos: same-coin logo before GeckoTerminal; the LI.FI list is loaded
   assert.equal(loads, 2);
 });
 
-test('token logos: when a source did not answer, a miss is kept only 10 minutes', async () => {
+test('token logos: when a source did not answer, a miss is kept only 2 minutes and keeps saying "retry"', async () => {
   let t = 1_800_000_000_000;
   let ds = 0;
   const get = async (url) => { if (url.includes('dexscreener')) { ds++; return { data: [] }; } throw new Error('429'); };
@@ -101,11 +101,13 @@ test('token logos: when a source did not answer, a miss is kept only 10 minutes'
   await logos(42161, [A], meta);
   assert.equal(meta.partial, true); // the page asks again in a couple of minutes
   t += 60e3;
+  const again = {};
+  await logos(42161, [A], again);
+  assert.equal(ds, 1); // cached for now…
+  assert.equal(again.partial, true); // …and still marked as not final
+  t += 61e3;
   await logos(42161, [A]);
-  assert.equal(ds, 1); // cached for now
-  t += 600e3;
-  await logos(42161, [A]);
-  assert.equal(ds, 2); // asked again soon, not after a day
+  assert.equal(ds, 2); // asked again after 2 minutes, not after a day
 });
 
 test('token logos: a request right behind another waits for its GeckoTerminal turn', async () => {
@@ -127,4 +129,30 @@ test('token logos: a request right behind another waits for its GeckoTerminal tu
   assert.deepEqual(waits, [1900]);
   assert.equal(m1.partial, undefined);
   assert.equal(m2.partial, undefined);
+});
+
+test('token logos: DexScreener down → nothing cached, page told to retry', async () => {
+  const logos = createTokenLogos({ get: async () => { throw new Error('down'); }, now: () => 1_800_000_000_000, loadCoins: async () => buildCoinIndex({}) });
+  const meta = {};
+  assert.deepEqual(await logos(1, [A], meta), {});
+  assert.equal(meta.partial, true);
+});
+
+test('token logos: Solana mints take Jupiter\'s icon when DexScreener has none', async () => {
+  const RNDR = 'rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof';
+  const seen = [];
+  const get = async (url, opts) => {
+    seen.push(url);
+    if (url.includes('dexscreener')) return { data: [] };
+    if (url.includes('jup.ag')) {
+      assert.equal(opts.params.query, RNDR);
+      return { data: [{ id: RNDR, icon: 'https://static.datapi.jup.ag/token-icons/rndr.webp' }, { id: 'other', icon: 'https://x.test/o.png' }] };
+    }
+    throw new Error('should not reach ' + url);
+  };
+  const logos = createTokenLogos({ get, now: () => 1_800_000_000_000 });
+  const meta = {};
+  assert.deepEqual(await logos(1151111081099710, [RNDR], meta), { [RNDR]: 'https://static.datapi.jup.ag/token-icons/rndr.webp' });
+  assert.equal(meta.partial, undefined);
+  assert.equal(seen.filter((u) => u.includes('geckoterminal')).length, 0);
 });

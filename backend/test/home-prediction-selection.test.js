@@ -134,3 +134,35 @@ test('failed translation keeps canonical cards and expired cards are removed eve
   stamp += 1001;
   assert.deepEqual((await load('ru')).markets, []);
 });
+
+test('home cards: current events first, chosen once a day, ended ones replaced at once', async () => {
+  const { createFeaturedPredictionLoader } = await import('../src/market/predict-featured.js');
+  const H = 3600e3, D = 24 * H;
+  let stamp = Date.parse('2026-11-17T12:00:00Z');
+  const ends = (ms) => new Date(stamp + ms).toISOString();
+  const long = { id: 'nominee2028', cat: 'politics', vol: 1.3e9, vol24: 1e6, endsAt: ends(700 * D) };
+  const fed = { id: 'fed-dec', cat: 'economy', vol: 5e7, vol24: 1.2e6, endsAt: ends(22 * D) };
+  const taipei = { id: 'taipei', cat: 'politics', vol: 2e7, vol24: 6e5, endsAt: ends(11 * D) };
+  const btcDay = { id: 'btc-today', cat: 'crypto', vol: 3e6, vol24: 4e5, endsAt: ends(2 * H) }; // ends today: not picked first
+  const btcMonth = { id: 'btc-month', cat: 'crypto', vol: 9e6, vol24: 2e5, endsAt: ends(13 * D) };
+  const ucl = { id: 'ucl-match', cat: 'sport', vol: 4e6, vol24: 3e5, endsAt: ends(3 * D) };
+  const quiet = { id: 'quiet', cat: 'culture', vol: 1e6, vol24: 1e3, endsAt: ends(5 * D) };
+  let markets = [long, fed, taipei, btcDay, btcMonth, ucl, quiet];
+  const load = createFeaturedPredictionLoader({ now: () => stamp, ttl: 1, getCatalog: async () => ({ markets }), translate: async () => [] });
+  assert.deepEqual((await load('en')).markets.map((m) => m.id), ['fed-dec', 'taipei', 'ucl-match', 'btc-month']);
+  /* Ranks change within the day: same cards, fresh odds. */
+  stamp += 3 * H;
+  markets = markets.map((m) => (m.id === 'quiet' ? { ...m, vol24: 9e6 } : m.id === 'fed-dec' ? { ...m, p: 77 } : m));
+  const mid = (await load('en')).markets;
+  assert.deepEqual(mid.map((m) => m.id), ['fed-dec', 'taipei', 'ucl-match', 'btc-month']);
+  assert.equal(mid[0].p, 77);
+  /* An event ends → replaced right away, the others stay. */
+  stamp += 3 * D - 3 * H + 1;
+  const after = (await load('en')).markets.map((m) => m.id);
+  assert.equal(after.length, 4);
+  assert.ok(!after.includes('ucl-match') && after.includes('fed-dec') && after.includes('taipei'));
+  /* Next day: a fresh choice. */
+  stamp += D;
+  markets = markets.concat({ id: 'new-hot', cat: 'sport', vol: 1e5, vol24: 5e6, endsAt: ends(4 * D) });
+  assert.ok((await load('en')).markets.map((m) => m.id).includes('new-hot'));
+});

@@ -208,12 +208,15 @@ test('stock token tags: short chain:address keys, ETFs apart from stocks', async
   try {
     const base = `http://127.0.0.1:${server.address().port}/api/market`;
     const j = await (await fetch(`${base}/stocks/tokens`)).json();
-    assert.equal(j.v, 1);
+    assert.equal(j.v, 2);
     assert.ok(Array.isArray(j.etf) && Array.isArray(j.stock));
     const items = await universe.get();
     const tsla = items.find((x) => x.sym === 'TSLA');
     const v = tsla.variants.find((x) => x.c !== 'solana');
     assert.ok(j.stock.includes(Number(v.c) + ':' + String(v.a).slice(2, 14).toLowerCase()));
+    /* v2: contract → ticker, for the company logo in the swap list */
+    assert.ok(j.tick.TSLA.includes(Number(v.c) + ':' + String(v.a).slice(2, 14).toLowerCase()));
+    assert.ok(Object.keys(j.tick).every((t) => /^[A-Z][A-Z0-9]{0,6}(?:\.[A-Z])?$/.test(t)));
     const ivv = items.find((x) => x.sym === 'IVV');
     if (ivv && ivv.k === 'etf') {
       const ev = ivv.variants.find((x) => x.c !== 'solana');

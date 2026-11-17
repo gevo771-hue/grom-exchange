@@ -274,6 +274,21 @@ async function main() {
       next(err);
     }
   });
+  /** Logos for swap-list tokens the token list leaves blank (DexScreener / GeckoTerminal images). */
+  const tokenLogosLimiter = rateLimit({
+    windowMs: 60_000, max: 90, standardHeaders: true, legacyHeaders: false, validate: { trustProxy: false },
+  });
+  app.get('/api/swap/token-logos', tokenLogosLimiter, async (req, res, next) => {
+    try {
+      const { tokenLogos } = await import('./liquidity/token-logos.js');
+      const meta = {};
+      const logos = await tokenLogos(Number(req.query.chain), String(req.query.a || ''), meta);
+      res.set('Cache-Control', meta.partial ? 'public, max-age=60' : 'public, max-age=3600');
+      res.json(meta.partial ? { logos, retry: 1 } : { logos });
+    } catch (err) {
+      next(err);
+    }
+  });
   app.get('/api/swap/token-logo/:chainId/:address', async (req, res) => {
     const { holdingsTokenLogo } = await import('./liquidity/holdings-tokens.js');
     const url = /^0x[0-9a-fA-F]{40}$/.test(req.params.address)

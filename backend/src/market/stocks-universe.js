@@ -610,15 +610,22 @@ export function registerStocksRoutes(router, {
       if (!tokenTags.body || Date.now() - tokenTags.ts > 10 * 60_000) {
         const etf = [];
         const stock = [];
+        /* v2: which ticker each contract is — the swap list shows the company logo
+           (Robinhood Chain tokens otherwise all showed the chain's feather, HyperEVM ones initials; 17.11). */
+        const tick = {};
         for (const it of await universe.get()) {
           const out = it.k === 'etf' ? etf : stock;
+          const keys = [];
           for (const v of it.variants) {
             const a = String(v.a || '');
-            if (v.c === 'solana') { if (a) out.push('sol:' + a.slice(0, 12)); continue; }
-            if (EVM_ADDR.test(a)) out.push(Number(v.c) + ':' + a.slice(2, 14).toLowerCase());
+            if (v.c === 'solana') { if (a) keys.push('sol:' + a.slice(0, 12)); continue; }
+            if (EVM_ADDR.test(a)) keys.push(Number(v.c) + ':' + a.slice(2, 14).toLowerCase());
           }
+          out.push(...keys);
+          const t = String(it.sym || '').toUpperCase();
+          if (keys.length && TICKER.test(t)) tick[t] = [...new Set([...(tick[t] || []), ...keys])];
         }
-        tokenTags = { ts: Date.now(), body: { v: 1, etf: [...new Set(etf)], stock: [...new Set(stock)] } };
+        tokenTags = { ts: Date.now(), body: { v: 2, etf: [...new Set(etf)], stock: [...new Set(stock)], tick } };
       }
       return res.set('Cache-Control', 'public, max-age=21600, stale-while-revalidate=86400').json(tokenTags.body);
     } catch (_) {

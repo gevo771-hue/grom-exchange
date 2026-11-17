@@ -15284,7 +15284,11 @@ var GROM_XSTOCKS = [
         // Drop poisoned v1 cache (LiFi junk: LOGX, FRAX, TRX…)
         try {
           localStorage.removeItem('gwx_btokens_catalog');
-          localStorage.removeItem('gwx_xstocks_catalog_v7');
+          /* every older catalog copy, not only v7 (v2/v4/v5/v6 stayed and filled the storage) */
+          for (var li = localStorage.length - 1; li >= 0; li--) {
+            var lk = localStorage.key(li);
+            if (lk && /^gwx_xstocks_catalog_v\d+$/.test(lk) && lk !== GWX_CACHE_KEY) localStorage.removeItem(lk);
+          }
         } catch (_) {}
         var local = gwxReadLocalCatalog();
         var age = local ? (Date.now() - local.at) : Infinity;

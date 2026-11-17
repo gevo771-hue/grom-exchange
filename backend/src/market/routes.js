@@ -2,6 +2,7 @@ import express from 'express';
 import { registerPredictionEventRoutes } from './predict-event.js';
 import { isUsElection2026 } from './predict-election.js';
 import { createFeaturedPredictionLoader } from './predict-featured.js';
+import { isPmStubTitle, expandPmStubTitle } from './predict-title.js';
 import { pmCategory } from './predict-category.js';
 import rateLimit from 'express-rate-limit';
 import axios from 'axios';
@@ -470,26 +471,6 @@ function pmEndsAt(iso) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 /** Polymarket multi-date events often ship stub titles: "… by...?" / "… к...?" */
-function isPmStubTitle(s) {
-  const t = String(s || '').trim();
-  if (!t) return true;
-  // Any ellipsis in the title is treated as incomplete (incl. mid-phrase "к...? (…)")
-  // Note: "___" blanks (Bitcoin above ___ on …) are intentional multi-strike titles — not stubs.
-  if (/\.{2,}/.test(t) || /…/.test(t)) return true;
-  return false;
-}
-function expandPmStubTitle(stub, fill) {
-  if (!stub || !fill) return '';
-  let expanded = String(stub)
-    .replace(/\b(by)\s*\.{2,}\s*\??/gi, `by ${fill}`)
-    .replace(/\b(к)\s*\.{2,}\s*\??/gi, `к ${fill}`)
-    .replace(/\b(by)\s*…\s*\??/gi, `by ${fill}`)
-    .replace(/\b(к)\s*…\s*\??/gi, `к ${fill}`)
-    .replace(/\.{2,}\s*\??/g, fill)
-    .replace(/…\s*\??/g, fill);
-  expanded = expanded.replace(/\s+\?/g, '?').replace(/\?{2,}/g, '?').replace(/\s{2,}/g, ' ').trim();
-  return (expanded && !isPmStubTitle(expanded)) ? expanded : '';
-}
 /**
  * Card title must match Polymarket's EVENT title for multi-outcome markets.
  * Never promote a single strike question (e.g. "…$70,000…") over

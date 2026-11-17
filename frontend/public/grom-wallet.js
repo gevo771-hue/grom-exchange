@@ -304,6 +304,27 @@ try { window.gwTokenTag = gwTokenTag; } catch (_) {}
 
 /* Logos the token list leaves blank (owner, 17.11): asked from the server (DexScreener /
    GeckoTerminal images) for the rows on screen, kept on the device for a week. */
+/* Old copies the newer versions replaced stayed in the browser and filled its storage (owner, 17.11:
+   ~5 MB used, so new data — stock tags, token logos — could no longer be saved). Removed on load. */
+const GW_LS_LEGACY = [
+  /^gw_lifi_tokens_v\d+$/, // old LI.FI token list cache (1.7 MB), no longer read
+  /^gwx_xstocks_catalog_v[0-7]$/, // stocks catalog: v8 is current (GWX_CACHE_KEY in index.html)
+  /^grom:trending:v[1-3](:|$)/, // Trending on DEX: v4 is current
+  /^gw_mp_cache_v\d+$/, /^gw_mp_last_snap_v\d+$/, /^gw_stock_tags_v1$/,
+];
+function gwLsSweepLegacy() {
+  try {
+    const drop = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && GW_LS_LEGACY.some((re) => re.test(k))) drop.push(k);
+    }
+    drop.forEach((k) => { try { localStorage.removeItem(k); } catch (_) {} });
+    return drop;
+  } catch (_) { return []; }
+}
+gwLsSweepLegacy();
+try { window.gwLsSweepLegacy = gwLsSweepLegacy; } catch (_) {}
 const GW_TK_LOGO_LS = 'gw_tk_logos_v1';
 function gwTkLogoKey(chainId, address) {
   const cid = Number(chainId) || 0;
@@ -30023,6 +30044,8 @@ function gwInjectTrendingCss() {
       border: 2px solid #252d3a; font-size: 6px; font-weight: 900; display: inline-flex;
       align-items: center; justify-content: center; color: #0b1220; line-height: 1;
     }
+    .gw-tr-row .net-dot.net-dot--logo { width: 16px; height: 16px; right: -3px; bottom: -3px; background: #0b1220; overflow: hidden; padding: 0; }
+    .gw-tr-row .net-dot.net-dot--logo img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: transparent; }
     .gw-tr-row .meta { min-width: 0; overflow: hidden; }
     .gw-tr-row .name { font-weight: 800; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .gw-tr-row .chain { font-size: 10.5px; letter-spacing: .1em; color: #6b7a92; text-transform: uppercase; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -30278,9 +30301,14 @@ function gwTrPaintList(list, rows, t, ctx) {
       : '$' + r.priceUsd.toFixed(Math.min(8, 4 + Math.max(0, -Math.log10(Math.max(r.priceUsd, 1e-9)) | 0)));
     const initial = (r.sym || '?').slice(0, 3).toUpperCase();
     const short = netShort(r.chainId, r.chainLabel || r.chain);
-    const badge = r.chainId
-      ? `<span class="net-dot" style="background:${netColor(r.chainId)}" title="${r.chainLabel || short}">${String(short).slice(0, 3)}</span>`
-      : '';
+    /* Network mark: the network's logo, letters only if the logo fails to load (owner, 17.11:
+       Robinhood rows showed «Rob» on a yellow dot). */
+    const mark = String(short).slice(0, 3).replace(/[^\w]/g, '');
+    const dotColor = String(netColor(r.chainId)).replace(/[^#\w(),.\s%]/g, '');
+    const netLogo = r.chainId && typeof gwChainLogo === 'function' ? gwChainLogo(Number(r.chainId)) : '';
+    const badge = !r.chainId ? '' : netLogo
+      ? `<span class="net-dot net-dot--logo" title="${r.chainLabel || short}"><img src="${netLogo}" alt="" loading="lazy" decoding="async" onerror="var d=this.parentNode;d.classList.remove('net-dot--logo');d.style.background='${dotColor}';d.textContent='${mark}'" /></span>`
+      : `<span class="net-dot" style="background:${dotColor}" title="${r.chainLabel || short}">${mark}</span>`;
     const img = r.img
       ? `<div class="gw-tr-ico"><img src="${r.img}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;avatar&quot;>${initial}</span>'" />${badge}</div>`
       : `<div class="gw-tr-ico"><span class="avatar">${initial}</span>${badge}</div>`;

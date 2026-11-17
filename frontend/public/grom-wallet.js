@@ -349,20 +349,24 @@ async function gwTkFetchMissingLogos() {
   if (!byChain.size) return;
   if (more) setTimeout(gwTkQueueLogoFetch, 600); // the next 30 after this batch
   let changed = false;
+  let retry = false;
   await Promise.all([...byChain].map(async ([cid, addrs]) => {
     const t = Date.now();
     addrs.forEach((a) => asked.set(cid + ':' + a, t));
     try {
       const r = await fetch('/api/swap/token-logos?chain=' + cid + '&a=' + encodeURIComponent(addrs.join(',')), { headers: { accept: 'application/json' } });
       const j = r.ok ? await r.json() : null;
-      /* A source was busy: the rest are asked again in 2 minutes instead of 6 hours. */
-      if (!j || j.retry) addrs.forEach((a) => asked.set(cid + ':' + a, t - 6 * 3600e3 + 120e3));
+      /* A source was busy: the rest are asked again in ~2.5 minutes instead of 6 hours. */
+      if (!j || j.retry) { addrs.forEach((a) => asked.set(cid + ':' + a, t - 6 * 3600e3 + 150e3)); retry = true; }
       for (const [a, url] of Object.entries((j && j.logos) || {})) {
         const k = gwTkLogoKey(cid, a);
         if (k && /^https:\/\//.test(String(url))) { store.set(k, [String(url), t]); changed = true; }
       }
-    } catch (_) { addrs.forEach((a) => asked.set(cid + ':' + a, t - 6 * 3600e3 + 120e3)); }
+    } catch (_) { addrs.forEach((a) => asked.set(cid + ':' + a, t - 6 * 3600e3 + 150e3)); retry = true; }
   }));
+  if (retry && !window.__gwTkLogoRetryT) {
+    window.__gwTkLogoRetryT = setTimeout(() => { window.__gwTkLogoRetryT = 0; gwTkQueueLogoFetch(); }, 160e3);
+  }
   if (!changed) return;
   try {
     const obj = {};

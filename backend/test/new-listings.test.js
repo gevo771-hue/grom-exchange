@@ -149,3 +149,65 @@ test('new listings: DEX rows only top up to the minimum, never duplicate a CoinG
   assert.equal(rows[0].id, 'long');
   assert.equal(rows.filter((r) => String(r.address).toLowerCase() === '0x' + '1'.repeat(40)).length, 1);
 });
+
+/* Owner, 17.11: after every deploy the NEW strip was empty for minutes and the CoinGecko baseline
+   started over. The snapshot now lives in the database (app_state). */
+function memStore(init = {}) {
+  const data = new Map(Object.entries(init));
+  const writes = [];
+  return {
+    data, writes,
+    get: async (k) => (data.has(k) ? JSON.parse(JSON.stringify(data.get(k))) : null),
+    set: async (k, v) => { writes.push(k); data.set(k, JSON.parse(JSON.stringify(v))); return true; },
+  };
+}
+
+test('new listings: after a restart the saved rows show at once, without waiting for the network', async () => {
+  const t = Date.parse('2026-11-17T21:00:00Z');
+  const known = Array.from({ length: 1200 }, (_, i) => 'c' + i);
+  const store = memStore({
+    new_listings_state: { known, fresh: [{ id: 'fresh-one', symbol: 'new', name: 'New One', at: t - 3600e3, chain: 'eth', chainId: 1, address: EVM }], dec: { 'fresh-one': 18 }, listTs: t - 10 * 60_000 },
+    new_listings_rows: {
+      markets: { ts: t - 20 * 60_000, rows: [{ id: 'fresh-one', symbol: 'new', name: 'New One', image: 'https://img/new', current_price: 2, total_volume: 90_000, price_change_percentage_24h: 5 }] },
+      dex: { ts: t - 20 * 60_000, rows: [] },
+    },
+  });
+  const get = async () => new Promise(() => {}); // network never answers
+  const svc = createNewListings({ get, now: () => t, file: '', apiKey: '', pause: async () => {}, store, dexOn: false });
+  const p = await svc.get();
+  assert.deepEqual(p.rows.map((r) => r.sym), ['NEW']);
+  assert.equal(p.warming, false);
+});
+
+test('new listings: the CoinGecko baseline survives a restart — a coin listed meanwhile is found', async () => {
+  let t = Date.parse('2026-11-17T21:00:00Z');
+  const base = Array.from({ length: 1200 }, (_, i) => ({ id: 'c' + i, symbol: 's' + i, name: 'C' + i, platforms: {} }));
+  const store = memStore({ new_listings_state: { known: base.map((c) => c.id), fresh: [], dec: {}, listTs: t - 40 * 60_000 } });
+  const list = base.concat([{ id: 'listed-during-deploy', symbol: 'ldd', name: 'Listed', platforms: { ethereum: EVM } }]);
+  const get = async (url, opts) => {
+    if (url.endsWith('/coins/list')) return { data: list };
+    if (url.endsWith('/v1/token')) return { data: { decimals: 18 } };
+    if (url.endsWith('/coins/markets')) return { data: opts.params.ids.split(',').map((id) => ({ id, symbol: id, name: id, image: 'https://img/' + id, current_price: 1, total_volume: 50_000, price_change_percentage_24h: 1 })) };
+    throw new Error('unexpected ' + url);
+  };
+  const svc = createNewListings({ get, now: () => t, file: '', apiKey: '', pause: async () => {}, store, dexOn: false });
+  await svc.refreshList();
+  assert.deepEqual(svc._state().fresh.map((f) => f.id), ['listed-during-deploy']); // not swallowed into a new baseline
+  assert.ok(store.writes.includes('new_listings_state'));
+  t += 60_000;
+  const p = await svc.get();
+  assert.deepEqual(p.rows.map((r) => r.id), ['listed-during-deploy']);
+  assert.ok(store.writes.includes('new_listings_rows'));
+  assert.equal(store.data.get('new_listings_rows').markets.rows[0].current_price, 1);
+});
+
+test('new listings: an empty or broken store is ignored', async () => {
+  const store = { get: async () => { throw new Error('relation "app_state" does not exist'); }, set: async () => { throw new Error('down'); } };
+  const t = Date.parse('2026-11-17T21:00:00Z');
+  const base = Array.from({ length: 1200 }, (_, i) => ({ id: 'c' + i, symbol: 's' + i, name: 'C' + i, platforms: {} }));
+  const get = async (url) => { if (url.endsWith('/coins/list')) return { data: base }; return { data: [] }; };
+  const svc = createNewListings({ get, now: () => t, file: '', apiKey: '', pause: async () => {}, store, dexOn: false });
+  const p = await svc.get();
+  assert.equal(p.count, 0);
+  assert.equal(svc._state().known.size, 1200);
+});

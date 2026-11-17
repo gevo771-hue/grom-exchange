@@ -231,6 +231,9 @@ export function buildRows(fresh, markets, decimals, {
   return rows;
 }
 
+const ST_STATE = 'new_listings_state';
+const ST_ROWS = 'new_listings_rows';
+
 export function createNewListings({
   get = axios.get,
   now = Date.now,
@@ -242,6 +245,9 @@ export function createNewListings({
   dexEveryMs = 30 * 60_000,
   dexOn = true,
   pause = (ms) => new Promise((r) => setTimeout(r, ms)),
+  /* { get(key), set(key, value) } — Postgres in production (app_state), so a deploy does not empty the
+     strip and the CoinGecko baseline survives restarts (owner, 17.11). */
+  store = null,
 } = {}) {
   const cgBase = apiKey ? CG_PRO : CG_FREE;
   const cgHeaders = { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0', ...(apiKey ? { 'x-cg-pro-api-key': apiKey } : {}) };
@@ -267,11 +273,39 @@ export function createNewListings({
   } catch (_) {}
 
   function save() {
-    if (!file) return;
-    try {
-      fs.writeFileSync(file, JSON.stringify({ known: [...state.known], fresh: state.fresh, dec: state.dec, listTs: state.listTs }), 'utf8');
-    } catch (_) {}
+    const snap = { known: [...(state.known || [])], fresh: state.fresh, dec: state.dec, listTs: state.listTs };
+    if (file) {
+      try { fs.writeFileSync(file, JSON.stringify(snap), 'utf8'); } catch (_) {}
+    }
+    if (store && state.known) Promise.resolve(store.set(ST_STATE, snap)).catch(() => {});
   }
+
+  /* Prices and DEX rows of the last good answer: shown right after a restart while fresh ones load. */
+  function saveRows() {
+    if (!store) return;
+    const compact = markets.rows.map((m) => ({
+      id: m.id, symbol: m.symbol, name: m.name, image: m.image, current_price: m.current_price,
+      total_volume: m.total_volume, market_cap: m.market_cap, price_change_percentage_24h: m.price_change_percentage_24h,
+    }));
+    Promise.resolve(store.set(ST_ROWS, { markets: { ts: markets.ts, rows: compact }, dex })).catch(() => {});
+  }
+
+  /* Saved snapshot → memory, unless something fresher is already there. */
+  const ready = !store ? Promise.resolve() : (async () => {
+    try {
+      const [st, rw] = await Promise.all([store.get(ST_STATE), store.get(ST_ROWS)]);
+      if (st && Array.isArray(st.known) && st.known.length > 1000 && Number(st.listTs) > state.listTs) {
+        state = { known: new Set(st.known), fresh: Array.isArray(st.fresh) ? st.fresh : [], dec: st.dec || {}, listTs: Number(st.listTs) || 0 };
+      }
+      if (rw && rw.markets && Array.isArray(rw.markets.rows) && Number(rw.markets.ts) > markets.ts) {
+        markets = { ts: Number(rw.markets.ts), rows: rw.markets.rows };
+      }
+      if (rw && rw.dex && Array.isArray(rw.dex.rows) && Number(rw.dex.ts) > dex.ts) {
+        dex = { ts: Number(rw.dex.ts), rows: rw.dex.rows };
+      }
+    } catch (_) {}
+  })();
+  const loaded = () => Promise.race([ready, pause(3000)]);
 
   function addFresh(coins, at) {
     const have = new Set(state.fresh.map((f) => f.id));
@@ -417,6 +451,7 @@ export function createNewListings({
         if (await checkDex(r)) rows.push(r);
       }
       dex = { ts: now(), rows };
+      saveRows();
     })().finally(() => { dexing = null; });
     return dexing;
   }
@@ -424,6 +459,7 @@ export function createNewListings({
   async function refreshList() {
     if (listing) return listing;
     listing = (async () => {
+      await loaded(); // diff against the saved baseline, not a new one
       const t = now();
       if (apiKey) {
         /* Pro: the latest 200 listings with their activation time — no warm-up needed. */
@@ -498,6 +534,7 @@ export function createNewListings({
         if (Array.isArray(data)) rows.push(...data);
       }
       markets = { ts: now(), rows };
+      saveRows();
     })().catch((e) => {
       markets = { ts: now() - marketsTtlMs + 60_000, rows: markets.rows }; // retry in a minute, don't stall every request
       throw e;
@@ -506,6 +543,7 @@ export function createNewListings({
   }
 
   async function getPayload() {
+    await loaded();
     const needAddrs = dexOn && !oldAddrs && now() - lastListTry > 5 * 60_000;
     if (!state.known || needAddrs || now() - state.listTs > listEveryMs) {
       lastListTry = now();
@@ -522,11 +560,16 @@ export function createNewListings({
     return { rows, count: rows.length, warming: !state.known, ts: markets.ts || now() };
   }
 
-  return { get: getPayload, refreshList, refreshMarkets, refreshDex, _state: () => state, _dex: () => dex };
+  return { get: getPayload, refreshList, refreshMarkets, refreshDex, ready, _state: () => state, _dex: () => dex };
 }
 
 let _svc = null;
 export function newListingsService() {
-  if (!_svc) _svc = createNewListings();
+  if (!_svc) {
+    /* Postgres snapshot (app_state) — loaded lazily so tests and tools that never call this stay DB-free. */
+    const db = { mod: null };
+    const kv = async () => { if (!db.mod) db.mod = (await import('../db/app-state.js')).appState(); return db.mod; };
+    _svc = createNewListings({ store: { get: async (k) => (await kv()).get(k), set: async (k, v) => (await kv()).set(k, v) } });
+  }
   return _svc;
 }

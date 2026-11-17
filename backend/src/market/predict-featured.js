@@ -1,18 +1,39 @@
 import { isCurrentPmEnd } from './predict-freshness.js';
 
-/** One category-diverse, volume-ranked selection for every screen size. */
-export function selectFeaturedPredictions(markets, count = 4) {
-  const ranked = (markets || []).filter((m) => m && m.id != null).slice().sort((a, b) =>
-    (Number(b.vol) || 0) - (Number(a.vol) || 0) || String(a.id).localeCompare(String(b.id)));
-  const selected = [], ids = new Set(), categories = new Set();
+const HOUR = 3600e3;
+const DAY = 24 * HOUR;
+
+/**
+ * One category-diverse selection for every screen size.
+ * Current events first (owner, 17.11: the home cards were stuck on long-running markets like
+ * «2028 nominee»): markets that end within 12 h – 60 days and trade ≥ $50K today, by today's
+ * volume; then any open market by today's volume, then by all-time volume.
+ */
+export function selectFeaturedPredictions(markets, count = 4, {
+  now = Date.now(), exclude = new Set(), takenCats = new Set(),
+  minLeftMs = 12 * HOUR, maxLeftMs = 60 * DAY, minVol24 = 50_000,
+} = {}) {
+  const alive = (markets || []).filter((m) => m && m.id != null && !exclude.has(String(m.id))
+    && isCurrentPmEnd(m.endsAt, now));
+  const left = (m) => {
+    const t = Date.parse(m.endsAt || '');
+    return Number.isFinite(t) ? t - now : Infinity;
+  };
+  const rank = (a, b) => (Number(b.vol24) || 0) - (Number(a.vol24) || 0)
+    || (Number(b.vol) || 0) - (Number(a.vol) || 0) || String(a.id).localeCompare(String(b.id));
+  const fresh = alive.filter((m) => left(m) >= minLeftMs && left(m) <= maxLeftMs && (Number(m.vol24) || 0) >= minVol24).sort(rank);
+  const rest = alive.slice().sort(rank);
+  const selected = [], ids = new Set(), categories = new Set(takenCats);
   function add(m) { selected.push(m); ids.add(String(m.id)); categories.add(m.cat); }
-  for (const m of ranked) {
-    if (selected.length >= count) break;
-    if (!ids.has(String(m.id)) && !categories.has(m.cat)) add(m);
-  }
-  for (const m of ranked) {
-    if (selected.length >= count) break;
-    if (!ids.has(String(m.id))) add(m);
+  for (const list of [fresh, rest]) {
+    for (const m of list) {
+      if (selected.length >= count) break;
+      if (!ids.has(String(m.id)) && !categories.has(m.cat)) add(m);
+    }
+    for (const m of list) {
+      if (selected.length >= count) break;
+      if (!ids.has(String(m.id))) add(m);
+    }
   }
   return selected;
 }
@@ -30,16 +51,37 @@ export function localizeFeaturedPredictions(selected, translated) {
   });
 }
 
-/** One shared snapshot and coalesced cold load for all devices and languages. */
-export function createFeaturedPredictionLoader({ getCatalog, translate, now = Date.now, ttl = 90_000 }) {
-  let snapshot = null, pending = null;
+/**
+ * One shared snapshot and coalesced cold load for all devices and languages.
+ * The set of events is chosen once a day (`rotateMs`, owner 17.11); odds refresh every `ttl`.
+ * An event that ended or left the catalog is replaced at once, without waiting for the day.
+ */
+export function createFeaturedPredictionLoader({ getCatalog, translate, now = Date.now, ttl = 90_000,
+  rotateMs = DAY, count = 4 }) {
+  let snapshot = null, pending = null, pick = null;
+  function choose(all, t) {
+    if (!pick || t - pick.at >= rotateMs) {
+      const markets = selectFeaturedPredictions(all, count, { now: t });
+      pick = { at: t, ids: markets.map((m) => String(m.id)) };
+      return markets;
+    }
+    const byId = new Map((all || []).filter((m) => m && m.id != null).map((m) => [String(m.id), m]));
+    let markets = pick.ids.map((id) => byId.get(id)).filter((m) => m && isCurrentPmEnd(m.endsAt, t));
+    if (markets.length < count) {
+      markets = markets.concat(selectFeaturedPredictions(all, count - markets.length, {
+        now: t, exclude: new Set(markets.map((m) => String(m.id))), takenCats: new Set(markets.map((m) => m.cat)),
+      }));
+      pick = { at: pick.at, ids: markets.map((m) => String(m.id)) };
+    }
+    return markets;
+  }
   async function canonical() {
     if (snapshot && now() - snapshot.at < ttl) return snapshot;
     if (pending) return pending;
     pending = (async () => {
       try {
         const catalog = await getCatalog();
-        const markets = selectFeaturedPredictions(catalog.markets);
+        const markets = choose(catalog.markets, now());
         if (!markets.length) throw new Error('empty_featured_catalog');
         snapshot = { at: now(), catalog: { ...catalog, markets }, locales: new Map() };
         return snapshot;

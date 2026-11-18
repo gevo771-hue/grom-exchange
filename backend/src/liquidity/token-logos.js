@@ -13,6 +13,7 @@
  */
 import axios from 'axios';
 import config from '../config/index.js';
+import { gtGate } from '../market/gt-gate.js';
 
 const DS = 'https://api.dexscreener.com/tokens/v1';
 const LIFI_TOKENS = 'https://li.quest/v1/tokens';
@@ -138,6 +139,9 @@ async function fetchCoinIndex(get) {
 export function createTokenLogos({
   get = axios.get, now = Date.now, gtGapMs = 2500, gtWaitMs = 3000,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)), loadCoins = () => fetchCoinIndex(get),
+  /* Shared GeckoTerminal budget (market/gt-gate.js): logos are background work and never take
+     Trending's share of the free API (18.11). Without it — the module's own pacing. */
+  gate = null,
 } = {}) {
   const cache = new Map(); // chainId:key → { url, at, ttl }
   let gtNext = 0;
@@ -196,12 +200,21 @@ export function createTokenLogos({
     }
     const rest = missing.filter((k) => !found[k]);
     /* GeckoTerminal: one call per gap; a request a moment behind another waits its turn (≤ 3 s). */
-    const slot = Math.max(now(), gtNext);
-    const useGt = rest.length && chain.gt && slot - now() <= gtWaitMs;
-    if (rest.length && chain.gt && !useGt) complete = false;
+    let useGt = false;
+    if (rest.length && chain.gt) {
+      if (gate) {
+        useGt = await gate.slot({ background: true, maxWaitMs: gtWaitMs });
+      } else {
+        const slot = Math.max(now(), gtNext);
+        useGt = slot - now() <= gtWaitMs;
+        if (useGt) {
+          gtNext = slot + gtGapMs;
+          if (slot > now()) await sleep(slot - now());
+        }
+      }
+      if (!useGt) complete = false;
+    }
     if (useGt) {
-      gtNext = slot + gtGapMs;
-      if (slot > now()) await sleep(slot - now());
       try {
         const { data } = await get(`${GT}/${chain.gt}/tokens/multi/${rest.join(',')}`, {
           timeout: 6000, headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' },
@@ -212,7 +225,10 @@ export function createTokenLogos({
           const img = safeUrl(a.image_url);
           if (k && img && !/missing\.png/i.test(img) && rest.includes(k)) found[k] = img;
         }
-      } catch (_) { complete = false; }
+      } catch (e) {
+        complete = false;
+        if (gate && Number(e?.response?.status) === 429) gate.note429(e);
+      }
     }
     const t = now();
     for (const k of missing) {
@@ -230,6 +246,6 @@ export function createTokenLogos({
 
 let singleton = null;
 export function tokenLogos(chainId, addresses, meta) {
-  if (!singleton) singleton = createTokenLogos();
+  if (!singleton) singleton = createTokenLogos({ gate: gtGate });
   return singleton(chainId, addresses, meta);
 }

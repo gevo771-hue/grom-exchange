@@ -4,6 +4,8 @@
  */
 import axios from 'axios';
 
+import { gtGate } from './gt-gate.js';
+
 const GT = 'https://api.geckoterminal.com/api/v2';
 const UA = { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' };
 
@@ -76,7 +78,10 @@ export function parseGtNetwork(gtNet, json, chainId, chainLabel) {
 
 // Keep provider timestamps: serving cached rows must never make quotes look newer.
 export function createTrendingService({ get = axios.get, now = Date.now,
-  pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), nets = TRENDING_NETS } = {}) {
+  pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), nets = TRENDING_NETS,
+  /* Shared GeckoTerminal budget (gt-gate.js): Trending may use all of it, background jobs only part,
+     and a 429 seen by anyone pauses everyone (18.11). Without it — the service's own 2.1 s pacing. */
+  gate = null } = {}) {
   const cache = new Map();
   const inflight = new Map();
   const failures = new Map();
@@ -91,7 +96,10 @@ export function createTrendingService({ get = axios.get, now = Date.now,
     draining = true;
     try {
       while (queue.length) {
-        if (lastStart != null) await pause(Math.max(0, lastStart + FETCH_GAP_MS - now()));
+        if (gate) {
+          // While the provider cools down the job starts at once and fails fast (cached rows still serve).
+          if (!gate.cooling()) await gate.slot({ maxWaitMs: 20_000 });
+        } else if (lastStart != null) await pause(Math.max(0, lastStart + FETCH_GAP_MS - now()));
         lastStart = now();
         queue.shift().start();
       }
@@ -120,7 +128,7 @@ export function createTrendingService({ get = axios.get, now = Date.now,
     void drain();
     const request = turn.then(async () => {
       try {
-        if (now() < providerRetryAt) throw new Error('Trending provider cooling down');
+        if (now() < providerRetryAt || (gate && gate.cooling())) throw new Error('Trending provider cooling down');
         const url = `${GT}/networks/${encodeURIComponent(net.gt)}/trending_pools?page=1&include=base_token`;
         const { data } = await get(url, { timeout: 6000, headers: UA });
         const at = now();
@@ -136,7 +144,10 @@ export function createTrendingService({ get = axios.get, now = Date.now,
         const seconds = Number(retryHeader);
         const retryDelay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryHeader) - now();
         const retryAt = Math.max(providerRetryAt, now() + Math.max(60_000, retryDelay || 0));
-        if (error.response?.status === 429) providerRetryAt = retryAt;
+        if (error.response?.status === 429) {
+          providerRetryAt = retryAt;
+          if (gate) gate.note429(error);
+        }
         failures.set(net.key, { error, retryAt });
         if (usable(hit)) return hit;
         throw error;
@@ -175,4 +186,4 @@ export function createTrendingService({ get = axios.get, now = Date.now,
   };
 }
 
-export const getTrending = createTrendingService();
+export const getTrending = createTrendingService({ gate: gtGate });

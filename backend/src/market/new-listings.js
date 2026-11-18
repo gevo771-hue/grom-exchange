@@ -18,6 +18,7 @@
  */
 import axios from 'axios';
 import fs from 'node:fs';
+import { gtGate } from './gt-gate.js';
 
 const CG_FREE = 'https://api.coingecko.com/api/v3';
 const CG_PRO = 'https://pro-api.coingecko.com/api/v3';
@@ -248,6 +249,8 @@ export function createNewListings({
   /* { get(key), set(key, value) } — Postgres in production (app_state), so a deploy does not empty the
      strip and the CoinGecko baseline survives restarts (owner, 17.11). */
   store = null,
+  /* Shared GeckoTerminal budget (gt-gate.js): the DEX scan is background work (18.11). */
+  gate = null,
 } = {}) {
   const cgBase = apiKey ? CG_PRO : CG_FREE;
   const cgHeaders = { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0', ...(apiKey ? { 'x-cg-pro-api-key': apiKey } : {}) };
@@ -432,15 +435,18 @@ export function createNewListings({
         const kinds = ['trending_pools?duration=24h&page=1&', 'pools?sort=h24_volume_usd_desc&page=1&'];
         if (['eth', 'bsc', 'base', 'solana'].includes(net.gt)) kinds.push('pools?sort=h24_volume_usd_desc&page=2&');
         for (const kind of kinds) {
+          if (gate && !(await gate.slot({ background: true, maxWaitMs: 5 * 60_000 }))) continue;
           try {
             const { data } = await get(`${GT}/networks/${net.gt}/${kind}include=base_token,quote_token`, {
               timeout: 15000, headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' },
             });
             pages.push({ net, json: data });
           } catch (e) {
-            if (Number(e?.response?.status) === 429) { await pause(60_000); }
+            if (Number(e?.response?.status) === 429) {
+              if (gate) gate.note429(e); else await pause(60_000);
+            }
           }
-          await pause(2500);
+          if (!gate) await pause(2500);
         }
       }
       const all = pickDexCandidates(pages, { now: now(), oldAddrs: new Set(), majorSyms: majors.syms, majorNames: majors.names });
@@ -569,7 +575,7 @@ export function newListingsService() {
     /* Postgres snapshot (app_state) — loaded lazily so tests and tools that never call this stay DB-free. */
     const db = { mod: null };
     const kv = async () => { if (!db.mod) db.mod = (await import('../db/app-state.js')).appState(); return db.mod; };
-    _svc = createNewListings({ store: { get: async (k) => (await kv()).get(k), set: async (k, v) => (await kv()).set(k, v) } });
+    _svc = createNewListings({ gate: gtGate, store: { get: async (k) => (await kv()).get(k), set: async (k, v) => (await kv()).set(k, v) } });
   }
   return _svc;
 }

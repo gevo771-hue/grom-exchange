@@ -81,7 +81,10 @@ export function createTrendingService({ get = axios.get, now = Date.now,
   pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), nets = TRENDING_NETS,
   /* Shared GeckoTerminal budget (gt-gate.js): Trending may use all of it, background jobs only part,
      and a 429 seen by anyone pauses everyone (18.11). Without it — the service's own 2.1 s pacing. */
-  gate = null } = {}) {
+  gate = null,
+  /* How long rows count as fresh before a background refresh. Production: 3 min, so nine networks
+     cost ~3 calls a minute out of GeckoTerminal's ~10 (18.11). */
+  ttl = TTL } = {}) {
   const cache = new Map();
   const inflight = new Map();
   const failures = new Map();
@@ -114,7 +117,7 @@ export function createTrendingService({ get = axios.get, now = Date.now,
       return inflight.get(net.key);
     }
     const hit = cache.get(net.key);
-    if (usable(hit) && now() - hit.at < TTL) return Promise.resolve(hit);
+    if (usable(hit) && now() - hit.at < ttl) return Promise.resolve(hit);
     const failure = failures.get(net.key);
     if (failure && now() < failure.retryAt) {
       return usable(hit) ? Promise.resolve(hit) : Promise.reject(failure.error);
@@ -164,7 +167,7 @@ export function createTrendingService({ get = axios.get, now = Date.now,
       .sort((a, b) => moverScore(b) - moverScore(a)).slice(0, 20);
     if (!rows.length) throw new Error('Trending data unavailable');
     const updatedAt = Math.min(...rows.map((row) => row.observedAt));
-    return { rows, cached, updatedAt, stale: now() - updatedAt >= TTL,
+    return { rows, cached, updatedAt, stale: now() - updatedAt >= ttl,
       partial: entries.length < selected.length,
       refreshing: selected.some((net) => inflight.has(net.key)), source: 'GeckoTerminal' };
   }
@@ -173,7 +176,12 @@ export function createTrendingService({ get = axios.get, now = Date.now,
     const net = nets.find((n) => n.key === String(netKey || 'all').toLowerCase()) || nets[0];
     const selected = net.key === 'all' ? networks : [net];
     const hasRows = selected.some((child) => usable(cache.get(child.key)));
-    const requests = selected.map((child) => refresh(child, net.key !== 'all'));
+    // Oldest data first: when the provider budget is tight, the same networks at the end of the
+    // list must not starve every time (OP, AVAX, LINEA, Robinhood, 18.11).
+    const order = net.key === 'all'
+      ? [...selected].sort((a, b) => (cache.get(a.key)?.at || 0) - (cache.get(b.key)?.at || 0))
+      : selected;
+    const requests = order.map((child) => refresh(child, net.key !== 'all'));
     // Attach handlers immediately, including requests that finish after the response.
     const first = Promise.any(requests);
     first.catch(() => {});
@@ -186,4 +194,4 @@ export function createTrendingService({ get = axios.get, now = Date.now,
   };
 }
 
-export const getTrending = createTrendingService({ gate: gtGate });
+export const getTrending = createTrendingService({ gate: gtGate, ttl: 180_000 });

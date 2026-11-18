@@ -1,10 +1,11 @@
 /**
  * One GeckoTerminal budget for the whole server.
  *
- * The free API allows about 30 calls a minute per IP. Trending on DEXs, the NEW strip's DEX scan and
- * token logos each paced themselves, but together they went over the limit; every 429 made Trending
- * pause and whole networks showed «Fresh data unavailable» for minutes (owner, 18.11: BASE, POL, OP,
- * AVAX, LINEA empty on the phone).
+ * The free API allows about 10 calls a minute per IP (measured 18.11: five quick calls pass, the sixth
+ * is a 429 with Retry-After 0; one call every 6.1 s — 12 of 12 pass). Trending on DEXs, the NEW
+ * strip's DEX scan and token logos each paced themselves at 2–2.5 s, so together they ran far over the
+ * limit; every 429 made Trending pause, and the networks at the end of the list (OP, AVAX, LINEA,
+ * Robinhood) stayed «Fresh data unavailable» (owner, 18.11).
  *
  * - Trending (what people look at) may use the whole budget.
  * - Background jobs (NEW scan, token logos) start a call only while the last minute had fewer than
@@ -14,9 +15,9 @@
 export function createGtGate({
   now = Date.now,
   pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  perMin = 25,
-  backgroundPerMin = 10,
-  gapMs = 2100,
+  perMin = 9,
+  backgroundPerMin = 4,
+  gapMs = 6000,
 } = {}) {
   const starts = []; // call start times within the last minute
   let next = 0;

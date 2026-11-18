@@ -62,6 +62,7 @@ test('a 429 seen by token logos pauses Trending too (shared gate), cached rows s
       throw Object.assign(new Error('limited'), { response: { status: 429, headers: { 'retry-after': '120' } } });
     },
   });
+  c.t += 7_000; // the next GeckoTerminal slot (one call every 6 s)
   const meta = {};
   await logos(8453, ['0x' + '1'.repeat(40)], meta);
   assert.equal(meta.partial, true);
@@ -71,4 +72,29 @@ test('a 429 seen by token logos pauses Trending too (shared gate), cached rows s
   const again = await trending('base');
   assert.equal(trendCalls, 1); // no call while cooling
   assert.equal(again.rows.length, 1); // last good rows (within 10 minutes) are served
+});
+
+test('GeckoTerminal gate defaults stay inside the measured free limit (~10 calls a minute)', async () => {
+  const c = clock();
+  const gate = createGtGate({ now: c.now, pause: c.pause });
+  const starts = [];
+  for (let i = 0; i < 20; i++) { await gate.slot(); starts.push(c.t); }
+  for (let i = 1; i < starts.length; i++) assert.ok(starts[i] - starts[i - 1] >= 6000);
+  for (let i = 9; i < starts.length; i++) assert.ok(starts[i] - starts[i - 9] >= 60_000); // never 10 in a minute
+});
+
+test('Trending «All» refreshes the oldest networks first, so the end of the list does not starve', async () => {
+  const c = clock();
+  const order = [];
+  const pool = { data: [{ attributes: { address: 'pool', base_token_price_usd: '1', price_change_percentage: { h24: '5' }, volume_usd: { h24: '1000' } }, relationships: { base_token: { data: { id: 't' } } } }], included: [{ id: 't', attributes: { symbol: 'AAA', name: 'Aaa', address: '0xaaa', decimals: 18 } }] };
+  const nets = [{ key: 'all' }, ...['eth', 'bsc', 'linea'].map((key, i) => ({ key, gt: key, chainId: i + 1, label: key }))];
+  const trending = createTrendingService({ nets, now: c.now, pause: c.pause, get: async (url) => { order.push(url.match(/networks\/(.*?)\//)[1]); return { data: pool }; } });
+  await trending('linea');
+  c.t += 1_000;
+  await trending('eth');
+  c.t += 100_000; // both are due again; bsc was never loaded
+  await trending('all');
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(order.slice(2), ['bsc', 'linea', 'eth']);
 });

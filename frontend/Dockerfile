@@ -1,7 +1,8 @@
 # Static UI + nginx reverse-proxy to GROM backend (same origin → no CORS).
 # HTML/JS is NEVER baked from public/ — always docker-cp frontend/dist after build.
 # (Baking public/ caused old admin / unhashed drift whenever compose rebuilt.)
-FROM nginx:1.27-alpine
+# Pinned: 1.30.7 fixes the Nov 2026 nginx advisories (CVE-2026-123007, CVE-2026-123633, …).
+FROM nginx:1.30.7-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 RUN mkdir -p /usr/share/nginx/html \
  && printf '%s\n' '<!doctype html><title>GROM</title><p>Deploy dist via docker cp</p>' \

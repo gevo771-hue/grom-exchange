@@ -1625,11 +1625,11 @@ export function createMarketRouter() {
     }
   });
 
-  /** Coin page /token/<id> in the browser: the coin to preselect in the swap (decimals from LI.FI; null → no preselect). */
+  /** Coin page /token/<id> (or /<lang>/token/<id>) in the browser: the coin to preselect in the swap (decimals from LI.FI; null → no preselect) and its title in that language. */
   r.get('/token-page', async (req, res) => {
     try {
       const { tokenPagesService } = await import('./token-pages.js');
-      const info = await tokenPagesService().swapInfo(String(req.query.id || '').toLowerCase());
+      const info = await tokenPagesService().swapInfo(String(req.query.id || '').toLowerCase(), String(req.query.locale || 'en'));
       if (!info) return res.status(404).set('Cache-Control', 'public, max-age=60').json({ error: 'not_found' });
       res.set('Cache-Control', 'public, max-age=300').json(info);
     } catch (e) {

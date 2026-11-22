@@ -6,6 +6,8 @@
  * (`GET /api/market/token-page`). Crawlers get a per-coin HTML page rendered here from the build's
  * `token-template.html` (the slim /swap page): own title, description, canonical, a collapsed
  * «About» block in the same style as the other routes, and JSON-LD. `/sitemap-tokens.xml` lists them.
+ * Languages (22.11): /es, /pt-BR, /tr, /ru, /vi, /id prefixes — copy in token-pages-i18n.js, one template
+ * per language from the build, mutual hreflang on every page and in the sitemap.
  *
  * Coins: CoinGecko top meme tokens + top coins by market cap + a pinned list (the landing links to
  * those) + NEW listings — only coins with a contract on a GROM swap network (NL_PLATFORMS).
@@ -13,6 +15,9 @@
  */
 import axios from 'axios';
 import { swapPlatforms } from './new-listings.js';
+import { TOKEN_LOCALES, TOKEN_COPY, tokenLocale, tokenPath } from './token-pages-i18n.js';
+
+export { TOKEN_LOCALES, tokenLocale, tokenPath };
 
 const CG_FREE = 'https://api.coingecko.com/api/v3';
 const CG_PRO = 'https://pro-api.coingecko.com/api/v3';
@@ -211,13 +216,13 @@ export function createTokenPages({
       await ensure();
       return [...entries.values()];
     },
-    /** For the browser swap: the coin's main network with LI.FI decimals (null → no preselect). */
-    async swapInfo(id) {
+    /** For the browser swap: the coin's main network with LI.FI decimals (null → no preselect); title in the page's language. */
+    async swapInfo(id, locale = 'en') {
       const e = await this.get(id);
       if (!e) return null;
       const main = e.chains[0];
       const dec = await lookupDecimals(main.chainId, main.address);
-      const { title, description } = tokenPageMeta(e);
+      const { title, description } = tokenPageMeta(e, locale);
       return {
         id: e.id, sym: e.sym, name: e.name, logo: e.logo, price: e.price, chg: e.chg, title, description,
         chainId: main.chainId, chain: main.chain, address: main.address, decimals: dec,
@@ -229,14 +234,20 @@ export function createTokenPages({
 
 /* ───────────── HTML for crawlers ───────────── */
 
-const fmtUsd = (v) => {
+const decSep = (num) => (1.5).toLocaleString(num).charAt(1) || '.';
+const fmtUsd = (v, num = 'en-US') => {
   if (v == null) return null;
-  if (v >= 1) return v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  if (v >= 1) return v.toLocaleString(num, { maximumFractionDigits: 2 });
   if (v === 0) return '0';
   const digits = Math.min(12, Math.max(2, 2 - Math.floor(Math.log10(v)) + 2));
-  return v.toFixed(digits).replace(/0+$/, '').replace(/\.$/, '');
+  return v.toFixed(digits).replace(/0+$/, '').replace(/\.$/, '').replace('.', decSep(num));
 };
-const fmtBig = (v) => (v == null ? null : v.toLocaleString('en-US', { maximumFractionDigits: 0 }));
+const fmtBig = (v, num = 'en-US') => (v == null ? null : v.toLocaleString(num, { maximumFractionDigits: 0 }));
+const fmtPct = (v, num = 'en-US') => Math.abs(v).toFixed(2).replace('.', decSep(num));
+
+const locOf = (code) => tokenLocale(code) || TOKEN_LOCALES[0];
+const copyOf = (code) => TOKEN_COPY[locOf(code).code] || TOKEN_COPY.en;
+const pageUrl = (id, code) => `${SITE}${tokenPath(id, locOf(code).code)}`;
 
 /** Other coins of the same kind, by market cap — internal links between coin pages. */
 export function relatedTokens(entry, all, n = 8) {
@@ -247,115 +258,139 @@ export function relatedTokens(entry, all, n = 8) {
     .slice(0, n);
 }
 
-export function tokenPageMeta(e) {
+function params(e, code, { updatedAt = Date.now() } = {}) {
+  const loc = locOf(code);
   const chains = [...new Set(e.chains.map((c) => CHAIN_NAMES[c.chain] || c.chain))];
-  const where = chains.slice(0, 3).join(', ') + (chains.length > 3 ? ' and more' : '');
-  const nm = e.name.toUpperCase() === e.sym ? e.sym : `${e.name} (${e.sym})`;
   return {
-    title: `Buy ${e.sym} — ${e.name} Price & Cross-Chain Swap | GROM`,
-    description: `Swap or buy ${nm} on ${where} from your own wallet. Live ${e.sym} price, 24h change and contract addresses. No sign-up, no deposit.`,
+    sym: e.sym,
+    name: e.name,
+    nm: e.name.toUpperCase() === e.sym ? e.sym : `${e.name} (${e.sym})`,
     chains,
+    main: CHAIN_NAMES[e.chains[0].chain] || e.chains[0].chain,
+    addr: e.chains[0].address,
+    price: fmtUsd(e.price, loc.num),
+    pct: e.chg != null ? fmtPct(e.chg, loc.num) : null,
+    up: e.chg != null && e.chg >= 0,
+    time: new Date(updatedAt).toISOString().slice(11, 16),
+    rank: e.rank || null,
+    vol: e.vol ? fmtBig(e.vol, loc.num) : null,
   };
 }
 
-function faqFor(e, chains) {
-  const main = CHAIN_NAMES[e.chains[0].chain] || e.chains[0].chain;
-  return [
-    { q: `How do I buy ${e.sym} without KYC?`, a: `Connect a self-custody wallet on GROM, choose the token you pay with and confirm the swap to ${e.sym} in your wallet. GROM has no account and no deposit; third-party services and some regions may apply their own checks.` },
-    { q: `Which networks is ${e.sym} on?`, a: `GROM can swap ${e.sym} on ${chains.join(', ')}. Pay with tokens on the same network or on another one — the route bridges for you.` },
-    { q: `What is the ${e.sym} contract address on ${main}?`, a: `${e.chains[0].address}. Always check the address before you swap: tokens with the same ticker exist on many networks.` },
-  ];
+export function tokenPageMeta(e, code = 'en') {
+  const c = copyOf(code);
+  const p = params(e, code);
+  return { title: c.title(p), description: c.desc(p, c.where(p.chains)), chains: p.chains };
 }
 
-export function tokenArticleHtml(e, related, { updatedAt = Date.now() } = {}) {
-  const { chains } = tokenPageMeta(e);
-  const main = CHAIN_NAMES[e.chains[0].chain] || e.chains[0].chain;
-  const price = fmtUsd(e.price);
-  const time = new Date(updatedAt).toISOString().slice(11, 16);
-  const priceLine = price
-    ? `${esc(e.name)} (${esc(e.sym)}) trades at $${esc(price)}${e.chg != null ? `, ${e.chg >= 0 ? 'up' : 'down'} ${esc(Math.abs(e.chg).toFixed(2))}% over the last 24 hours` : ''} (CoinGecko data, ${esc(time)} UTC).`
-      + (e.rank ? ` Market cap rank #${esc(e.rank)}.` : '') + (e.vol ? ` 24h trading volume: $${esc(fmtBig(e.vol))}.` : '')
-    : `${esc(e.name)} (${esc(e.sym)}) price and 24h change load live in the swap.`;
+function faqFor(e, code) {
+  return copyOf(code).faq(params(e, code));
+}
+
+export function tokenArticleHtml(e, related, { updatedAt = Date.now(), locale = 'en' } = {}) {
+  const loc = locOf(locale);
+  const c = copyOf(loc.code);
+  const p = params(e, loc.code, { updatedAt });
   const meme = e.kinds.includes('meme') || e.kinds.includes('new');
-  const risk = meme
-    ? 'Meme coins are highly volatile and can lose most of their value quickly. Quotes depend on available liquidity and can change before you sign. This page is information, not investment advice.'
-    : 'Crypto prices are volatile. Quotes depend on available liquidity and can change before you sign. This page is information, not investment advice.';
   const rel = related.length
-    ? `<h2>More tokens</h2>\n<nav class="grom-seo-nav" aria-label="More tokens">${related.map((r) => `<a href="/token/${esc(r.id)}">${esc(r.sym)}</a>`).join('\n')}</nav>`
+    ? `<h2>${esc(c.moreH2)}</h2>\n<nav class="grom-seo-nav" aria-label="${esc(c.moreH2)}">${related.map((r) => `<a href="${esc(tokenPath(r.id, loc.code))}">${esc(r.sym)}</a>`).join('\n')}</nav>`
     : '';
-  const faq = faqFor(e, chains);
+  const navPaths = ['/', '/swap', '/futures', '/predict', '/stocks', '/markets'];
+  const nav = navPaths.map((path, i) => `<a href="${esc(loc.prefix ? (path === '/' ? `${loc.prefix}/` : loc.prefix + path) : path)}">${esc(loc.nav[i])}</a>`).join(' ');
   return `
-<section id="gromSeoRouteCopy" class="grom-seo-route" data-seo-route="token" lang="en">
+<section id="gromSeoRouteCopy" class="grom-seo-route" data-seo-route="token" lang="${esc(loc.htmlLang)}">
   <details class="grom-seo-details">
-    <summary class="grom-seo-summary">About · ${esc(e.name)} (${esc(e.sym)})</summary>
+    <summary class="grom-seo-summary">${esc(loc.about)} · ${esc(e.name)} (${esc(e.sym)})</summary>
     <article class="grom-seo-article">
-      <h1>${esc(e.name)} (${esc(e.sym)}) price and swap</h1>
-      <p class="grom-seo-lead">Live ${esc(e.sym)} price, networks and contract addresses. Buy or swap ${esc(e.sym)} on ${esc(chains.join(', '))} straight from your self-custody wallet with GROM — no sign-up and no deposit.</p>
-      <h2>${esc(e.sym)} price today</h2>
-      <p>${priceLine}</p>
-      <h2>Networks and contract addresses</h2>
-      <ul>${e.chains.map((c) => `<li>${esc(CHAIN_NAMES[c.chain] || c.chain)}: <code>${esc(c.address)}</code></li>`).join('')}</ul>
-      <p>Always check the contract address before you swap — tokens with the same ticker exist on many networks.</p>
-      <h2>How to buy ${esc(e.sym)} on GROM</h2>
+      <h1>${esc(c.h1(p))}</h1>
+      <p class="grom-seo-lead">${esc(c.lead(p))}</p>
+      <h2>${esc(c.priceH2(p))}</h2>
+      <p>${esc(p.price ? c.price(p) : c.priceNone(p))}</p>
+      <h2>${esc(c.netH2)}</h2>
+      <ul>${e.chains.map((x) => `<li>${esc(CHAIN_NAMES[x.chain] || x.chain)}: <code>${esc(x.address)}</code></li>`).join('')}</ul>
+      <p>${esc(c.check)}</p>
+      <h2>${esc(c.howH2(p))}</h2>
       <ol>
-        <li>Connect a self-custody wallet (browser extension or WalletConnect).</li>
-        <li>Open the swap with ${esc(e.sym)} selected and choose the token you pay with — on any supported network.</li>
-        <li>Review the route, fees and the amount you receive.</li>
-        <li>Confirm the transaction in your wallet. ${esc(e.sym)} arrives at your address on ${esc(main)}.</li>
+        ${c.steps(p).map((t) => `<li>${esc(t)}</li>`).join('\n        ')}
       </ol>
-      <h2>Risks</h2>
-      <p>${esc(risk)}</p>
+      <h2>${esc(c.riskH2)}</h2>
+      <p>${esc(meme ? c.riskMeme : c.riskOther)}</p>
       ${rel}
-      <h2>Explore GROM</h2>
-      <nav class="grom-seo-nav" aria-label="Product links"><a href="/">Home</a> <a href="/swap">Swap</a> <a href="/futures">Trade</a> <a href="/predict">Predictions</a> <a href="/stocks">Stocks</a> <a href="/markets">Markets</a></nav>
-      <h2>FAQ</h2>
-      <div class="grom-seo-faq">${faq.map((x) => `<details class="grom-seo-faq-item"><summary>${esc(x.q)}</summary><p>${esc(x.a)}</p></details>`).join('\n')}</div>
+      <h2>${esc(loc.explore)}</h2>
+      <nav class="grom-seo-nav" aria-label="Product links">${nav}</nav>
+      <h2>${esc(c.faqH2)}</h2>
+      <div class="grom-seo-faq">${faqFor(e, loc.code).map((x) => `<details class="grom-seo-faq-item"><summary>${esc(x.q)}</summary><p>${esc(x.a)}</p></details>`).join('\n')}</div>
     </article>
   </details>
 </section>`.trim();
 }
 
-export function tokenJsonLd(e) {
-  const { title, description, chains } = tokenPageMeta(e);
-  const url = `${SITE}/token/${e.id}`;
+export function tokenJsonLd(e, code = 'en') {
+  const loc = locOf(code);
+  const { title, description } = tokenPageMeta(e, loc.code);
+  const url = pageUrl(e.id, loc.code);
+  const home = loc.prefix ? `${SITE}${loc.prefix}/` : `${SITE}/`;
   const page = {
-    '@context': 'https://schema.org', '@type': 'WebPage', name: title, url, description, inLanguage: 'en',
+    '@context': 'https://schema.org', '@type': 'WebPage', name: title, url, description, inLanguage: loc.htmlLang,
     about: { '@type': 'Thing', name: e.name, alternateName: e.sym },
     publisher: { '@type': 'Organization', name: 'GROM Exchange', url: `${SITE}/` },
   };
   const crumbs = {
     '@context': 'https://schema.org', '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'GROM', item: `${SITE}/` },
-      { '@type': 'ListItem', position: 2, name: 'Swap', item: `${SITE}/swap` },
+      { '@type': 'ListItem', position: 1, name: 'GROM', item: home },
+      { '@type': 'ListItem', position: 2, name: 'Swap', item: `${SITE}${loc.prefix}/swap` },
       { '@type': 'ListItem', position: 3, name: e.sym, item: url },
     ],
   };
   const faq = {
-    '@context': 'https://schema.org', '@type': 'FAQPage', inLanguage: 'en',
-    mainEntity: faqFor(e, chains).map((x) => ({ '@type': 'Question', name: x.q, acceptedAnswer: { '@type': 'Answer', text: x.a } })),
+    '@context': 'https://schema.org', '@type': 'FAQPage', inLanguage: loc.htmlLang,
+    mainEntity: faqFor(e, loc.code).map((x) => ({ '@type': 'Question', name: x.q, acceptedAnswer: { '@type': 'Answer', text: x.a } })),
   };
   const json = (o) => JSON.stringify(o).replace(/</g, '\\u003c');
   return [page, crumbs, faq].map((o) => `<script type="application/ld+json">${json(o)}</script>`).join('\n');
 }
 
-/** Fill the build's token-template.html (placeholders from scripts/build-frontend.mjs). */
+/** Mutual hreflang set for one coin (all languages + x-default → English). */
+export function tokenHreflang(id) {
+  const links = TOKEN_LOCALES.map((l) => `<link rel="alternate" hreflang="${l.hreflang}" href="${esc(pageUrl(id, l.code))}" />`);
+  links.push(`<link rel="alternate" hreflang="x-default" href="${esc(pageUrl(id, 'en'))}" />`);
+  return links.join('\n');
+}
+
+/** Fill the build's token template for one language (placeholders from scripts/build-frontend.mjs). */
 export function renderTokenPage(template, e, related, opts = {}) {
-  const { title, description } = tokenPageMeta(e);
+  const code = locOf(opts.locale).code;
+  const { title, description } = tokenPageMeta(e, code);
   return String(template)
     .split('__GROM_TOKEN_TITLE__').join(esc(title))
     .split('__GROM_TOKEN_DESC__').join(esc(description))
     .split('__GROM_TOKEN_ID__').join(esc(e.id))
-    .replace('<!--GROM_TOKEN_ARTICLE-->', () => tokenArticleHtml(e, related, opts))
-    .replace('<!--GROM_TOKEN_JSONLD-->', () => tokenJsonLd(e));
+    .replace('<!--GROM_TOKEN_HREFLANG-->', () => tokenHreflang(e.id))
+    .replace('<!--GROM_TOKEN_ARTICLE-->', () => tokenArticleHtml(e, related, { ...opts, locale: code }))
+    .replace('<!--GROM_TOKEN_JSONLD-->', () => tokenJsonLd(e, code));
 }
 
+/** 404 for an unknown coin, in the page's language. */
+export function tokenNotFoundHtml(code = 'en') {
+  const loc = locOf(code);
+  const c = copyOf(loc.code);
+  return `<!doctype html><html lang="${esc(loc.htmlLang)}"><head><meta charset="utf-8"><title>${esc(c.notFound.replace(/\.$/, ''))} — GROM</title><meta name="robots" content="noindex"></head><body><p>${esc(c.notFound)} <a href="${esc(loc.prefix)}/swap">${esc(c.openSwap)}</a></p></body></html>`;
+}
+
+/** Every coin in every language, each with its full hreflang set. */
 export function tokenSitemapXml(list, { lastmod = new Date().toISOString().slice(0, 10) } = {}) {
-  const urls = list
-    .filter((e) => validTokenId(e.id))
-    .map((e) => `  <url>\n    <loc>${SITE}/token/${e.id}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>`)
-    .join('\n');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+  const urls = [];
+  for (const e of list) {
+    if (!validTokenId(e.id)) continue;
+    const alts = TOKEN_LOCALES.map((l) => `    <xhtml:link rel="alternate" hreflang="${l.hreflang}" href="${pageUrl(e.id, l.code)}" />`)
+      .concat(`    <xhtml:link rel="alternate" hreflang="x-default" href="${pageUrl(e.id, 'en')}" />`)
+      .join('\n');
+    for (const l of TOKEN_LOCALES) {
+      urls.push(`  <url>\n    <loc>${pageUrl(e.id, l.code)}</loc>\n    <lastmod>${lastmod}</lastmod>\n${alts}\n  </url>`);
+    }
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n        xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls.join('\n')}\n</urlset>\n`;
 }
 
 /* ───────────── production singletons ───────────── */
@@ -381,12 +416,21 @@ export function tokenPagesService() {
   return service;
 }
 
-/* Template from the frontend container (built with the same deploy); cached a minute, last good copy kept. */
-const tpl = { html: '', at: 0, pending: null };
-export async function tokenTemplate({ get = axios.get, now = Date.now, url = process.env.GROM_TOKEN_TEMPLATE_URL || 'http://frontend/token-template.html' } = {}) {
+/* Templates from the frontend container (built with the same deploy), one per language:
+   token-template.html (English) and token-template-<code>.html. Cached a minute, last good copy kept. */
+const tpls = new Map(); // code → { html, at, pending }
+export function tokenTemplateUrl(code = 'en', base = process.env.GROM_TOKEN_TEMPLATE_URL || 'http://frontend/token-template.html') {
+  const c = locOf(code).code;
+  return c === 'en' ? base : base.replace(/\.html$/, `-${c}.html`);
+}
+export async function tokenTemplate({ get = axios.get, now = Date.now, locale = 'en', url } = {}) {
+  const code = locOf(locale).code;
+  const src = url || tokenTemplateUrl(code);
+  const tpl = tpls.get(code) || { html: '', at: 0, pending: null };
+  tpls.set(code, tpl);
   if (tpl.html && now() - tpl.at < 60_000) return tpl.html;
   if (!tpl.pending) {
-    tpl.pending = get(url, { timeout: 5000, responseType: 'text', transformResponse: (x) => x })
+    tpl.pending = get(src, { timeout: 5000, responseType: 'text', transformResponse: (x) => x })
       .then(({ data }) => {
         const html = String(data || '');
         if (html.includes('<!--GROM_TOKEN_ARTICLE-->') && html.includes('__GROM_TOKEN_TITLE__')) { tpl.html = html; tpl.at = now(); }

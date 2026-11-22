@@ -344,23 +344,30 @@ function stableSitemapLastmod() {
     const xdef = 'https://grom.exchange' + (productPath === '/' ? '/' : productPath);
     return `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${lastmod}</lastmod>\n${alts}\n    <xhtml:link rel="alternate" hreflang="x-default" href="${xdef}" />\n  </url>`;
   }).join('\n');
-  /* Coin page template (/token/<id>, owner 22.11): the slim /swap page for crawlers with placeholders
-     the backend fills per coin (backend/src/market/token-pages.js → renderTokenPage). English only. */
-  {
+  /* Coin page templates (/token/<id> and /<lang>/token/<id>, owner 22.11): the slim /swap page for
+     crawlers in each SEO language, with placeholders the backend fills per coin
+     (backend/src/market/token-pages.js → renderTokenPage, which also writes the coin's hreflang set). */
+  for (const loc of SEO_LOCALES) {
+    const name = loc.code === 'en' ? 'token-template.html' : `token-template-${loc.code}.html`;
     const tplPage = {
-      path: '/token/__GROM_TOKEN_ID__', dir: null, route: 'dashboard', productPath: '/swap',
-      locale: SEO_LOCALES[0], title: '__GROM_TOKEN_TITLE__', description: '__GROM_TOKEN_DESC__',
+      path: `${loc.prefix}/token/__GROM_TOKEN_ID__`, dir: null, route: 'dashboard', productPath: '/swap',
+      locale: loc, title: '__GROM_TOKEN_TITLE__', description: '__GROM_TOKEN_DESC__',
     };
     let tpl = applySeoToHtml(baseHtml, tplPage);
-    tpl = tpl.replace(/<link rel="alternate" hreflang="[^"]*" href="[^"]*" \/>\n?/g, '');
+    let firstAlt = true;
+    tpl = tpl.replace(/<link rel="alternate" hreflang="[^"]*" href="[^"]*" \/>\n?/g, () => {
+      if (!firstAlt) return '';
+      firstAlt = false;
+      return '<!--GROM_TOKEN_HREFLANG-->\n';
+    });
     tpl = tpl.replace(/<section id="gromSeoRouteCopy"[\s\S]*?<\/section>/i, '<!--GROM_TOKEN_ARTICLE-->');
     tpl = tpl.replace(/<script type="application\/ld\+json" id="gromSeoWebAppLd">[\s\S]*?<\/script>/i, '<!--GROM_TOKEN_JSONLD-->');
     tpl = tpl.replace(/<script type="application\/ld\+json" id="gromSeoFaqLd">[\s\S]*?<\/script>\n?/i, '');
-    for (const mark of ['<!--GROM_TOKEN_ARTICLE-->', '<!--GROM_TOKEN_JSONLD-->', '__GROM_TOKEN_TITLE__', '__GROM_TOKEN_DESC__', 'https://grom.exchange/token/__GROM_TOKEN_ID__']) {
-      if (!tpl.includes(mark)) throw new Error(`token-template.html: missing ${mark}`);
+    for (const mark of ['<!--GROM_TOKEN_HREFLANG-->', '<!--GROM_TOKEN_ARTICLE-->', '<!--GROM_TOKEN_JSONLD-->', '__GROM_TOKEN_TITLE__', '__GROM_TOKEN_DESC__', `https://grom.exchange${loc.prefix}/token/__GROM_TOKEN_ID__`, `data-grom-locale="${loc.code}"`]) {
+      if (!tpl.includes(mark)) throw new Error(`${name}: missing ${mark}`);
     }
-    if (/hreflang=/.test(tpl.replace(/<script[\s\S]*?<\/script>/gi, ''))) throw new Error('token-template.html: hreflang left');
-    writeFileSync(join(OUT, 'token-template.html'), tpl);
+    if (/hreflang=/.test(tpl.replace(/<script[\s\S]*?<\/script>/gi, ''))) throw new Error(`${name}: hreflang left`);
+    writeFileSync(join(OUT, name), tpl);
   }
   writeFileSync(join(OUT, 'sitemap.xml'),
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
@@ -369,7 +376,7 @@ function stableSitemapLastmod() {
 }
 
 // Shared hashed files let subsequent product routes reuse the same CSS/JS.
-for (const file of ['app.html', 'token-template.html', ...SEO_PAGES.map(p => p.dir ? `${p.dir}/index.html` : 'index.html')]) {
+for (const file of ['app.html', ...SEO_LOCALES.map(l => (l.code === 'en' ? 'token-template.html' : `token-template-${l.code}.html`)), ...SEO_PAGES.map(p => p.dir ? `${p.dir}/index.html` : 'index.html')]) {
   const path = join(OUT, file);
   const html = externalizeInline(readFileSync(path, 'utf8'), (name, body) => writeFileSync(join(OUT, name), body));
   writeFileSync(path, html);

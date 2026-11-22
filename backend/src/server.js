@@ -125,30 +125,36 @@ async function main() {
     }
   });
 
-  /* Coin pages /token/<coingecko-id> for crawlers (owner, 22.11). Frontend nginx sends only crawlers
-     here; browsers get app.html and the swap opens with the coin (GET /api/market/token-page). */
-  app.get('/token/:id', async (req, res, next) => {
+  /* Coin pages /token/<coingecko-id> and /<lang>/token/<id> (es, pt-BR, tr, ru, vi, id) for crawlers
+     (owner, 22.11). Frontend nginx sends only crawlers here; browsers get app.html and the swap opens
+     with the coin (GET /api/market/token-page). */
+  const tokenPage = async (req, res, next) => {
     try {
       const id = String(req.params.id || '').toLowerCase();
-      const { tokenPagesService, tokenTemplate, renderTokenPage, relatedTokens, validTokenId } = await import('./market/token-pages.js');
+      const { tokenPagesService, tokenTemplate, renderTokenPage, relatedTokens, validTokenId, tokenLocale, tokenNotFoundHtml } = await import('./market/token-pages.js');
+      const locale = req.params.locale || 'en';
+      const loc = tokenLocale(locale);
+      if (!loc || (req.params.locale && loc.code === 'en')) return next();
       res.set('Cache-Control', 'no-cache');
       res.type('html');
       const svc = tokenPagesService();
       const entry = validTokenId(id) ? await svc.get(id) : null;
       if (!entry) {
         res.set('X-Robots-Tag', 'noindex');
-        return res.status(404).send('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Token not found — GROM</title><meta name="robots" content="noindex"></head><body><p>Token not found. <a href="/swap">Open the GROM swap</a></p></body></html>');
+        return res.status(404).send(tokenNotFoundHtml(loc.code));
       }
-      const template = await tokenTemplate();
+      const template = await tokenTemplate({ locale: loc.code });
       if (!template) {
         res.set('Retry-After', '120');
         return res.status(503).send('Temporarily unavailable');
       }
-      res.send(renderTokenPage(template, entry, relatedTokens(entry, await svc.list())));
+      res.send(renderTokenPage(template, entry, relatedTokens(entry, await svc.list()), { locale: loc.code }));
     } catch (err) {
       next(err);
     }
-  });
+  };
+  app.get('/token/:id', tokenPage);
+  app.get('/:locale/token/:id', tokenPage);
   app.get('/sitemap-tokens.xml', async (_req, res, next) => {
     try {
       const { tokenPagesService, tokenSitemapXml } = await import('./market/token-pages.js');

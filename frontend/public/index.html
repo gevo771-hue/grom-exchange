@@ -8350,8 +8350,8 @@ function updateRouteSeo(page) {
   var key = page || 'landing';
   var canonical = document.querySelector('link[rel="canonical"]');
   var currentPath = (location.pathname || '/').replace(/\/$/, '') || '/';
-  /* Coin page /token/<id>: its own title and canonical (crawler HTML from the backend, or set by the swap). */
-  if (key === 'dashboard' && /^\/token\/[a-z0-9][a-z0-9-]{0,79}$/.test(currentPath)) {
+  /* Coin page /token/<id> or /<lang>/token/<id>: its own title and canonical (crawler HTML from the backend, or set by the swap). */
+  if (key === 'dashboard' && /^(?:\/(?:es|pt-BR|tr|ru|vi|id))?\/token\/[a-z0-9][a-z0-9-]{0,79}$/.test(currentPath)) {
     var tp = window.__gromTokenPage;
     if (tp && tp.title) {
       document.title = tp.title;
@@ -8833,8 +8833,8 @@ window.gromSyncPrettyPath = function gromSyncPrettyPath(page) {
     else if (LOCALES[parts[0]]) { locale = parts[0]; parts.shift(); }
     if (!Object.prototype.hasOwnProperty.call(PAGE_SEG, page)) return;
     var seg = PAGE_SEG[page];
-    /* Coin page /token/<id> stays on its own URL while the swap shows that coin (22.11). */
-    if (page === 'dashboard' && !locale && parts[0] === 'token' && /^[a-z0-9][a-z0-9-]{0,79}$/.test(parts[1] || '')) seg = 'token/' + parts[1];
+    /* Coin page /token/<id> (or /<lang>/token/<id>) stays on its own URL while the swap shows that coin (22.11). */
+    if (page === 'dashboard' && parts[0] === 'token' && /^[a-z0-9][a-z0-9-]{0,79}$/.test(parts[1] || '')) seg = 'token/' + parts[1];
     var newHash = page === 'landing' ? '' : ('#' + page);
     var newPath = (locale ? '/' + locale : '') + (seg ? '/' + seg : '/');
     if (!newPath) newPath = '/';

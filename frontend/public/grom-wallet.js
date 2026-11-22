@@ -30187,12 +30187,13 @@ window.gwDsPickToken = gwDsPickToken;
 /* Coin page /token/<coingecko-id> (owner, 22.11): the swap opens with that coin to buy. An unknown coin
    or unknown decimals → the plain swap (a wrong decimals value would break the amounts). */
 async function gwTokenPageBoot() {
-  const m = /^\/token\/([a-z0-9][a-z0-9-]{0,79})\/?$/.exec(location.pathname || '');
+  /* /token/<id> or /<lang>/token/<id> — the title comes back in the page's language (22.11). */
+  const m = /^(?:\/(es|pt-BR|tr|ru|vi|id))?\/token\/([a-z0-9][a-z0-9-]{0,79})\/?$/.exec(location.pathname || '');
   if (!m || window.__gwTokenPageBooted) return;
   window.__gwTokenPageBooted = true;
   let t = null;
   try {
-    const r = await fetch('/api/market/token-page?id=' + encodeURIComponent(m[1]), { headers: { Accept: 'application/json' } });
+    const r = await fetch('/api/market/token-page?id=' + encodeURIComponent(m[2]) + (m[1] ? '&locale=' + encodeURIComponent(m[1]) : ''), { headers: { Accept: 'application/json' } });
     t = r.ok ? await r.json() : null;
   } catch (_) {}
   if (!t || !t.sym) return;

@@ -281,12 +281,16 @@ export const SEO_COPY = {
   },
 };
 
+/* Landing-only extra copy: Uniswap / PancakeSwap / 1inch / Binance comparison + meme coins (owner, 22.11). */
+withLandingExtra(SEO_COPY.landing, 'en');
+
 export function wordCount(html) {
   const text = String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   return text ? text.split(' ').length : 0;
 }
 
 import { getSeoCopy, localizedNavHtml } from './seo-copy-localized.mjs';
+import { withLandingExtra } from './seo-landing-extra.mjs';
 import { SEO_LOCALES, languageSwitcherHtml } from './seo-locales.mjs';
 
 export function buildRouteArticleHtml(routeKey, localeCode = 'en', productPath = '/') {

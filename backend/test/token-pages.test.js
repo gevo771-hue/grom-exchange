@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildEntry, createTokenPages, renderTokenPage, tokenSitemapXml, relatedTokens, validTokenId,
-  tokenPageMeta, PINNED_TOKENS,
+  tokenPageMeta, PINNED_TOKENS, TOKEN_LOCALES, tokenTemplateUrl, tokenNotFoundHtml,
 } from '../src/market/token-pages.js';
+import { TOKEN_COPY } from '../src/market/token-pages-i18n.js';
+import { SEO_LOCALES } from '../../scripts/seo-locales.mjs';
 import { LANDING_MEME_TOKENS } from '../../scripts/seo-landing-extra.mjs';
 
 const PEPE = '0x6982508145454Ce325dDbE47a25d4ec3d2311933';
@@ -121,11 +123,76 @@ test('meta: networks named, no prices in the description (snippets go stale)', (
   assert.ok(!/\d\.\d/.test(m.description));
 });
 
-test('sitemap lists every coin page', () => {
+test('sitemap lists every coin page in every language with its hreflang set', () => {
   const xml = tokenSitemapXml([{ id: 'pepe' }, { id: 'bonk' }, { id: 'Bad' }], { lastmod: '2026-11-22' });
   assert.match(xml, /<loc>https:\/\/grom\.exchange\/token\/pepe<\/loc>\n    <lastmod>2026-11-22<\/lastmod>/);
-  assert.match(xml, /token\/bonk/);
+  assert.match(xml, /<loc>https:\/\/grom\.exchange\/ru\/token\/pepe<\/loc>/);
+  assert.match(xml, /<loc>https:\/\/grom\.exchange\/pt-BR\/token\/bonk<\/loc>/);
+  assert.equal(xml.match(/<loc>/g).length, 2 * TOKEN_LOCALES.length);
+  assert.equal(xml.match(/hreflang="x-default" href="https:\/\/grom\.exchange\/token\/pepe"/g).length, TOKEN_LOCALES.length);
+  assert.match(xml, /xmlns:xhtml="http:\/\/www\.w3\.org\/1999\/xhtml"/);
   assert.ok(!xml.includes('Bad'));
+});
+
+test('languages: same set and prefixes as the site SEO pages, every text filled', () => {
+  assert.deepEqual(TOKEN_LOCALES.map((l) => [l.code, l.prefix]), SEO_LOCALES.map((l) => [l.code, l.prefix]));
+  const e = buildEntry({ id: 'pepe', symbol: 'pepe', name: 'Pepe', current_price: 0.0000041, price_change_percentage_24h: -2.5, market_cap_rank: 30, total_volume: 987654321 },
+    { ethereum: PEPE, solana: WIF }, ['meme']);
+  for (const l of TOKEN_LOCALES) {
+    assert.ok(TOKEN_COPY[l.code], l.code);
+    const m = tokenPageMeta(e, l.code);
+    assert.match(m.title, /PEPE/);
+    assert.match(m.title, /\| GROM$/);
+    assert.ok(m.description.length > 80 && m.description.length < 200, `${l.code}: ${m.description.length}`);
+    assert.ok(!/(^|[^а-яё])акци|Hyperliquid|Polymarket|Kalshi|xStocks|Backed|undefined|null/i.test(m.title + m.description), l.code);
+    const html = renderTokenPage(TEMPLATE, e, [], { locale: l.code });
+    assert.ok(!/undefined|null|NaN|\$\{/.test(html.replace(/<script[\s\S]*?<\/script>/g, '')), l.code);
+    assert.ok(html.includes(`lang="${l.htmlLang}"`), l.code);
+    assert.equal((html.match(/<details class="grom-seo-faq-item">/g) || []).length, 3, l.code);
+    assert.equal((html.match(/<li>/g) || []).length, 2 + 4, l.code); // networks + steps
+  }
+});
+
+const TEMPLATE_RU = TEMPLATE.replace('lang="en"', 'lang="ru"').replace('data-grom-locale="en"', 'data-grom-locale="ru"')
+  .split('https://grom.exchange/token/__GROM_TOKEN_ID__').join('https://grom.exchange/ru/token/__GROM_TOKEN_ID__')
+  .replace('</title>', '</title><!--GROM_TOKEN_HREFLANG-->');
+
+test('page in Russian: own title, links in Russian, hreflang to every language', () => {
+  const e = buildEntry({ id: 'pepe', symbol: 'pepe', name: 'Pepe', current_price: 0.0000041, price_change_percentage_24h: -2.5, market_cap_rank: 30, total_volume: 987654321 },
+    { ethereum: PEPE, 'binance-smart-chain': '0x25d887ce7a35172c62febfd67a1856f20faebb00' }, ['meme']);
+  const bonk = buildEntry({ id: 'bonk', symbol: 'bonk', name: 'Bonk', market_cap_rank: 60 }, { solana: WIF }, ['meme']);
+  const html = renderTokenPage(TEMPLATE_RU, e, [bonk], { locale: 'ru', updatedAt: Date.parse('2026-11-22T20:15:00Z') });
+  assert.match(html, /<title>Купить PEPE — курс Pepe и кросс-чейн своп \| GROM<\/title>/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/grom\.exchange\/ru\/token\/pepe" \/>/);
+  assert.match(html, /<h1>Pepe \(PEPE\): курс и обмен<\/h1>/);
+  assert.match(html, /торгуется по \$0,0000041, падение на 2,50% за 24 часа \(данные CoinGecko, 20:15 UTC\)/);
+  assert.match(html, /в сетях Ethereum и BNB Chain/);
+  assert.match(html, /<a href="\/ru\/token\/bonk">BONK<\/a>/);
+  assert.match(html, /<a href="\/ru\/swap">Swap<\/a>/);
+  assert.match(html, /<link rel="alternate" hreflang="es" href="https:\/\/grom\.exchange\/es\/token\/pepe" \/>/);
+  assert.match(html, /<link rel="alternate" hreflang="x-default" href="https:\/\/grom\.exchange\/token\/pepe" \/>/);
+  assert.equal((html.match(/rel="alternate" hreflang=/g) || []).length, TOKEN_LOCALES.length + 1);
+  const ld = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1]));
+  assert.equal(ld[0].inLanguage, 'ru');
+  assert.equal(ld[0].url, 'https://grom.exchange/ru/token/pepe');
+  assert.equal(ld[1].itemListElement[0].item, 'https://grom.exchange/ru/');
+  assert.match(ld[2].mainEntity[0].name, /Как купить PEPE без KYC\?/);
+  assert.ok(!/(^|[^а-яё])акци/i.test(html)); // «акции» (stocks) — not «транзакцию»
+});
+
+test('templates and 404 per language', () => {
+  assert.equal(tokenTemplateUrl('en', 'http://frontend/token-template.html'), 'http://frontend/token-template.html');
+  assert.equal(tokenTemplateUrl('pt-BR', 'http://frontend/token-template.html'), 'http://frontend/token-template-pt-BR.html');
+  assert.equal(tokenTemplateUrl('xx', 'http://frontend/token-template.html'), 'http://frontend/token-template.html');
+  assert.match(tokenNotFoundHtml('es'), /<html lang="es">[\s\S]*noindex[\s\S]*Token no encontrado\. <a href="\/es\/swap">/);
+  assert.match(tokenNotFoundHtml(), /Token not found\. <a href="\/swap">/);
+});
+
+test('swap info: title in the requested language', async () => {
+  const { get } = mockGet({ dec: 18 });
+  const svc = createTokenPages({ get, pinned: [] });
+  assert.match((await svc.swapInfo('pepe', 'tr')).title, /^PEPE Satın Al — Pepe Fiyatı/);
+  assert.match((await svc.swapInfo('pepe', 'xx')).title, /^Buy PEPE — /);
 });
 
 test('tokenized funds and securities get no page', () => {

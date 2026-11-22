@@ -24,7 +24,9 @@ export const LANDING_MEME_TOKENS = [
   ['toshi', 'TOSHI'],
 ];
 
-const tokenLinks = () => LANDING_MEME_TOKENS.map(([id, sym]) => `<a href="/token/${id}">${sym}</a>`).join(', ');
+const PREFIX = { en: '', es: '/es', 'pt-BR': '/pt-BR', tr: '/tr', ru: '/ru', vi: '/vi', id: '/id' };
+/* Coin pages exist in every SEO language (/ru/token/pepe…): each landing links to its own language. */
+const tokenLinks = (prefix = '') => LANDING_MEME_TOKENS.map(([id, sym]) => `<a href="${prefix}/token/${id}">${sym}</a>`).join(', ');
 
 const COPY = {
   en: {
@@ -155,6 +157,7 @@ function escText(s) {
 /** Extra landing sections + FAQ for one locale (falls back to English). */
 export function landingExtra(localeCode = 'en') {
   const c = COPY[localeCode] || COPY.en;
+  const prefix = COPY[localeCode] ? PREFIX[localeCode] || '' : '';
   return {
     sections: [
       {
@@ -163,10 +166,10 @@ export function landingExtra(localeCode = 'en') {
       },
       {
         h2: c.memeH2,
-        html: `<p>${escText(c.meme)}</p>\n<p>${escText(c.memeList)} ${tokenLinks()}.</p>\n<p>${escText(c.memeRisk)}</p>`,
+        html: `<p>${escText(c.meme)}</p>\n<p>${escText(c.memeList)} ${tokenLinks(prefix)}.</p>\n<p>${escText(c.memeRisk)}</p>`,
       },
     ],
-    faq: c.faq.map((x) => ({ ...x })),
+    faq: c.faq.map((x) => ({ ...x, a: x.a.split('/token/pepe').join(`${prefix}/token/pepe`) })),
   };
 }
 

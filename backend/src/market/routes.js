@@ -1188,6 +1188,10 @@ function startStockWarmers() {
   const warmTrending = async () => { const { getTrending } = await import('./trending.js'); await getTrending.warm(); };
   setTimeout(() => { warmTrending().catch(() => {}); }, 15_000).unref?.();
   every(60_000, warmTrending);
+  /* Coin pages (/token/<id>): CoinGecko memes + top coins + pinned + NEW, every 30 min (3 calls). */
+  const warmTokens = async () => { const { tokenPagesService } = await import('./token-pages.js'); await tokenPagesService().refresh(); };
+  setTimeout(() => { warmTokens().catch(() => {}); }, 90_000).unref?.();
+  every(30 * 60_000, warmTokens);
   every(14 * 60_000, warmSpark);
   every(3 * 60_000, warmLiquidity);
 }
@@ -1618,6 +1622,18 @@ export function createMarketRouter() {
       res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120').json(payload);
     } catch (e) {
       res.status(502).json({ rows: [], count: 0, error: String(e?.message || e) });
+    }
+  });
+
+  /** Coin page /token/<id> in the browser: the coin to preselect in the swap (decimals from LI.FI; null → no preselect). */
+  r.get('/token-page', async (req, res) => {
+    try {
+      const { tokenPagesService } = await import('./token-pages.js');
+      const info = await tokenPagesService().swapInfo(String(req.query.id || '').toLowerCase());
+      if (!info) return res.status(404).set('Cache-Control', 'public, max-age=60').json({ error: 'not_found' });
+      res.set('Cache-Control', 'public, max-age=300').json(info);
+    } catch (e) {
+      res.status(502).json({ error: String(e?.message || e) });
     }
   });
 

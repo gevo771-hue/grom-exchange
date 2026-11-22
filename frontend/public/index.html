@@ -539,7 +539,7 @@
 <script>
 (function () {
   var ALLOW = { landing: 1, dashboard: 1, earn: 1, spot: 1, binary: 1, futures: 1, trade: 1, markets: 1, wallet: 1, referral: 1, history: 1, settings: 1, help: 1, predict: 1, xstocks: 1, backoffice: 1 };
-  var PATH = { '': 'landing', swap: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
+  var PATH = { '': 'landing', swap: 'dashboard', token: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
   var LOCALES = { es: 1, tr: 1, ru: 1, vi: 1, id: 1 };
   var parts = (location.pathname || '/').split('/').filter(Boolean);
   if (parts[0] === 'pt-BR') parts.shift();
@@ -8350,6 +8350,19 @@ function updateRouteSeo(page) {
   var key = page || 'landing';
   var canonical = document.querySelector('link[rel="canonical"]');
   var currentPath = (location.pathname || '/').replace(/\/$/, '') || '/';
+  /* Coin page /token/<id>: its own title and canonical (crawler HTML from the backend, or set by the swap). */
+  if (key === 'dashboard' && /^\/token\/[a-z0-9][a-z0-9-]{0,79}$/.test(currentPath)) {
+    var tp = window.__gromTokenPage;
+    if (tp && tp.title) {
+      document.title = tp.title;
+      gromSeoSet('description', tp.description || '');
+      gromSeoSetProp('og:title', tp.title);
+      gromSeoSetProp('og:description', tp.description || '');
+    }
+    if (canonical) canonical.setAttribute('href', 'https://grom.exchange' + currentPath);
+    gromSeoSetProp('og:url', 'https://grom.exchange' + currentPath);
+    return;
+  }
   var staticLocale = document.documentElement.getAttribute('data-grom-locale');
   var staticRoute = document.documentElement.getAttribute('data-grom-route');
   // Keep the translated, build-time metadata when JS hydrates that same route.
@@ -8820,6 +8833,8 @@ window.gromSyncPrettyPath = function gromSyncPrettyPath(page) {
     else if (LOCALES[parts[0]]) { locale = parts[0]; parts.shift(); }
     if (!Object.prototype.hasOwnProperty.call(PAGE_SEG, page)) return;
     var seg = PAGE_SEG[page];
+    /* Coin page /token/<id> stays on its own URL while the swap shows that coin (22.11). */
+    if (page === 'dashboard' && !locale && parts[0] === 'token' && /^[a-z0-9][a-z0-9-]{0,79}$/.test(parts[1] || '')) seg = 'token/' + parts[1];
     var newHash = page === 'landing' ? '' : ('#' + page);
     var newPath = (locale ? '/' + locale : '') + (seg ? '/' + seg : '/');
     if (!newPath) newPath = '/';
@@ -9100,7 +9115,7 @@ document.addEventListener('click', function (e) {
 var _logoHome = document.getElementById('logoHome');
 if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefault(); show('landing'); });
 (function () {
-  var PATH = { '': 'landing', swap: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
+  var PATH = { '': 'landing', swap: 'dashboard', token: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
   var LOCALES = { es: 1, tr: 1, ru: 1, vi: 1, id: 1 };
   var parts = (location.pathname || '/').split('/').filter(Boolean);
   if (parts[0] === 'pt-BR') parts.shift();

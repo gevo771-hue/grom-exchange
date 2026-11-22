@@ -125,6 +125,41 @@ async function main() {
     }
   });
 
+  /* Coin pages /token/<coingecko-id> for crawlers (owner, 22.11). Frontend nginx sends only crawlers
+     here; browsers get app.html and the swap opens with the coin (GET /api/market/token-page). */
+  app.get('/token/:id', async (req, res, next) => {
+    try {
+      const id = String(req.params.id || '').toLowerCase();
+      const { tokenPagesService, tokenTemplate, renderTokenPage, relatedTokens, validTokenId } = await import('./market/token-pages.js');
+      res.set('Cache-Control', 'no-cache');
+      res.type('html');
+      const svc = tokenPagesService();
+      const entry = validTokenId(id) ? await svc.get(id) : null;
+      if (!entry) {
+        res.set('X-Robots-Tag', 'noindex');
+        return res.status(404).send('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Token not found — GROM</title><meta name="robots" content="noindex"></head><body><p>Token not found. <a href="/swap">Open the GROM swap</a></p></body></html>');
+      }
+      const template = await tokenTemplate();
+      if (!template) {
+        res.set('Retry-After', '120');
+        return res.status(503).send('Temporarily unavailable');
+      }
+      res.send(renderTokenPage(template, entry, relatedTokens(entry, await svc.list())));
+    } catch (err) {
+      next(err);
+    }
+  });
+  app.get('/sitemap-tokens.xml', async (_req, res, next) => {
+    try {
+      const { tokenPagesService, tokenSitemapXml } = await import('./market/token-pages.js');
+      const list = await tokenPagesService().list();
+      res.set('Cache-Control', 'public, max-age=3600');
+      res.type('application/xml').send(tokenSitemapXml(list));
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.get('/metrics', async (_req, res) => {
     res.setHeader('Content-Type', registry.contentType);
     res.end(await registry.metrics());

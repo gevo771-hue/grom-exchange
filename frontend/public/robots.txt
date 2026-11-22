@@ -1,5 +1,7 @@
 User-agent: *
 Disallow: /api/admin/
 Disallow: /auth/
+Disallow: /token-template.html
 
 Sitemap: https://grom.exchange/sitemap.xml
+Sitemap: https://grom.exchange/sitemap-tokens.xml

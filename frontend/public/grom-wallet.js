@@ -30185,7 +30185,8 @@ function gwDsPickToken(sym, which, meta) {
 window.gwDsPickToken = gwDsPickToken;
 
 const GW_TR_CACHE_TTL = 60_000;
-const GW_TR_MAX_AGE = 10 * 60_000;
+/* Rows up to 30 min old stay on screen with their age (the server keeps them as long), 22.11. */
+const GW_TR_MAX_AGE = 30 * 60_000;
 function gwTrCacheUsable(entry) {
   return !!(entry?.rows?.length && Number(entry.at) > 0 && Date.now() - entry.at < GW_TR_MAX_AGE);
 }
@@ -30216,7 +30217,8 @@ async function gwFetchTrendingNetwork(net) {
       const at = Number(j.updatedAt);
       const rows = (Array.isArray(j.rows) ? j.rows : [])
         .filter((row) => Number(row.observedAt) > 0 && Date.now() - row.observedAt < GW_TR_MAX_AGE);
-      const entry = { at, rows, refreshing: !!j.refreshing };
+      /* partial: some networks are still loading on the server — keep asking until all arrive (22.11). */
+      const entry = { at, rows, refreshing: !!(j.refreshing || j.partial) };
       if (!gwTrCacheUsable(entry)) throw new Error('trending expired');
       window.__gwTrMemCache.set(net.key, entry);
       try { localStorage.setItem('grom:trending:v4:' + net.key, JSON.stringify(entry)); } catch (_) {}
@@ -30267,13 +30269,16 @@ async function gwTrLoadNet(netKey, opts) {
   gwTrPaintList(list, rows, t, ctx);
   const attempts = Number(opts.attempts) || 0;
   const pending = gwTrCached(key)?.refreshing;
-  if ((pending || !rows.length) && attempts < 10) {
+  /* Networks still loading: every 2.5 s for the first 15 s, then every 8 s for ~3 min more —
+     a cold server loads nine networks one by one (about a minute), and the list used to stop at
+     25 s with only the first network shown (owner, 22.11). */
+  if ((pending || !rows.length) && attempts < 30) {
     window[ctx.reqIdKey + 'Timer'] = setTimeout(() => {
       const active = ctx.instance === 'landing' ? gwTrLandingActive() : gwDashActive();
       if (!document.hidden && active && ctx.getNet() === key && reqId === window[ctx.reqIdKey]) {
         gwTrLoadNet(key, { instance: ctx.instance, attempts: attempts + 1 });
       }
-    }, pending ? 2500 : 10000);
+    }, pending ? (attempts < 6 ? 2500 : 8000) : 10000);
   }
 }
 

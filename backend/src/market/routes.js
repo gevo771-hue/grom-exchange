@@ -1182,6 +1182,12 @@ function startStockWarmers() {
   const warmListings = async () => { const { newListingsService } = await import('./new-listings.js'); await newListingsService().refreshList(); };
   setTimeout(() => { warmListings().catch(() => {}); }, 45_000).unref?.();
   every(30 * 60_000, warmListings);
+  /* Trending on DEXs: every network stays fresh even when nobody opens the page, so a visitor after a
+     quiet spell or a deploy sees all networks at once, not one and then the rest minutes later (owner, 22.11).
+     Each run refreshes only networks older than 3 min — about three GeckoTerminal calls a minute. */
+  const warmTrending = async () => { const { getTrending } = await import('./trending.js'); await getTrending.warm(); };
+  setTimeout(() => { warmTrending().catch(() => {}); }, 15_000).unref?.();
+  every(60_000, warmTrending);
   every(14 * 60_000, warmSpark);
   every(3 * 60_000, warmLiquidity);
 }

@@ -211,3 +211,67 @@ test('new listings: an empty or broken store is ignored', async () => {
   assert.equal(p.count, 0);
   assert.equal(svc._state().known.size, 1200);
 });
+
+import { pickDexChange } from '../src/market/new-listings.js';
+
+test('new listings: busiest DexScreener pair gives the change; other tokens and empty changes are ignored', () => {
+  const sol = '7R4MP6VX7n3RMNhL9zsk5Zu5ibZvwq8npUYnRq7epump';
+  const pairs = [
+    { baseToken: { address: sol }, liquidity: { usd: 500 }, priceChange: { h24: -3 } },
+    { baseToken: { address: sol }, liquidity: { usd: 97_000 }, priceChange: { h24: 1540 } },
+    { baseToken: { address: 'other' }, liquidity: { usd: 1e9 }, priceChange: { h24: 5 } },
+    { baseToken: { address: sol }, liquidity: { usd: 1e9 }, priceChange: {} },
+  ];
+  assert.equal(pickDexChange(pairs, sol), 1540);
+  assert.equal(pickDexChange([{ baseToken: { address: '0xABCDEF0000000000000000000000000000000001' }, priceChange: { h24: 35.6 } }], '0xabcdef0000000000000000000000000000000001'), 35.6);
+  assert.equal(pickDexChange([], sol), null);
+  assert.equal(pickDexChange(null, sol), null);
+});
+
+test('service: a coin listed today gets its change from DexScreener instead of CoinGecko\'s 0 (22.11)', async () => {
+  let t = Date.parse('2026-11-22T10:00:00Z');
+  const base = Array.from({ length: 1200 }, (_, i) => ({ id: 'c' + i, symbol: 's' + i, name: 'C' + i, platforms: {} }));
+  const A = '0x' + 'a'.repeat(40);
+  const B = '0x' + 'b'.repeat(40);
+  const C = '0x' + 'c'.repeat(40);
+  let list = base;
+  const dsCalls = [];
+  let dsDown = false;
+  const get = async (url, opts) => {
+    if (url.endsWith('/coins/list')) return { data: list };
+    if (url.endsWith('/v1/token')) return { data: { decimals: 18 } };
+    if (url.endsWith('/coins/markets')) {
+      const chg = { a: 0, b: 0, c: 7.5 };
+      return { data: opts.params.ids.split(',').map((id) => ({ id, symbol: id, name: id, image: 'https://img/' + id, current_price: 1, total_volume: 50_000, price_change_percentage_24h: chg[id] })) };
+    }
+    if (url.includes('api.dexscreener.com/tokens/v1/')) {
+      dsCalls.push(url);
+      if (dsDown) throw new Error('down');
+      return { data: [{ baseToken: { address: A }, liquidity: { usd: 20_000 }, priceChange: { h24: 35.6 } }] };
+    }
+    throw new Error('unexpected ' + url);
+  };
+  const svc = createNewListings({ get, now: () => t, file: '', apiKey: '', dexOn: false, pause: async () => {} });
+  await svc.get();
+  list = base.concat([
+    { id: 'a', symbol: 'aa', name: 'A', platforms: { robinhood: A } },
+    { id: 'b', symbol: 'bb', name: 'B', platforms: { ethereum: B } },
+    { id: 'c', symbol: 'cc', name: 'C', platforms: { ethereum: C } },
+  ]);
+  t += 31 * 60_000;
+  await svc.refreshList();
+  t += 6 * 60_000;
+  const p = await svc.get();
+  const chg = Object.fromEntries(p.rows.map((r) => [r.id, r.chg]));
+  assert.equal(chg.a, 35.6); // DexScreener (robinhood)
+  assert.equal(chg.b, null); // no pair: no percent instead of a fake 0
+  assert.equal(chg.c, 7.5); // CoinGecko's own change kept, no extra lookup
+  assert.ok(dsCalls.some((u) => u.includes('/robinhood/' + A)) && dsCalls.some((u) => u.includes('/ethereum/' + B)));
+  assert.ok(!dsCalls.some((u) => u.includes(C)));
+  // DexScreener down: still no fake 0.
+  dsDown = true;
+  t += 6 * 60_000;
+  await svc.refreshMarkets();
+  const p2 = await svc.get();
+  assert.ok(p2.rows.every((r) => r.chg !== 0));
+});

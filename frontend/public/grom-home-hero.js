@@ -349,7 +349,8 @@
     var net = NL_NET_ICON[r.chain] ? '<img class="gnl-net" src="' + CHAIN_ICON + NL_NET_ICON[r.chain] + '.svg" alt="" loading="lazy">' : '';
     return '<button type="button" class="gnl-chip" data-nl="' + i + '" title="' + esc(r.name || r.sym) + '">'
       + '<span class="gnl-logo">' + logo + net + '</span><b>' + esc(r.sym) + '</b>'
-      + (dir || c === 0 ? '<em class="' + dir + '">' + arrow + ' ' + esc(nlPct(c)) + '</em>' : '')
+      /* No percent rather than «0,00%»: an exact 0 means the source had no 24 h change yet (22.11). */
+      + (dir ? '<em class="' + dir + '">' + arrow + ' ' + esc(nlPct(c)) + '</em>' : '')
       + '</button>';
   }
   function nlRender() {

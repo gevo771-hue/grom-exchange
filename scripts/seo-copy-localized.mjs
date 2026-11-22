@@ -5,6 +5,7 @@
 import { SEO_LOCALES, localePath } from './seo-locales.mjs';
 import { SEO_META_TR_RU, SEO_COPY_TR, SEO_COPY_RU } from './seo-copy-tr-ru.mjs';
 import { SEO_META_VI_ID, SEO_COPY_VI, SEO_COPY_ID } from './seo-copy-vi-id.mjs';
+import { withLandingExtra } from './seo-landing-extra.mjs';
 
 function p(localeCode, productPath) {
   const loc = SEO_LOCALES.find((l) => l.code === localeCode) || SEO_LOCALES[0];
@@ -38,12 +39,12 @@ export const SEO_META_BY_LOCALE = {
       description: 'Swaps, perpetual futures, prediction markets and tokenized stocks from your own wallet. No sign-up, no deposits, no KYC for swaps.',
     },
     dashboard: {
-      title: 'Crypto Swaps & Cross-Chain Routes — GROM Exchange',
-      description: 'Compare available crypto swap and bridge routes. Supported tokens, networks, fees and output depend on the current quote. Confirm each transaction in your wallet.',
+      title: 'Crypto Swap & Cross-Chain Bridge From Your Wallet | GROM',
+      description: 'Swap and bridge tokens across Ethereum, BNB Chain, Base, Arbitrum, Solana and more. Compare routes and see fees before you sign — no sign-up, no deposit.',
     },
     futures: {
-      title: 'Perpetual Futures From Your Wallet — Up to 40x',
-      description: 'Trade spot and perpetual futures from a self-custody wallet. Margin stays on the venue — GROM never holds your deposit.',
+      title: 'Crypto Perpetual Futures & Live Prices — BTC, ETH, SOL | GROM',
+      description: 'Live prices and perpetual futures for BTC, ETH, SOL and hundreds of altcoins. Trade from your own wallet, leverage up to 40× depending on the market.',
     },
     predict: {
       title: 'Prediction Markets — Politics, Sports, Crypto',
@@ -54,8 +55,8 @@ export const SEO_META_BY_LOCALE = {
       description: 'Buy fractional tokenized equities any time, including weekends. Settles to the same wallet you swap and trade perps with. No brokerage account.',
     },
     markets: {
-      title: 'Crypto Markets & Live Prices — GROM Exchange',
-      description: 'Live prices, 24h volume and depth across crypto, TradFi and trending pairs. Open any market straight into the terminal.',
+      title: 'Crypto Prices Today — Live Charts & Trending Tokens | GROM',
+      description: 'Live crypto prices, 24h change and volume, trending DEX tokens and new listings. Open any market straight into swap or trade from your wallet.',
     },
   },
   es: {
@@ -470,6 +471,11 @@ export const SEO_COPY_BY_LOCALE = {
   vi: SEO_COPY_VI,
   id: SEO_COPY_ID,
 };
+
+/* Landing-only extra copy (comparison + meme coins), every landing locale (owner, 22.11). */
+for (const [code, pack] of Object.entries(SEO_COPY_BY_LOCALE)) {
+  if (pack && pack.landing) withLandingExtra(pack.landing, code);
+}
 
 export function getSeoCopy(localeCode, routeKey) {
   if (!localeCode || localeCode === 'en') return null;

@@ -30184,6 +30184,42 @@ function gwDsPickToken(sym, which, meta) {
 }
 window.gwDsPickToken = gwDsPickToken;
 
+/* Coin page /token/<coingecko-id> (owner, 22.11): the swap opens with that coin to buy. An unknown coin
+   or unknown decimals → the plain swap (a wrong decimals value would break the amounts). */
+async function gwTokenPageBoot() {
+  const m = /^\/token\/([a-z0-9][a-z0-9-]{0,79})\/?$/.exec(location.pathname || '');
+  if (!m || window.__gwTokenPageBooted) return;
+  window.__gwTokenPageBooted = true;
+  let t = null;
+  try {
+    const r = await fetch('/api/market/token-page?id=' + encodeURIComponent(m[1]), { headers: { Accept: 'application/json' } });
+    t = r.ok ? await r.json() : null;
+  } catch (_) {}
+  if (!t || !t.sym) return;
+  window.__gromTokenPage = { id: t.id, title: t.title, description: t.description };
+  try { if (typeof window.gromSeoRefreshRouteMeta === 'function') window.gromSeoRefreshRouteMeta('dashboard'); } catch (_) {}
+  if (!t.chainId || !t.address || !Number.isInteger(Number(t.decimals))) return;
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  for (let i = 0; i < 80; i++) {
+    if (document.getElementById('gwDsTo') && (typeof gwDashActive !== 'function' || gwDashActive())) break;
+    await sleep(250);
+  }
+  await sleep(700);
+  const meta = { sym: t.sym, chainId: Number(t.chainId), tokenAddress: t.address, name: t.name || t.sym, img: t.logo || '', decimals: Number(t.decimals) };
+  try { gwDsPickToken(t.sym, 'to', meta); } catch (_) { return; }
+  const pickedAt = Date.now();
+  /* The swap may restore a saved pair right after boot — pick again unless the user chose another coin. */
+  setTimeout(() => {
+    const sel = document.getElementById('gwDsTo');
+    if (sel && sel.value === t.sym) return;
+    const p = window.__gwDsUserPickedTo;
+    if (p && Number(p.at) > pickedAt && String(p.address || '').toLowerCase() !== String(t.address).toLowerCase()) return;
+    try { gwDsPickToken(t.sym, 'to', meta); } catch (_) {}
+  }, 2500);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { gwTokenPageBoot(); });
+else setTimeout(() => { gwTokenPageBoot(); }, 0);
+
 const GW_TR_CACHE_TTL = 60_000;
 /* Rows up to 30 min old stay on screen with their age (the server keeps them as long), 22.11. */
 const GW_TR_MAX_AGE = 30 * 60_000;

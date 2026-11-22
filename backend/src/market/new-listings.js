@@ -19,12 +19,14 @@
 import axios from 'axios';
 import fs from 'node:fs';
 import { gtGate } from './gt-gate.js';
+import { LOGO_CHAINS } from '../liquidity/token-logos.js';
 
 const CG_FREE = 'https://api.coingecko.com/api/v3';
 const CG_PRO = 'https://pro-api.coingecko.com/api/v3';
 const LIFI = 'https://li.quest/v1';
 const GT = 'https://api.geckoterminal.com/api/v2';
 const GOPLUS = 'https://api.gopluslabs.io/api/v1';
+const DS_TOKENS = 'https://api.dexscreener.com/tokens/v1';
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const WEEK = 7 * DAY;
@@ -163,6 +165,26 @@ export function pickPlatform(platforms) {
   return swapPlatforms(platforms)[0] || null;
 }
 
+/**
+ * 24 h change of a token from DexScreener pairs (`/tokens/v1`): its busiest pair. For a pool younger
+ * than a day DexScreener counts from the first trade. null — no pair with a change.
+ */
+export function pickDexChange(pairs, address) {
+  const want = String(address || '');
+  const evm = /^0x/i.test(want);
+  let best = null;
+  for (const p of Array.isArray(pairs) ? pairs : []) {
+    const a = String(p?.baseToken?.address || '');
+    if (!(evm ? a.toLowerCase() === want.toLowerCase() : a === want)) continue;
+    const raw = p?.priceChange?.h24;
+    const h24 = raw == null || raw === '' ? NaN : Number(raw);
+    if (!Number.isFinite(h24)) continue;
+    const liq = Number(p?.liquidity?.usd) || 0;
+    if (!best || liq > best.liq) best = { liq, h24 };
+  }
+  return best ? best.h24 : null;
+}
+
 /** Diff of two coin lists: coins present now but not in `known` (Set of ids). */
 export function diffNewCoins(list, known) {
   const out = [];
@@ -195,7 +217,8 @@ export function buildRows(fresh, markets, decimals, {
     if (vol < minVol) continue;
     const dec = decimals.get(f.id);
     if (!Number.isInteger(dec) || dec < 0 || dec > 36) continue;
-    const chg = Number(m.price_change_percentage_24h);
+    const rawChg = m.price_change_percentage_24h;
+    const chg = rawChg == null || rawChg === '' ? NaN : Number(rawChg); // Number(null) is 0 — keep «no data» empty
     (age <= DAY ? day : week).push({
       id: f.id,
       sym: String(m.symbol || f.symbol || '').toUpperCase().slice(0, 16),
@@ -525,6 +548,40 @@ export function createNewListings({
     for (const id of Object.keys(state.dec)) if (!keep.has(id)) delete state.dec[id];
   }
 
+  /* CoinGecko gives 0 (not «no data») as the 24 h change of a coin listed a few hours ago — the strip
+     showed «0,00%» for every coin of the day (owner, 22.11). Such coins take the change of their busiest
+     DexScreener pair; with none, the change stays empty and the strip shows no percent. */
+  async function fillDexChange(rows) {
+    const byId = new Map(state.fresh.map((f) => [f.id, f]));
+    const want = new Map(); // DexScreener chain → [{ m, address }]
+    for (const m of rows) {
+      const c = m?.price_change_percentage_24h;
+      if (c != null && c !== '' && Number(c) !== 0) continue;
+      m.price_change_percentage_24h = null;
+      const f = byId.get(String(m?.id));
+      const ds = f && f.address && LOGO_CHAINS[f.chainId]?.ds;
+      if (!ds) continue;
+      if (!want.has(ds)) want.set(ds, []);
+      want.get(ds).push({ m, address: String(f.address) });
+    }
+    for (const [ds, list] of want) {
+      for (let i = 0; i < list.length; i += 30) {
+        const part = list.slice(i, i + 30);
+        let pairs = [];
+        try {
+          const { data } = await get(`${DS_TOKENS}/${ds}/${part.map((x) => x.address).join(',')}`, {
+            timeout: 10000, headers: { Accept: 'application/json', 'User-Agent': 'grom-exchange/1.0' },
+          });
+          pairs = Array.isArray(data) ? data : [];
+        } catch (_) { /* no change shown — better than a wrong 0 % */ }
+        for (const x of part) {
+          const h24 = pickDexChange(pairs, x.address);
+          if (h24 != null) x.m.price_change_percentage_24h = h24;
+        }
+      }
+    }
+  }
+
   async function refreshMarkets() {
     if (marketing) return marketing;
     marketing = (async () => {
@@ -539,6 +596,7 @@ export function createNewListings({
         });
         if (Array.isArray(data)) rows.push(...data);
       }
+      await fillDexChange(rows);
       markets = { ts: now(), rows };
       saveRows();
     })().catch((e) => {

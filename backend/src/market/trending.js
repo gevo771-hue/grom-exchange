@@ -84,12 +84,46 @@ export function createTrendingService({ get = axios.get, now = Date.now,
   gate = null,
   /* How long rows count as fresh before a background refresh. Production: 3 min, so nine networks
      cost ~3 calls a minute out of GeckoTerminal's ~10 (18.11). */
-  ttl = TTL } = {}) {
+  ttl = TTL,
+  /* How long old rows are still shown (with their age) while a refresh is pending or failing.
+     Production: 30 min — an empty list after a quiet spell looked broken (owner, 22.11). */
+  staleTtl = STALE_TTL,
+  /* { get(key), set(key, value) } — Postgres in production (app_state): the last rows survive a
+     deploy or restart instead of nine networks loading one by one from nothing (owner, 22.11). */
+  store = null } = {}) {
   const cache = new Map();
   const inflight = new Map();
   const failures = new Map();
   const networks = nets.filter((net) => net.gt);
-  const usable = (hit) => hit?.rows?.length && now() - hit.at < STALE_TTL;
+  const usable = (hit) => hit?.rows?.length && now() - hit.at < staleTtl;
+
+  /* Saved rows → memory on first use (not at import: tests and tools stay DB-free). */
+  let readyP = null;
+  const ready = () => readyP || (readyP = !store ? Promise.resolve() : (async () => {
+    try {
+      const snap = await store.get(ST_CACHE);
+      for (const net of networks) {
+        const e = snap?.[net.key];
+        if (!e || !Array.isArray(e.rows) || !e.rows.length || !(Number(e.at) > 0)) continue;
+        const have = cache.get(net.key);
+        if (!have || have.at < Number(e.at)) cache.set(net.key, { at: Number(e.at), rows: e.rows });
+      }
+    } catch (_) { /* no snapshot — load from the provider as before */ }
+  })());
+  const loaded = () => (!store ? ready() : Promise.race([ready(), new Promise((resolve) => {
+    const t = setTimeout(resolve, 3000); t.unref?.();
+  })]));
+  let saveTimer = null;
+  function save() {
+    if (!store || saveTimer) return;
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      const snap = {};
+      for (const [key, entry] of cache) if (entry?.rows?.length) snap[key] = { at: entry.at, rows: entry.rows };
+      Promise.resolve().then(() => store.set(ST_CACHE, snap)).catch(() => {});
+    }, 5000);
+    saveTimer.unref?.();
+  }
   const queue = [];
   let draining = false;
   let lastStart = null;
@@ -141,6 +175,7 @@ export function createTrendingService({ get = axios.get, now = Date.now,
         const entry = { at, rows };
         cache.set(net.key, entry);
         failures.delete(net.key);
+        save();
         return entry;
       } catch (error) {
         const retryHeader = error.response?.headers?.['retry-after'];
@@ -163,7 +198,7 @@ export function createTrendingService({ get = axios.get, now = Date.now,
   function snapshot(selected, cached) {
     const entries = selected.map((net) => cache.get(net.key)).filter(usable);
     const rows = entries.flatMap((entry) => entry.rows)
-      .filter((row) => now() - row.observedAt < STALE_TTL)
+      .filter((row) => now() - row.observedAt < staleTtl)
       .sort((a, b) => moverScore(b) - moverScore(a)).slice(0, 20);
     if (!rows.length) throw new Error('Trending data unavailable');
     const updatedAt = Math.min(...rows.map((row) => row.observedAt));
@@ -172,7 +207,17 @@ export function createTrendingService({ get = axios.get, now = Date.now,
       refreshing: selected.some((net) => inflight.has(net.key)), source: 'GeckoTerminal' };
   }
 
-  return async function getTrending(netKey) {
+  /* Background refresh of every network whose rows are older than `ttl` (production: called every
+     minute, so each network is at most ~4 min old). A visitor after a quiet spell no longer waits for
+     nine networks one by one (owner, 22.11). Oldest first; a clicked network still goes ahead. */
+  async function warm() {
+    await loaded();
+    const order = [...networks].sort((a, b) => (cache.get(a.key)?.at || 0) - (cache.get(b.key)?.at || 0));
+    await Promise.allSettled(order.map((net) => refresh(net, false)));
+  }
+
+  async function getTrending(netKey) {
+    await loaded();
     const net = nets.find((n) => n.key === String(netKey || 'all').toLowerCase()) || nets[0];
     const selected = net.key === 'all' ? networks : [net];
     const hasRows = selected.some((child) => usable(cache.get(child.key)));
@@ -191,7 +236,19 @@ export function createTrendingService({ get = axios.get, now = Date.now,
     // Cold "All" paints the first available network; subsequent reads include all
     // completed networks. Warm responses never wait for provider revalidation.
     return { net: net.key, ...snapshot(selected, hasRows) };
-  };
+  }
+  getTrending.warm = warm;
+  getTrending.ready = ready;
+  return getTrending;
 }
 
-export const getTrending = createTrendingService({ gate: gtGate, ttl: 180_000 });
+const ST_CACHE = 'trending_cache';
+
+/* Postgres snapshot (app_state) — the module is loaded lazily on first use. */
+const kv = { mod: null };
+const appStateStore = {
+  get: async (key) => { if (!kv.mod) kv.mod = (await import('../db/app-state.js')).appState(); return kv.mod.get(key); },
+  set: async (key, value) => { if (!kv.mod) kv.mod = (await import('../db/app-state.js')).appState(); return kv.mod.set(key, value); },
+};
+
+export const getTrending = createTrendingService({ gate: gtGate, ttl: 180_000, staleTtl: 30 * 60_000, store: appStateStore });

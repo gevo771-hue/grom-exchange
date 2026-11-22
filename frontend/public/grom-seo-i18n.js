@@ -471,9 +471,48 @@
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  /* Landing «О GROM» on «/» (22.11, owner): the build writes English there for Google; people whose
+   * interface is Russian, Spanish, Turkish… get the same block from the localized landing (/ru/, /es/…). */
+  var STATIC_PRIMARY_SRC = { ru: '/ru/', es: '/es/', pt: '/pt-BR/', tr: '/tr/', vi: '/vi/', id: '/id/' };
+  var staticPrimary = null;
+  var staticPrimaryCache = {};
+  function renderStaticPrimary(host) {
+    if (/^\/(es|pt-BR|tr|ru|vi|id)(\/|$)/.test(location.pathname || '')) return;
+    if (!staticPrimary) staticPrimary = { html: host.innerHTML, lang: host.getAttribute('lang') || 'en' };
+    var lang = curLang();
+    var src = STATIC_PRIMARY_SRC[lang];
+    if (!src) {
+      if (host.getAttribute('lang') !== staticPrimary.lang) {
+        host.innerHTML = staticPrimary.html;
+        host.setAttribute('lang', staticPrimary.lang);
+      }
+      return;
+    }
+    var want = lang === 'pt' ? 'pt-BR' : lang;
+    if (host.getAttribute('lang') === want) return;
+    var apply = function (html) {
+      if (curLang() !== lang) return;
+      host.innerHTML = html;
+      host.setAttribute('lang', want);
+    };
+    if (staticPrimaryCache[lang]) { apply(staticPrimaryCache[lang]); return; }
+    if (typeof fetch !== 'function' || typeof DOMParser !== 'function') return;
+    fetch(src, { credentials: 'same-origin', headers: { Accept: 'text/html' } })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (t) {
+        if (!t) return;
+        var el = new DOMParser().parseFromString(t, 'text/html').getElementById('lpSeoPrimary');
+        if (!el || el.getAttribute('lang') !== want || !el.hasAttribute('data-seo-static')) return;
+        staticPrimaryCache[lang] = el.innerHTML;
+        apply(el.innerHTML);
+      })
+      .catch(function () {});
+  }
+
   function renderPrimaryBlock() {
     var host = document.getElementById('lpSeoPrimary');
-    if (!host || host.hasAttribute('data-seo-static')) return;
+    if (!host) return;
+    if (host.hasAttribute('data-seo-static')) { renderStaticPrimary(host); return; }
     var lang = curLang();
     var b = BLOCKS[lang] || BLOCKS.en;
     var kw = b.kw.map(function (k) {

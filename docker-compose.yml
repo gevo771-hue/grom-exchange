@@ -88,7 +88,9 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "${GROM_FRONTEND_PORT:-5273}:80"
+      # Loopback only: host nginx (TLS) proxies to 127.0.0.1:5273. Docker bypasses ufw,
+      # so a bare "5273:80" was reachable from the internet, skipping Cloudflare.
+      - "127.0.0.1:${GROM_FRONTEND_PORT:-5273}:80"
     depends_on:
       backend: { condition: service_healthy }
     networks: [grom_net]
@@ -99,7 +101,7 @@ services:
     container_name: grom_prometheus
     restart: unless-stopped
     ports:
-      - "9091:9090"
+      - "127.0.0.1:9091:9090"
     volumes:
       - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - grom_prom_data:/prometheus
@@ -111,7 +113,7 @@ services:
     container_name: grom_grafana
     restart: unless-stopped
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GROM_DB_PASSWORD}
     volumes:

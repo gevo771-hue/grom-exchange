@@ -13,6 +13,8 @@
   var REFRESH_MS = 180_000;
   var _timer = null;
   var _l3Live = null;
+  var _l3LoadAt = 0;
+  var _resumeBound = false;
   var _cache = Object.create(null);
   var _painted = false;
   var _lang = '';
@@ -1156,7 +1158,8 @@
     ru: {
       sub: 'Покупай акции Apple и Nvidia, торгуй биткоином с плечом до 40× и делай прогнозы на события в мире — прямо из своего кошелька. Без KYC и без депозитов на GROM.',
       sub_m: 'Акции, perps, своп и прогнозы — из своего кошелька. Без KYC и депозитов.',
-      trust: ['Без KYC', 'Без депозитов', 'Каждую сделку подписываешь ты'],
+      /* Third item «Полностью ончейн» (owner, 22.11): «Каждую сделку подписываешь ты» wrapped to a second row where the English line fits. */
+      trust: ['Без KYC', 'Без депозитов', 'Полностью ончейн'],
       now_h: 'Рынки сейчас', mkt_open: 'Биржа США открыта', mkt_closed: 'Биржа США закрыта — цены закрытия',
       gold: 'Золото',
       stk_sub: 'Торговля 24/7',
@@ -2098,6 +2101,7 @@
     l3MountTrending();
   }
   function l3Load(force) {
+    _l3LoadAt = Date.now();
     var jobs = [
       ['top', l3FetchTop], ['idx', l3FetchIdx], ['perps', l3FetchPerps],
       ['spark', l3FetchSpark], ['candles', l3FetchCandles], ['predict', l3FetchPredict],
@@ -2110,6 +2114,24 @@
       }).catch(function () {});
     });
     fetchEthUsd().then(function (eth) { if (eth) { _live.eth = eth; l3Paint(); } }).catch(function () {});
+  }
+
+  function l3LandingVisible() {
+    if (document.hidden) return false;
+    var route = '';
+    try { route = document.documentElement.getAttribute('data-grom-route') || ''; } catch (_) {}
+    return !route || route === 'landing';
+  }
+  /* Back to the tab (iOS restores tabs without reloading them): reload prices older than a minute (22.11). */
+  function l3BindResume() {
+    if (_resumeBound) return;
+    _resumeBound = true;
+    var onBack = function () {
+      if (!l3LandingVisible() || !_l3LoadAt || Date.now() - _l3LoadAt < 60_000) return;
+      refresh({ force: false });
+    };
+    document.addEventListener('visibilitychange', onBack);
+    window.addEventListener('pageshow', function (e) { if (e && e.persisted) onBack(); });
   }
 
   function refresh(opts) {
@@ -2159,15 +2181,16 @@
         if (document.querySelector('#page-landing .gw-lp-faq-list') || ++tries > 6) clearInterval(faqPoll);
       }, window.GROM_LANDING ? 2000 : 1200);
       if (_timer) clearInterval(_timer);
+      /* Every 3 min while the landing is on screen — phones and Safari too: with a single load a tab
+         opened earlier kept its old prices, and Chrome and Safari on one phone showed different
+         S&P / BTC numbers (owner, 22.11). Only changed blocks repaint (mountBoard diff). */
+      _timer = setInterval(function () {
+        if (!l3LandingVisible()) return;
+        refresh({ force: false });
+      }, REFRESH_MS);
+      l3BindResume();
       if (!lv2StableUi()) {
-        _timer = setInterval(function () {
-          if (document.hidden) return;
-          var route = '';
-          try { route = document.documentElement.getAttribute('data-grom-route') || ''; } catch (_) {}
-          if (route && route !== 'landing') return;
-          refresh({ force: false });
-        }, REFRESH_MS);
-        /* Perps prices tick every 20 s on desktop (one request); phones keep a single load. */
+        /* Perps prices tick every 20 s on desktop only (one request); phones use the 3-min refresh above. */
         if (_l3Live) clearInterval(_l3Live);
         _l3Live = setInterval(function () {
           if (document.hidden) return;

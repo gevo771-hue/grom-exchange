@@ -539,7 +539,7 @@
 <script>
 (function () {
   var ALLOW = { landing: 1, dashboard: 1, earn: 1, spot: 1, binary: 1, futures: 1, trade: 1, markets: 1, wallet: 1, referral: 1, history: 1, settings: 1, help: 1, predict: 1, xstocks: 1, backoffice: 1 };
-  var PATH = { '': 'landing', swap: 'dashboard', token: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
+  var PATH = { '': 'landing', swap: 'dashboard', token: 'dashboard', bridge: 'dashboard', alternatives: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
   var LOCALES = { es: 1, tr: 1, ru: 1, vi: 1, id: 1 };
   var parts = (location.pathname || '/').split('/').filter(Boolean);
   if (parts[0] === 'pt-BR') parts.shift();
@@ -8352,8 +8352,9 @@ function updateRouteSeo(page) {
   var canonical = document.querySelector('link[rel="canonical"]');
   var currentPath = (location.pathname || '/').replace(/\/$/, '') || '/';
   /* Coin page /token/<id> or /<lang>/token/<id>: its own title and canonical (crawler HTML from the backend, or set by the swap). */
-  if (key === 'dashboard' && /^(?:\/(?:es|pt-BR|tr|ru|vi|id))?\/token\/[a-z0-9][a-z0-9-]{0,79}$/.test(currentPath)) {
-    var tp = window.__gromTokenPage;
+  /* …and swap / bridge / alternative pages (24.11): /swap/eth-to-sol, /ru/bridge/usdc-ethereum-to-base. */
+  if (key === 'dashboard' && /^(?:\/(?:es|pt-BR|tr|ru|vi|id))?\/(?:token|swap|bridge|alternatives)\/[a-z0-9][a-z0-9-]{0,79}$/.test(currentPath)) {
+    var tp = /\/token\//.test(currentPath) ? window.__gromTokenPage : window.__gromRoutePage;
     if (tp && tp.title) {
       document.title = tp.title;
       gromSeoSet('description', tp.description || '');
@@ -8836,6 +8837,8 @@ window.gromSyncPrettyPath = function gromSyncPrettyPath(page) {
     var seg = PAGE_SEG[page];
     /* Coin page /token/<id> (or /<lang>/token/<id>) stays on its own URL while the swap shows that coin (22.11). */
     if (page === 'dashboard' && parts[0] === 'token' && /^[a-z0-9][a-z0-9-]{0,79}$/.test(parts[1] || '')) seg = 'token/' + parts[1];
+    /* Swap / bridge / alternative pages keep their own URL while the swap shows the pair (24.11). */
+    if (page === 'dashboard' && /^(?:swap|bridge|alternatives)$/.test(parts[0] || '') && /^[a-z0-9][a-z0-9-]{0,79}$/.test(parts[1] || '')) seg = parts[0] + '/' + parts[1];
     var newHash = page === 'landing' ? '' : ('#' + page);
     var newPath = (locale ? '/' + locale : '') + (seg ? '/' + seg : '/');
     if (!newPath) newPath = '/';
@@ -9116,7 +9119,7 @@ document.addEventListener('click', function (e) {
 var _logoHome = document.getElementById('logoHome');
 if (_logoHome) _logoHome.addEventListener('click', function (e) { e.preventDefault(); show('landing'); });
 (function () {
-  var PATH = { '': 'landing', swap: 'dashboard', token: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
+  var PATH = { '': 'landing', swap: 'dashboard', token: 'dashboard', bridge: 'dashboard', alternatives: 'dashboard', earn: 'earn', futures: 'futures', predict: 'predict', stocks: 'xstocks', markets: 'markets', dashboard: 'dashboard', wallet: 'wallet', referral: 'referral', history: 'history', settings: 'settings', help: 'help' };
   var LOCALES = { es: 1, tr: 1, ru: 1, vi: 1, id: 1 };
   var parts = (location.pathname || '/').split('/').filter(Boolean);
   if (parts[0] === 'pt-BR') parts.shift();

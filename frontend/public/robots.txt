@@ -5,3 +5,4 @@ Disallow: /token-template
 
 Sitemap: https://grom.exchange/sitemap.xml
 Sitemap: https://grom.exchange/sitemap-tokens.xml
+Sitemap: https://grom.exchange/sitemap-routes.xml

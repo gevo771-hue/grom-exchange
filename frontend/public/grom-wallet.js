@@ -29986,7 +29986,7 @@ const GW_TR_NETS = [
 
 function gwInjectTrendingCss() {
   const css = `
-    .gw-tr-wrap { margin: 12px 0 4px; max-width: 100%; box-sizing: border-box; background: transparent !important; }
+    .gw-tr-wrap { margin: var(--dash-stack-gap, 22px) 0 0; max-width: 100%; box-sizing: border-box; background: transparent !important; }
     .gw-tr-card {
       position: relative;
       padding: 22px 22px 20px; border-radius: 24px; color: #e7eef8;
@@ -30055,7 +30055,6 @@ function gwInjectTrendingCss() {
     .gw-tr-row .chg.dn { color: #f87171; background: rgba(232,87,107,0.14); border: 1px solid rgba(232,87,107,0.28); }
     .gw-tr-empty { color: #6b7a92; font-size: 13px; text-align: center; padding: 20px 0; }
     @media (max-width: 640px) {
-      .gw-tr-wrap { margin: 6px 0 4px; }
       .gw-tr-card { padding: 16px 14px 14px; border-radius: 18px;
         box-shadow: 0 12px 28px -18px rgba(0,0,0,0.5); }
       .gw-tr-title { font-size: 17px; }

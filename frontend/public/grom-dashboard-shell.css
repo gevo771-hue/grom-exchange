@@ -1,7 +1,8 @@
 /* Match the loaded cards before the deferred wallet module arrives. */
 #page-dashboard > #gwDsWrap,
 #page-dashboard #gwDsCard { min-height: 556px; }
-#page-dashboard > #gwTrendingCard { margin: 12px 0 4px; }
+/* Same gap above and below Trending as between every other dashboard card (--dash-stack-gap, 24.11). */
+#page-dashboard > #gwTrendingCard { margin: var(--dash-stack-gap, 22px) 0 0; }
 #gwDsWrap[data-gw-ds-pending],
 #gwTrendingCard[data-gw-tr-pending] { pointer-events: none; }
 .gw-boot-swap, .gw-boot-trending {
@@ -38,7 +39,6 @@
 #page-markets #marketList:empty { min-height:480px; }
 #page-xstocks .gwx-rows:empty { min-height:480px; }
 @media(max-width:640px) {
-  #page-dashboard > #gwTrendingCard { margin:6px 0 4px; }
   .gw-boot-trending { height:447px; padding:16px 14px 14px; border-radius:18px; }
   .gw-boot-swap { padding:16px; border-radius:18px; }
   .gw-boot-head b { font-size:17px; }

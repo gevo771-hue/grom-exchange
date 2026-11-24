@@ -19197,14 +19197,18 @@ async function gwDsRefreshRate() {
          A pick made just now (token picker, Trending, New listings) is never «sticky»: picking Tron, then
          Solana reset the Solana pick to USDC (15.11). */
       const freshPick = tAt && Date.now() - tAt < 8000;
-      const staleNonevmTo = !freshPick && tCid
+      /* A deliberate cross-network pick (token picker, Trending, coin and swap pages) keeps its bridge intent
+         until the user changes the pay network — the chip clears it. It is not a leftover (24.11). */
+      const fbTo = window.__gwDsForceBridgeTo;
+      const bridgeIntent = !!(fbTo && Number(fbTo.chainId) === tCid && gwDsNormSym(fbTo.sym || '') === tSym);
+      const staleNonevmTo = !freshPick && !bridgeIntent && tCid
         && payCid
         && tCid !== payCid
         && (tCid === GW_TRON_CHAIN_ID || tCid === GW_LIFI_SOL_CHAIN || tCid === 1151111081099710)
         && payCid !== GW_TRON_CHAIN_ID
         && payCid !== GW_LIFI_SOL_CHAIN
         && payCid !== 1151111081099710;
-      const staleVsCatalog = !freshPick && tCid && cat && tCid !== cat
+      const staleVsCatalog = !freshPick && !bridgeIntent && tCid && cat && tCid !== cat
         && (tCid === GW_TRON_CHAIN_ID || tCid === GW_LIFI_SOL_CHAIN || tCid === 1151111081099710)
         && cat !== GW_TRON_CHAIN_ID
         && cat !== GW_LIFI_SOL_CHAIN
@@ -30219,6 +30223,103 @@ async function gwTokenPageBoot() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { gwTokenPageBoot(); });
 else setTimeout(() => { gwTokenPageBoot(); }, 0);
+
+/* Swap / bridge / alternative pages (24.11): /swap/eth-to-sol, /bridge/usdc-ethereum-to-base, /alternatives/uniswap
+   (+ /<lang>/…). The swap opens with the page's pair; alternative pages only take their title.
+   Paying from Solana or TRON: the network is soft-selected the way a tap on its chip does it, but the
+   wallet is not opened on page load — it connects when the user swaps. */
+function gwRoutePageSoftSolana() {
+  const chip = document.querySelector('.gw-ds-chain[data-nonevm="sol"]');
+  if (!chip || chip.classList.contains('soon')) return false;
+  document.querySelectorAll('.gw-ds-chain').forEach((x) => x.classList.remove('on'));
+  chip.classList.add('on');
+  window.__gwDsUserPickedFrom = Object.assign({}, window.__gwDsUserPickedFrom || {}, {
+    nonevm: 'sol', chainId: GW_LIFI_SOL_CHAIN, sym: 'SOL', at: Date.now(),
+  });
+  try { gwInvalidateExecutableQuoteCaches?.('route-page'); } catch (_) {}
+  try { gwDsInvalidateQuoteUi('route-page'); } catch (_) {}
+  try { if (typeof gwLifiEnsureChainTokens === 'function') gwLifiEnsureChainTokens(GW_LIFI_SOL_CHAIN).catch(() => {}); } catch (_) {}
+  const fromEl = document.getElementById('gwDsFrom');
+  if (fromEl) {
+    try { gwDsEnsureTokenOption('SOL', { sym: 'SOL', name: 'Solana' }); } catch (_) {}
+    fromEl.value = 'SOL';
+    try { gwTkSyncButton('from'); } catch (_) {}
+  }
+  return true;
+}
+function gwRoutePageSoftTron(sym) {
+  if (typeof gwTronActivateUi !== 'function') return false;
+  window.__gwDsUserPickedFrom = { sym, chainId: GW_TRON_CHAIN_ID, nonevm: 'trx', at: Date.now() };
+  gwTronActivateUi('');
+  try { gwInvalidateExecutableQuoteCaches?.('route-page'); } catch (_) {}
+  try { gwDsInvalidateQuoteUi('route-page'); } catch (_) {}
+  try { if (typeof gwLifiEnsureChainTokens === 'function') gwLifiEnsureChainTokens(GW_TRON_CHAIN_ID).catch(() => {}); } catch (_) {}
+  const fromEl = document.getElementById('gwDsFrom');
+  return !!fromEl && String(fromEl.value).toUpperCase() === sym;
+}
+async function gwRoutePageBoot() {
+  const m = /^(?:\/(es|pt-BR|tr|ru|vi|id))?\/(swap|bridge|alternatives)\/([a-z0-9][a-z0-9-]{0,79})\/?$/.exec(location.pathname || '');
+  if (!m || window.__gwRoutePageBooted) return;
+  window.__gwRoutePageBooted = true;
+  let t = null;
+  try {
+    const q = 'kind=' + encodeURIComponent(m[2]) + '&slug=' + encodeURIComponent(m[3]) + (m[1] ? '&locale=' + encodeURIComponent(m[1]) : '');
+    const r = await fetch('/api/market/route-page?' + q, { headers: { Accept: 'application/json' } });
+    t = r.ok ? await r.json() : null;
+  } catch (_) {}
+  if (!t || !t.title) return;
+  window.__gromRoutePage = { slug: t.slug, title: t.title, description: t.description };
+  try { if (typeof window.gromSeoRefreshRouteMeta === 'function') window.gromSeoRefreshRouteMeta('dashboard'); } catch (_) {}
+  const okSide = (x) => x && x.sym && Number(x.chainId) > 0 && Number.isInteger(Number(x.decimals));
+  if (!okSide(t.from) || !okSide(t.to)) return;
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  for (let i = 0; i < 80; i++) {
+    if (document.getElementById('gwDsTo') && (typeof gwDashActive !== 'function' || gwDashActive())) break;
+    await sleep(250);
+  }
+  await sleep(700);
+  const ZERO = '0x0000000000000000000000000000000000000000';
+  const meta = (x) => ({
+    sym: x.sym, chainId: Number(x.chainId), name: x.name || x.sym, decimals: Number(x.decimals),
+    /* Native coins resolve by symbol in the swap; a zero address would be remembered as a token. */
+    tokenAddress: x.address && x.address !== ZERO ? x.address : null,
+  });
+  const pick = async () => {
+    const f = t.from;
+    if (f.kind === 'solana') {
+      try { await gwEnsureFeeConfig(); } catch (_) {}
+      if (typeof gwJupiterReady === 'function' && !gwJupiterReady()) return false;
+      if (!gwRoutePageSoftSolana()) return false;
+      if (f.sym !== 'SOL') gwDsPickToken(f.sym, 'from', meta(f));
+    } else if (f.kind === 'tron') {
+      if (!gwRoutePageSoftTron(f.sym)) return false;
+    } else {
+      gwDsPickToken(f.sym, 'from', meta(f));
+    }
+    gwDsPickToken(t.to.sym, 'to', meta(t.to));
+    return true;
+  };
+  let ok = false;
+  try { ok = await pick(); } catch (_) { return; }
+  if (!ok) return;
+  /* The swap may restore a saved or default pair after boot (later on a slow phone) — pick again,
+     until the user touches anything on the page. */
+  let touched = false;
+  const onTouch = () => { touched = true; };
+  ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, onTouch, { capture: true, once: true }));
+  for (const ms of [2500, 6000, 12000]) {
+    setTimeout(() => {
+      if (touched) return;
+      const fromEl = document.getElementById('gwDsFrom');
+      const toEl = document.getElementById('gwDsTo');
+      const toCid = Number(window.__gwDsForceBridgeTo?.chainId || window.__gwDsUserPickedTo?.chainId || 0);
+      if (fromEl && toEl && fromEl.value === t.from.sym && toEl.value === t.to.sym && toCid === Number(t.to.chainId)) return;
+      pick().catch(() => {});
+    }, ms);
+  }
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { gwRoutePageBoot(); });
+else setTimeout(() => { gwRoutePageBoot(); }, 0);
 
 const GW_TR_CACHE_TTL = 60_000;
 /* Rows up to 30 min old stay on screen with their age (the server keeps them as long), 22.11. */

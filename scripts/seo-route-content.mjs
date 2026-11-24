@@ -292,6 +292,18 @@ export function wordCount(html) {
 import { getSeoCopy, localizedNavHtml } from './seo-copy-localized.mjs';
 import { withLandingExtra } from './seo-landing-extra.mjs';
 import { SEO_LOCALES, languageSwitcherHtml } from './seo-locales.mjs';
+import { RP_ALL, RP_SEGMENT, rpLabel } from '../backend/src/market/route-pages-data.js';
+import { ROUTE_COPY } from '../backend/src/market/route-pages-i18n.js';
+
+/* Swap page (crawler HTML): links to every swap / bridge / alternative page in that language (24.11). */
+function routeLinksHtml(localeCode, prefix) {
+  const c = ROUTE_COPY[localeCode] || ROUTE_COPY.en;
+  const links = RP_ALL.map((r) => {
+    const label = r.kind === 'alt' ? c.altLabel(r.name) : rpLabel(r);
+    return `<a href="${esc(`${prefix}/${RP_SEGMENT[r.kind]}/${r.slug}`)}">${esc(label)}</a>`;
+  }).join('\n');
+  return `<h2>${esc(c.routesH2)}</h2>\n<nav class="grom-seo-nav" aria-label="${esc(c.routesH2)}">${links}</nav>`;
+}
 
 export function buildRouteArticleHtml(routeKey, localeCode = 'en', productPath = '/') {
   const localized = getSeoCopy(localeCode, routeKey);
@@ -313,6 +325,7 @@ export function buildRouteArticleHtml(routeKey, localeCode = 'en', productPath =
       <h1>${esc(c.h1)}</h1>
       <p class="grom-seo-lead">${esc(c.lead)}</p>
       ${body}
+      ${routeKey === 'dashboard' ? routeLinksHtml(loc.code, loc.prefix || '') : ''}
       <h2>${esc(explore)}</h2>
       ${navHtml}
       ${langHtml}

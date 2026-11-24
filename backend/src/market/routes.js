@@ -1637,6 +1637,18 @@ export function createMarketRouter() {
     }
   });
 
+  /* Swap / bridge / alternative page → the pair the swap opens with (24.11). */
+  r.get('/route-page', async (req, res) => {
+    try {
+      const { RP_KIND_BY_SEGMENT, rpFind, routeSwapInfo } = await import('./route-pages.js');
+      const route = rpFind(RP_KIND_BY_SEGMENT[String(req.query.kind || '')], String(req.query.slug || ''));
+      if (!route) return res.status(404).set('Cache-Control', 'public, max-age=60').json({ error: 'not_found' });
+      res.set('Cache-Control', 'public, max-age=300').json(routeSwapInfo(route, String(req.query.locale || 'en')));
+    } catch (e) {
+      res.status(502).json({ error: String(e?.message || e) });
+    }
+  });
+
   /** GeckoTerminal trending — cached server proxy (avoids browser 429 bursts). */
   r.get('/trending', async (req, res) => {
     try {

@@ -155,6 +155,44 @@ async function main() {
   };
   app.get('/token/:id', tokenPage);
   app.get('/:locale/token/:id', tokenPage);
+  /* Swap / bridge / alternative pages (24.11): crawler HTML from route-pages.js; browsers get the app from nginx. */
+  const routePage = (segment) => async (req, res, next) => {
+    try {
+      const { RP_KIND_BY_SEGMENT, rpFind, renderRoutePage, routeNotFoundHtml, routePrices } = await import('./market/route-pages.js');
+      const { tokenTemplate, tokenLocale } = await import('./market/token-pages.js');
+      const loc = tokenLocale(req.params.locale || 'en');
+      if (!loc || (req.params.locale && loc.code === 'en')) return next();
+      res.set('Cache-Control', 'no-cache');
+      res.type('html');
+      const route = rpFind(RP_KIND_BY_SEGMENT[segment], req.params.slug);
+      if (!route) {
+        res.set('X-Robots-Tag', 'noindex');
+        return res.status(404).send(routeNotFoundHtml(loc.code));
+      }
+      const template = await tokenTemplate({ locale: loc.code });
+      if (!template) {
+        res.set('Retry-After', '120');
+        return res.status(503).send('Temporarily unavailable');
+      }
+      const { prices, at } = route.kind === 'swap' ? await routePrices() : { prices: null, at: Date.now() };
+      res.send(renderRoutePage(template, route, { locale: loc.code, prices, at }));
+    } catch (err) {
+      next(err);
+    }
+  };
+  for (const segment of ['swap', 'bridge', 'alternatives']) {
+    app.get(`/${segment}/:slug`, routePage(segment));
+    app.get(`/:locale/${segment}/:slug`, routePage(segment));
+  }
+  app.get('/sitemap-routes.xml', async (_req, res, next) => {
+    try {
+      const { routeSitemapXml } = await import('./market/route-pages.js');
+      res.set('Cache-Control', 'public, max-age=3600');
+      res.type('application/xml').send(routeSitemapXml());
+    } catch (err) {
+      next(err);
+    }
+  });
   app.get('/sitemap-tokens.xml', async (_req, res, next) => {
     try {
       const { tokenPagesService, tokenSitemapXml } = await import('./market/token-pages.js');

@@ -19813,9 +19813,21 @@ async function gwDsRefreshRate() {
         const toLbl = (typeof gwChainLabel === 'function') ? gwChainLabel(forceTo) : String(forceTo);
         bridgeHint2 = `⚠ No fee-ready bridge ${fromLbl}→${toLbl} for ${to} yet — wait a few seconds or pick ${to} again from Trending`;
       }
+      /* A Solana / TRON leg without that wallet: the quote has no address there, so «pick again» was
+         misleading — say which wallet to connect (24.11). */
+      const isSolCid = (c) => c === GW_LIFI_SOL_CHAIN || c === 1151111081099710;
+      let solAddr = '';
+      let tronAddr = '';
+      try { solAddr = (typeof gwSolPubkey === 'function' && gwSolPubkey()) || localStorage.getItem('grom_sol_addr') || ''; } catch (_) {}
+      try { tronAddr = (typeof gwTronSavedAddr === 'function' && gwTronSavedAddr()) || window.__gwTronAddr || localStorage.getItem('grom_tron_addr') || ''; } catch (_) {}
+      if ((isSolCid(forceTo) || isSolCid(uiCid)) && !solAddr) {
+        bridgeHint2 = '⚠ ' + gwTx('swap_need_sol_wallet', null, 'Connect a Solana wallet (for example Phantom) — this route needs your Solana address.');
+      } else if ((forceTo === GW_TRON_CHAIN_ID || uiCid === GW_TRON_CHAIN_ID) && !tronAddr) {
+        bridgeHint2 = '⚠ ' + gwTx('swap_need_tron_wallet', null, 'Connect a TRON wallet (for example TronLink) — this route needs your TRON address.');
+      }
     } catch (_) {}
     routeEl.innerHTML = `
-      <span class="k">${t.route}</span><span class="v">estimate only · not executable</span>
+      <span class="k">${t.route}</span><span class="v">${gwTx('swap_estimate_only', null, 'estimate only · not executable')}</span>
       <span class="k full" id="gwDsRateLine">1 ${from} ≈ ${mid.rate.toFixed(6)} ${to}</span>
       <span class="k full" style="color:#fbbf24">${bridgeHint2}</span>
     `;

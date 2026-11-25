@@ -30447,8 +30447,7 @@ function gwTrPaintList(list, rows, t, ctx) {
     const created = Date.parse(r.poolCreatedAt || '');
     const young = Number.isFinite(created) && r.observedAt >= created && r.observedAt - created < 86400000;
     const period = young ? (t.young || 'Pool <24h') : '24h';
-    const age = Math.max(0, Math.floor((Date.now() - r.observedAt) / 60000));
-    const freshness = age >= 2 ? ' · ' + age + ' min' : '';
+    /* No «· N min» after the period (owner, 25.11: «эти минуты не нужны»); the time is in the % tooltip. */
     const quoteTitle = 'GeckoTerminal · ' + (r.observedAt ? new Date(r.observedAt).toISOString() : '—');
     const priceFmt = !(Number.isFinite(r.priceUsd) && r.priceUsd > 0) ? '—' : r.priceUsd > 1
       ? '$' + r.priceUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })
@@ -30466,7 +30465,7 @@ function gwTrPaintList(list, rows, t, ctx) {
     const img = r.img
       ? `<div class="gw-tr-ico"><img src="${r.img}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;avatar&quot;>${initial}</span>'" />${badge}</div>`
       : `<div class="gw-tr-ico"><span class="avatar">${initial}</span>${badge}</div>`;
-    const chainTxt = (r.chainLabel || r.chain || short || '') + ' · ' + period + freshness;
+    const chainTxt = (r.chainLabel || r.chain || short || '') + ' · ' + period;
     return `<div class="gw-tr-row" data-img="${String(r.img || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" data-sym="${r.sym}" data-chain="${r.chain || ''}" data-cid="${r.chainId || ''}" data-addr="${r.tokenAddress || ''}" data-dec="${r.decimals != null ? r.decimals : ''}" role="button" tabindex="0" aria-label="${r.sym}">
       <div class="gw-tr-rank">${i + 1}</div>
       ${img}
